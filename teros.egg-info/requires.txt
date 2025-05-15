@@ -1,0 +1,4 @@
+aiida-core
+aiida-workgraph
+pymatgen
+numpy
