@@ -1,4 +1,4 @@
-# Teros: Thermodynamics of Oxide Surfaces
+# TEROS: Thermodynamics of Oxide Surfaces
 
 Teros is a Python package for calculating surface Gibbs free energy using ab initio atomistic thermodynamics with the AiiDA Workgraph framework.
 
