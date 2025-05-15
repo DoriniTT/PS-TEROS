@@ -52,6 +52,24 @@ For more detailed examples, check the `examples` directory.
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
+## Documentation
+
+The documentation is available online at [Read the Docs](https://aiida-teros.readthedocs.io/).
+
+To build the documentation locally:
+
+```bash
+# Install documentation dependencies
+pip install -e .[docs]
+
+# Build the documentation
+cd docs
+make html
+
+# Open the documentation in your browser
+open build/html/index.html  # On Linux use: xdg-open build/html/index.html
+```
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

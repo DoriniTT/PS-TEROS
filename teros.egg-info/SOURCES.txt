@@ -1,5 +1,8 @@
 README.md
 setup.py
+legacy/AiiDA_teros.py
+legacy/__init__.py
+legacy/run_aiida.py
 teros/__init__.py
 teros.egg-info/PKG-INFO
 teros.egg-info/SOURCES.txt

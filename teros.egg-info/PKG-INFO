@@ -1,4 +1,4 @@
-Metadata-Version: 2.4
+Metadata-Version: 2.2
 Name: teros
 Version: 0.1.0
 Summary: Ab Initio Atomistic Thermodynamics for Surface Energetics
@@ -7,14 +7,25 @@ Author-email: your.email@example.com
 Classifier: Programming Language :: Python :: 3
 Classifier: License :: OSI Approved :: MIT License
 Classifier: Operating System :: OS Independent
-Requires-Python: >=3.6
+Requires-Python: >=3.9
 Requires-Dist: aiida-core
 Requires-Dist: aiida-workgraph
 Requires-Dist: pymatgen
 Requires-Dist: numpy
+Provides-Extra: docs
+Requires-Dist: sphinx>=4.0.0; extra == "docs"
+Requires-Dist: sphinx-rtd-theme>=1.0.0; extra == "docs"
+Requires-Dist: recommonmark; extra == "docs"
+Requires-Dist: sphinxcontrib-bibtex; extra == "docs"
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: flake8; extra == "dev"
 Dynamic: author
 Dynamic: author-email
 Dynamic: classifier
+Dynamic: provides-extra
 Dynamic: requires-dist
 Dynamic: requires-python
 Dynamic: summary

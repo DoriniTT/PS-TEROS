@@ -13,6 +13,20 @@ setup(
         "pymatgen",
         "numpy",
     ],
+    extras_require={
+        "docs": [
+            "sphinx>=4.0.0",
+            "sphinx-rtd-theme>=1.0.0",
+            "recommonmark",
+            "sphinxcontrib-bibtex",
+        ],
+        "dev": [
+            "pytest",
+            "pytest-cov",
+            "black",
+            "flake8",
+        ]
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
