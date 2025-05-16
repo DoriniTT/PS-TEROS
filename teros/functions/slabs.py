@@ -58,7 +58,8 @@ def get_slabs(relaxed_structure):
     )
 
     # --- Generate all possible slabs for the given orientation ---
-    slabs = [slab_gen.get_slabs(symmetrize=symmetrize)[0]]
+    #slabs = [slab_gen.get_slabs(symmetrize=symmetrize)[0]]
+    slabs = slab_gen.get_slabs(symmetrize=symmetrize)
 
     # --- Convert slabs to orthogonal cells and then to AiiDA structures ---
     aiida_slabs = {}
