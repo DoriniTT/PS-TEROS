@@ -96,7 +96,7 @@ else:  # Default or "bohr"
     queue_name = QUEUE_NAME
 
 # Set the slab parameters
-MILLER_INDICES = (1, 0, 0)   # Miller index for surface orientation
+MILLER_INDICES = (1, 1, 0)   # Miller index for surface orientation
 MIN_VACUUM_THICKNESS = 15.0  # Minimum vacuum thickness in Angstroms
 MIN_SLAB_THICKNESS = 15.0    # Minimum thickness of the slab in Angstroms
 LLL_REDUCE = True            # Whether to reduce the cell using LLL algorithm
