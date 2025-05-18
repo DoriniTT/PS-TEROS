@@ -11,6 +11,9 @@ from teros.functions.slabs import get_slabs
 from teros.functions.thermodynamics.formation import calculate_formation_enthalpy
 from teros.functions.thermodynamics.binary import calculate_surface_energy_binary
 from teros.functions.thermodynamics.ternary import calculate_surface_energy_ternary
+from aiida.orm import Dict, Int, Float, Bool, List
+from aiida import load_profile
+load_profile()
 
 # Module docstring to explain the workflow
 """
@@ -36,7 +39,18 @@ Usage:
 
 @task.graph_builder(outputs=[{"name": "result", "from": "ctx.result"}])
 def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_builders, 
-                          workgraph_name="teros_surface_workflow", code="VASP"):
+                          workgraph_name="teros_surface_workflow", code="VASP",
+                          manual_slabs=None, 
+                          # Slab generation parameters
+                          miller_indices: List = None,
+                          min_slab_thickness: Float = None,
+                          min_vacuum_thickness: Float = None,
+                          lll_reduce: Bool = None,
+                          center_slab: Bool = None,
+                          symmetrize: Bool = None,
+                          primitive: Bool = None,
+                          in_unit_planes: Bool = None,
+                          max_normal_search: Int = None):
     """
     Factory function to create a generic WorkGraph for bulk and slab relaxations.
 
@@ -48,6 +62,18 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
                         Format: {element: builder_function}
         workgraph_name: Name for the WorkGraph
         code: DFT code identifier ("QUANTUM_ESPRESSO", "CP2K", "VASP")
+        manual_slabs: Dictionary of manually created slab structures (Optional)
+                    Format: {slab_id: StructureData}
+                    When provided, automated slab generation is skipped
+        miller_indices: AiiDA List for Miller indices.
+        min_slab_thickness: AiiDA Float for minimum slab thickness.
+        min_vacuum_thickness: AiiDA Float for minimum vacuum thickness.
+        lll_reduce: AiiDA Bool for LLL reduction.
+        center_slab: AiiDA Bool for centering the slab.
+        symmetrize: AiiDA Bool for symmetrizing slabs.
+        primitive: AiiDA Bool for using primitive cell.
+        in_unit_planes: AiiDA Bool for restricting to unit planes.
+        max_normal_search: AiiDA Int for max normal search (optional).
 
     Returns:
         WorkGraph: Configured workflow
@@ -59,8 +85,6 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
     with WorkGraph(workgraph_name) as wg:
         # Block 2: Bulk Relaxation Task
         # -----------------------------
-        # Add a task to relax the bulk structure using the provided DFT workchain.
-        # The builder_bulk contains all necessary inputs for the bulk relaxation.
         bulk_task = wg.add_task(dft_workchain, name="bulk_relaxation")
         bulk_task.set_from_builder(builder_bulk)
 
@@ -78,27 +102,43 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
         elements = list(set(bulk_structure.get_ase().get_chemical_symbols()))
 
         # Determine the correct output node for the relaxed structure depending on the DFT code.
-        # VASP uses 'structure', others use 'output_structure'.
         if code == 'VASP':
             output_struct_node = bulk_task.outputs.structure
         else:
             output_struct_node = bulk_task.outputs.output_structure
 
-        # Block 3: Slab Generation Task
-        # -----------------------------
-        # Add a task to generate slab structures from the relaxed bulk structure.
-        # This uses the get_slabs function.
-        generate_slabs_task = wg.add_task(
-            get_slabs,
-            name="generate_slabs",
-            relaxed_structure=output_struct_node
-        )
+        if manual_slabs:
+            # Block 3 (Alternative): Use manually provided slab structures
+            # ----------------------------------------------------------
+            # When manual slabs are provided, skip the get_slabs function
+            slab_structures = manual_slabs
+            print(f"Using {len(manual_slabs)} manually provided slab structures")
+        else:
+            # Block 3: Slab Generation Task
+            # -----------------------------
+            # Add a task to generate slab structures from the relaxed bulk structure.
+            generate_slabs_task = wg.add_task(
+                get_slabs,
+                name="generate_slabs",
+                relaxed_structure=output_struct_node,
+                # Pass slab generation parameters
+                miller_indices=miller_indices,
+                min_slab_thickness=min_slab_thickness,
+                min_vacuum_thickness=min_vacuum_thickness,
+                lll_reduce=lll_reduce,
+                center_slab=center_slab,
+                symmetrize=symmetrize,
+                primitive=primitive,
+                in_unit_planes=in_unit_planes,
+                max_normal_search=max_normal_search,
+            )
+            
+            # Use the generated slabs for the rest of the workflow
+            slab_structures = generate_slabs_task.outputs.structures
 
         # Block 4: Slab Relaxation Tasks (Active Map Zone)
         # ------------------------------------------------
-        # For each generated slab, add a relaxation task.
-        # The active_map_zone context allows mapping over all generated slabs.
-        with active_map_zone(generate_slabs_task.outputs.structures) as map_zone:
+        with active_map_zone(slab_structures) as map_zone:
             # Depending on the DFT code, set up the slab relaxation task with the correct input keys.
             if code == 'QUANTUM_ESPRESSO':
                 slab_task = map_zone.add_task(
@@ -123,8 +163,6 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
 
         # Block 5: Reference Calculations for Formation Enthalpy
         # -----------------------------------------------------
-        # For each reference system (e.g., O2, metals), add a relaxation task.
-        # These are needed to compute the formation enthalpy of the bulk.
         reference_tasks = {}
 
         # Ensure that reference builders are provided.
@@ -140,8 +178,6 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
 
         # Block 6: Prepare Inputs for Formation Enthalpy Calculation
         # ---------------------------------------------------------
-        # Collect the outputs from the bulk and reference relaxation tasks to use as inputs
-        # for the formation enthalpy calculation.
         enthalpy_kwargs = {}
 
         # For VASP, the output keys are 'structure' and 'misc'.
@@ -167,8 +203,6 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
 
         # Block 7: Formation Enthalpy Calculation Task
         # --------------------------------------------
-        # Add a task to calculate the formation enthalpy of the bulk structure.
-        # This uses the outputs from the bulk and reference relaxation tasks.
         enthalpy_task = wg.add_task(
             calculate_formation_enthalpy,
             name="formation_enthalpy",
@@ -180,7 +214,6 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
 
         # Block 8: Prepare Inputs for Surface Thermodynamics Task
         # ------------------------------------------------------
-        # Collect the outputs from the slab relaxation tasks for use in the surface thermodynamics calculation.
         if code == 'VASP':
             bulk_struct_out = bulk_task.outputs.structure
             bulk_params_out = bulk_task.outputs.misc
@@ -194,7 +227,6 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
 
         # Block 9: Determine Compound Type (Binary or Ternary)
         # ----------------------------------------------------
-        # Use the number of unique elements in the bulk structure to determine if the compound is binary or ternary.
         bulk_atoms = bulk_structure.get_ase()
         elements = set(bulk_atoms.get_chemical_symbols())
         num_elements = len(elements)
@@ -203,10 +235,7 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
 
         # Block 10: Surface Thermodynamics Calculation Task
         # -------------------------------------------------
-        # Add a task to calculate the surface thermodynamics (Gibbs free energy per area).
-        # Use the binary or ternary implementation depending on the compound type.
         if is_binary:
-            # For binary compounds (e.g., Ag2O), use the binary implementation.
             surface_thermo_task = wg.add_task(
                 calculate_surface_energy_binary,
                 name="surface_thermodynamics",
@@ -218,7 +247,6 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
                 code=code
             )
         elif is_ternary:
-            # For ternary and more complex compounds, use the ternary implementation.
             surface_thermo_task = wg.add_task(
                 calculate_surface_energy_ternary,
                 name="surface_thermodynamics",
@@ -230,7 +258,6 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
                 code=code
             )
 
-    # Return the fully constructed WorkGraph object.
     return wg
 
 # Example of how to use the module:

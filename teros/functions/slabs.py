@@ -1,17 +1,37 @@
-from aiida.orm import StructureData
+from aiida.orm import StructureData, Int
 from aiida_workgraph import task
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from aiida.orm import StructureData
+from aiida.orm import StructureData, List, Float, Bool, Int
 
 @task.calcfunction(outputs=[{"name": "structures"}])
-def get_slabs(relaxed_structure):
+def get_slabs(
+    relaxed_structure: StructureData,
+    miller_indices: List,
+    min_slab_thickness: Float,
+    min_vacuum_thickness: Float,
+    lll_reduce: Bool,
+    center_slab: Bool,
+    symmetrize: Bool,
+    primitive: Bool,
+    in_unit_planes: Bool,
+    max_normal_search: Int = None
+):
     """
     Generate slab structures from a bulk crystal structure.
 
     Args:
         relaxed_structure: AiiDA StructureData of the bulk crystal
+        miller_indices: AiiDA List for Miller indices (e.g., [1, 0, 0])
+        min_slab_thickness: AiiDA Float for minimum slab thickness in Angstroms
+        min_vacuum_thickness: AiiDA Float for minimum vacuum thickness in Angstroms
+        lll_reduce: AiiDA Bool whether to reduce the cell using LLL algorithm
+        center_slab: AiiDA Bool whether to center the slab
+        symmetrize: AiiDA Bool whether to generate symmetrically distinct terminations
+        primitive: AiiDA Bool whether to use the primitive cell
+        in_unit_planes: AiiDA Bool whether to restrict to unit planes
+        max_normal_search: AiiDA Int for max normal search (optional)
 
     Returns:
         Dictionary with 'structures' key containing different slab terminations
@@ -27,39 +47,39 @@ def get_slabs(relaxed_structure):
         return StructureData(ase=ase_atoms)
 
     # --- Slab generation parameters ---
-    miller_indices = (1, 0, 0)           # Miller index for surface orientation (e.g., (100) surface)
-    min_slab_thickness = 10.0            # Minimum thickness of the slab in Angstroms
-    min_vacuum_thickness = 15.0          # Minimum thickness of vacuum region in Angstroms
-    lll_reduce = True                    # Whether to reduce the cell using the LLL algorithm for better numerical stability
-    center_slab = True                   # Whether to center the slab in the simulation cell
-    symmetrize = True                    # Whether to generate symmetrically distinct slab terminations
-    primitive = True                     # Whether to use the primitive cell for slab generation
-    max_normal_search = None             # Use default search for surface normal (None lets pymatgen decide)
-    in_unit_planes = False               # Whether to restrict to unit planes (False allows more general slabs)
+    # Convert AiiDA types to Python types
+    py_miller_indices = tuple(miller_indices.get_list())
+    py_min_slab_thickness = min_slab_thickness.value
+    py_min_vacuum_thickness = min_vacuum_thickness.value
+    py_lll_reduce = lll_reduce.value
+    py_center_slab = center_slab.value
+    py_symmetrize = symmetrize.value
+    py_primitive = primitive.value
+    py_in_unit_planes = in_unit_planes.value
+    py_max_normal_search = max_normal_search.value if max_normal_search is not None else None
 
     # --- Convert input structure to pymatgen format ---
     bulk_structure = get_pymatgen_structure(relaxed_structure)
 
     # --- Optionally reduce to primitive cell for cleaner slabs ---
-    if primitive:
+    if py_primitive:
         analyzer = SpacegroupAnalyzer(bulk_structure)
         bulk_structure = analyzer.get_primitive_standard_structure()
 
     # --- Create the slab generator object ---
     slab_gen = SlabGenerator(
         bulk_structure,
-        miller_indices,
-        min_slab_thickness,
-        min_vacuum_thickness,
-        lll_reduce=lll_reduce,
-        center_slab=center_slab,
-        max_normal_search=max_normal_search,
-        in_unit_planes=in_unit_planes
+        py_miller_indices,
+        py_min_slab_thickness,
+        py_min_vacuum_thickness,
+        lll_reduce=py_lll_reduce,
+        center_slab=py_center_slab,
+        max_normal_search=py_max_normal_search,
+        in_unit_planes=py_in_unit_planes
     )
 
     # --- Generate all possible slabs for the given orientation ---
-    #slabs = [slab_gen.get_slabs(symmetrize=symmetrize)[0]]
-    slabs = slab_gen.get_slabs(symmetrize=symmetrize)
+    slabs = slab_gen.get_slabs(symmetrize=py_symmetrize)
 
     # --- Convert slabs to orthogonal cells and then to AiiDA structures ---
     aiida_slabs = {}

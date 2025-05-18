@@ -94,8 +94,11 @@ def calculate_surface_energy_binary(bulk_structure, bulk_parameters, formation_e
         term3 = ((y/x) * N_M_slab - N_O_slab) * mu_O_min
         gamma_O_poor = (term1 - term2 + term3) / (2 * area)
         
+        #stoichiometric_imbalance = (y/x * N_M_slab - N_O_slab)
+        #gamma_O_rich = gamma_O_poor + (1 / (2 * area)) * stoichiometric_imbalance * formation_energy
+
         stoichiometric_imbalance = (y/x * N_M_slab - N_O_slab)
-        gamma_O_rich = gamma_O_poor + (1 / (2 * area)) * stoichiometric_imbalance * formation_energy
+        gamma_O_rich = gamma_O_poor - (1 / (2 * area)) * stoichiometric_imbalance * formation_energy / y
 
         results_dict = {
             'slab_energy': float(E_slab),

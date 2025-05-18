@@ -7,7 +7,7 @@ It sets up the VASP calculation parameters and runs the create_teros_workgraph f
 import os
 import sys
 from ase.io import read
-from aiida.orm import Dict, Bool, Str, Int, Float, StructureData, KpointsData, load_code
+from aiida.orm import Dict, Bool, Str, Int, Float, List, StructureData, KpointsData, load_code
 from aiida.plugins import WorkflowFactory
 from aiida import load_profile
 
@@ -43,7 +43,7 @@ MAX_ITERATIONS = 5
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # File paths
-STRUCTURE_PATH = os.path.join(BASE_DIR, "structures/bulk/Ag2O.cif")
+STRUCTURE_PATH = os.path.join(BASE_DIR, "structures/bulk/Ag6O8P2_optimized.cif")
 AG_STRUCTURE_PATH = os.path.join(BASE_DIR, "structures/pure_elements/Ag.cif")
 P_STRUCTURE_PATH = os.path.join(BASE_DIR, "structures/pure_elements/P.cif")
 O2_STRUCTURE_PATH = os.path.join(BASE_DIR, "structures/pure_elements/O2.cif")
@@ -94,6 +94,51 @@ if "cluster" in CODE_LABEL.lower():
 else:  # Default or "bohr"
     resource_kwargs["num_cores_per_machine"] = NUM_CORES
     queue_name = QUEUE_NAME
+
+# Set the slab parameters
+MILLER_INDICES = (1, 0, 0)   # Miller index for surface orientation
+MIN_VACUUM_THICKNESS = 15.0  # Minimum vacuum thickness in Angstroms
+MIN_SLAB_THICKNESS = 15.0    # Minimum thickness of the slab in Angstroms
+LLL_REDUCE = True            # Whether to reduce the cell using LLL algorithm
+CENTER_SLAB = True           # Whether to center the slab in the simulation cell
+SYMMETRIZE = True            # Whether to generate symmetrically distinct slab terminations
+PRIMITIVE = True             # Whether to use the primitive cell for slab generation
+MAX_NORMAL_SEARCH = None     # Max normal search for pymatgen (None for default)
+IN_UNIT_PLANES = False       # Whether to restrict to unit planes
+
+# Option for manually created slab structures
+# Set file paths to your manually created slab structures
+MANUAL_SLABS_PATHS = [
+    # os.path.join(BASE_DIR, "structures/slabs/Ag2O_100_1.cif"),
+    # os.path.join(BASE_DIR, "structures/slabs/Ag2O_100_2.cif"),
+]
+
+# Choose how to handle slabs: 
+# Set to True to use manual slabs, False to use automatic generation
+USE_MANUAL_SLABS = len(MANUAL_SLABS_PATHS) > 0
+
+def load_manual_slabs():
+    """
+    Load manually created slabs from files into AiiDA StructureData objects
+    
+    Returns:
+        dict: Dictionary mapping slab identifiers to StructureData objects
+    """
+    manual_slabs = {}
+    
+    if not MANUAL_SLABS_PATHS:
+        return None
+        
+    for i, path in enumerate(MANUAL_SLABS_PATHS):
+        if os.path.exists(path):
+            # Load the structure from file and store as AiiDA StructureData
+            structure = StructureData(ase=read(path))
+            manual_slabs[f"s_{i}"] = structure
+            print(f"Loaded manual slab {i+1}/{len(MANUAL_SLABS_PATHS)} from {path}")
+        else:
+            print(f"Warning: Slab file not found at {path}")
+            
+    return manual_slabs if manual_slabs else None
 
 #########################################################
 # BUILDER FUNCTIONS
@@ -541,19 +586,34 @@ def run_workflow():
     # Get reference builders for all elements in the structure
     reference_builders = get_reference_builders(elements)
     
-    # Build and submit the workflow using the functional approach
+    # Determine which slab approach to use: manual or automatic
+    manual_slabs = load_manual_slabs() if USE_MANUAL_SLABS else None
+    
+    # Build and submit the workflow using the original approach
     wg = create_teros_workgraph(
         dft_workchain=DFTWORKCHAIN,
         builder_bulk=bulk_builder,
         builder_slab=slab_builder,
         reference_builders=reference_builders,
         workgraph_name=WORKGRAPH_NAME,
-        code=CODE
+        code=CODE,
+        manual_slabs=manual_slabs,
+        # Slab generation parameters
+        miller_indices=List(list(MILLER_INDICES)),
+        min_slab_thickness=Float(MIN_SLAB_THICKNESS),
+        min_vacuum_thickness=Float(MIN_VACUUM_THICKNESS),
+        lll_reduce=Bool(LLL_REDUCE),
+        center_slab=Bool(CENTER_SLAB),
+        symmetrize=Bool(SYMMETRIZE),
+        primitive=Bool(PRIMITIVE),
+        in_unit_planes=Bool(IN_UNIT_PLANES),
+        max_normal_search=Int(MAX_NORMAL_SEARCH) if MAX_NORMAL_SEARCH is not None else None,
     )
     
     print(f"Submitting TEROS workflow using {CODE}...")
-    wg.submit(wait=False)
+    print(f"Using {'manual slabs' if manual_slabs else 'automatic slab generation with default parameters'}")
     
+    wg.submit(wait=False)
     wg.to_html()
     
     print("\nWorkflow submitted.")
