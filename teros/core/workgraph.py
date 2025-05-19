@@ -10,7 +10,7 @@ from aiida_workgraph import WorkGraph, task, active_map_zone
 from teros.functions.slabs import get_slabs
 from teros.functions.thermodynamics.formation import calculate_formation_enthalpy
 from teros.functions.thermodynamics.binary import calculate_surface_energy_binary
-from teros.functions.thermodynamics.ternary import calculate_surface_energy_ternary
+from teros.functions.thermodynamics.ternary import calculate_surface_energy_ternar
 from aiida.orm import Dict, Int, Float, Bool, List
 from aiida import load_profile
 load_profile()
@@ -41,6 +41,7 @@ Usage:
 def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_builders, 
                           workgraph_name="teros_surface_workflow", code="VASP",
                           manual_slabs=None, 
+                          sampling : Int = None,
                           # Slab generation parameters
                           miller_indices: List = None,
                           min_slab_thickness: Float = None,
@@ -248,10 +249,11 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
             )
         elif is_ternary:
             surface_thermo_task = wg.add_task(
-                calculate_surface_energy_ternary,
+                calculate_surface_energy_ternar,
                 name="surface_thermodynamics",
                 bulk_structure=bulk_struct_out,
                 bulk_parameters=bulk_params_out,
+                sampling=sampling,
                 slab_structures=slab_structures_out,
                 slab_parameters=slab_parameters_out,
                 formation_enthalpy=enthalpy_task.outputs.formation_enthalpy,

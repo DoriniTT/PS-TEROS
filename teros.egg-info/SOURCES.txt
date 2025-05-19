@@ -1,5 +1,9 @@
 README.md
 setup.py
+examples/__init__.py
+examples/run_workflow_cp2k.py
+examples/run_workflow_qe.py
+examples/run_workflow_vasp.py
 legacy/AiiDA_teros.py
 legacy/__init__.py
 legacy/run_aiida.py
@@ -11,10 +15,6 @@ teros.egg-info/requires.txt
 teros.egg-info/top_level.txt
 teros/core/__init__.py
 teros/core/workgraph.py
-teros/examples/__init__.py
-teros/examples/run_workflow_cp2k.py
-teros/examples/run_workflow_qe.py
-teros/examples/run_workflow_vasp.py
 teros/functions/__init__.py
 teros/functions/slabs.py
 teros/functions/thermodynamics/__init__.py

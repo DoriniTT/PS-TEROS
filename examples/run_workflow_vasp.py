@@ -105,6 +105,7 @@ SYMMETRIZE = True            # Whether to generate symmetrically distinct slab t
 PRIMITIVE = True             # Whether to use the primitive cell for slab generation
 MAX_NORMAL_SEARCH = None     # Max normal search for pymatgen (None for default)
 IN_UNIT_PLANES = False       # Whether to restrict to unit planes
+SAMPLING = 1000 # Number of sampling points for the surface phase diagram (1000 x 1000 grid). Use a smaller number for testing.
 
 # Option for manually created slab structures
 # Set file paths to your manually created slab structures
@@ -597,6 +598,7 @@ def run_workflow():
         reference_builders=reference_builders,
         workgraph_name=WORKGRAPH_NAME,
         code=CODE,
+        sampling=Int(SAMPLING),
         manual_slabs=manual_slabs,
         # Slab generation parameters
         miller_indices=List(list(MILLER_INDICES)),
