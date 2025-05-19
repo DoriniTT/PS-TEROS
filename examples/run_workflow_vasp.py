@@ -96,7 +96,7 @@ else:  # Default or "bohr"
     queue_name = QUEUE_NAME
 
 # Set the slab parameters
-MILLER_INDICES = (1, 1, 0)   # Miller index for surface orientation
+MILLER_INDICES = (1, 0, 0)   # Miller index for surface orientation
 MIN_VACUUM_THICKNESS = 15.0  # Minimum vacuum thickness in Angstroms
 MIN_SLAB_THICKNESS = 15.0    # Minimum thickness of the slab in Angstroms
 LLL_REDUCE = True            # Whether to reduce the cell using LLL algorithm
@@ -105,7 +105,8 @@ SYMMETRIZE = True            # Whether to generate symmetrically distinct slab t
 PRIMITIVE = True             # Whether to use the primitive cell for slab generation
 MAX_NORMAL_SEARCH = None     # Max normal search for pymatgen (None for default)
 IN_UNIT_PLANES = False       # Whether to restrict to unit planes
-SAMPLING = 1000 # Number of sampling points for the surface phase diagram (1000 x 1000 grid). Use a smaller number for testing.
+SAMPLING = 300 # Number of sampling points for the surface phase diagram (300 x 300 grid). Use a smaller number for testing.
+# 300 usually works well for most systems and make a clear surface phase diagram, but you can adjust it based on your needs.
 
 # Option for manually created slab structures
 # Set file paths to your manually created slab structures
