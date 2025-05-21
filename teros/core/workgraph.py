@@ -38,10 +38,10 @@ Usage:
 """
 
 @task.graph_builder(outputs=[{"name": "result", "from": "ctx.result"}])
-def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_builders, 
+def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_builders,
                           workgraph_name="teros_surface_workflow", code="VASP",
-                          manual_slabs=None, 
-                          sampling : Int = None,
+                          manual_slabs=None,
+                          sampling: Int = None,
                           # Slab generation parameters
                           miller_indices: List = None,
                           min_slab_thickness: Float = None,
@@ -53,31 +53,69 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
                           in_unit_planes: Bool = None,
                           max_normal_search: Int = None):
     """
-    Factory function to create a generic WorkGraph for bulk and slab relaxations.
+    Factory function to create a TEROS WorkGraph for surface thermodynamics calculations.
 
-    Args:
-        dft_workchain: AiiDA workchain class for DFT relaxations
-        builder_bulk: Preconfigured builder for bulk relaxation
-        builder_slab: Preconfigured builder for slab relaxation
-        reference_builders: Dictionary of reference builders for formation enthalpy
-                        Format: {element: builder_function}
-        workgraph_name: Name for the WorkGraph
-        code: DFT code identifier ("QUANTUM_ESPRESSO", "CP2K", "VASP")
-        manual_slabs: Dictionary of manually created slab structures (Optional)
-                    Format: {slab_id: StructureData}
-                    When provided, automated slab generation is skipped
-        miller_indices: AiiDA List for Miller indices.
-        min_slab_thickness: AiiDA Float for minimum slab thickness.
-        min_vacuum_thickness: AiiDA Float for minimum vacuum thickness.
-        lll_reduce: AiiDA Bool for LLL reduction.
-        center_slab: AiiDA Bool for centering the slab.
-        symmetrize: AiiDA Bool for symmetrizing slabs.
-        primitive: AiiDA Bool for using primitive cell.
-        in_unit_planes: AiiDA Bool for restricting to unit planes.
-        max_normal_search: AiiDA Int for max normal search (optional).
+    This function assembles an AiiDA WorkGraph that performs:
+    1. Bulk structure relaxation.
+    2. Slab generation (if not manually provided) and relaxation for specified Miller indices.
+    3. Relaxation of reference structures (e.g., elemental phases, O2 molecule).
+    4. Calculation of formation enthalpy for the bulk material.
+    5. Calculation of surface energies for the generated slabs, potentially as a function
+       of chemical potentials for ternary systems.
 
-    Returns:
-        WorkGraph: Configured workflow
+    :param dft_workchain: The AiiDA DFT workchain class to be used for all relaxations
+                          (e.g., ``WorkflowFactory('vasp.vasp')`` or ``WorkflowFactory('quantumespresso.pw.relax')``).
+    :type dft_workchain: aiida.plugins.WorkflowFactory
+    :param builder_bulk: A pre-configured AiiDA ``ProcessBuilder`` instance for the bulk relaxation.
+                         This builder should have the structure, DFT parameters, and resource options set.
+    :type builder_bulk: aiida.engine.ProcessBuilder
+    :param builder_slab: A pre-configured AiiDA ``ProcessBuilder`` instance for slab relaxations.
+                         This builder should have DFT parameters and resource options set. The structure
+                         for each slab will be injected by the workgraph.
+    :type builder_slab: aiida.engine.ProcessBuilder
+    :param reference_builders: A dictionary mapping reference material identifiers (e.g., 'O2', 'Ag')
+                               to their pre-configured AiiDA ``ProcessBuilder`` instances for relaxation.
+                               Example: ``{'O2': o2_builder, 'Ag': ag_builder}``
+    :type reference_builders: dict[str, aiida.engine.ProcessBuilder]
+    :param workgraph_name: Name for the generated WorkGraph.
+    :type workgraph_name: str, optional
+    :param code: DFT code identifier, used to handle code-specific output parsing.
+                 Supported codes: "VASP", "QUANTUM_ESPRESSO", "CP2K".
+    :type code: str, optional
+    :param manual_slabs: A dictionary mapping slab identifiers (str) to AiiDA ``StructureData`` nodes
+                         for manually created/provided slab structures. If provided, automated slab
+                         generation via ``get_slabs`` is skipped. Default is None (automatic generation).
+    :type manual_slabs: dict[str, aiida.orm.StructureData], optional
+    :param sampling: An AiiDA ``Int`` node specifying the number of sampling points for the
+                     chemical potential grid in ternary surface phase diagrams.
+                     Only used for ternary compounds. Default is None.
+    :type sampling: aiida.orm.Int, optional
+    :param miller_indices: An AiiDA ``List`` of Miller indices for which slabs should be generated
+                           (e.g., ``List(list=[[1,0,0], [1,1,0]])``). Used if ``manual_slabs`` is not provided.
+    :type miller_indices: aiida.orm.List, optional
+    :param min_slab_thickness: An AiiDA ``Float`` for the minimum slab thickness in Angstroms for slab generation.
+    :type min_slab_thickness: aiida.orm.Float, optional
+    :param min_vacuum_thickness: An AiiDA ``Float`` for the minimum vacuum thickness in Angstroms for slab generation.
+    :type min_vacuum_thickness: aiida.orm.Float, optional
+    :param lll_reduce: An AiiDA ``Bool`` indicating whether to perform LLL reduction on the cell for slab generation.
+    :type lll_reduce: aiida.orm.Bool, optional
+    :param center_slab: An AiiDA ``Bool`` indicating whether to center the slab in the simulation cell.
+    :type center_slab: aiida.orm.Bool, optional
+    :param symmetrize: An AiiDA ``Bool`` indicating whether to generate symmetrically distinct slab terminations.
+    :type symmetrize: aiida.orm.Bool, optional
+    :param primitive: An AiiDA ``Bool`` indicating whether to use the primitive cell for slab generation.
+    :type primitive: aiida.orm.Bool, optional
+    :param in_unit_planes: An AiiDA ``Bool`` for restricting slab generation to unit planes.
+    :type in_unit_planes: aiida.orm.Bool, optional
+    :param max_normal_search: An AiiDA ``Int`` for the maximum normal search distance in Pymatgen's slab generation.
+                              Default is None, using Pymatgen's default.
+    :type max_normal_search: aiida.orm.Int, optional
+
+    :raises ValueError: If ``reference_builders`` is not provided or empty.
+    :raises ValueError: If the bulk structure cannot be extracted from ``builder_bulk``.
+
+    :return: The configured AiiDA WorkGraph instance.
+    :rtype: aiida_workgraph.WorkGraph
     """
     # Block 1: WorkGraph Context Setup
     # ---------------------------------

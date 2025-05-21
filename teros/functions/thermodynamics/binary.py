@@ -7,17 +7,42 @@ from aiida.orm import Dict
 @task.calcfunction()
 def calculate_surface_energy_binary(bulk_structure, bulk_parameters, formation_enthalpy=None, code=None, **kwargs):
     """
-    Calculate the surface Gibbs free energy per unit area (γ) for each slab in a binary oxide system.
+    Calculate surface Gibbs free energies (γ) for slabs of a binary oxide material.
 
-    Args:
-        bulk_structure: AiiDA StructureData of the bulk
-        bulk_parameters: Dict with energy data
-        formation_enthalpy: Dict with formation enthalpy data
-        code: DFT code identifier ("QUANTUM_ESPRESSO", "CP2K", "VASP")
-        **kwargs: Contains slab_structures and slab_parameters
+    This function determines γ under oxygen-poor and oxygen-rich conditions,
+    which correspond to the lower and upper bounds of the allowed oxygen chemical potential.
 
-    Returns:
-        Dict with γ for each slab (in eV/Å²)
+    :param bulk_structure: AiiDA ``StructureData`` node of the bulk material.
+    :type bulk_structure: aiida.orm.StructureData
+    :param bulk_parameters: AiiDA ``Dict`` node with energy data from the bulk DFT calculation.
+    :type bulk_parameters: aiida.orm.Dict
+    :param formation_enthalpy: AiiDA ``Dict`` node containing formation enthalpy data for the bulk material,
+                               as returned by ``calculate_formation_enthalpy``. This includes reference energies.
+    :type formation_enthalpy: aiida.orm.Dict, optional
+    :param code: DFT code identifier ("QUANTUM_ESPRESSO", "CP2K", "VASP"), used for energy parsing.
+    :type code: str, optional
+    :param kwargs: Should contain:
+                   - ``slab_structures`` (dict[str, aiida.orm.StructureData]): A dictionary mapping slab identifiers
+                     to their AiiDA ``StructureData`` nodes.
+                   - ``slab_parameters`` (dict[str, aiida.orm.Dict]): A dictionary mapping slab identifiers
+                     to AiiDA ``Dict`` nodes containing energy data from slab DFT calculations.
+    :type kwargs: dict
+
+    :raises ValueError: If the material is not a binary compound or does not contain oxygen.
+
+    :return: A dictionary where keys are slab identifiers (e.g., "s_0", "s_1") and values are
+             AiiDA ``Dict`` nodes. Each inner ``Dict`` contains:
+             - ``slab_energy`` (float): Total energy of the slab.
+             - ``bulk_energy`` (float): Total energy of the bulk material.
+             - ``area`` (float): Surface area of the slab in Å².
+             - ``mu_O_min`` (float): Minimum oxygen chemical potential (O-poor limit).
+             - ``mu_O_max`` (float): Maximum oxygen chemical potential (O-rich limit).
+             - ``gamma_O_poor`` (float): Surface energy at the O-poor limit (eV/Å²).
+             - ``gamma_O_rich`` (float): Surface energy at the O-rich limit (eV/Å²).
+             - ``element_counts`` (dict[str, int]): Elemental composition of the slab.
+             - ``reference_energies`` (dict[str, float]): Reference energies per atom for elements.
+             - ``formation_enthalpy_ev`` (float): Formation enthalpy of the bulk material.
+    :rtype: dict[str, aiida.orm.Dict]
     """
     # Block 1: Extract and Validate Input Parameters
     # ---------------------------------------------

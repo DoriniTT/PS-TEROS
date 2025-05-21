@@ -6,17 +6,44 @@ from aiida.orm import Dict
 @task.calcfunction(outputs=[{"name": "formation_enthalpy"}])
 def calculate_formation_enthalpy(bulk_structure, bulk_parameters, code=None, **reference_systems):
     """
-    Calculate the enthalpy of formation for any oxide material.
+    Calculate the enthalpy of formation for a material, typically an oxide.
 
-    Args:
-        bulk_structure: AiiDA StructureData of the bulk oxide
-        bulk_parameters: Dict with energy data for the oxide
-        code: DFT code identifier ("QUANTUM_ESPRESSO", "CP2K", "VASP")
-        **reference_systems: Dictionary of reference systems with structure and parameters
-                            Format: {element_name_structure: structure, element_name_parameters: parameters}
+    The formation enthalpy is calculated with respect to the provided elemental references
+    (or O2 for oxygen). The function handles parsing energies from different DFT codes
+    and normalizes the formation enthalpy per formula unit and per atom.
 
-    Returns:
-        Dict with enthalpy of formation in eV
+    :param bulk_structure: AiiDA ``StructureData`` node of the bulk material.
+    :type bulk_structure: aiida.orm.StructureData
+    :param bulk_parameters: AiiDA ``Dict`` node containing the output parameters (including total energy)
+                            of the DFT calculation for the bulk material.
+    :type bulk_parameters: aiida.orm.Dict
+    :param code: DFT code identifier, used to correctly parse energy from `bulk_parameters`
+                 and reference parameters. Supported: "VASP", "QUANTUM_ESPRESSO", "CP2K".
+    :type code: str, optional
+    :param reference_systems: Keyword arguments where each key-value pair represents a reference system.
+                              For each element in the bulk material (e.g., 'Ag', 'P', 'O'),
+                              two keyword arguments are expected:
+                              - ``<element_lower>_structure``: AiiDA ``StructureData`` for the reference (e.g., ``ag_structure``).
+                              - ``<element_lower>_parameters``: AiiDA ``Dict`` with output parameters for the reference (e.g., ``ag_parameters``).
+                              For oxygen, the keys are typically ``o2_structure`` and ``o2_parameters``.
+                              The function also checks for uppercase element names as a fallback (e.g., ``AG_structure``).
+    :type reference_systems: dict[str, aiida.orm.StructureData or aiida.orm.Dict]
+
+    :raises ValueError: If reference data (structure or parameters) is missing for an element
+                        in the bulk material.
+    :raises ValueError: If a reference structure for an element does not contain that element.
+
+    :return: A dictionary where the key 'formation_enthalpy' maps to an AiiDA ``Dict`` node.
+             This Dict node contains the following key-value pairs:
+             - ``formation_enthalpy_ev`` (float): Formation enthalpy in eV per formula unit.
+             - ``formation_enthalpy_kjmol`` (float): Formation enthalpy in kJ/mol per formula unit.
+             - ``formation_enthalpy_ev_per_atom`` (float): Formation enthalpy in eV per atom.
+             - ``bulk_energy`` (float): Total energy of the bulk material in eV.
+             - ``formula_units`` (int): Number of formula units in the provided bulk cell.
+             - ``elements`` (list[str]): List of unique chemical symbols in the bulk material.
+             - ``element_counts`` (dict[str, int]): Count of each element in the bulk cell.
+             - ``<element_lower>_energy_per_atom`` (float): Energy per atom for each reference element (e.g., ``ag_energy_per_atom``).
+    :rtype: dict[str, aiida.orm.Dict]
     """
     # Step 1: Extract the atomic structure and count elements in the bulk
     bulk_atoms = bulk_structure.get_ase()
