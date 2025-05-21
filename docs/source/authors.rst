@@ -7,7 +7,7 @@ Authors
 Development Lead
 --------------
 
-* Thiago T. Dorini <your.email@example.com>
+* Thiago T. Dorini
 
 Contributors
 -----------

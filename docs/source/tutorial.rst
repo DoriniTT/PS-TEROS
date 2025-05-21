@@ -12,15 +12,18 @@ This tutorial will guide you through setting up and running a basic TEROS workfl
 Setting up AiiDA
 ~~~~~~~~~~~~~~~
 
-Before using TEROS, make sure you have AiiDA properly set up:
+Before using TEROS, make sure you have AiiDA properly set up. 
+AiiDA's `verdi presto` command is recommended for quickly setting up a new profile with necessary services.
 
-1. Initialize your AiiDA profile if you haven't already:
+1. Start and initialize your AiiDA profile if you haven't already:
 
    .. code-block:: bash
 
-       verdi quicksetup
+       verdi presto start
 
-2. Configure your computer and codes in AiiDA:
+   This command will guide you through creating a new profile (if one doesn't exist) or start an existing one, along with its associated database and message broker services.
+
+2. Configure your computer(s) and code(s) in AiiDA:
 
    .. code-block:: bash
 
@@ -51,10 +54,17 @@ Here's a simple example of how to set up and run a TEROS workflow with VASP:
     builder_slab = RelaxWorkChain.get_builder()
     # ... configure builder_slab settings ...
     
-    # Set up reference calculations (e.g., O2, pure metals)
+    # Example: Setting up reference calculation builders for VASP
+    # Oxygen reference (assuming O2 molecule calculation)
+    builder_o2_relax = RelaxWorkChain.get_builder()
+    # ... configure builder_o2_relax for an O2 molecule ...
+    # Metal reference (assuming Ag bulk calculation)
+    builder_ag_bulk_relax = RelaxWorkChain.get_builder()
+    # ... configure builder_ag_bulk_relax for Ag bulk ...
+
     references = {
-        'O': builder_o2,
-        'Ag': builder_ag,
+        'O': builder_o2_relax,  # Builder for 1/2 O2 energy
+        'Ag': builder_ag_bulk_relax, # Builder for Ag bulk energy
         # Add more references as needed
     }
     
@@ -85,6 +95,8 @@ Once your workflow has completed, you can analyze the results:
     
     # Access the results
     surface_energies = wg_node.outputs.surface_energies
+    # surface_energies is a dictionary where keys are surface identifiers (e.g., strings)
+    # and values are the calculated surface energies (e.g., floats in J/m²).
     
     # Print or process the results
     for surface, energy in surface_energies.items():
@@ -93,12 +105,6 @@ Once your workflow has completed, you can analyze the results:
 Visualization
 ~~~~~~~~~~~~
 
-TEROS also provides utilities for visualizing your results in the `teros.utils.plots` module:
+Utilities for visualizing results, such as plotting surface energy diagrams, are currently under development and will be available in an upcoming release. These tools will help in analyzing the output of TEROS workflows.
 
-.. code-block:: python
-
-    from teros.utils.plots import plot_surface_energy_vs_potential
-    
-    # Generate a surface energy plot as a function of chemical potential
-    figure = plot_surface_energy_vs_potential(wg_node)
-    figure.savefig('surface_energy_plot.png')
+Stay tuned for updates on this feature!

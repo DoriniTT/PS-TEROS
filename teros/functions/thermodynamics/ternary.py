@@ -5,25 +5,72 @@ from collections import Counter
 from math import gcd
 from functools import reduce
 import numpy as np
-# from aiida.orm import Dict # Duplicate import
 
 @task.calcfunction()
 def calculate_surface_energy_ternar(bulk_structure, bulk_parameters, sampling=None, formation_enthalpy=None, code=None, **kwargs):
     """
-    Calculate the surface Gibbs free energy per unit area (γ) for each slab in a ternary oxide system.
-    This version aligns with the formulation where Gamma terms are defined using direct stoichiometric
-    multipliers of N_N_ref_slab, and phi's bulk energy subtraction is generalized.
+    Calculate surface Gibbs free energies (γ) for slabs of a ternary oxide material.
 
-    γ = φ - Γ_NM * Δμ_M - Γ_NO * Δμ_O
-    φ = (1/2A) * [E_slab - (N_N_ref_slab / x_N_ref_coeff) * E_bulk_fu]
-        - Γ_NM * E_M_bulk_atom
-        - Γ_NO * E_O_atom_ref
-    Γ_NM = (1/2A) * (N_M_slab - x_M_coeff * N_N_ref_slab)
-    Γ_NO = (1/2A) * (N_O_slab - x_O_coeff * N_N_ref_slab)
+    This function evaluates γ over a grid of oxygen (Δμ_O) and metal (Δμ_M) chemical potentials.
+    The formulation used is:
+        γ = φ - Γ_NM * Δμ_M - Γ_NO * Δμ_O
+    where:
+        φ = (1 / 2A) * [E_slab - (N_N_ref_slab / x_N_ref_coeff) * E_bulk_fu]
+            - Γ_NM * E_M_bulk_atom
+            - Γ_NO * E_O_atom_ref
+        Γ_NM = (1 / 2A) * (N_M_slab - x_M_coeff * N_N_ref_slab)
+        Γ_NO = (1 / 2A) * (N_O_slab - x_O_coeff * N_N_ref_slab)
 
-    where M (el_M) is the first non-oxygen element, N_ref (el_N_ref) is the second non-oxygen element
-    (reference for Γ terms) from the bulk formula M_xM_coeff N_ref_xN_ref_coeff O_xO_coeff.
-    E_O_atom_ref is typically (1/2 * E_O2_molecule).
+    Here, M (el_M) is the first non-oxygen element, and N_ref (el_N_ref) is the second non-oxygen
+    element used as a reference for defining surface excess (Γ) terms. The stoichiometry of the
+    bulk material is M_{x_M_coeff} N_ref_{x_N_ref_coeff} O_{x_O_coeff}. E_O_atom_ref is the
+    reference energy per oxygen atom (typically from 1/2 * E_O2_molecule).
+
+    :param bulk_structure: AiiDA ``StructureData`` node of the bulk ternary material.
+    :type bulk_structure: aiida.orm.StructureData
+    :param bulk_parameters: AiiDA ``Dict`` node with energy data from the bulk DFT calculation.
+    :type bulk_parameters: aiida.orm.Dict
+    :param sampling: An AiiDA ``Int`` node specifying the number of points for the
+                     chemical potential grid (for both Δμ_M and Δμ_O). Default: 100.
+    :type sampling: aiida.orm.Int, optional
+    :param formation_enthalpy: AiiDA ``Dict`` node containing formation enthalpy data for the bulk material,
+                               as returned by ``calculate_formation_enthalpy``. This provides reference energies
+                               and the bulk formation enthalpy value.
+    :type formation_enthalpy: aiida.orm.Dict, optional
+    :param code: DFT code identifier ("QUANTUM_ESPRESSO", "CP2K", "VASP"), used for energy parsing.
+    :type code: str, optional
+    :param kwargs: Should contain:
+                   - ``slab_structures`` (dict[str, aiida.orm.StructureData]): A dictionary mapping slab identifiers
+                     to their AiiDA ``StructureData`` nodes.
+                   - ``slab_parameters`` (dict[str, aiida.orm.Dict]): A dictionary mapping slab identifiers
+                     to AiiDA ``Dict`` nodes containing energy data from slab DFT calculations.
+    :type kwargs: dict
+
+    :raises ValueError: If the material is not a ternary oxide, if oxygen is missing,
+                        if stoichiometric coefficients are zero leading to division errors,
+                        or if reference energies are not found in ``formation_enthalpy``.
+
+    :return: A dictionary where keys are slab identifiers (e.g., "s_0") and values are
+             AiiDA ``Dict`` nodes. Each inner ``Dict`` contains detailed results for that slab:
+             - ``phi`` (float): The φ term in the surface energy equation (eV/Å²).
+             - ``Gamma_M_vs_Nref`` (float): Surface excess of element M relative to N_ref (atoms/Å²).
+             - ``Gamma_O_vs_Nref`` (float): Surface excess of element O relative to N_ref (atoms/Å²).
+             - ``gamma_values_grid`` (dict): Nested dictionary ``{muM_key: {muO_key: gamma_value}}``
+               representing γ over the 2D chemical potential grid.
+             - ``gamma_values_fixed_muM_zero`` (dict): Dictionary ``{muO_key: gamma_value}`` for γ
+               when Δμ_M = 0 eV.
+             - ``area_A2`` (float): Surface area of the slab in Å².
+             - ``element_M_independent`` (str): Symbol of the first metal element (M).
+             - ``element_N_reference`` (str): Symbol of the second metal element (N_ref).
+             - ``bulk_stoichiometry_MxNyOz`` (dict): Stoichiometry of the bulk formula unit.
+             - ``slab_atom_counts`` (dict): Number of atoms of M, N_ref, and O in the slab.
+             - ``reference_energies_per_atom`` (dict): Reference energies per atom for elements.
+             - ``E_slab_eV`` (float): Total energy of the slab.
+             - ``E_bulk_fu_eV`` (float): Energy per formula unit of the bulk material.
+             - ``formation_enthalpy_MxNyOz_eV`` (float, optional): Formation enthalpy of the bulk.
+             - Additional diagnostic keys like ``formula_units_original_definition`` and
+               ``excess_atoms_original_definition``.
+    :rtype: dict[str, aiida.orm.Dict]
     """
     print("--- Starting calculate_surface_energy_ternar (Updated Formulation) ---") # LOG
     slab_structures = kwargs.get('slab_structures', {})
