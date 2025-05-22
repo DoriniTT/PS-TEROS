@@ -105,7 +105,7 @@ SYMMETRIZE = True            # Whether to generate symmetrically distinct slab t
 PRIMITIVE = True             # Whether to use the primitive cell for slab generation
 MAX_NORMAL_SEARCH = None     # Max normal search for pymatgen (None for default)
 IN_UNIT_PLANES = False       # Whether to restrict to unit planes
-SAMPLING = 300 # Number of sampling points for the surface phase diagram (300 x 300 grid). Use a smaller number for testing.
+SAMPLING = 10 # Number of sampling points for the surface phase diagram (300 x 300 grid). Use a smaller number for testing.
 # 300 usually works well for most systems and make a clear surface phase diagram, but you can adjust it based on your needs.
 
 # Option for manually created slab structures
