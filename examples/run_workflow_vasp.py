@@ -31,7 +31,7 @@ DFTWORKCHAIN = WorkflowFactory('vasp.vasp')
 CODE = 'VASP'
 
 # Computational resources
-CODE_LABEL = "VASP-6.4.3@bohr"  # Adjust to your VASP installation
+CODE_LABEL = "VASP-6.4.3@bohr"  # Adjust to your VASP code label configured in AiiDA (e.g., vasp@mycluster)
 NCORE = 2
 NUM_CORES = 40
 NUM_MACHINES = 1
@@ -87,12 +87,14 @@ KPOINTS_SLAB.set_kpoints_mesh([2, 2, 1])
 vasp_code = load_code(CODE_LABEL)
 
 # Set resource parameters based on code/computer label
+# This example distinguishes between a generic "cluster" setup and a local "bohr" setup.
+# Adjust this logic based on your AiiDA computer configuration.
 resource_kwargs = {}
-if "cluster" in CODE_LABEL.lower():
-    resource_kwargs["num_mpiprocs_per_machine"] = 16
-    queue_name = None
-else:  # Default or "bohr"
-    resource_kwargs["num_cores_per_machine"] = NUM_CORES
+if "cluster" in CODE_LABEL.lower():  # Example: if your code label contains "cluster"
+    resource_kwargs["num_mpiprocs_per_machine"] = 16 # Typical for clusters using MPI
+    queue_name = None # Or specify your queue if not the default
+else:  # Default or "bohr" (assumed local or specific setup)
+    resource_kwargs["num_cores_per_machine"] = NUM_CORES # For machines where you specify total cores
     queue_name = QUEUE_NAME
 
 # Set the slab parameters
@@ -103,19 +105,28 @@ LLL_REDUCE = True            # Whether to reduce the cell using LLL algorithm
 CENTER_SLAB = True           # Whether to center the slab in the simulation cell
 SYMMETRIZE = True            # Whether to generate symmetrically distinct slab terminations
 PRIMITIVE = True             # Whether to use the primitive cell for slab generation
+<<<<<<< HEAD
 MAX_NORMAL_SEARCH = None     # Max normal search for pymatgen (None for default)
 IN_UNIT_PLANES = False       # Whether to restrict to unit planes
 SAMPLING = 10 # Number of sampling points for the surface phase diagram (300 x 300 grid). Use a smaller number for testing.
 # 300 usually works well for most systems and make a clear surface phase diagram, but you can adjust it based on your needs.
+=======
+MAX_NORMAL_SEARCH = None     # Max normal search for pymatgen slab generation (None for default behavior).
+IN_UNIT_PLANES = False       # Whether to restrict slab generation to unit planes.
+SAMPLING = 300 # Number of sampling points for the surface phase diagram (e.g., 300 results in a 300x300 grid).
+               # Use a smaller number (e.g., 50-100) for faster testing, especially for initial runs.
+               # 300 usually provides a good resolution for publication-quality diagrams.
+>>>>>>> 7c2bb6c7d4f2592c33645931f4f071bef666890d
 
 # Option for manually created slab structures
-# Set file paths to your manually created slab structures
+# Provide paths to your pre-existing slab structure files (e.g., CIF, POSCAR).
+# These are examples; uncomment and modify paths if you have your own slab files.
 MANUAL_SLABS_PATHS = [
-    # os.path.join(BASE_DIR, "structures/slabs/Ag2O_100_1.cif"),
-    # os.path.join(BASE_DIR, "structures/slabs/Ag2O_100_2.cif"),
+    # os.path.join(BASE_DIR, "structures/slabs/MySlab_term1.cif"),
+    # os.path.join(BASE_DIR, "structures/slabs/MySlab_term2.cif"),
 ]
 
-# Choose how to handle slabs: 
+# Choose how to handle slabs:
 # Set to True to use manual slabs, False to use automatic generation
 USE_MANUAL_SLABS = len(MANUAL_SLABS_PATHS) > 0
 
@@ -559,7 +570,8 @@ def get_reference_builders(elements):
     
     for element in elements:
         if element == 'O':
-            # Oxygen is always referenced to O2 molecule
+            # Oxygen reference is typically an O2 molecule.
+            # The key 'O2' is used internally by TEROS to identify the oxygen reference energy (halved for E_O).
             ref_builders['O2'] = builder_o2_relax()
         elif element == 'Ag':
             ref_builders['Ag'] = builder_ag_relax()
@@ -616,8 +628,10 @@ def run_workflow():
     print(f"Submitting TEROS workflow using {CODE}...")
     print(f"Using {'manual slabs' if manual_slabs else 'automatic slab generation with default parameters'}")
     
-    wg.submit(wait=False)
-    wg.to_html()
+    wg.submit(wait=False)  # wait=False submits the workflow and returns immediately (asynchronous).
+                           # Set to True to wait for the workflow to complete (synchronous, useful for scripting).
+    wg.to_html()           # Generates an HTML representation of the workgraph, useful for visualization and debugging.
+                           # The file is typically saved as wg.html in the current directory.
     
     print("\nWorkflow submitted.")
     print(f"WorkGraph PK: {wg.pk}")

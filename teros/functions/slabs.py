@@ -19,22 +19,42 @@ def get_slabs(
     max_normal_search: Int = None
 ):
     """
-    Generate slab structures from a bulk crystal structure.
+    Generate slab structures from a bulk crystal structure using Pymatgen's SlabGenerator.
 
-    Args:
-        relaxed_structure: AiiDA StructureData of the bulk crystal
-        miller_indices: AiiDA List for Miller indices (e.g., [1, 0, 0])
-        min_slab_thickness: AiiDA Float for minimum slab thickness in Angstroms
-        min_vacuum_thickness: AiiDA Float for minimum vacuum thickness in Angstroms
-        lll_reduce: AiiDA Bool whether to reduce the cell using LLL algorithm
-        center_slab: AiiDA Bool whether to center the slab
-        symmetrize: AiiDA Bool whether to generate symmetrically distinct terminations
-        primitive: AiiDA Bool whether to use the primitive cell
-        in_unit_planes: AiiDA Bool whether to restrict to unit planes
-        max_normal_search: AiiDA Int for max normal search (optional)
+    This calcfunction wraps Pymatgen's slab generation capabilities to produce various
+    surface terminations for a given bulk material and Miller index.
 
-    Returns:
-        Dictionary with 'structures' key containing different slab terminations
+    :param relaxed_structure: AiiDA ``StructureData`` node of the bulk crystal.
+    :type relaxed_structure: aiida.orm.StructureData
+    :param miller_indices: AiiDA ``List`` of the Miller indices for slab generation (e.g., ``List(list=[1,0,0])``).
+    :type miller_indices: aiida.orm.List
+    :param min_slab_thickness: AiiDA ``Float`` specifying the minimum slab thickness in Angstroms.
+    :type min_slab_thickness: aiida.orm.Float
+    :param min_vacuum_thickness: AiiDA ``Float`` specifying the minimum vacuum thickness in Angstroms.
+    :type min_vacuum_thickness: aiida.orm.Float
+    :param lll_reduce: AiiDA ``Bool`` indicating whether to reduce the cell using the LLL algorithm
+                       before slab generation to get a more orthogonal cell. Default: False.
+    :type lll_reduce: aiida.orm.Bool
+    :param center_slab: AiiDA ``Bool`` indicating whether to center the slab in the c direction of the cell. Default: True.
+    :type center_slab: aiida.orm.Bool
+    :param symmetrize: AiiDA ``Bool`` indicating whether to generate symmetrically distinct terminations.
+                       If False, generates all unique terminations. Default: False.
+    :type symmetrize: aiida.orm.Bool
+    :param primitive: AiiDA ``Bool`` indicating whether to find the primitive cell of the bulk structure
+                      before generating slabs. Default: True.
+    :type primitive: aiida.orm.Bool
+    :param in_unit_planes: AiiDA ``Bool`` indicating whether to restrict Miller indices to unit planes. Default: False.
+    :type in_unit_planes: aiida.orm.Bool
+    :param max_normal_search: An optional AiiDA ``Int``. Pymatgen parameter: max normal search for finding Miller indices.
+                              Corresponds to ``max_sites`` in Pymatgen's ``SlabGenerator.get_slabs()`` if ``symmetrize=False``.
+                              Default: None (uses Pymatgen's default).
+    :type max_normal_search: aiida.orm.Int, optional
+
+    :return: A dictionary where the key 'structures' maps to another dictionary.
+             This inner dictionary has slab identifiers (e.g., "s_0", "s_1") as keys
+             and AiiDA ``StructureData`` nodes of the generated slabs as values.
+             Example: ``{'structures': {'s_0': <StructureData>, 's_1': <StructureData>}}``
+    :rtype: dict[str, dict[str, aiida.orm.StructureData]]
     """
     # --- Helper functions for structure conversion ---
     def get_pymatgen_structure(structure):
