@@ -6,373 +6,338 @@ from math import gcd
 from functools import reduce
 import numpy as np
 
+
 @task.calcfunction()
-def calculate_surface_energy_ternar(bulk_structure, bulk_parameters, sampling=None, formation_enthalpy=None, code=None, **kwargs):
+def calculate_surface_energy_ternar(bulk_structure, bulk_parameters, sampling=None, 
+                                  formation_enthalpy=None, code=None, **kwargs):
     """
     Calculate surface Gibbs free energies (γ) for slabs of a ternary oxide material.
 
-    This function evaluates γ over a grid of oxygen (Δμ_O) and metal (Δμ_M) chemical potentials.
-    The formulation used is:
-        γ = φ - Γ_NM * Δμ_M - Γ_NO * Δμ_O
-    where:
-        φ = (1 / 2A) * [E_slab - (N_N_ref_slab / x_N_ref_coeff) * E_bulk_fu]
-            - Γ_NM * E_M_bulk_atom
-            - Γ_NO * E_O_atom_ref
-        Γ_NM = (1 / 2A) * (N_M_slab - x_M_coeff * N_N_ref_slab)
-        Γ_NO = (1 / 2A) * (N_O_slab - x_O_coeff * N_N_ref_slab)
-
-    Here, M (el_M) is the first non-oxygen element, and N_ref (el_N_ref) is the second non-oxygen
-    element used as a reference for defining surface excess (Γ) terms. The stoichiometry of the
-    bulk material is M_{x_M_coeff} N_ref_{x_N_ref_coeff} O_{x_O_coeff}. E_O_atom_ref is the
-    reference energy per oxygen atom (typically from 1/2 * E_O2_molecule).
-
-    :param bulk_structure: AiiDA ``StructureData`` node of the bulk ternary material.
-    :type bulk_structure: aiida.orm.StructureData
-    :param bulk_parameters: AiiDA ``Dict`` node with energy data from the bulk DFT calculation.
-    :type bulk_parameters: aiida.orm.Dict
-    :param sampling: An AiiDA ``Int`` node specifying the number of points for the
-                     chemical potential grid (for both Δμ_M and Δμ_O). Default: 100.
-    :type sampling: aiida.orm.Int, optional
-    :param formation_enthalpy: AiiDA ``Dict`` node containing formation enthalpy data for the bulk material,
-                               as returned by ``calculate_formation_enthalpy``. This provides reference energies
-                               and the bulk formation enthalpy value.
-    :type formation_enthalpy: aiida.orm.Dict, optional
-    :param code: DFT code identifier ("QUANTUM_ESPRESSO", "CP2K", "VASP"), used for energy parsing.
-    :type code: str, optional
-    :param kwargs: Should contain:
-                   - ``slab_structures`` (dict[str, aiida.orm.StructureData]): A dictionary mapping slab identifiers
-                     to their AiiDA ``StructureData`` nodes.
-                   - ``slab_parameters`` (dict[str, aiida.orm.Dict]): A dictionary mapping slab identifiers
-                     to AiiDA ``Dict`` nodes containing energy data from slab DFT calculations.
-    :type kwargs: dict
-
-    :raises ValueError: If the material is not a ternary oxide, if oxygen is missing,
-                        if stoichiometric coefficients are zero leading to division errors,
-                        or if reference energies are not found in ``formation_enthalpy``.
-
-    :return: A dictionary where keys are slab identifiers (e.g., "s_0") and values are
-             AiiDA ``Dict`` nodes. Each inner ``Dict`` contains detailed results for that slab:
-             - ``phi`` (float): The φ term in the surface energy equation (eV/Å²).
-             - ``Gamma_M_vs_Nref`` (float): Surface excess of element M relative to N_ref (atoms/Å²).
-             - ``Gamma_O_vs_Nref`` (float): Surface excess of element O relative to N_ref (atoms/Å²).
-             - ``gamma_values_grid`` (dict): Nested dictionary ``{muM_key: {muO_key: gamma_value}}``
-               representing γ over the 2D chemical potential grid.
-             - ``gamma_values_fixed_muM_zero`` (dict): Dictionary ``{muO_key: gamma_value}`` for γ
-               when Δμ_M = 0 eV.
-             - ``area_A2`` (float): Surface area of the slab in Å².
-             - ``element_M_independent`` (str): Symbol of the first metal element (M).
-             - ``element_N_reference`` (str): Symbol of the second metal element (N_ref).
-             - ``bulk_stoichiometry_MxNyOz`` (dict): Stoichiometry of the bulk formula unit.
-             - ``slab_atom_counts`` (dict): Number of atoms of M, N_ref, and O in the slab.
-             - ``reference_energies_per_atom`` (dict): Reference energies per atom for elements.
-             - ``E_slab_eV`` (float): Total energy of the slab.
-             - ``E_bulk_fu_eV`` (float): Energy per formula unit of the bulk material.
-             - ``formation_enthalpy_MxNyOz_eV`` (float, optional): Formation enthalpy of the bulk.
-             - Additional diagnostic keys like ``formula_units_original_definition`` and
-               ``excess_atoms_original_definition``.
-    :rtype: dict[str, aiida.orm.Dict]
+    ================================================================================================
+    THEORETICAL FORMULATION
+    ================================================================================================
+    
+    For a ternary oxide M_x N_y O_z (where M and N are metals), the surface energy is:
+    
+        γ(Δμ_M, Δμ_O) = φ - Γ_M × Δμ_M - Γ_O × Δμ_O
+    
+    Where:
+    ------
+    1. φ (surface energy at reference chemical potentials):
+       φ = (1/2A) × [E_slab - (N_N,slab/y) × E_bulk,fu] - Γ_M × E_M,ref - Γ_O × E_O,ref
+    
+    2. Γ_M (surface excess of metal M relative to metal N):
+       Γ_M = (1/2A) × (N_M,slab - x × N_N,slab/y)
+    
+    3. Γ_O (surface excess of oxygen relative to metal N):
+       Γ_O = (1/2A) × (N_O,slab - z × N_N,slab/y)
+    
+    Variables:
+    ----------
+    - E_slab: Total energy of the slab
+    - E_bulk,fu: Energy per formula unit of the bulk
+    - N_i,slab: Number of atoms of element i in the slab
+    - x, y, z: Stoichiometric coefficients in M_x N_y O_z
+    - A: Surface area of one side of the slab (factor of 2 accounts for both surfaces)
+    - E_i,ref: Reference energy per atom for element i
+    - Δμ_i: Chemical potential of element i relative to its reference state
+    
+    Stability constraint (from bulk formation):
+    ------------------------------------------
+    x × Δμ_M + z × Δμ_O ≤ ΔH_f(M_x N_y O_z)
+    
+    ================================================================================================
+    
+    :param bulk_structure: AiiDA StructureData of the bulk ternary material
+    :param bulk_parameters: AiiDA Dict with bulk DFT calculation results
+    :param sampling: Number of points for chemical potential grid (default: 100)
+    :param formation_enthalpy: AiiDA Dict with formation enthalpy data
+    :param code: DFT code identifier ("QUANTUM_ESPRESSO", "CP2K", "VASP")
+    :param kwargs: Should contain slab_structures and slab_parameters dicts
+    
+    :return: Dictionary mapping slab IDs to surface energy results
     """
-    print("--- Starting calculate_surface_energy_ternar (Updated Formulation) ---") # LOG
+    
+    # ============================================================================================
+    # SECTION 1: EXTRACT INPUT DATA
+    # ============================================================================================
+    
     slab_structures = kwargs.get('slab_structures', {})
     slab_parameters = kwargs.get('slab_parameters', {})
-
-    # --- Bulk Properties ---
+    
+    # Set default sampling if not provided
+    if sampling is None:
+        sampling = Int(100)
+    grid_points = sampling.value
+    
+    # ============================================================================================
+    # SECTION 2: ANALYZE BULK COMPOSITION AND STOICHIOMETRY
+    # ============================================================================================
+    
+    # Get bulk composition
     bulk_ase = bulk_structure.get_ase()
-    bulk_elements_counter_raw = Counter(bulk_ase.get_chemical_symbols())
-    print(f"[LOG] Raw bulk elements count: {bulk_elements_counter_raw}") # LOG
-
-    unique_elements_bulk_formula = sorted(list(bulk_elements_counter_raw.keys()))
-    el_O = 'O'
-    if el_O not in unique_elements_bulk_formula:
-        raise ValueError("No oxygen atoms found in bulk structure. This workflow is designed for oxide materials.")
-
-    metal_elements = sorted([el for el in unique_elements_bulk_formula if el != el_O])
+    bulk_atom_counts = Counter(bulk_ase.get_chemical_symbols())
+    
+    # Identify elements (expecting M, N, O for ternary oxide)
+    all_elements = sorted(list(bulk_atom_counts.keys()))
+    if 'O' not in all_elements:
+        raise ValueError("No oxygen found. This workflow is for oxide materials.")
+    
+    # Separate metals from oxygen
+    metal_elements = sorted([el for el in all_elements if el != 'O'])
     if len(metal_elements) != 2:
-        raise ValueError(
-            f"Expected 2 metal elements for a ternary oxide, found {len(metal_elements)}: {metal_elements}. "
-            f"Elements in bulk: {unique_elements_bulk_formula}"
-        )
-
-    el_M = metal_elements[0]
-    el_N_ref = metal_elements[1]
-    print(f"[LOG] Identified elements: el_M = {el_M}, el_N_ref (reference) = {el_N_ref}, el_O = {el_O}") # LOG
-
-    counts_for_gcd = [bulk_elements_counter_raw[el] for el in [el_M, el_N_ref, el_O] if el in bulk_elements_counter_raw]
-    if not counts_for_gcd or len(counts_for_gcd) < 3: # Ensure all three elements are present for GCD
-        raise ValueError(f"Bulk structure does not contain all expected elements M, N_ref, O for GCD calculation. Counts: {bulk_elements_counter_raw}")
+        raise ValueError(f"Expected 2 metal elements for ternary oxide, found {len(metal_elements)}: {metal_elements}")
+    
+    # Define element roles
+    element_M = metal_elements[0]      # First metal (independent chemical potential)
+    element_N_ref = metal_elements[1]  # Second metal (reference for surface excess)
+    element_O = 'O'                    # Oxygen
+    
+    # Calculate stoichiometric coefficients (x, y, z in M_x N_y O_z)
+    element_list = [element_M, element_N_ref, element_O]
+    counts_for_gcd = [bulk_atom_counts[el] for el in element_list]
     common_divisor = reduce(gcd, counts_for_gcd)
-    print(f"[LOG] GCD for bulk formula: {common_divisor}") # LOG
-
-    bulk_stoich = {
-        el_M: bulk_elements_counter_raw[el_M] // common_divisor,
-        el_N_ref: bulk_elements_counter_raw[el_N_ref] // common_divisor,
-        el_O: bulk_elements_counter_raw[el_O] // common_divisor,
-    }
-    x_M_coeff = bulk_stoich[el_M]
-    x_N_ref_coeff = bulk_stoich[el_N_ref]
-    x_O_coeff = bulk_stoich[el_O]
-    print(f"[LOG] Bulk stoichiometric coefficients: x_{el_M}={x_M_coeff}, x_{el_N_ref}={x_N_ref_coeff}, x_{el_O}={x_O_coeff}") # LOG
-
-    if x_N_ref_coeff == 0: # Denominator for bulk energy term and potentially old Gamma
-        raise ValueError(f"Stoichiometric coefficient for reference element {el_N_ref} (x_N_ref_coeff) is zero.")
-
+    
+    x_M = bulk_atom_counts[element_M] // common_divisor
+    y_N = bulk_atom_counts[element_N_ref] // common_divisor
+    z_O = bulk_atom_counts[element_O] // common_divisor
+    
+    print(f"\n{'='*80}")
+    print(f"BULK COMPOSITION: {element_M}_{x_M} {element_N_ref}_{y_N} {element_O}_{z_O}")
+    print(f"{'='*80}")
+    
+    # ============================================================================================
+    # SECTION 3: EXTRACT ENERGIES FROM DFT CALCULATIONS
+    # ============================================================================================
+    
+    # Extract bulk energy
     if code in ['QUANTUM_ESPRESSO', 'CP2K']:
-        E_bulk_cell = bulk_parameters.get_dict()['energy']
-    else: # VASP and others
-        E_bulk_cell = bulk_parameters.get_dict()['total_energies']['energy_extrapolated']
-    print(f"[LOG] Total energy of bulk simulation cell (E_bulk_cell): {E_bulk_cell} eV") # LOG
-
-    if x_N_ref_coeff > 0 :
-        num_fu_in_bulk_cell = bulk_elements_counter_raw[el_N_ref] / x_N_ref_coeff
-    elif x_M_coeff > 0:
-         num_fu_in_bulk_cell = bulk_elements_counter_raw[el_M] / x_M_coeff
-    elif x_O_coeff > 0:
-        num_fu_in_bulk_cell = bulk_elements_counter_raw[el_O] / x_O_coeff
-    else:
-        raise ValueError("Cannot determine number of formula units in bulk cell due to zero stoichiometric coefficients.")
-
-    print(f"[LOG] Number of formula units in bulk cell: {num_fu_in_bulk_cell}") # LOG
-    E_bulk_fu = E_bulk_cell / num_fu_in_bulk_cell
-    print(f"[LOG] Energy per formula unit of bulk (E_bulk_fu): {E_bulk_fu} eV") # LOG
-
-    formation_data_dict = formation_enthalpy.get_dict() if formation_enthalpy else {}
-    element_ref_energies = {}
-    for el_symbol in [el_M, el_N_ref, el_O]: # N_ref needed if it's part of chem pots, but not for O2 ref.
-        energy = formation_data_dict.get(f'{el_symbol.lower()}_energy_per_atom')
-        if energy is None:
-            raise ValueError(f"Reference energy for element {el_symbol} not found in formation_enthalpy node.")
-        element_ref_energies[el_symbol] = energy
-    print(f"[LOG] Elemental reference energies (per atom): {element_ref_energies}") # LOG
-
-    E_M_bulk_atom = element_ref_energies[el_M]
-    E_O_atom_ref = element_ref_energies[el_O] # This is E_O_atom_ref, often 1/2 * E_O2_molecule
-
-    results = {}
-    first_slab_logged = False
-
-    for i, ((slab_key_param, slab_misc_data), (slab_key_struct, slab_structure_data)) in enumerate(zip(slab_parameters.items(), slab_structures.items())):
-        label = f's_{str(i)}'
-        print(f"\n--- Processing Slab: {label} (param key: {slab_key_param}, struct key: {slab_key_struct}) ---") # LOG
-
-        slab_ase = slab_structure_data.get_ase()
-        slab_atom_counts = Counter(slab_ase.get_chemical_symbols())
-        area = np.linalg.norm(np.cross(slab_ase.cell[0], slab_ase.cell[1]))
-
-        if not first_slab_logged:
-            print(f"[LOG][{label}] Slab atoms count: {slab_atom_counts}") # LOG
-            print(f"[LOG][{label}] Calculated surface area (A): {area} Å^2 (Using 2*A: {2*area} Å^2)") # LOG
-
-        if code in ['QUANTUM_ESPRESSO', 'CP2K']:
-            E_slab = slab_misc_data.get_dict()['energy']
-        else: # VASP and others
-            E_slab = slab_misc_data.get_dict()['total_energies']['energy_extrapolated']
-
-        if E_slab is None:
-            results[label] = Dict(dict={'error': f'E_slab for {label} is None'})
-            if not first_slab_logged: print(f"[LOG][{label}] E_slab is None. Skipping.") # LOG
-            continue
-        if not first_slab_logged: print(f"[LOG][{label}] Slab energy (E_slab): {E_slab} eV") # LOG
-
-        N_M_slab = slab_atom_counts.get(el_M, 0)
-        N_N_ref_slab = slab_atom_counts.get(el_N_ref, 0)
-        N_O_slab = slab_atom_counts.get(el_O, 0)
-        if not first_slab_logged:
-            print(f"[LOG][{label}] N_M_slab ({el_M}): {N_M_slab}") # LOG
-            print(f"[LOG][{label}] N_N_ref_slab ({el_N_ref}): {N_N_ref_slab}") # LOG
-            print(f"[LOG][{label}] N_O_slab ({el_O}): {N_O_slab}") # LOG
-
-        # --- Calculate Gamma terms (surface excess concentrations) ---
-        term_in_Gamma_NM = (N_M_slab - x_M_coeff * N_N_ref_slab)
-        Gamma_NM = term_in_Gamma_NM / (2 * area)
-
-        term_in_Gamma_NO = (N_O_slab - x_O_coeff * N_N_ref_slab)
-        Gamma_NO = term_in_Gamma_NO / (2 * area)
-
-        if not first_slab_logged:
-            print(f"[LOG][{label}] Term in Γ_NM (N_M_slab - x_M_coeff * N_N_ref_slab): {term_in_Gamma_NM}") # LOG
-            print(f"[LOG][{label}] Γ_NM ({el_M} wrt {el_N_ref}): {Gamma_NM} atoms/Å^2") # LOG
-            print(f"[LOG][{label}] Term in Γ_NO (N_O_slab - x_O_coeff * N_N_ref_slab): {term_in_Gamma_NO}") # LOG
-            print(f"[LOG][{label}] Γ_NO ({el_O} wrt {el_N_ref}): {Gamma_NO} atoms/Å^2") # LOG
-
-        # --- Calculate phi term ---
-        if x_N_ref_coeff == 0: # Should have been caught earlier, but as a safeguard for division
-             raise ValueError(f"x_N_ref_coeff for {el_N_ref} is zero, division by zero in phi calculation.")
-        equivalent_bulk_energy_for_phi = (N_N_ref_slab / x_N_ref_coeff) * E_bulk_fu
-        phi_part1_numerator = E_slab - equivalent_bulk_energy_for_phi
-        phi_part1 = phi_part1_numerator / (2 * area)
-
-        phi_part2 = - Gamma_NM * E_M_bulk_atom
-        phi_part3 = - Gamma_NO * E_O_atom_ref
-        phi_value = phi_part1 + phi_part2 + phi_part3
-
-        if not first_slab_logged:
-            print(f"[LOG][{label}] For φ calculation:") # LOG
-            print(f"[LOG][{label}]   (N_N_ref_slab / x_{el_N_ref}_coeff) * E_bulk_fu = {equivalent_bulk_energy_for_phi}") # LOG
-            print(f"[LOG][{label}]   E_slab - ((N_N_ref_slab / x_{el_N_ref}_coeff) * E_bulk_fu) (numerator for part1) = {phi_part1_numerator}") # LOG
-            print(f"[LOG][{label}]   φ Part 1 (energy term): {phi_part1} eV/Å^2") # LOG
-            print(f"[LOG][{label}]   Γ_NM * E_M_bulk_atom = {Gamma_NM * E_M_bulk_atom}") # LOG
-            print(f"[LOG][{label}]   φ Part 2 (chem pot M term): {phi_part2} eV/Å^2") # LOG
-            print(f"[LOG][{label}]   Γ_NO * E_O_atom_ref = {Gamma_NO * E_O_atom_ref}") # LOG
-            print(f"[LOG][{label}]   φ Part 3 (chem pot O term): {phi_part3} eV/Å^2") # LOG
-            print(f"[LOG][{label}] Total φ value: {phi_value} eV/Å^2") # LOG
-
-        # --- Chemical potential ranges and stability conditions ---
-        formation_energy_MxNyOz = formation_data_dict.get('formation_enthalpy_ev')
-        if not first_slab_logged and formation_energy_MxNyOz is not None:
-             print(f"[LOG][{label}] Formation enthalpy of bulk (ΔH_f(M_{x_M_coeff}{el_N_ref}_{x_N_ref_coeff}{el_O}_{x_O_coeff})): {formation_energy_MxNyOz} eV") # LOG
-
-        # Initialize with a default practical lower bound
-        default_min_mu = -5.0
-        delta_mu_M_min = default_min_mu
-        delta_mu_O_min = default_min_mu
-
-        if formation_energy_MxNyOz is not None:
-            # Calculate the stability limit for delta_mu_M (when delta_mu_O = 0)
-            if x_M_coeff > 0:
-                limit_M_from_FE = formation_energy_MxNyOz / x_M_coeff
-                # The actual lower bound is this limit, but not exceeding 0.0
-                delta_mu_M_min = min(0.0, limit_M_from_FE)
-
-            # Calculate the stability limit for delta_mu_O (when delta_mu_M = 0)
-            if x_O_coeff > 0:
-                limit_O_from_FE = formation_energy_MxNyOz / x_O_coeff
-                # The actual lower bound is this limit, but not exceeding 0.0
-                delta_mu_O_min = min(0.0, limit_O_from_FE)
+        E_bulk_total = bulk_parameters.get_dict()['energy']
+    else:  # VASP
+        E_bulk_total = bulk_parameters.get_dict()['total_energies']['energy_extrapolated']
+    
+    # Calculate energy per formula unit
+    formula_units_in_bulk = bulk_atom_counts[element_N_ref] / y_N
+    E_bulk_per_fu = E_bulk_total / formula_units_in_bulk
+    
+    # Extract reference energies
+    formation_data = formation_enthalpy.get_dict() if formation_enthalpy else {}
+    reference_energies = {}
+    for element in element_list:
+        energy_key = f'{element.lower()}_energy_per_atom'
+        if energy_key not in formation_data:
+            raise ValueError(f"Reference energy for {element} not found")
+        reference_energies[element] = formation_data[energy_key]
+    
+    E_M_ref = reference_energies[element_M]
+    E_O_ref = reference_energies[element_O]
+    
+    # Get formation enthalpy if available
+    formation_enthalpy_value = formation_data.get('formation_enthalpy_ev')
+    
+    print(f"\nENERGY REFERENCES:")
+    print(f"  E_bulk (per f.u.) = {E_bulk_per_fu:.6f} eV")
+    print(f"  E_{element_M} (ref) = {E_M_ref:.6f} eV/atom")
+    print(f"  E_{element_O} (ref) = {E_O_ref:.6f} eV/atom")
+    if formation_enthalpy_value:
+        print(f"  ΔH_f = {formation_enthalpy_value:.6f} eV/f.u.")
+    
+    # ============================================================================================
+    # SECTION 4: DEFINE CHEMICAL POTENTIAL RANGES
+    # ============================================================================================
+    
+    # Default bounds
+    delta_mu_M_min = -5.0  # eV
+    delta_mu_O_min = -5.0  # eV
+    
+    # Apply stability constraints if formation enthalpy is available
+    if formation_enthalpy_value is not None:
+        # From stability: x·Δμ_M + z·Δμ_O ≤ ΔH_f
+        # When Δμ_O = 0: Δμ_M ≤ ΔH_f/x
+        # When Δμ_M = 0: Δμ_O ≤ ΔH_f/z
         
-        # Ensure that even if default values were used (e.g., FE not provided),
-        # or if calculated limits were positive (e.g. positive FE),
-        # the final min values for chemical potentials do not exceed 0.0.
-        delta_mu_M_min = min(delta_mu_M_min, 0.0)
-        delta_mu_O_min = min(delta_mu_O_min, 0.0)
-
-        if not first_slab_logged:
-            print(f"[LOG][{label}] Δμ_{el_M} range for plots: [{delta_mu_M_min}, 0.0] eV") # LOG
-            print(f"[LOG][{label}] Δμ_{el_O} range for plots: [{delta_mu_O_min}, 0.0] eV") # LOG
-
-        if sampling is None:
-            sampling = Int(100)
-        delta_mu_M_range = np.linspace(delta_mu_M_min, 0.0, sampling.value) # User defined sampling
-        delta_mu_O_range = np.linspace(delta_mu_O_min, 0.0, sampling.value) # User defined sampling
-
+        if x_M > 0:
+            delta_mu_M_min = min(0.0, formation_enthalpy_value / x_M)
+        if z_O > 0:
+            delta_mu_O_min = min(0.0, formation_enthalpy_value / z_O)
+    
+    # Ensure bounds don't exceed 0
+    delta_mu_M_min = min(delta_mu_M_min, 0.0)
+    delta_mu_O_min = min(delta_mu_O_min, 0.0)
+    
+    # Create chemical potential grids
+    delta_mu_M_range = np.linspace(delta_mu_M_min, 0.0, grid_points)
+    delta_mu_O_range = np.linspace(delta_mu_O_min, 0.0, grid_points)
+    
+    print(f"\nCHEMICAL POTENTIAL RANGES:")
+    print(f"  Δμ_{element_M}: [{delta_mu_M_min:.3f}, 0.000] eV")
+    print(f"  Δμ_{element_O}: [{delta_mu_O_min:.3f}, 0.000] eV")
+    
+    # ============================================================================================
+    # SECTION 5: PROCESS EACH SLAB
+    # ============================================================================================
+    
+    results = {}
+    
+    for i, ((_, slab_data), (_, structure)) in enumerate(zip(slab_parameters.items(), slab_structures.items())):
+        slab_id = f's_{i}'
+        
+        print(f"\n{'-'*80}")
+        print(f"PROCESSING SLAB: {slab_id}")
+        print(f"{'-'*80}")
+        
+        # ----------------------------------------------------------------------------------------
+        # 5.1: Extract slab properties
+        # ----------------------------------------------------------------------------------------
+        
+        slab_ase = structure.get_ase()
+        slab_atom_counts = Counter(slab_ase.get_chemical_symbols())
+        
+        # Calculate surface area (cross product of lattice vectors a and b)
+        area = np.linalg.norm(np.cross(slab_ase.cell[0], slab_ase.cell[1]))
+        
+        # Extract slab energy
+        if code in ['QUANTUM_ESPRESSO', 'CP2K']:
+            E_slab = slab_data.get_dict()['energy']
+        else:  # VASP
+            E_slab = slab_data.get_dict()['total_energies']['energy_extrapolated']
+        
+        if E_slab is None:
+            print(f"  WARNING: No energy found for {slab_id}, skipping...")
+            continue
+        
+        # Get atom counts in slab
+        N_M_slab = slab_atom_counts.get(element_M, 0)
+        N_N_slab = slab_atom_counts.get(element_N_ref, 0)
+        N_O_slab = slab_atom_counts.get(element_O, 0)
+        
+        print(f"\n  Slab composition: {element_M}_{N_M_slab} {element_N_ref}_{N_N_slab} {element_O}_{N_O_slab}")
+        print(f"  Surface area: {area:.3f} Å²")
+        print(f"  E_slab = {E_slab:.6f} eV")
+        
+        # ----------------------------------------------------------------------------------------
+        # 5.2: Calculate surface excess (Gamma) terms
+        # ----------------------------------------------------------------------------------------
+        
+        print(f"\n  SURFACE EXCESS CALCULATIONS:")
+        print(f"  " + "="*60)
+        
+        # Γ_M = (1/2A) × (N_M,slab - x × N_N,slab/y)
+        excess_M = N_M_slab - (x_M * N_N_slab / y_N)
+        Gamma_M = excess_M / (2 * area)
+        
+        print(f"  Γ_{element_M} = (1/2A) × (N_{element_M},slab - x × N_{element_N_ref},slab/y)")
+        print(f"       = (1/{2*area:.3f}) × ({N_M_slab} - {x_M} × {N_N_slab}/{y_N})")
+        print(f"       = (1/{2*area:.3f}) × {excess_M:.3f}")
+        print(f"       = {Gamma_M:.6f} atoms/Å²")
+        
+        # Γ_O = (1/2A) × (N_O,slab - z × N_N,slab/y)
+        excess_O = N_O_slab - (z_O * N_N_slab / y_N)
+        Gamma_O = excess_O / (2 * area)
+        
+        print(f"\n  Γ_{element_O} = (1/2A) × (N_{element_O},slab - z × N_{element_N_ref},slab/y)")
+        print(f"      = (1/{2*area:.3f}) × ({N_O_slab} - {z_O} × {N_N_slab}/{y_N})")
+        print(f"      = (1/{2*area:.3f}) × {excess_O:.3f}")
+        print(f"      = {Gamma_O:.6f} atoms/Å²")
+        
+        # ----------------------------------------------------------------------------------------
+        # 5.3: Calculate φ (surface energy at reference chemical potentials)
+        # ----------------------------------------------------------------------------------------
+        
+        print(f"\n  PHI (φ) CALCULATION:")
+        print(f"  " + "="*60)
+        
+        # φ = (1/2A) × [E_slab - (N_N,slab/y) × E_bulk,fu] - Γ_M × E_M,ref - Γ_O × E_O,ref
+        
+        # Term 1: Energy difference contribution
+        bulk_equivalent_energy = (N_N_slab / y_N) * E_bulk_per_fu
+        energy_diff = E_slab - bulk_equivalent_energy
+        term1 = energy_diff / (2 * area)
+        
+        # Term 2: Metal reference contribution
+        term2 = -Gamma_M * E_M_ref
+        
+        # Term 3: Oxygen reference contribution
+        term3 = -Gamma_O * E_O_ref
+        
+        # Total φ
+        phi = term1 + term2 + term3
+        
+        print(f"  φ = (1/2A) × [E_slab - (N_{element_N_ref},slab/y) × E_bulk,fu] - Γ_{element_M} × E_{element_M},ref - Γ_{element_O} × E_{element_O},ref")
+        print(f"\n  Breaking down the calculation:")
+        print(f"    Term 1 = (1/{2*area:.3f}) × [{E_slab:.6f} - ({N_N_slab}/{y_N}) × {E_bulk_per_fu:.6f}]")
+        print(f"           = (1/{2*area:.3f}) × {energy_diff:.6f}")
+        print(f"           = {term1:.6f} eV/Å²")
+        print(f"\n    Term 2 = -{Gamma_M:.6f} × {E_M_ref:.6f}")
+        print(f"           = {term2:.6f} eV/Å²")
+        print(f"\n    Term 3 = -{Gamma_O:.6f} × {E_O_ref:.6f}")
+        print(f"           = {term3:.6f} eV/Å²")
+        print(f"\n  φ = {term1:.6f} + {term2:.6f} + {term3:.6f} = {phi:.6f} eV/Å²")
+        
+        # ----------------------------------------------------------------------------------------
+        # 5.4: Calculate surface energy over chemical potential grid
+        # ----------------------------------------------------------------------------------------
+        
+        print(f"\n  SURFACE ENERGY EQUATION:")
+        print(f"  γ(Δμ_{element_M}, Δμ_{element_O}) = {phi:.6f} - {Gamma_M:.6f} × Δμ_{element_M} - {Gamma_O:.6f} × Δμ_{element_O}")
+        
+        # Calculate γ for full 2D grid
         gamma_values_grid = {}
-        for delta_mu_M_val in delta_mu_M_range:
-            for delta_mu_O_val in delta_mu_O_range:
-                gamma = phi_value - Gamma_NM * delta_mu_M_val - Gamma_NO * delta_mu_O_val
-                key = f"muM_{delta_mu_M_val:.4f}_muO_{delta_mu_O_val:.4f}"
+        for delta_mu_M in delta_mu_M_range:
+            for delta_mu_O in delta_mu_O_range:
+                gamma = phi - Gamma_M * delta_mu_M - Gamma_O * delta_mu_O
+                key = f"muM_{delta_mu_M:.4f}_muO_{delta_mu_O:.4f}"
                 gamma_values_grid[key] = float(gamma)
-
-        # --- Calculate gamma for fixed delta_mu_M = 0 ---
+        
+        # Calculate γ for fixed Δμ_M = 0 (common analysis case)
         gamma_values_fixed_muM_zero = {}
-        delta_mu_M_fixed_val = 0.0
-        for delta_mu_O_val in delta_mu_O_range:
-            gamma = phi_value - Gamma_NM * delta_mu_M_fixed_val - Gamma_NO * delta_mu_O_val
-            key = f"muM_0.0000_muO_{delta_mu_O_val:.4f}" # muM is fixed at 0.0
+        for delta_mu_O in delta_mu_O_range:
+            gamma = phi - Gamma_O * delta_mu_O  # Δμ_M = 0
+            key = f"muM_0.0000_muO_{delta_mu_O:.4f}"
             gamma_values_fixed_muM_zero[key] = float(gamma)
-
-        if not first_slab_logged:
-            print(f"[LOG][{label}] Example γ (at Δμ_{el_M}=0, Δμ_{el_O}=0, if stable): {gamma_values_grid.get('muM_0.0000_muO_0.0000', 'N/A (not in stable region or not calculated)')}") # LOG
-            first_slab_logged = True
-
-        n_i_original_calc = {}
-        for el, bulk_c in bulk_stoich.items():
-            if bulk_c > 0:
-                n_i_original_calc[el] = slab_atom_counts.get(el, 0) / bulk_c
-            else:
-                n_i_original_calc[el] = 0.0
-        n_values_original = [v for v in n_i_original_calc.values() if v > 0]
-        formula_units_original_def = min(n_values_original) if n_values_original else 1.0
-        excess_atoms_original_def = {
-            el: slab_atom_counts.get(el, 0) - formula_units_original_def * bulk_stoich.get(el,0)
-            for el in [el_M, el_N_ref, el_O]
-        }
-
-        current_results_dict = {
-            'phi': float(phi_value),
-            'Gamma_M_vs_Nref': float(Gamma_NM),
-            'Gamma_O_vs_Nref': float(Gamma_NO),
+        
+        # Example values
+        gamma_at_zero = phi  # Both chemical potentials at zero
+        print(f"\n  Example: γ(0, 0) = {gamma_at_zero:.6f} eV/Å²")
+        
+        # ----------------------------------------------------------------------------------------
+        # 5.5: Store results
+        # ----------------------------------------------------------------------------------------
+        
+        results[slab_id] = Dict(dict={
+            # Primary results
+            'phi': float(phi),
+            'Gamma_M_vs_Nref': float(Gamma_M),
+            'Gamma_O_vs_Nref': float(Gamma_O),
             'gamma_values_grid': gamma_values_grid,
             'gamma_values_fixed_muM_zero': gamma_values_fixed_muM_zero,
+            
+            # Structural information
             'area_A2': float(area),
-            'element_M_independent': el_M,
-            'element_N_reference': el_N_ref,
+            'element_M_independent': element_M,
+            'element_N_reference': element_N_ref,
             'bulk_stoichiometry_MxNyOz': {
-                f"x_{el_M}": int(x_M_coeff),
-                f"x_{el_N_ref}": int(x_N_ref_coeff),
-                f"x_{el_O}": int(x_O_coeff)
+                f"x_{element_M}": int(x_M),
+                f"x_{element_N_ref}": int(y_N),
+                f"x_{element_O}": int(z_O)
             },
             'slab_atom_counts': {
-                f"N_{el_M}": int(N_M_slab),
-                f"N_{el_N_ref}": int(N_N_ref_slab),
-                f"N_{el_O}": int(N_O_slab)
+                f"N_{element_M}": int(N_M_slab),
+                f"N_{element_N_ref}": int(N_N_slab),
+                f"N_{element_O}": int(N_O_slab)
             },
-            'reference_energies_per_atom': {k:float(v) for k,v in element_ref_energies.items()},
+            
+            # Energy data
+            'reference_energies_per_atom': {k: float(v) for k, v in reference_energies.items()},
             'E_slab_eV': float(E_slab),
-            'E_bulk_fu_eV': float(E_bulk_fu),
-            'formula_units_original_definition': float(formula_units_original_def),
-            'excess_atoms_original_definition': {k:float(v) for k,v in excess_atoms_original_def.items()},
-        }
-        if formation_energy_MxNyOz is not None:
-            current_results_dict['formation_enthalpy_MxNyOz_eV'] = float(formation_energy_MxNyOz)
-
-        results[label] = Dict(dict=current_results_dict)
-
-    return results
-
-if __name__ == "__main__":
-    from aiida.orm import StructureData, Dict
-    from ase import Atoms
-
-    mock_bulk_structure = StructureData(ase=read('/home/thiagotd/git/aiida_teros/examples/structures/bulk/Ag6O8P2_optimized.cif'))
-
-    mock_bulk_parameters = Dict(dict={
-        'total_energies': {
-            'energy_extrapolated': -83.74683825
-        }
-    })
-
-    mock_formation_enthalpy_data = {
-        'formation_enthalpy_ev': -8.800103665,
-        'ag_energy_per_atom': -2.717776815,
-        'p_energy_per_atom': -5.200724015,
-        'o_energy_per_atom': -4.92981525
-    }
-    mock_formation_enthalpy = Dict(dict=mock_formation_enthalpy_data)
-
-    mock_code = 'VASP'
-
-    mock_slab1_structure = load_node(23123)
-    mock_slab1_parameters = Dict(dict={
-        'total_energies': {
-            'energy_extrapolated': -246.86343315
-        }
-    })
-
-    mock_slab_structures = {'slab1': mock_slab1_structure}
-    mock_slab_parameters = {'slab1_params': mock_slab1_parameters}
-
-    print("Testing calculate_surface_energy_ternar...")
-    try:
-        results_dict = calculate_surface_energy_ternar(
-            bulk_structure=mock_bulk_structure,
-            bulk_parameters=mock_bulk_parameters,
-            formation_enthalpy=mock_formation_enthalpy,
-            code=mock_code,
-            slab_structures=mock_slab_structures,
-            slab_parameters=mock_slab_parameters
-        )
-
-        for slab_label, result_data_node in results_dict.items():
-            print(f"\nResults for {slab_label}:")
-            result_data = result_data_node.get_dict()
-            for key, value in result_data.items():
-                if isinstance(value, dict):
-                    print(f"  {key}:")
-                    for sub_key, sub_value in value.items():
-                        print(f"    {sub_key}: {sub_value}")
-                else:
-                    print(f"  {key}: {value}")
+            'E_bulk_fu_eV': float(E_bulk_per_fu),
+        })
+        
+        if formation_enthalpy_value is not None:
+            results[slab_id].dict['formation_enthalpy_MxNyOz_eV'] = float(formation_enthalpy_value)
     
-    except ValueError as e:
-        print(f"An error occurred during the test: {e}")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+    print(f"\n{'='*80}")
+    print(f"CALCULATION COMPLETE")
+    print(f"{'='*80}\n")
+    
+    return results
