@@ -13,8 +13,8 @@ PS-TEROS is a Python package for calculating surface Gibbs free energy using ab 
 
 ```bash
 # Clone the repository
-git clone git@github.com:DoriniTT/aiida-teros.git
-cd aiida-teros
+git clone git@github.com:DoriniTT/PS-TEROS.git
+cd PS-TEROS
 
 # Install the package in development mode
 pip install -e .
