@@ -1,6 +1,6 @@
-# TEROS: Thermodynamics of Oxide Surfaces
+# PS-TEROS: Predicting Stability of TERminations of Oxide Surfaces
 
-Teros is a Python package for calculating surface Gibbs free energy using ab initio atomistic thermodynamics with the AiiDA Workgraph framework.
+PS-TEROS is a Python package for calculating surface Gibbs free energy using ab initio atomistic thermodynamics with the AiiDA Workgraph framework.
 
 ## Features
 
@@ -13,8 +13,8 @@ Teros is a Python package for calculating surface Gibbs free energy using ab ini
 
 ```bash
 # Clone the repository
-git clone git@github.com:DoriniTT/aiida-teros.git
-cd aiida-teros
+git clone git@github.com:DoriniTT/PS-TEROS.git
+cd PS-TEROS
 
 # Install the package in development mode
 pip install -e .
@@ -32,7 +32,7 @@ pip install -e .
 
 ### Basic Workflow
 
-To create and submit a Teros workflow:
+To create and submit a PS-TEROS workflow:
 
 ```python
 from teros import create_teros_workgraph
