@@ -105,18 +105,10 @@ LLL_REDUCE = True            # Whether to reduce the cell using LLL algorithm
 CENTER_SLAB = True           # Whether to center the slab in the simulation cell
 SYMMETRIZE = True            # Whether to generate symmetrically distinct slab terminations
 PRIMITIVE = True             # Whether to use the primitive cell for slab generation
-<<<<<<< HEAD
 MAX_NORMAL_SEARCH = None     # Max normal search for pymatgen (None for default)
 IN_UNIT_PLANES = False       # Whether to restrict to unit planes
 SAMPLING = 10 # Number of sampling points for the surface phase diagram (300 x 300 grid). Use a smaller number for testing.
 # 300 usually works well for most systems and make a clear surface phase diagram, but you can adjust it based on your needs.
-=======
-MAX_NORMAL_SEARCH = None     # Max normal search for pymatgen slab generation (None for default behavior).
-IN_UNIT_PLANES = False       # Whether to restrict slab generation to unit planes.
-SAMPLING = 300 # Number of sampling points for the surface phase diagram (e.g., 300 results in a 300x300 grid).
-               # Use a smaller number (e.g., 50-100) for faster testing, especially for initial runs.
-               # 300 usually provides a good resolution for publication-quality diagrams.
->>>>>>> 7c2bb6c7d4f2592c33645931f4f071bef666890d
 
 # Option for manually created slab structures
 # Provide paths to your pre-existing slab structure files (e.g., CIF, POSCAR).

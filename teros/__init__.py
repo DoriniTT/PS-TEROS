@@ -27,4 +27,8 @@ For theoretical background on ab initio atomistic thermodynamics, see:
 __version__ = '0.1.0'
 
 # Import main components for easier access
-from teros.core.workgraph import create_teros_workgraph
+try:
+    from .core.workgraph import create_teros_workgraph
+except ImportError:
+    # Fallback for development/testing
+    pass

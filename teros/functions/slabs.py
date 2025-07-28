@@ -4,6 +4,7 @@ from pymatgen.core.surface import SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from aiida.orm import StructureData, List, Float, Bool, Int
+import csv
 
 @task.calcfunction(outputs=[{"name": "structures"}])
 def get_slabs(
@@ -81,6 +82,40 @@ def get_slabs(
     # --- Convert input structure to pymatgen format ---
     bulk_structure = get_pymatgen_structure(relaxed_structure)
 
+    # --- Helper function to analyze stoichiometric deviations ---
+    def analyze_defects(slab_structure, bulk_structure):
+        """
+        Analyze stoichiometric deviations in a slab compared to the bulk structure.
+        
+        :param slab_structure: pymatgen Structure of the slab
+        :param bulk_structure: pymatgen Structure of the bulk
+        :return: dict with element symbols as keys and excess amounts as values
+        """
+        # Get bulk composition and normalize to per formula unit
+        bulk_composition = bulk_structure.composition
+        # Get the reduced composition and factor
+        bulk_reduced, factor = bulk_composition.get_reduced_composition_and_factor()
+        
+        # Get slab composition
+        slab_composition = slab_structure.composition
+        
+        # Calculate excess for each element in the bulk
+        defects = {}
+        for element in bulk_reduced.elements:
+            bulk_amount = bulk_reduced[element]
+            # Scale to slab size (using the same element to determine scaling)
+            slab_amount = slab_composition[element] if element in slab_composition else 0
+            # Calculate excess relative to the reduced bulk formula
+            excess = slab_amount - bulk_amount
+            defects[element.name] = excess
+            
+        # Check for elements in slab that are not in bulk
+        for element in slab_composition.elements:
+            if element not in bulk_reduced.elements:
+                defects[element.name] = slab_composition[element]
+                
+        return defects
+
     # --- Optionally reduce to primitive cell for cleaner slabs ---
     if py_primitive:
         analyzer = SpacegroupAnalyzer(bulk_structure)
@@ -103,10 +138,42 @@ def get_slabs(
 
     # --- Convert slabs to orthogonal cells and then to AiiDA structures ---
     aiida_slabs = {}
+    defect_data = []
+    
+    # Get all elements in the bulk structure for consistent CSV columns
+    bulk_elements = [element.name for element in bulk_structure.composition.elements]
+    
     for i, slab in enumerate(slabs):
         ortho_slab = slab.get_orthogonal_c_slab()  # Convert to orthogonal cell along c-axis
         super_slab = ortho_slab.make_supercell((1, 1, 1))  # No expansion, but could be changed
         aiida_slabs[f"s_{i}"] = get_aiida_structure(super_slab)  # Convert to AiiDA StructureData
+        
+        # Analyze defects for this slab
+        defects = analyze_defects(super_slab, bulk_structure)
+        defect_entry = {"termination": f"s_{i}"}
+        defect_entry.update(defects)
+        defect_data.append(defect_entry)
+
+    # --- Write defect data to CSV file ---
+    # Ensure all elements from bulk are included in CSV columns
+    csv_columns = ["termination"] + bulk_elements
+    
+    # Add any additional elements found in slabs but not in bulk
+    all_elements = set(bulk_elements)
+    for entry in defect_data:
+        all_elements.update(entry.keys())
+    all_elements.discard("termination")
+    
+    # Reorder columns: termination first, then elements in alphabetical order
+    csv_columns = ["termination"] + sorted(list(all_elements))
+    
+    with open("DEFECT_TYPES", "w", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
+        writer.writeheader()
+        for entry in defect_data:
+            # Ensure all columns are present in each row
+            row = {col: entry.get(col, 0) for col in csv_columns}
+            writer.writerow(row)
 
     # --- Return the dictionary of slab structures ---
     return {'structures': aiida_slabs}

@@ -11,6 +11,7 @@ from teros.functions.slabs import get_slabs
 from teros.functions.thermodynamics.formation import calculate_formation_enthalpy
 from teros.functions.thermodynamics.binary import calculate_surface_energy_binary
 from teros.functions.thermodynamics.ternary import calculate_surface_energy_ternar
+#from teros.utils.output_formatter import create_output_file
 from aiida.orm import Dict, Int, Float, Bool, List
 from aiida import load_profile
 load_profile()
@@ -297,6 +298,26 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
                 formation_enthalpy=enthalpy_task.outputs.formation_enthalpy,
                 code=code
             )
+
+        # Block 11: Generate Output File
+        # ------------------------------
+        # Prepare results data for output formatting
+        #results_data = {
+        #    "Formation Enthalpy": (enthalpy_task.outputs.formation_enthalpy.value, "eV/atom"),
+        #}
+        
+        ## Add surface energies to results
+        ## Note: This is a simplified approach - in practice, you might need to extract
+        ## specific values from the surface_thermo_task outputs
+        #output_task = wg.add_task(
+        #    create_output_file,
+        #    name="generate_output",
+        #    results_data=results_data,
+        #    filename="PS_TEROS_OUTPUT.txt"
+        #)
+        
+        ## Set dependencies to ensure output is generated after calculations
+        #output_task.set_dependencies([surface_thermo_task, enthalpy_task])
 
     return wg
 

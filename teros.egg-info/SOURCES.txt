@@ -8,6 +8,7 @@ legacy/AiiDA_teros.py
 legacy/__init__.py
 legacy/run_aiida.py
 teros/__init__.py
+teros/setup.py
 teros.egg-info/PKG-INFO
 teros.egg-info/SOURCES.txt
 teros.egg-info/dependency_links.txt

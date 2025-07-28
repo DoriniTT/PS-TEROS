@@ -12,5 +12,5 @@ from teros.functions.thermodynamics.ternary import calculate_surface_energy_tern
 __all__ = [
     'calculate_formation_enthalpy',
     'calculate_surface_energy_binary',
-    'calculate_surface_energy_ternary',
+    'calculate_surface_energy_ternar',
 ]

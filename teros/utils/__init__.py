@@ -7,4 +7,8 @@ data processing, analysis, visualization, or other common tasks that support
 the core workflow operations.
 """
 
-__all__ = [] # Controls 'from teros.utils import *'
+# Import submodules for easier access
+from . import plots
+from . import output_formatter
+
+__all__ = ["plots", "output_formatter"]
