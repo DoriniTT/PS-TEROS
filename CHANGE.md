@@ -1,5 +1,13 @@
 # Changelog
 
+## [v0.1.2] - Enthalpy of Formation Bug Fix & Oxygen Chemical Potential Limits
+
+### Bug Fixes
+- Fixed calculation of enthalpy of formation to correct numerical errors in previous versions.
+- Corrected the limits for the oxygen chemical potential to ensure physically meaningful bounds are enforced.
+
+---
+
 ## [v0.1.1] - Added DEFECT_TYPES File Generation
 
 ### New Feature
