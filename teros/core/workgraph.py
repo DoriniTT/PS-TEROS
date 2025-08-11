@@ -10,7 +10,7 @@ from aiida_workgraph import WorkGraph, task, active_map_zone
 from teros.functions.slabs import get_slabs
 from teros.functions.thermodynamics.formation import calculate_formation_enthalpy
 from teros.functions.thermodynamics.binary import calculate_surface_energy_binary
-from teros.functions.thermodynamics.ternary import calculate_surface_energy_ternar
+from teros.functions.thermodynamics.ternary import calculate_surface_energy_ternary
 #from teros.utils.output_formatter import create_output_file
 from aiida.orm import Dict, Int, Float, Bool, List
 from aiida import load_profile
@@ -43,6 +43,8 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
                           workgraph_name="teros_surface_workflow", code="VASP",
                           manual_slabs=None,
                           sampling: Int = None,
+                          # Early-exit control
+                          generate_structures_only: Bool = None,
                           # Slab generation parameters
                           miller_indices: List = None,
                           min_slab_thickness: Float = None,
@@ -91,6 +93,12 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
                      chemical potential grid in ternary surface phase diagrams.
                      Only used for ternary compounds. Default is None.
     :type sampling: aiida.orm.Int, optional
+    :param generate_structures_only: An AiiDA ``Bool`` flag. If True, the workflow stops after
+                                     generating slab structures from the bulk relaxation (or
+                                     using manual_slabs), writes them to CIF files, and returns
+                                     a FolderData with the files. Skips slab relaxations,
+                                     reference calculations and thermodynamics.
+    :type generate_structures_only: aiida.orm.Bool, optional
     :param miller_indices: An AiiDA ``List`` of Miller indices for which slabs should be generated
                            (e.g., ``List(list=[[1,0,0], [1,1,0]])``). Used if ``manual_slabs`` is not provided.
     :type miller_indices: aiida.orm.List, optional
@@ -123,6 +131,47 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
     # Create a new WorkGraph context with the specified workflow name.
     # All tasks and dependencies will be defined within this context.
     with WorkGraph(workgraph_name) as wg:
+        # Fast path: generate only slab structures from the input bulk and stop
+        # ---------------------------------------------------------------------
+        if generate_structures_only and bool(getattr(generate_structures_only, "value", False)):
+            # Determine the bulk structure input directly from the provided builder, without running relaxation
+            bulk_structure = builder_bulk.structure if hasattr(builder_bulk, 'structure') else None
+            if bulk_structure is None and hasattr(builder_bulk, 'cp2k') and 'structure' in builder_bulk.cp2k:
+                bulk_structure = builder_bulk.cp2k.structure
+            if bulk_structure is None:
+                raise ValueError("Could not extract structure from bulk builder for generate_structures_only=True")
+
+            if manual_slabs:
+                slab_structures = manual_slabs
+            else:
+                # Trigger slab generation immediately from the provided bulk structure
+                generate_slabs_task = wg.add_task(
+                    get_slabs,
+                    name="generate_slabs",
+                    relaxed_structure=bulk_structure,
+                    # Pass slab generation parameters
+                    miller_indices=miller_indices,
+                    min_slab_thickness=min_slab_thickness,
+                    min_vacuum_thickness=min_vacuum_thickness,
+                    lll_reduce=lll_reduce,
+                    center_slab=center_slab,
+                    symmetrize=symmetrize,
+                    primitive=primitive,
+                    in_unit_planes=in_unit_planes,
+                    max_normal_search=max_normal_search,
+                )
+                slab_structures = generate_slabs_task.outputs.structures
+
+            # Write slabs to files and return early
+            from teros.utils.write_slabs import write_slabs_to_files
+            write_task = wg.add_task(
+                write_slabs_to_files,
+                name="write_slabs_to_files",
+                slab_structures=slab_structures
+            )
+            wg.ctx.result = write_task.outputs
+            return wg
+
         # Block 2: Bulk Relaxation Task
         # -----------------------------
         bulk_task = wg.add_task(dft_workchain, name="bulk_relaxation")
@@ -175,6 +224,21 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
             
             # Use the generated slabs for the rest of the workflow
             slab_structures = generate_slabs_task.outputs.structures
+
+        # Optional Early Exit: Only generate structures and write to files
+        # ---------------------------------------------------------------
+        if generate_structures_only and bool(getattr(generate_structures_only, "value", False)):
+            # If manual slabs were provided, slab_structures is that mapping already.
+            # Otherwise, it is generate_slabs_task.outputs.structures.
+            from teros.utils.write_slabs import write_slabs_to_files
+            write_task = wg.add_task(
+                write_slabs_to_files,
+                name="write_slabs_to_files",
+                slab_structures=slab_structures
+            )
+            # Expose the FolderData as the result and return the WorkGraph
+            wg.ctx.result = write_task.outputs
+            return wg
 
         # Block 4: Slab Relaxation Tasks (Active Map Zone)
         # ------------------------------------------------
@@ -288,7 +352,7 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
             )
         elif is_ternary:
             surface_thermo_task = wg.add_task(
-                calculate_surface_energy_ternar,
+                calculate_surface_energy_ternary,
                 name="surface_thermodynamics",
                 bulk_structure=bulk_struct_out,
                 bulk_parameters=bulk_params_out,

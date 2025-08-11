@@ -25,5 +25,8 @@ teros/functions/thermodynamics/ternary.py
 teros/tests/__init__.py
 teros/tests/test_slab_generation.py
 teros/utils/__init__.py
+teros/utils/output_formatter.py
+teros/utils/test_output_formatter.py
+teros/utils/write_slabs.py
 teros/utils/plots/__init__.py
 teros/utils/plots/delta_oxygen_chem_vs_surface_energy.py

@@ -139,16 +139,15 @@ def calculate_surface_energy_ternary(bulk_structure, bulk_parameters, sampling=N
     delta_mu_O_min = -5.0  # eV
     
     # Apply stability constraints if formation enthalpy is available
-    # From stability: x·Δμ_M + z·Δμ_O ≤ ΔH_f
-    # When Δμ_O = 0: Δμ_M ≤ ΔH_f/x
-    # When Δμ_M = 0: Δμ_O ≤ ΔH_f/z
-    
-    if x_M > 0:
-        delta_mu_M_min = min(0.0, formation_enthalpy_value / bulk_atom_counts[element_M])
-        #delta_mu_M_min = min(0.0, formation_enthalpy_value / x_M)
-    if z_O > 0:
-        delta_mu_O_min = min(0.0, formation_enthalpy_value / bulk_atom_counts[element_O])
-        #delta_mu_O_min = min(0.0, formation_enthalpy_value / z_O)
+    if formation_enthalpy_value is not None:
+        # From stability: x·Δμ_M + z·Δμ_O ≤ ΔH_f
+        # When Δμ_O = 0: Δμ_M ≤ ΔH_f/x
+        # When Δμ_M = 0: Δμ_O ≤ ΔH_f/z
+        
+        if x_M > 0:
+            delta_mu_M_min = min(0.0, formation_enthalpy_value / x_M)
+        if z_O > 0:
+            delta_mu_O_min = min(0.0, formation_enthalpy_value / z_O)
     
     # Ensure bounds don't exceed 0
     delta_mu_M_min = min(delta_mu_M_min, 0.0)
