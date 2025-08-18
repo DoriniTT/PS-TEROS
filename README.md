@@ -28,6 +28,11 @@ pip install -e .
 (and a supported DFT code + AiiDA plugin for actual calculations)
 ```
 
+**Important:** For the moment, PS-TEROS is only compatible with aiida-workgraph version 0.5.2. Install it with:
+```bash
+pip install aiida-workgraph==0.5.2
+```
+
 ## Usage
 
 ### Basic Workflow
@@ -105,3 +110,5 @@ open build/html/index.html  # On Linux use: xdg-open build/html/index.html
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+```
