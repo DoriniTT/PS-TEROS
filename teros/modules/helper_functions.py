@@ -11,7 +11,7 @@ from aiida_workgraph import task
 
 
 @task.calcfunction
-def get_structure_from_file(filepath: orm.Str) -> orm.StructureData:
+def get_structure_from_file(filepath) -> orm.StructureData:
     """
     Load structure from a file (CIF, POSCAR, XYZ, etc.).
 
@@ -19,15 +19,21 @@ def get_structure_from_file(filepath: orm.Str) -> orm.StructureData:
     in any format supported by ASE.
 
     Args:
-        filepath: Path to the structure file
+        filepath: Path to the structure file (can be str or orm.Str)
 
     Returns:
         StructureData node containing the loaded structure
     """
     from ase.io import read
 
+    # Handle both string and orm.Str types
+    if isinstance(filepath, orm.Str):
+        path_str = filepath.value
+    else:
+        path_str = str(filepath)
+
     # Read structure file using ASE (supports CIF, POSCAR, XYZ, etc.)
-    atoms = read(filepath.value)
+    atoms = read(path_str)
 
     # Convert to AiiDA StructureData
     structure = orm.StructureData(ase=atoms)

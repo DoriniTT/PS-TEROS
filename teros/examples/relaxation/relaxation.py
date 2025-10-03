@@ -14,7 +14,7 @@ Usage:
 
 import sys
 from aiida import load_profile, orm
-from teros.workgraph import build_workgraph
+from teros.workgraph import build_relaxation_workgraph
 
 
 def main():
@@ -71,7 +71,7 @@ def main():
 
     # Create the WorkGraph
     print("\nCreating WorkGraph...")
-    wg = build_workgraph(
+    wg = build_relaxation_workgraph(
         structure_path=structure_path,
         code_label=code_label,
         kpoints_spacing=0.3,  # A^-1 * 2pi
