@@ -20,7 +20,7 @@ If the daemon is not running, you can start it by doing 'verdi daemon start'.
 * **Python binary**
 
   ```bash
-  source ~/envs/aiida/bin/activate && /home/thiagotd/envs/aiida/bin/python
+  source ~/envs/psteros/bin/activate && /home/thiagotd/envs/psteros/bin/python
   ```
 
 * **Launch workflow**

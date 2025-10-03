@@ -21,7 +21,6 @@ Usage:
 from aiida import load_profile, orm
 from teros.workgraph import build_formation_workgraph
 
-
 def main():
     """Main function to run the formation enthalpy workflow."""
 
@@ -46,7 +45,7 @@ def main():
         'IBRION': 2,  # Conjugate gradient
         'ISIF': 3,    # Relax cell shape, volume, and atoms
         'NSW': 100,   # Max ionic steps
-        'EDIFFG': -0.01,  # Force convergence
+        'EDIFFG': -0.1,  # Force convergence
         'ALGO': 'Normal',
         'LREAL': 'Auto',
         'LWAVE': False,
@@ -57,7 +56,7 @@ def main():
     bulk_options = {
         'resources': {
             'num_machines': 1,
-            'num_mpiprocs_per_machine': 40,
+            'num_cores_per_machine': 40,
         },
         'queue_name': 'par40',
     }
@@ -72,7 +71,7 @@ def main():
         'IBRION': 2,
         'ISIF': 3,
         'NSW': 100,
-        'EDIFFG': -0.01,
+        'EDIFFG': -0.1,
         'ALGO': 'Normal',
         'LREAL': 'Auto',
         'LWAVE': False,
@@ -83,7 +82,7 @@ def main():
     metal_options = {
         'resources': {
             'num_machines': 1,
-            'num_mpiprocs_per_machine': 40,
+            'num_cores_per_machine': 40,
         },
         'queue_name': 'par40',
     }
@@ -98,7 +97,7 @@ def main():
         'IBRION': 2,
         'ISIF': 3,
         'NSW': 100,
-        'EDIFFG': -0.01,
+        'EDIFFG': -0.1,
         'ALGO': 'Normal',
         'LREAL': 'Auto',
         'LWAVE': False,
@@ -109,7 +108,7 @@ def main():
     nonmetal_options = {
         'resources': {
             'num_machines': 1,
-            'num_mpiprocs_per_machine': 40,
+            'num_cores_per_machine': 40,
         },
         'queue_name': 'par40',
     }
@@ -125,7 +124,7 @@ def main():
         'IBRION': 2,
         'ISIF': 2,    # Relax ions only, not cell (molecule in box)
         'NSW': 100,
-        'EDIFFG': -0.01,
+        'EDIFFG': -0.1,
         'ALGO': 'Normal',
         'LREAL': False,  # Use reciprocal space for small systems
         'LWAVE': False,
@@ -136,7 +135,7 @@ def main():
     oxygen_options = {
         'resources': {
             'num_machines': 1,
-            'num_mpiprocs_per_machine': 40,
+            'num_cores_per_machine': 40,
         },
         'queue_name': 'par40',
     }

@@ -9,7 +9,7 @@ from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
 from ase.io import read
-from typing import Annotated
+from typing import Annotated, Union
 from aiida_workgraph import spec
 
 @task
@@ -27,17 +27,25 @@ def load_structure(filepath: str) -> orm.StructureData:
     return orm.StructureData(ase=atoms)
 
 @task
-def extract_total_energy(energies: orm.Dict) -> orm.Float:
+def extract_total_energy(energies: Union[orm.Dict, dict]) -> orm.Float:
     """
     Extract total energy from VASP energies output.
 
     Args:
-        energies: Dictionary containing energy outputs from VASP
+        energies: Dictionary containing energy outputs from VASP (from misc output)
 
     Returns:
         Total energy as Float
     """
-    energy_dict = energies.get_dict()
+    # Handle both orm.Dict and plain dict
+    if isinstance(energies, orm.Dict):
+        energy_dict = energies.get_dict()
+    else:
+        energy_dict = energies
+    
+    # For VASP v2 workchain, energies are nested under 'total_energies'
+    if 'total_energies' in energy_dict:
+        energy_dict = energy_dict['total_energies']
 
     # Try different keys in order of preference
     for key in ['energy_extrapolated', 'energy_no_entropy', 'energy']:
@@ -127,7 +135,7 @@ def formation_workgraph(
         clean_workdir=clean_workdir,
     )
 
-    bulk_energy = extract_total_energy(energies=bulk_vasp.energies)
+    bulk_energy = extract_total_energy(energies=bulk_vasp.misc)
 
     # ===== METAL RELAXATION =====
     metal_struct = load_structure(filepath=f"{structures_dir}/{metal_name}")
@@ -143,7 +151,7 @@ def formation_workgraph(
         clean_workdir=clean_workdir,
     )
 
-    metal_energy = extract_total_energy(energies=metal_vasp.energies)
+    metal_energy = extract_total_energy(energies=metal_vasp.misc)
 
     # ===== NONMETAL RELAXATION =====
     nonmetal_struct = load_structure(filepath=f"{structures_dir}/{nonmetal_name}")
@@ -159,7 +167,7 @@ def formation_workgraph(
         clean_workdir=clean_workdir,
     )
 
-    nonmetal_energy = extract_total_energy(energies=nonmetal_vasp.energies)
+    nonmetal_energy = extract_total_energy(energies=nonmetal_vasp.misc)
 
     # ===== OXYGEN RELAXATION =====
     oxygen_struct = load_structure(filepath=f"{structures_dir}/{oxygen_name}")
@@ -175,7 +183,7 @@ def formation_workgraph(
         clean_workdir=clean_workdir,
     )
 
-    oxygen_energy = extract_total_energy(energies=oxygen_vasp.energies)
+    oxygen_energy = extract_total_energy(energies=oxygen_vasp.misc)
 
     # Return all outputs
     return {

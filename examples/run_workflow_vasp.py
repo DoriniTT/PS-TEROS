@@ -125,15 +125,15 @@ USE_MANUAL_SLABS = len(MANUAL_SLABS_PATHS) > 0
 def load_manual_slabs():
     """
     Load manually created slabs from files into AiiDA StructureData objects
-    
+
     Returns:
         dict: Dictionary mapping slab identifiers to StructureData objects
     """
     manual_slabs = {}
-    
+
     if not MANUAL_SLABS_PATHS:
         return None
-        
+
     for i, path in enumerate(MANUAL_SLABS_PATHS):
         if os.path.exists(path):
             # Load the structure from file and store as AiiDA StructureData
@@ -142,7 +142,7 @@ def load_manual_slabs():
             print(f"Loaded manual slab {i+1}/{len(MANUAL_SLABS_PATHS)} from {path}")
         else:
             print(f"Warning: Slab file not found at {path}")
-            
+
     return manual_slabs if manual_slabs else None
 
 #########################################################
@@ -152,18 +152,18 @@ def load_manual_slabs():
 def builder_bulk_relax():
     """Set up a VASP bulk relaxation calculation"""
     builder = DFTWORKCHAIN.get_builder()
-    
+
     # Load structure from file
     structure = StructureData(ase=read(STRUCTURE_PATH))
     builder.structure = structure
-    
+
     # Set VASP code
     builder.code = vasp_code
-    
+
     # Set pseudopotentials
     builder.potential_family = Str(POTENTIAL_FAMILY)
     builder.potential_mapping = Dict(dict=POTENTIAL_MAPPING)
-    
+
     # Define parameters for electronic structure and ionic relaxation
     parameters = {
         'incar': {
@@ -179,7 +179,7 @@ def builder_bulk_relax():
             'NELMIN': 6,
             'LREAL': 'Auto',
             'EDIFF': EDIFF,
-            
+
             # Ionic relaxation parameters
             'ISIF': ISIF,
             'IBRION': IBRION,
@@ -188,10 +188,10 @@ def builder_bulk_relax():
         },
     }
     builder.parameters = Dict(dict=parameters)
-    
+
     # Set kpoints
     builder.kpoints = KPOINTS
-    
+
     # Configure computational resources
     options = {
         'resources': {
@@ -203,9 +203,9 @@ def builder_bulk_relax():
     }
     if queue_name:
         options['queue_name'] = queue_name
-        
+
     builder.options = Dict(dict=options)
-    
+
     # Set parser settings
     settings = {
         'parser_settings': {
@@ -215,28 +215,28 @@ def builder_bulk_relax():
         }
     }
     builder.settings = Dict(dict=settings)
-    
+
     # Set restart settings
     builder.max_iterations = Int(MAX_ITERATIONS)
     builder.clean_workdir = Bool(False)
-    
+
     # Set meta info
     builder.metadata.label = "VASP bulk structure relaxation"
     builder.metadata.description = "VaspWorkChain calculation for bulk optimization"
-    
+
     return builder
 
 def builder_slab_relax():
     """Set up a VASP slab relaxation calculation"""
     builder = DFTWORKCHAIN.get_builder()
-    
+
     # Set VASP code
     builder.code = vasp_code
-    
+
     # Set pseudopotentials
     builder.potential_family = Str(POTENTIAL_FAMILY)
     builder.potential_mapping = Dict(dict=POTENTIAL_MAPPING)
-    
+
     # Define parameters for electronic structure and ionic relaxation with slab-specific settings
     parameters = {
         'incar': {
@@ -252,7 +252,7 @@ def builder_slab_relax():
             'NELMIN': 6,
             'LREAL': 'Auto',
             'EDIFF': EDIFF,
-            
+
             # Ionic relaxation parameters for slabs
             'ISIF': SLAB_ISIF,
             'IBRION': IBRION,
@@ -260,19 +260,19 @@ def builder_slab_relax():
             'EDIFFG': SLAB_EDIFFG,
         },
     }
-    
+
     # Add dipole correction for slabs
     if SLAB_DIPOLE:
         parameters['incar'].update({
             'LDIPOL': LDIPOL,
             'IDIPOL': IDIPOL,
         })
-    
+
     builder.parameters = Dict(dict=parameters)
-    
+
     # Set kpoints
     builder.kpoints = KPOINTS_SLAB
-    
+
     # Configure computational resources
     options = {
         'resources': {
@@ -284,9 +284,9 @@ def builder_slab_relax():
     }
     if queue_name:
         options['queue_name'] = queue_name
-        
+
     builder.options = Dict(dict=options)
-    
+
     # Set parser settings
     settings = {
         'parser_settings': {
@@ -296,32 +296,32 @@ def builder_slab_relax():
         }
     }
     builder.settings = Dict(dict=settings)
-    
+
     # Set restart settings
     builder.max_iterations = Int(MAX_ITERATIONS)
     builder.clean_workdir = Bool(False)
-    
+
     # Set meta info
     builder.metadata.label = "VASP slab structure relaxation"
     builder.metadata.description = "VaspWorkChain calculation for slab with fixed cell"
-    
+
     return builder
 
 def builder_ag_relax():
     """Set up a VASP relaxation calculation for pure silver"""
     builder = DFTWORKCHAIN.get_builder()
-    
+
     # Load structure from file
     structure = StructureData(ase=read(AG_STRUCTURE_PATH))
     builder.structure = structure
-    
+
     # Set VASP code
     builder.code = vasp_code
-    
+
     # Set pseudopotentials
     builder.potential_family = Str(POTENTIAL_FAMILY)
     builder.potential_mapping = Dict(dict=POTENTIAL_MAPPING)
-    
+
     # Define parameters for electronic structure and ionic relaxation
     parameters = {
         'incar': {
@@ -337,7 +337,7 @@ def builder_ag_relax():
             'NELMIN': 6,
             'LREAL': 'Auto',
             'EDIFF': EDIFF,
-            
+
             # Ionic relaxation parameters
             'ISIF': ISIF,
             'IBRION': IBRION,
@@ -346,12 +346,12 @@ def builder_ag_relax():
         },
     }
     builder.parameters = Dict(dict=parameters)
-    
+
     # Set kpoints (dense mesh for metals)
     kpoints = KpointsData()
     kpoints.set_kpoints_mesh([7, 7, 7])
     builder.kpoints = kpoints
-    
+
     # Configure computational resources
     options = {
         'resources': {
@@ -363,9 +363,9 @@ def builder_ag_relax():
     }
     if queue_name:
         options['queue_name'] = queue_name
-        
+
     builder.options = Dict(dict=options)
-    
+
     # Set parser settings
     settings = {
         'parser_settings': {
@@ -375,32 +375,32 @@ def builder_ag_relax():
         }
     }
     builder.settings = Dict(dict=settings)
-    
+
     # Set restart settings
     builder.max_iterations = Int(MAX_ITERATIONS)
     builder.clean_workdir = Bool(False)
-    
+
     # Set meta info
     builder.metadata.label = "VASP pure Ag relaxation"
     builder.metadata.description = "VaspWorkChain calculation for pure silver"
-    
+
     return builder
 
 def builder_o2_relax():
     """Set up a VASP relaxation calculation for O2 molecule"""
     builder = DFTWORKCHAIN.get_builder()
-    
+
     # Load structure from file
     structure = StructureData(ase=read(O2_STRUCTURE_PATH))
     builder.structure = structure
-    
+
     # Set VASP code
     builder.code = vasp_code
-    
+
     # Set pseudopotentials
     builder.potential_family = Str(POTENTIAL_FAMILY)
     builder.potential_mapping = Dict(dict=POTENTIAL_MAPPING)
-    
+
     # Define parameters for electronic structure and ionic relaxation
     parameters = {
         'incar': {
@@ -416,25 +416,25 @@ def builder_o2_relax():
             'NELMIN': 6,
             'LREAL': 'Auto',
             'EDIFF': EDIFF,
-            
+
             # Ionic relaxation parameters
             'ISIF': 2,       # Only relax atomic positions for molecule
             'IBRION': IBRION,
             'NSW': NSW,
             'EDIFFG': EDIFFG,
-            
+
             # Important parameters for molecular calculation
             'LWAVE': True,
             'LCHARG': True,
         },
     }
     builder.parameters = Dict(dict=parameters)
-    
+
     # Set kpoints (gamma-point only for molecule)
     kpoints = KpointsData()
     kpoints.set_kpoints_mesh([1, 1, 1])
     builder.kpoints = kpoints
-    
+
     # Configure computational resources
     options = {
         'resources': {
@@ -446,9 +446,9 @@ def builder_o2_relax():
     }
     if queue_name:
         options['queue_name'] = queue_name
-        
+
     builder.options = Dict(dict=options)
-    
+
     # Set parser settings
     settings = {
         'parser_settings': {
@@ -458,32 +458,32 @@ def builder_o2_relax():
         }
     }
     builder.settings = Dict(dict=settings)
-    
+
     # Set restart settings
     builder.max_iterations = Int(MAX_ITERATIONS)
     builder.clean_workdir = Bool(False)
-    
+
     # Set meta info
     builder.metadata.label = "VASP O2 relaxation"
     builder.metadata.description = "VaspWorkChain calculation for O2 molecule"
-    
+
     return builder
 
 def builder_p_relax():
     """Set up a VASP relaxation calculation for pure phosphorus"""
     builder = DFTWORKCHAIN.get_builder()
-    
+
     # Load structure from file
     structure = StructureData(ase=read(P_STRUCTURE_PATH))
     builder.structure = structure
-    
+
     # Set VASP code
     builder.code = vasp_code
-    
+
     # Set pseudopotentials
     builder.potential_family = Str(POTENTIAL_FAMILY)
     builder.potential_mapping = Dict(dict=POTENTIAL_MAPPING)
-    
+
     # Define parameters for electronic structure and ionic relaxation
     parameters = {
         'incar': {
@@ -499,7 +499,7 @@ def builder_p_relax():
             'NELMIN': 6,
             'LREAL': 'Auto',
             'EDIFF': EDIFF,
-            
+
             # Ionic relaxation parameters
             'ISIF': ISIF,
             'IBRION': IBRION,
@@ -508,12 +508,12 @@ def builder_p_relax():
         },
     }
     builder.parameters = Dict(dict=parameters)
-    
+
     # Set kpoints (appropriate mesh for phosphorus)
     kpoints = KpointsData()
     kpoints.set_kpoints_mesh([5, 5, 5])
     builder.kpoints = kpoints
-    
+
     # Configure computational resources
     options = {
         'resources': {
@@ -525,9 +525,9 @@ def builder_p_relax():
     }
     if queue_name:
         options['queue_name'] = queue_name
-        
+
     builder.options = Dict(dict=options)
-    
+
     # Set parser settings
     settings = {
         'parser_settings': {
@@ -537,29 +537,29 @@ def builder_p_relax():
         }
     }
     builder.settings = Dict(dict=settings)
-    
+
     # Set restart settings
     builder.max_iterations = Int(MAX_ITERATIONS)
     builder.clean_workdir = Bool(False)
-    
+
     # Set meta info
     builder.metadata.label = "VASP pure P relaxation"
     builder.metadata.description = "VaspWorkChain calculation for pure phosphorus"
-    
+
     return builder
 
 def get_reference_builders(elements):
     """
     Get reference builders for the specified elements
-    
+
     Args:
         elements: List of elements in the oxide
-        
+
     Returns:
         Dict mapping elements to their builders
     """
     ref_builders = {}
-    
+
     for element in elements:
         if element == 'O':
             # Oxygen reference is typically an O2 molecule.
@@ -571,30 +571,30 @@ def get_reference_builders(elements):
             ref_builders['P'] = builder_p_relax()
         else:
             print(f"Warning: No builder found for element {element}")
-    
+
     return ref_builders
 
 def run_workflow():
     """
     Configure and run the TEROS workflow using VASP
-    
+
     Returns:
         WorkGraph: The submitted workgraph
     """
     # Get the builders
     bulk_builder = builder_bulk_relax()
     slab_builder = builder_slab_relax()
-    
+
     bulk_structure = bulk_builder.structure
-    
+
     elements = list(set(bulk_structure.get_ase().get_chemical_symbols()))
-    
+
     # Get reference builders for all elements in the structure
     reference_builders = get_reference_builders(elements)
-    
+
     # Determine which slab approach to use: manual or automatic
     manual_slabs = load_manual_slabs() if USE_MANUAL_SLABS else None
-    
+
     # Build and submit the workflow using the original approach
     wg = create_teros_workgraph(
         dft_workchain=DFTWORKCHAIN,
@@ -616,19 +616,19 @@ def run_workflow():
         in_unit_planes=Bool(IN_UNIT_PLANES),
         max_normal_search=Int(MAX_NORMAL_SEARCH) if MAX_NORMAL_SEARCH is not None else None,
     )
-    
+
     print(f"Submitting TEROS workflow using {CODE}...")
     print(f"Using {'manual slabs' if manual_slabs else 'automatic slab generation with default parameters'}")
-    
+
     wg.submit(wait=False)  # wait=False submits the workflow and returns immediately (asynchronous).
                            # Set to True to wait for the workflow to complete (synchronous, useful for scripting).
     wg.to_html()           # Generates an HTML representation of the workgraph, useful for visualization and debugging.
                            # The file is typically saved as wg.html in the current directory.
-    
+
     print("\nWorkflow submitted.")
     print(f"WorkGraph PK: {wg.pk}")
     print("You can check the status with: verdi process list -a")
-    
+
     return wg
 
 if __name__ == "__main__":
