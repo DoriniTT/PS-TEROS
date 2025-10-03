@@ -12,7 +12,6 @@ from ase.io import read
 from typing import Annotated
 from aiida_workgraph import spec
 
-
 @task
 def load_structure(filepath: str) -> orm.StructureData:
     """
@@ -26,7 +25,6 @@ def load_structure(filepath: str) -> orm.StructureData:
     """
     atoms = read(filepath)
     return orm.StructureData(ase=atoms)
-
 
 @task
 def extract_total_energy(energies: orm.Dict) -> orm.Float:
@@ -47,7 +45,6 @@ def extract_total_energy(energies: orm.Dict) -> orm.Float:
             return orm.Float(energy_dict[key])
 
     raise ValueError(f"Could not find energy in energies dict. Available keys: {list(energy_dict.keys())}")
-
 
 @task.graph(outputs=[
     'bulk_energy', 'metal_energy', 'nonmetal_energy', 'oxygen_energy',
