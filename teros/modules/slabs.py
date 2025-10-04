@@ -20,12 +20,12 @@ def get_slabs(
     miller_indices: list,
     min_slab_thickness: float,
     min_vacuum_thickness: float,
-    lll_reduce: bool = False,
+    lll_reduce: bool = True,
     center_slab: bool = True,
-    symmetrize: bool = False,
+    symmetrize: bool = True,
     primitive: bool = True,
     in_unit_planes: bool = False,
-    max_normal_search: int = None
+    max_normal_search: int = None,
 ) -> Annotated[dict, spec.namespace(slabs=spec.dynamic(orm.StructureData))]:
     """
     Generate slab structures from a bulk crystal structure using Pymatgen's SlabGenerator.
@@ -83,7 +83,7 @@ def get_slabs(
         lll_reduce=lll_reduce,
         center_slab=center_slab,
         max_normal_search=max_normal_search,
-        in_unit_planes=in_unit_planes
+        in_unit_planes=in_unit_planes,
     )
 
     # --- Generate all possible slabs for the given orientation ---
@@ -93,9 +93,15 @@ def get_slabs(
     slab_structures = {}
 
     for i, slab in enumerate(slabs):
-        ortho_slab = slab.get_orthogonal_c_slab()  # Convert to orthogonal cell along c-axis
-        super_slab = ortho_slab.make_supercell((1, 1, 1))  # No expansion, but could be changed
-        slab_structures[f"term_{i}"] = get_aiida_structure(super_slab)  # Convert to AiiDA StructureData
+        ortho_slab = (
+            slab.get_orthogonal_c_slab()
+        )  # Convert to orthogonal cell along c-axis
+        super_slab = ortho_slab.make_supercell(
+            (1, 1, 1)
+        )  # No expansion, but could be changed
+        slab_structures[f"term_{i}"] = get_aiida_structure(
+            super_slab
+        )  # Convert to AiiDA StructureData
 
     # --- Return dictionary with slabs ---
-    return {'slabs': slab_structures}
+    return {"slabs": slab_structures}
