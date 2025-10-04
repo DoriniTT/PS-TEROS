@@ -6,7 +6,7 @@ from math import gcd
 from functools import reduce
 import numpy as np
 
-@task.calcfunction()
+@task.calcfunction
 def calculate_surface_energy_ternary(bulk_structure, bulk_parameters, sampling=None, 
                                   formation_enthalpy=None, code=None, **kwargs):
     """

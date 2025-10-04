@@ -3,7 +3,7 @@ from aiida_workgraph import task
 from collections import Counter
 from aiida.orm import Dict
 
-@task.calcfunction(outputs=[{"name": "formation_enthalpy"}])
+@task.calcfunction
 def calculate_formation_enthalpy(bulk_structure, bulk_parameters, code=None, **reference_systems):
     """
     Calculate the enthalpy of formation for a material, typically an oxide.

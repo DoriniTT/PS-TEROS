@@ -6,7 +6,7 @@ This module defines a workflow that can be used with multiple DFT codes
 It focuses on defining tasks and executing the workflow,
 while all code-specific configuration is imported from builder modules.
 """
-from aiida_workgraph import WorkGraph, task, active_map_zone
+from aiida_workgraph import WorkGraph, task
 from teros.functions.slabs import get_slabs
 from teros.functions.thermodynamics.formation import calculate_formation_enthalpy
 from teros.functions.thermodynamics.binary import calculate_surface_energy_binary
@@ -38,7 +38,6 @@ Usage:
     wg.submit()
 """
 
-@task.graph_builder(outputs=[{"name": "result", "from": "ctx.result"}])
 def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_builders,
                           workgraph_name="teros_surface_workflow", code="VASP",
                           manual_slabs=None,
@@ -135,9 +134,9 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
         # ---------------------------------------------------------------------
         if generate_structures_only and bool(getattr(generate_structures_only, "value", False)):
             # Determine the bulk structure input directly from the provided builder, without running relaxation
-            bulk_structure = builder_bulk.structure if hasattr(builder_bulk, 'structure') else None
-            if bulk_structure is None and hasattr(builder_bulk, 'cp2k') and 'structure' in builder_bulk.cp2k:
-                bulk_structure = builder_bulk.cp2k.structure
+            bulk_structure = builder_bulk_actual.structure if hasattr(builder_bulk_actual, 'structure') else None
+            if bulk_structure is None and hasattr(builder_bulk_actual, 'cp2k') and 'structure' in builder_bulk_actual.cp2k:
+                bulk_structure = builder_bulk_actual.cp2k.structure
             if bulk_structure is None:
                 raise ValueError("Could not extract structure from bulk builder for generate_structures_only=True")
 
@@ -172,16 +171,16 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
             wg.ctx.result = write_task.outputs
             return wg
 
-        # Block 2: Bulk Relaxation Task
+        # Block 3: Bulk Relaxation Task
         # -----------------------------
-        bulk_task = wg.add_task(dft_workchain, name="bulk_relaxation")
-        bulk_task.set_from_builder(builder_bulk)
+        bulk_task = wg.add_task(dft_workchain_actual, name="bulk_relaxation")
+        bulk_task.set_from_builder(builder_bulk_actual)
 
         # Extract the bulk structure from the builder for later use (e.g., to determine elements).
-        bulk_structure = builder_bulk.structure if hasattr(builder_bulk, 'structure') else None
+        bulk_structure = builder_bulk_actual.structure if hasattr(builder_bulk_actual, 'structure') else None
         # For CP2K, the structure may be nested under the 'cp2k' attribute.
-        if bulk_structure is None and hasattr(builder_bulk, 'cp2k') and 'structure' in builder_bulk.cp2k:
-            bulk_structure = builder_bulk.cp2k.structure
+        if bulk_structure is None and hasattr(builder_bulk_actual, 'cp2k') and 'structure' in builder_bulk_actual.cp2k:
+            bulk_structure = builder_bulk_actual.cp2k.structure
 
         # If the structure could not be extracted, raise an error.
         if bulk_structure is None:
@@ -191,7 +190,7 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
         elements = list(set(bulk_structure.get_ase().get_chemical_symbols()))
 
         # Determine the correct output node for the relaxed structure depending on the DFT code.
-        if code == 'VASP':
+        if code_actual == 'VASP':
             output_struct_node = bulk_task.outputs.structure
         else:
             output_struct_node = bulk_task.outputs.output_structure
@@ -240,43 +239,57 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
             wg.ctx.result = write_task.outputs
             return wg
 
-        # Block 4: Slab Relaxation Tasks (Active Map Zone)
+        # Block 4: Slab Relaxation Tasks (Map Zone)
         # ------------------------------------------------
-        with active_map_zone(slab_structures) as map_zone:
+        from aiida_workgraph import Map
+        
+        with Map(slab_structures) as map_zone:
             # Depending on the DFT code, set up the slab relaxation task with the correct input keys.
-            if code == 'QUANTUM_ESPRESSO':
-                slab_task = map_zone.add_task(
-                    dft_workchain,
+            if code_actual == 'QUANTUM_ESPRESSO':
+                slab_task = wg.add_task(
+                    dft_workchain_actual,
                     name="slab_relaxation",
-                    structure=map_zone.item,
+                    structure=map_zone.item.value,
                 )
-            elif code == 'CP2K':
-                slab_task = map_zone.add_task(
-                    dft_workchain,
+            elif code_actual == 'CP2K':
+                slab_task = wg.add_task(
+                    dft_workchain_actual,
                     name="slab_relaxation",
-                    cp2k={'structure': map_zone.item}
+                    cp2k={'structure': map_zone.item.value}
                 )
-            elif code == 'VASP':
-                slab_task = map_zone.add_task(
-                    dft_workchain,
+            elif code_actual == 'VASP':
+                slab_task = wg.add_task(
+                    dft_workchain_actual,
                     name="slab_relaxation",
-                    structure=map_zone.item,
+                    structure=map_zone.item.value,
                 )
             # Set the builder for the slab relaxation task (common for all codes).
-            slab_task.set_from_builder(builder_slab)
+            slab_task.set_from_builder(builder_slab_actual)
+            
+            # Gather the outputs from each slab relaxation
+            if code_actual == 'VASP':
+                map_zone.gather({
+                    'structure': slab_task.outputs.structure,
+                    'parameters': slab_task.outputs.misc
+                })
+            else:
+                map_zone.gather({
+                    'structure': slab_task.outputs.output_structure,
+                    'parameters': slab_task.outputs.output_parameters
+                })
 
         # Block 5: Reference Calculations for Formation Enthalpy
         # -----------------------------------------------------
         reference_tasks = {}
 
         # Ensure that reference builders are provided.
-        if not reference_builders:
+        if not reference_builders_actual:
             raise ValueError("Reference builders must be provided. They are required for formation enthalpy calculations.")
 
         # For each reference element, add a relaxation task and store it for later use.
-        for element, builder in reference_builders.items():
+        for element, builder in reference_builders_actual.items():
             task_name = f"{element.lower()}_relaxation"
-            ref_task = wg.add_task(dft_workchain, name=task_name)
+            ref_task = wg.add_task(dft_workchain_actual, name=task_name)
             ref_task.set_from_builder(builder)
             reference_tasks[element] = ref_task
 
@@ -285,7 +298,7 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
         enthalpy_kwargs = {}
 
         # For VASP, the output keys are 'structure' and 'misc'.
-        if code == 'VASP':
+        if code_actual == 'VASP':
             bulk_struct_out = bulk_task.outputs.structure
             bulk_params_out = bulk_task.outputs.misc
 
@@ -312,22 +325,22 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
             name="formation_enthalpy",
             bulk_structure=bulk_struct_out,
             bulk_parameters=bulk_params_out,
-            code=code,
+            code=code_actual,
             **enthalpy_kwargs
         )
 
         # Block 8: Prepare Inputs for Surface Thermodynamics Task
         # ------------------------------------------------------
-        if code == 'VASP':
+        if code_actual == 'VASP':
             bulk_struct_out = bulk_task.outputs.structure
             bulk_params_out = bulk_task.outputs.misc
-            slab_structures_out = slab_task.outputs.structure
-            slab_parameters_out = slab_task.outputs.misc
+            slab_structures_out = map_zone.outputs.structure
+            slab_parameters_out = map_zone.outputs.parameters
         else:
             bulk_struct_out = bulk_task.outputs.output_structure
             bulk_params_out = bulk_task.outputs.output_parameters
-            slab_structures_out = slab_task.outputs.output_structure
-            slab_parameters_out = slab_task.outputs.output_parameters
+            slab_structures_out = map_zone.outputs.structure
+            slab_parameters_out = map_zone.outputs.parameters
 
         # Block 9: Determine Compound Type (Binary or Ternary)
         # ----------------------------------------------------
@@ -348,7 +361,7 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
                 slab_structures=slab_structures_out,
                 slab_parameters=slab_parameters_out,
                 formation_enthalpy=enthalpy_task.outputs.formation_enthalpy,
-                code=code
+                code=code_actual
             )
         elif is_ternary:
             surface_thermo_task = wg.add_task(
@@ -360,7 +373,7 @@ def create_teros_workgraph(dft_workchain, builder_bulk, builder_slab, reference_
                 slab_structures=slab_structures_out,
                 slab_parameters=slab_parameters_out,
                 formation_enthalpy=enthalpy_task.outputs.formation_enthalpy,
-                code=code
+                code=code_actual
             )
 
         # Block 11: Generate Output File

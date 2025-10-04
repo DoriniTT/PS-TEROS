@@ -4,7 +4,7 @@ from collections import Counter
 import numpy as np
 
 
-@task.calcfunction()
+@task.calcfunction
 def calculate_surface_energy_binary(bulk_structure, bulk_parameters, formation_enthalpy=None, 
                                    code=None, **kwargs):
     """

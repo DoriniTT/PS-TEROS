@@ -6,7 +6,7 @@ from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 from aiida.orm import StructureData, List, Float, Bool, Int
 import csv
 
-@task.calcfunction(outputs=[{"name": "structures"}])
+@task.calcfunction
 def get_slabs(
     relaxed_structure: StructureData,
     miller_indices: List,
