@@ -11,6 +11,7 @@ from aiida_workgraph import task
 from ase.io import read
 from typing import Annotated, Union
 from aiida_workgraph import spec
+from teros.modules.hf import calculate_formation_enthalpy
 
 @task
 def load_structure(filepath: str) -> orm.StructureData:
@@ -56,7 +57,8 @@ def extract_total_energy(energies: Union[orm.Dict, dict]) -> orm.Float:
 
 @task.graph(outputs=[
     'bulk_energy', 'metal_energy', 'nonmetal_energy', 'oxygen_energy',
-    'bulk_structure', 'metal_structure', 'nonmetal_structure', 'oxygen_structure'
+    'bulk_structure', 'metal_structure', 'nonmetal_structure', 'oxygen_structure',
+    'formation_enthalpy'
 ])
 def formation_workgraph(
     structures_dir: str,
@@ -84,8 +86,9 @@ def formation_workgraph(
     """
     Core WorkGraph for formation enthalpy calculations of ternary oxides.
 
-    This workflow relaxes the bulk compound and all reference elements in parallel.
-    The workflow is general and works for any ternary oxide system (e.g., Ag3PO4, Fe2WO6, etc.).
+    This workflow relaxes the bulk compound and all reference elements in parallel,
+    then calculates the formation enthalpy. The workflow is general and works for
+    any ternary oxide system (e.g., Ag3PO4, Fe2WO6, etc.).
     Each reference (metal, nonmetal, oxygen) can have its own specific calculation parameters.
 
     Args:
@@ -112,7 +115,10 @@ def formation_workgraph(
         clean_workdir: Whether to clean work directory
 
     Returns:
-        Dictionary with energies and structures for all systems
+        Dictionary with energies, structures, and formation enthalpy for all systems:
+            - bulk_energy, metal_energy, nonmetal_energy, oxygen_energy: Total energies (Float)
+            - bulk_structure, metal_structure, nonmetal_structure, oxygen_structure: Relaxed structures (StructureData)
+            - formation_enthalpy: Formation enthalpy and related data (Dict)
     """
     # Load the code
     code = orm.load_code(code_label)
@@ -185,6 +191,18 @@ def formation_workgraph(
 
     oxygen_energy = extract_total_energy(energies=oxygen_vasp.misc)
 
+    # ===== FORMATION ENTHALPY CALCULATION =====
+    formation_hf = calculate_formation_enthalpy(
+        bulk_structure=bulk_vasp.structure,
+        bulk_energy=bulk_energy.result,
+        metal_structure=metal_vasp.structure,
+        metal_energy=metal_energy.result,
+        nonmetal_structure=nonmetal_vasp.structure,
+        nonmetal_energy=nonmetal_energy.result,
+        oxygen_structure=oxygen_vasp.structure,
+        oxygen_energy=oxygen_energy.result,
+    )
+
     # Return all outputs
     return {
         'bulk_energy': bulk_energy.result,
@@ -195,6 +213,7 @@ def formation_workgraph(
         'nonmetal_structure': nonmetal_vasp.structure,
         'oxygen_energy': oxygen_energy.result,
         'oxygen_structure': oxygen_vasp.structure,
+        'formation_enthalpy': formation_hf.result,
     }
 
 
