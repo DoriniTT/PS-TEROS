@@ -12,6 +12,7 @@ from ase.io import read
 from typing import Annotated, Union
 from aiida_workgraph import spec
 from teros.modules.hf import calculate_formation_enthalpy
+from teros.modules.slabs import get_slabs
 
 @task
 def load_structure(filepath: str) -> orm.StructureData:
@@ -58,7 +59,7 @@ def extract_total_energy(energies: Union[orm.Dict, dict]) -> orm.Float:
 @task.graph(outputs=[
     'bulk_energy', 'metal_energy', 'nonmetal_energy', 'oxygen_energy',
     'bulk_structure', 'metal_structure', 'nonmetal_structure', 'oxygen_structure',
-    'formation_enthalpy'
+    'formation_enthalpy', 'slab_structures'
 ])
 def formation_workgraph(
     structures_dir: str,
@@ -82,13 +83,22 @@ def formation_workgraph(
     oxygen_parameters: dict,
     oxygen_options: dict,
     clean_workdir: bool,
+    miller_indices: list,
+    min_slab_thickness: float,
+    min_vacuum_thickness: float,
+    lll_reduce: bool = False,
+    center_slab: bool = True,
+    symmetrize: bool = False,
+    primitive: bool = True,
+    in_unit_planes: bool = False,
+    max_normal_search: int = None,
 ):
     """
-    Core WorkGraph for formation enthalpy calculations of ternary oxides.
+    Core WorkGraph for formation enthalpy calculations of ternary oxides with slab generation.
 
     This workflow relaxes the bulk compound and all reference elements in parallel,
-    then calculates the formation enthalpy. The workflow is general and works for
-    any ternary oxide system (e.g., Ag3PO4, Fe2WO6, etc.).
+    then calculates the formation enthalpy and generates slab structures from the relaxed bulk.
+    The workflow is general and works for any ternary oxide system (e.g., Ag3PO4, Fe2WO6, etc.).
     Each reference (metal, nonmetal, oxygen) can have its own specific calculation parameters.
 
     Args:
@@ -113,12 +123,22 @@ def formation_workgraph(
         oxygen_parameters: VASP parameters for oxygen reference
         oxygen_options: Scheduler options for oxygen reference
         clean_workdir: Whether to clean work directory
+        miller_indices: Miller indices for slab generation (e.g., [1, 0, 0])
+        min_slab_thickness: Minimum slab thickness in Angstroms
+        min_vacuum_thickness: Minimum vacuum thickness in Angstroms
+        lll_reduce: Reduce cell using LLL algorithm. Default: False
+        center_slab: Center the slab in c direction. Default: True
+        symmetrize: Generate symmetrically distinct terminations. Default: False
+        primitive: Find primitive cell before slab generation. Default: True
+        in_unit_planes: Restrict Miller indices to unit planes. Default: False
+        max_normal_search: Max normal search for Miller indices. Default: None
 
     Returns:
-        Dictionary with energies, structures, and formation enthalpy for all systems:
+        Dictionary with energies, structures, formation enthalpy, and slab structures:
             - bulk_energy, metal_energy, nonmetal_energy, oxygen_energy: Total energies (Float)
             - bulk_structure, metal_structure, nonmetal_structure, oxygen_structure: Relaxed structures (StructureData)
             - formation_enthalpy: Formation enthalpy and related data (Dict)
+            - slab_structures: Dynamic namespace with all generated slab terminations (StructureData)
     """
     # Load the code
     code = orm.load_code(code_label)
@@ -203,6 +223,20 @@ def formation_workgraph(
         oxygen_energy=oxygen_energy.result,
     )
 
+    # ===== SLAB GENERATION =====
+    slabs = get_slabs(
+        relaxed_structure=bulk_vasp.structure,
+        miller_indices=miller_indices,
+        min_slab_thickness=min_slab_thickness,
+        min_vacuum_thickness=min_vacuum_thickness,
+        lll_reduce=lll_reduce,
+        center_slab=center_slab,
+        symmetrize=symmetrize,
+        primitive=primitive,
+        in_unit_planes=in_unit_planes,
+        max_normal_search=max_normal_search,
+    )
+
     # Return all outputs
     return {
         'bulk_energy': bulk_energy.result,
@@ -214,6 +248,7 @@ def formation_workgraph(
         'oxygen_energy': oxygen_energy.result,
         'oxygen_structure': oxygen_vasp.structure,
         'formation_enthalpy': formation_hf.result,
+        'slab_structures': slabs.slabs,
     }
 
 
@@ -223,6 +258,9 @@ def build_formation_workgraph(
     metal_name: str,
     nonmetal_name: str,
     oxygen_name: str,
+    miller_indices: list,
+    min_slab_thickness: float,
+    min_vacuum_thickness: float,
     code_label: str = 'VASP-VTST-6.4.3@bohr',
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
@@ -239,13 +277,19 @@ def build_formation_workgraph(
     oxygen_parameters: dict = None,
     oxygen_options: dict = None,
     clean_workdir: bool = True,
+    lll_reduce: bool = False,
+    center_slab: bool = True,
+    symmetrize: bool = False,
+    primitive: bool = True,
+    in_unit_planes: bool = False,
+    max_normal_search: int = None,
     name: str = 'FormationEnthalpy',
 ):
     """
-    Build a formation enthalpy WorkGraph for any ternary oxide.
+    Build a formation enthalpy WorkGraph for any ternary oxide with slab generation.
 
     This is a convenience wrapper that builds and returns a WorkGraph
-    ready to calculate formation enthalpy.
+    ready to calculate formation enthalpy and generate slab structures.
 
     Returns:
         WorkGraph instance ready to be submitted
@@ -274,6 +318,15 @@ def build_formation_workgraph(
         oxygen_parameters=oxygen_parameters or {},
         oxygen_options=oxygen_options or {},
         clean_workdir=clean_workdir,
+        miller_indices=miller_indices,
+        min_slab_thickness=min_slab_thickness,
+        min_vacuum_thickness=min_vacuum_thickness,
+        lll_reduce=lll_reduce,
+        center_slab=center_slab,
+        symmetrize=symmetrize,
+        primitive=primitive,
+        in_unit_planes=in_unit_planes,
+        max_normal_search=max_normal_search,
     )
 
     # Set the name
