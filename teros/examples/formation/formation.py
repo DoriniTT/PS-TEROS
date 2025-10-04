@@ -19,7 +19,7 @@ Usage:
 """
 
 from aiida import load_profile, orm
-from teros.workgraph import build_formation_workgraph
+from teros.workgraph import build_core_workgraph
 
 def main():
     """Main function to run the formation enthalpy workflow."""
@@ -152,7 +152,7 @@ def main():
 
     # Create the WorkGraph
     print("\nCreating WorkGraph...")
-    wg = build_formation_workgraph(
+    wg = build_core_workgraph(
         structures_dir=structures_dir,
         bulk_name='ag3po4.cif',
         metal_name='Ag.cif',

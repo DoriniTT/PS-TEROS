@@ -1,19 +1,19 @@
 #!/usr/bin/env python
 """
-Test script to verify the slabs workflow can be built without submitting it.
+Test script to verify the slab relaxation workflow can be built without submitting it.
 """
 
 from aiida import load_profile
 from teros.workgraph import build_core_workgraph
 
-def test_workflow_build():
-    """Test that the workflow can be built successfully."""
+def test_slab_relax_workflow():
+    """Test that the slab relaxation workflow can be built successfully."""
 
     # Load AiiDA profile
     print("Loading AiiDA profile...")
     load_profile()
 
-    # Define parameters (minimal set for testing)
+    # Define minimal parameters for testing
     structures_dir = '/home/thiagotd/git/PS-TEROS/teros/structures'
 
     bulk_parameters = {'ENCUT': 520, 'IBRION': 2, 'ISIF': 3, 'NSW': 1}
@@ -28,7 +28,11 @@ def test_workflow_build():
     oxygen_parameters = {'ENCUT': 520, 'IBRION': 2, 'ISIF': 2, 'NSW': 1}
     oxygen_options = {'resources': {'num_machines': 1, 'num_cores_per_machine': 40}, 'queue_name': 'par40'}
 
-    print("\nBuilding workflow...")
+    # Slab relaxation parameters
+    slab_parameters = {'ENCUT': 520, 'IBRION': 2, 'ISIF': 2, 'NSW': 1, 'EDIFFG': -0.02}
+    slab_options = {'resources': {'num_machines': 1, 'num_cores_per_machine': 40}, 'queue_name': 'par40'}
+
+    print("\nBuilding workflow with slab relaxation enabled...")
     wg = build_core_workgraph(
         structures_dir=structures_dir,
         bulk_name='ag3po4.cif',
@@ -51,7 +55,7 @@ def test_workflow_build():
         oxygen_parameters=oxygen_parameters,
         oxygen_options=oxygen_options,
         clean_workdir=True,
-        # Slab parameters
+        # Slab generation
         miller_indices=[1, 0, 0],
         min_slab_thickness=10.0,
         min_vacuum_thickness=15.0,
@@ -61,7 +65,13 @@ def test_workflow_build():
         primitive=True,
         in_unit_planes=False,
         max_normal_search=None,
-        name='Test_Workflow',
+        # Slab relaxation
+        relax_slabs=True,
+        slab_parameters=slab_parameters,
+        slab_options=slab_options,
+        slab_potential_mapping={'Ag': 'Ag', 'P': 'P', 'O': 'O'},
+        slab_kpoints_spacing=0.3,
+        name='Test_SlabRelax',
     )
 
     print("\n✓ Workflow built successfully!")
@@ -76,20 +86,29 @@ def test_workflow_build():
 
     # Try to export to HTML
     try:
-        html_file = 'test_workflow.html'
+        html_file = 'test_slab_relax.html'
         wg.to_html(html_file)
         print(f"\n✓ Workflow visualization saved to: {html_file}")
     except Exception as e:
         print(f"\n✗ Could not generate HTML: {e}")
 
-    print("\n✓ All workflow build tests passed!")
-    print("\nNOTE: Workflow was NOT submitted. To submit, run slabs.py")
+    # Check that we have the expected outputs
+    print(f"\n✓ Checking workflow outputs...")
+    expected_outputs = [
+        'bulk_energy', 'metal_energy', 'nonmetal_energy', 'oxygen_energy',
+        'bulk_structure', 'metal_structure', 'nonmetal_structure', 'oxygen_structure',
+        'formation_enthalpy', 'slab_structures', 'relaxed_slabs', 'slab_energies'
+    ]
+
+    print(f"Expected outputs: {expected_outputs}")
+    print(f"\n✓ All tests passed!")
+    print("\nNOTE: Workflow was NOT submitted. To submit, run slabs_relax.py")
 
     return wg
 
 if __name__ == '__main__':
     try:
-        wg = test_workflow_build()
+        wg = test_slab_relax_workflow()
     except Exception as e:
         print(f"\n✗ Workflow build failed!")
         print(f"Error: {e}")

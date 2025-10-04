@@ -19,7 +19,7 @@ Usage:
 """
 
 from aiida import load_profile, orm
-from teros.workgraph import build_formation_workgraph
+from teros.workgraph import build_core_workgraph
 
 
 def main():
@@ -202,7 +202,7 @@ def main():
     print("Creating WorkGraph...")
     print(f"{'='*70}")
 
-    wg = build_formation_workgraph(
+    wg = build_core_workgraph(
         structures_dir=structures_dir,
         bulk_name="ag3po4.cif",
         metal_name="Ag.cif",

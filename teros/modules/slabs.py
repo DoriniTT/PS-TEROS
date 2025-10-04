@@ -49,7 +49,7 @@ def get_slabs(
     Returns:
         Dictionary with key 'slabs' containing a dict of slab structures.
         Each slab is keyed by termination identifier (e.g., "term_0", "term_1")
-        and contains an AiiDA StructureData node.
+        and contains AiiDA StructureData nodes.
     """
     # --- Helper functions for structure conversion ---
     adaptor = AseAtomsAdaptor()
@@ -89,7 +89,7 @@ def get_slabs(
     # --- Generate all possible slabs for the given orientation ---
     slabs = slab_gen.get_slabs(symmetrize=symmetrize)
 
-    # --- Convert slabs to orthogonal cells and then to AiiDA structures ---
+    # --- Convert slabs to orthogonal cells and then to AiiDA StructureData ---
     slab_structures = {}
 
     for i, slab in enumerate(slabs):
@@ -103,5 +103,5 @@ def get_slabs(
             super_slab
         )  # Convert to AiiDA StructureData
 
-    # --- Return dictionary with slabs ---
+    # --- Return dictionary with slabs nested in namespace ---
     return {"slabs": slab_structures}
