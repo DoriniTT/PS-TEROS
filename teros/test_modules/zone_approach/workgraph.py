@@ -118,47 +118,6 @@ def extract_total_energy(energies: orm.Dict | dict) -> orm.Float:
     raise ValueError(f'Unable to find total energy in VASP outputs. Available keys: {available}')
 
 
-@task.graph
-def relax_single_slab(
-    structure: orm.StructureData,
-    *,
-    code_label: str,
-    potential_family: str,
-    potential_mapping: MappingStrStr,
-    parameters: MappingStrAny,
-    options: MappingStrAny,
-    kpoints_spacing: float | None = None,
-    clean_workdir: bool = True,
-) -> t.Annotated[
-    dict[str, object],
-    namespace(relaxed_structure=orm.StructureData, energy=orm.Float),
-]:
-    """Relax a single slab and expose the relaxed structure and total energy."""
-    code = orm.load_code(code_label)
-    vasp_wc = WorkflowFactory('vasp.v2.vasp')
-    relax_task = task(vasp_wc)
-
-    inputs: dict[str, t.Any] = {
-        'structure': structure,
-        'code': code,
-        'parameters': {'incar': dict(parameters)},
-        'options': dict(options),
-        'potential_family': potential_family,
-        'potential_mapping': dict(potential_mapping),
-        'clean_workdir': clean_workdir,
-    }
-    if kpoints_spacing is not None:
-        inputs['kpoints_spacing'] = kpoints_spacing
-
-    relaxation = relax_task(**inputs)
-    energy = extract_total_energy(energies=relaxation.misc).result
-
-    return {
-        'relaxed_structure': relaxation.structure,
-        'energy': energy,
-    }
-
-
 @task
 def generate_mock_scalars(count: int = 3) -> t.Annotated[
     dict[str, orm.Float],
@@ -223,22 +182,30 @@ def build_zone_workgraph(
             max_normal_search=max_normal_search,
         ).slabs
 
+        code = orm.load_code(code_label)
+        vasp_wc = WorkflowFactory('vasp.v2.vasp')
+        relax_task_cls = task(vasp_wc)
+
         with Map(slab_namespace) as map_zone:
-            relaxation = relax_single_slab(
-                structure=map_zone.item.value,
-                code_label=code_label,
-                potential_family=potential_family,
-                potential_mapping=potential_mapping,
-                parameters=parameters,
-                options=options,
-                kpoints_spacing=kpoints_spacing,
-                clean_workdir=clean_workdir,
-            )
+            relax_inputs: dict[str, t.Any] = {
+                'structure': map_zone.item.value,
+                'code': code,
+                'parameters': {'incar': dict(parameters)},
+                'options': dict(options),
+                'potential_family': potential_family,
+                'potential_mapping': dict(potential_mapping),
+                'clean_workdir': clean_workdir,
+            }
+            if kpoints_spacing is not None:
+                relax_inputs['kpoints_spacing'] = kpoints_spacing
+
+            relaxation = relax_task_cls(**relax_inputs)
+            energy = extract_total_energy(energies=relaxation.misc).result
 
             map_zone.gather(
                 {
-                    'relaxed_slabs': relaxation.relaxed_structure,
-                    'slab_energies': relaxation.energy,
+                    'relaxed_slabs': relaxation.structure,
+                    'slab_energies': energy,
                 }
             )
 
