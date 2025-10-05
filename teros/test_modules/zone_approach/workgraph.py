@@ -7,12 +7,53 @@ import typing as t
 from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import Map, WorkGraph, dynamic, namespace, task
+from aiida_workgraph.engine import task_manager as _task_manager
+from aiida_workgraph.utils import get_nested_dict
+
+from collections.abc import Mapping
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 MappingStrAny = t.Mapping[str, t.Any]
 MappingStrStr = t.Mapping[str, str]
+
+# Temporary shim: aiida-workgraph 1.0.0b3 drops the ``source`` kwarg when the
+# map zone iterates over a Task output namespace. Patch ``TaskManager`` so the
+# ``source`` payload is recovered directly from the socket when missing.
+_ORIG_EXECUTE_MAP_TASK = _task_manager.TaskManager.execute_map_task
+
+
+def _patched_execute_map_task(self, task, kwargs):
+    kwargs = dict(kwargs)
+    source = kwargs.get('source')
+    if not source:
+        source = self.get_socket_value(task.inputs.source)
+    if not source:
+        links = getattr(task.inputs.source, '_links', [])
+        if links:
+            link = links[0]
+            results = self.ctx._task_results.get(link.from_node.name)
+            if results is not None:
+                scoped_name = link.from_socket._scoped_name
+                source = get_nested_dict(results, scoped_name, default=None)
+                if source is None:
+                    source = get_nested_dict(results, f'result.{scoped_name}', default=None)
+                if source is None:
+                    source = get_nested_dict(results, f'_outputs.{scoped_name}', default=None)
+                if source is None and isinstance(results, Mapping):
+                    result_namespace = results.get('result')
+                    if isinstance(result_namespace, Mapping):
+                        source = result_namespace.get(scoped_name)
+    if isinstance(source, Mapping):
+        source = dict(source)
+    kwargs['source'] = source or {}
+    return _ORIG_EXECUTE_MAP_TASK(self, task, kwargs)
+
+
+if not getattr(_task_manager.TaskManager.execute_map_task, '_zone_patch', False):
+    _task_manager.TaskManager.execute_map_task = _patched_execute_map_task
+    _task_manager.TaskManager.execute_map_task._zone_patch = True
 
 
 @task
@@ -118,6 +159,25 @@ def relax_single_slab(
     }
 
 
+@task
+def generate_mock_scalars(count: int = 3) -> t.Annotated[
+    dict[str, orm.Float],
+    namespace(values=dynamic(orm.Float)),
+]:
+    """Return a dynamic namespace of scalar values for Map-zone testing."""
+    values = {
+        f'value_{index:02d}': orm.Float(float(index))
+        for index in range(count)
+    }
+    return {'values': values}
+
+
+@task
+def shift_scalar(value: orm.Float, delta: float = 1.0) -> orm.Float:
+    """Apply a constant offset to a scalar value."""
+    return orm.Float(value.value + float(delta))
+
+
 def build_zone_workgraph(
     *,
     name: str = 'slab_relax_map_zone',
@@ -185,5 +245,30 @@ def build_zone_workgraph(
         wg.outputs.generated_slabs = slab_namespace
         wg.outputs.relaxed_slabs = map_zone.outputs.relaxed_slabs
         wg.outputs.slab_energies = map_zone.outputs.slab_energies
+
+    return wg
+
+
+def build_mock_zone_workgraph(
+    *,
+    name: str = 'mock_map_zone',
+    count: int = 3,
+    delta: float = 0.5,
+) -> WorkGraph:
+    """Return a lightweight ``WorkGraph`` that maps over generated scalars."""
+    outputs_spec = namespace(
+        source_values=dynamic(orm.Float),
+        shifted_values=dynamic(orm.Float),
+    )
+
+    with WorkGraph(name=name, outputs=outputs_spec) as wg:
+        source_namespace = generate_mock_scalars(count=count).values
+
+        with Map(source_namespace) as map_zone:
+            shifted = shift_scalar(value=map_zone.item.value, delta=delta)
+            map_zone.gather({'shifted_values': shifted})
+
+        wg.outputs.source_values = source_namespace
+        wg.outputs.shifted_values = map_zone.outputs.shifted_values
 
     return wg

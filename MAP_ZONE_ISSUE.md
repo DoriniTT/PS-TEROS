@@ -272,3 +272,94 @@ We expect the `Map` context manager to:
 We need guidance on the correct pattern for mapping over dynamic task outputs in the current version of AiiDA-WorkGraph. The legacy `active_map_zone` worked perfectly, but we cannot find the equivalent implementation in the documentation or codebase.
 
 Any help would be greatly appreciated!
+
+---
+
+## UPDATE: Forum Response and Further Testing
+
+After posting this on the AiiDA forum, we received the response:
+
+> "In the latest version, map_zone.item has key and value outputs. For your example code, you only need to change map_zone.item to map_zone.item.value in both cases (static and dynamic)."
+
+### What We Tried
+
+We updated our code in `/home/thiagotd/git/PS-TEROS/teros/test_modules/zone_approach/workgraph.py` to use `map_zone.item.value`:
+
+```python
+with Map(slab_namespace) as map_zone:
+    relaxation = relax_single_slab(
+        structure=map_zone.item.value,  # Changed from map_zone.item
+        code_label=code_label,
+        potential_family=potential_family,
+        potential_mapping=potential_mapping,
+        parameters=parameters,
+        options=options,
+        kpoints_spacing=kpoints_spacing,
+        clean_workdir=clean_workdir,
+    )
+
+    map_zone.gather({
+        'relaxed_slabs': relaxation.relaxed_structure,
+        'slab_energies': relaxation.energy,
+    })
+```
+
+**Result: Still produces the same `KeyError: 'source'` error!**
+
+### Additional Attempts
+
+We also tried:
+- `with Map(source_socket=slab_namespace)` - same error
+- Both positional and keyword arguments - same error  
+- Different import statements - same error
+
+### Error Traceback
+
+```
+File "/home/thiagotd/envs/aiida/lib/python3.10/site-packages/aiida_workgraph/engine/task_manager.py", line 298, in execute_map_task
+    source = kwargs['source']
+KeyError: 'source'
+```
+
+This suggests that the Map context manager is not properly registering task outputs as the source parameter internally in version 1.0.0b3.
+
+### Confirmed Working vs Not Working
+
+**Confirmed Working:**
+- ✅ Map with pre-defined data (dict created before WorkGraph)
+- ✅ `map_zone.item.value` syntax (when source is pre-defined data)
+
+**Confirmed NOT Working (all produce `KeyError: 'source'`):**
+- ❌ Map with task outputs in version 1.0.0b3
+- ❌ Both `Map(task_output)` and `Map(source_socket=task_output)`
+- ❌ Both `map_zone.item` and `map_zone.item.value` (when source is task output)
+- ❌ Using `map_zone.gather()` with task outputs
+
+### Test File
+
+We created a test file at `/home/thiagotd/git/PS-TEROS/teros/test_modules/zone_approach/slabs_relax.py` that demonstrates the issue. Running it produces:
+
+```
+[6583|WorkGraphEngine|update_task_state]: Task: generate_slab_structures, type: PYFUNCTION, finished.
+[6583|WorkGraphEngine|continue_workgraph]: tasks ready to run: map_zone
+[6583|WorkGraphEngine|on_except]: KeyError: 'source'
+```
+
+### Conclusion
+
+**This appears to be a limitation or bug in AiiDA-WorkGraph 1.0.0b3.**
+
+The Map context manager cannot accept task outputs as the source, despite:
+1. The forum response suggesting it should work with `map_zone.item.value`
+2. The code being structured correctly according to documentation examples
+3. Static data working fine with the same pattern
+
+### Next Steps
+
+**Options to consider:**
+1. **Downgrade to version 0.5.2** where `active_map_zone` worked
+2. **Wait for a fix** in a future aiida-workgraph version  
+3. **Open a GitHub issue** with this reproducible example
+4. **Use a different pattern** (two-stage workflow, While loops, etc.)
+
+The legacy `active_map_zone` from version 0.5.2 worked perfectly for this exact use case, so downgrading might be the most practical solution until the Map zone is fixed.

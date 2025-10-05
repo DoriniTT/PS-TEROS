@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -14,7 +15,33 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
-from test_modules.zone_approach.workgraph import build_zone_workgraph
+from test_modules.zone_approach.workgraph import (
+    build_mock_zone_workgraph,
+    build_zone_workgraph,
+)
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Return parsed command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        '--mock',
+        action='store_true',
+        help='run a lightweight Map-zone workflow that does not require VASP.',
+    )
+    parser.add_argument(
+        '--mock-count',
+        type=int,
+        default=3,
+        help='number of mock items to generate when ``--mock`` is set.',
+    )
+    parser.add_argument(
+        '--mock-delta',
+        type=float,
+        default=0.5,
+        help='offset applied to mock values when ``--mock`` is set.',
+    )
+    return parser.parse_args(argv)
 
 
 def load_bulk_structure(structure_path: Path) -> orm.StructureData:
@@ -23,9 +50,38 @@ def load_bulk_structure(structure_path: Path) -> orm.StructureData:
     return orm.StructureData(ase=atoms)
 
 
-def main() -> None:
+def _print_scalar_namespace(title: str, namespace: orm.Dict | dict) -> None:
+    """Pretty-print a namespace of scalar values."""
+    if hasattr(namespace, 'value'):
+        data = namespace.value
+    else:
+        data = namespace
+
+    print(title)
+    for key, value in sorted(data.items()):
+        if hasattr(value, 'value'):
+            numeric = value.value
+        else:
+            numeric = value
+        print(f'  {key}: {numeric}')
+
+
+def main(argv: list[str] | None = None) -> None:
     """Configure parameters and launch the Map-zone slab relaxation workflow."""
+    args = parse_args(argv)
     load_profile()
+
+    if args.mock:
+        workflow = build_mock_zone_workgraph(
+            count=args.mock_count,
+            delta=args.mock_delta,
+        )
+        workflow.run()
+
+        print('\nMock Map-zone workflow finished:')
+        _print_scalar_namespace('  Source values:', workflow.outputs.source_values)
+        _print_scalar_namespace('  Shifted values:', workflow.outputs.shifted_values)
+        return
 
     structures_dir = REPO_ROOT / 'structures'
     bulk_path = structures_dir / 'ag3po4.cif'
@@ -100,4 +156,4 @@ def main() -> None:
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])
