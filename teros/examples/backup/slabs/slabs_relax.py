@@ -24,7 +24,7 @@ Usage:
 """
 
 from aiida import load_profile, orm
-from teros.workgraph import build_core_workgraph_with_map
+from teros.workgraph_map import build_core_workgraph_with_map
 
 
 def main():

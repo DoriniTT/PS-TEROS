@@ -6,7 +6,7 @@ using Pymatgen's SlabGenerator.
 """
 
 from aiida import orm
-from aiida_workgraph import task, spec
+from aiida_workgraph import task, namespace, dynamic
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
@@ -26,7 +26,7 @@ def get_slabs(
     primitive: bool = True,
     in_unit_planes: bool = False,
     max_normal_search: int = None,
-) -> Annotated[dict, spec.namespace(slabs=spec.dynamic(orm.StructureData))]:
+) -> Annotated[dict, namespace(slabs=dynamic(orm.StructureData))]:
     """
     Generate slab structures from a bulk crystal structure using Pymatgen's SlabGenerator.
 
