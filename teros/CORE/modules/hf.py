@@ -23,27 +23,32 @@ def calculate_formation_enthalpy(
     oxygen_energy: orm.Float,
 ) -> orm.Dict:
     """
-    Calculate the enthalpy of formation for a ternary oxide.
+    Calculate the enthalpy of formation for binary or ternary oxides.
 
     This function computes the formation enthalpy with respect to elemental references
-    (metal, nonmetal, and O2 for oxygen). The formation enthalpy is normalized per
+    (metal, nonmetal/metal2, and O2 for oxygen). The formation enthalpy is normalized per
     formula unit and per atom, and converted to both eV and kJ/mol.
 
-    The calculation follows the formula:
-        ΔH_f = E_bulk - (n_metal * E_metal/atom + n_nonmetal * E_nonmetal/atom + n_O * E_O2/atom)
+    For ternary oxides (M-N-O):
+        ΔH_f = E_bulk - (n_M * E_M/atom + n_N * E_N/atom + n_O * E_O2/atom)
+    
+    For binary oxides (M-O):
+        ΔH_f = E_bulk - (n_M * E_M/atom + n_O * E_O2/atom)
+        (nonmetal reference is ignored even if provided)
 
     Args:
-        bulk_structure: Relaxed structure of the bulk ternary oxide
+        bulk_structure: Relaxed structure of the bulk oxide
         bulk_energy: Total energy of the bulk system (eV)
         metal_structure: Relaxed structure of the metal reference
         metal_energy: Total energy of the metal reference (eV)
-        nonmetal_structure: Relaxed structure of the nonmetal reference
-        nonmetal_energy: Total energy of the nonmetal reference (eV)
+        nonmetal_structure: Relaxed structure of the nonmetal reference (or dummy for binary)
+        nonmetal_energy: Total energy of the nonmetal reference (eV) (or dummy for binary)
         oxygen_structure: Relaxed structure of O2 molecule
         oxygen_energy: Total energy of O2 molecule (eV)
 
     Returns:
         Dict node containing:
+            - oxide_type (str): 'binary' or 'ternary'
             - formation_enthalpy_ev (float): Formation enthalpy in eV per formula unit
             - formation_enthalpy_kjmol (float): Formation enthalpy in kJ/mol per formula unit
             - formation_enthalpy_ev_per_atom (float): Formation enthalpy in eV per atom
@@ -52,9 +57,9 @@ def calculate_formation_enthalpy(
             - elements (list): List of unique elements in the bulk
             - element_counts (dict): Count of each element in the bulk cell
             - metal_symbol (str): Chemical symbol of the metal
-            - nonmetal_symbol (str): Chemical symbol of the nonmetal
+            - nonmetal_symbol (str): Chemical symbol of the nonmetal (or None for binary)
             - metal_energy_per_atom (float): Energy per atom of metal reference (eV)
-            - nonmetal_energy_per_atom (float): Energy per atom of nonmetal reference (eV)
+            - nonmetal_energy_per_atom (float): Energy per atom of nonmetal reference (eV) (or None)
             - oxygen_energy_per_atom (float): Energy per atom from O2 (eV)
 
     Raises:
@@ -78,12 +83,38 @@ def calculate_formation_enthalpy(
     if oxygen_symbol not in oxygen_atoms.get_chemical_symbols():
         raise ValueError("Oxygen reference structure does not contain O atoms")
 
-    # Verify all elements in bulk are accounted for
-    expected_elements = sorted([metal_symbol, nonmetal_symbol, oxygen_symbol])
-    if elements != expected_elements:
+    # Determine oxide type based on bulk elements
+    if len(elements) == 2 and oxygen_symbol in elements:
+        # Binary oxide: M-O
+        oxide_type = 'binary'
+        expected_elements = sorted([metal_symbol, oxygen_symbol])
+        
+        if elements != expected_elements:
+            raise ValueError(
+                f"Binary oxide: Bulk elements {elements} do not match expected elements {expected_elements}. "
+                f"Metal: {metal_symbol}, Oxygen: {oxygen_symbol}"
+            )
+        
+        # For binary, nonmetal is not used
+        use_nonmetal = False
+        
+    elif len(elements) == 3 and oxygen_symbol in elements:
+        # Ternary oxide: M-N-O
+        oxide_type = 'ternary'
+        expected_elements = sorted([metal_symbol, nonmetal_symbol, oxygen_symbol])
+        
+        if elements != expected_elements:
+            raise ValueError(
+                f"Ternary oxide: Bulk elements {elements} do not match expected elements {expected_elements}. "
+                f"Metal: {metal_symbol}, Nonmetal: {nonmetal_symbol}, Oxygen: {oxygen_symbol}"
+            )
+        
+        use_nonmetal = True
+        
+    else:
         raise ValueError(
-            f"Bulk elements {elements} do not match expected elements {expected_elements}. "
-            f"Metal: {metal_symbol}, Nonmetal: {nonmetal_symbol}, Oxygen: {oxygen_symbol}"
+            f"Unexpected bulk composition: {elements}. "
+            f"Expected either binary (M-O) or ternary (M-N-O) oxide."
         )
 
     # Determine number of formula units in the bulk cell
@@ -98,26 +129,31 @@ def calculate_formation_enthalpy(
 
     # Calculate energy per atom for each reference
     metal_count = len([s for s in metal_atoms.get_chemical_symbols() if s == metal_symbol])
-    nonmetal_count = len([s for s in nonmetal_atoms.get_chemical_symbols() if s == nonmetal_symbol])
     oxygen_count = len([s for s in oxygen_atoms.get_chemical_symbols() if s == oxygen_symbol])
 
     if metal_count == 0:
         raise ValueError(f"Metal reference structure does not contain {metal_symbol} atoms")
-    if nonmetal_count == 0:
-        raise ValueError(f"Nonmetal reference structure does not contain {nonmetal_symbol} atoms")
     if oxygen_count == 0:
         raise ValueError("Oxygen reference structure does not contain O atoms")
 
     metal_energy_per_atom = metal_energy.value / metal_count
-    nonmetal_energy_per_atom = nonmetal_energy.value / nonmetal_count
     oxygen_energy_per_atom = oxygen_energy.value / oxygen_count
 
     # Calculate formation energy
     e_bulk = bulk_energy.value
     formation_energy = e_bulk
     formation_energy -= element_counts[metal_symbol] * metal_energy_per_atom
-    formation_energy -= element_counts[nonmetal_symbol] * nonmetal_energy_per_atom
     formation_energy -= element_counts[oxygen_symbol] * oxygen_energy_per_atom
+
+    # For ternary, subtract nonmetal contribution
+    nonmetal_energy_per_atom_val = None
+    if use_nonmetal:
+        nonmetal_count = len([s for s in nonmetal_atoms.get_chemical_symbols() if s == nonmetal_symbol])
+        if nonmetal_count == 0:
+            raise ValueError(f"Nonmetal reference structure does not contain {nonmetal_symbol} atoms")
+        
+        nonmetal_energy_per_atom_val = nonmetal_energy.value / nonmetal_count
+        formation_energy -= element_counts[nonmetal_symbol] * nonmetal_energy_per_atom_val
 
     # Normalize per formula unit
     formation_energy_per_fu = formation_energy / formula_units
@@ -132,6 +168,7 @@ def calculate_formation_enthalpy(
 
     # Prepare results
     results = {
+        'oxide_type': oxide_type,
         'formation_enthalpy_ev': formation_energy_per_fu,
         'formation_enthalpy_kjmol': formation_energy_kjmol,
         'formation_enthalpy_ev_per_atom': formation_energy_per_atom,
@@ -140,9 +177,9 @@ def calculate_formation_enthalpy(
         'elements': elements,
         'element_counts': {element: int(count) for element, count in element_counts.items()},
         'metal_symbol': metal_symbol,
-        'nonmetal_symbol': nonmetal_symbol,
+        'nonmetal_symbol': nonmetal_symbol if use_nonmetal else None,
         'metal_energy_per_atom': metal_energy_per_atom,
-        'nonmetal_energy_per_atom': nonmetal_energy_per_atom,
+        'nonmetal_energy_per_atom': nonmetal_energy_per_atom_val if use_nonmetal else None,
         'oxygen_energy_per_atom': oxygen_energy_per_atom,
     }
 

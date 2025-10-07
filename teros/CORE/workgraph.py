@@ -16,7 +16,10 @@ from teros.CORE.modules.slabs import (
     relax_slabs_scatter,
     extract_total_energy,
 )
-from teros.CORE.modules.thermodynamics import compute_surface_energies_scatter
+from teros.CORE.modules.thermodynamics import (
+    identify_oxide_type,
+    compute_surface_energies_scatter,
+)
 
 def load_structure_from_file(filepath: str) -> orm.StructureData:
     """
@@ -281,6 +284,9 @@ def core_workgraph(
     # ===== THERMODYNAMICS CALCULATION (OPTIONAL) =====
     surface_energies_output = None
     if compute_thermodynamics and relax_slabs:
+        # Identify oxide type (binary or ternary)
+        oxide_type_result = identify_oxide_type(bulk_structure=bulk_vasp.structure)
+        
         # Compute surface energies for all slabs
         # The formation_hf.result Dict contains all needed reference energies
         surface_outputs = compute_surface_energies_scatter(
@@ -290,6 +296,7 @@ def core_workgraph(
             bulk_energy=bulk_energy.result,
             reference_energies=formation_hf.result,  # Dict with reference energies
             formation_enthalpy=formation_hf.result,  # Dict with formation_enthalpy_ev key
+            oxide_type=oxide_type_result.result,  # Pass the Str node directly
             sampling=thermodynamics_sampling,
         )
         

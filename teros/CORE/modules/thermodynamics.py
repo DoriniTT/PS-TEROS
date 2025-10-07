@@ -1,7 +1,7 @@
-"""Ab initio atomistic thermodynamics for ternary oxide surfaces.
+"""Ab initio atomistic thermodynamics for oxide surfaces.
 
 This module implements surface energy calculations as a function of chemical potential
-for ternary oxide slabs (M-N-O systems), following the ab initio atomistic thermodynamics
+for both binary and ternary oxide slabs, following the ab initio atomistic thermodynamics
 framework.
 """
 
@@ -15,6 +15,41 @@ from math import gcd
 import numpy as np
 from aiida import orm
 from aiida_workgraph import dynamic, namespace, task
+
+
+@task.calcfunction
+def identify_oxide_type(bulk_structure: orm.StructureData) -> orm.Str:
+    """
+    Identify whether a bulk structure is a binary or ternary oxide.
+    
+    Args:
+        bulk_structure: Bulk structure to analyze
+        
+    Returns:
+        Str node with value 'binary' or 'ternary'
+        
+    Raises:
+        ValueError: If structure is not a binary or ternary oxide
+    """
+    bulk_ase = bulk_structure.get_ase()
+    bulk_counts = Counter(bulk_ase.get_chemical_symbols())
+    
+    if 'O' not in bulk_counts:
+        raise ValueError('Structure contains no oxygen; not an oxide.')
+    
+    metal_elements = sorted(element for element in bulk_counts if element != 'O')
+    
+    if len(metal_elements) == 1:
+        oxide_type = 'binary'
+    elif len(metal_elements) == 2:
+        oxide_type = 'ternary'
+    else:
+        raise ValueError(
+            f'Found {len(metal_elements)} non-oxygen elements: {metal_elements}. '
+            'Only binary (1 metal) and ternary (2 metals) oxides are supported.'
+        )
+    
+    return orm.Str(oxide_type)
 
 
 @task.calcfunction
@@ -179,6 +214,7 @@ def calculate_surface_energy_ternary(
             'gamma_at_reference': float(phi),
             
             # System information
+            'oxide_type': 'ternary',
             'area_A2': float(area),
             'element_M_independent': element_M,
             'element_N_reference': element_N_ref,
@@ -200,6 +236,169 @@ def calculate_surface_energy_ternary(
     )
 
 
+@task.calcfunction
+def calculate_surface_energy_binary(
+    bulk_structure: orm.StructureData,
+    bulk_energy: orm.Float,
+    slab_structure: orm.StructureData,
+    slab_energy: orm.Float,
+    reference_energies: orm.Dict,
+    formation_enthalpy: orm.Dict,
+    sampling: orm.Int,
+) -> orm.Dict:
+    """
+    Compute γ(Δμ_O) surface energy for a single binary oxide slab.
+    
+    For a binary oxide M_x O_y, the surface energy is calculated as:
+    γ(Δμ_O) = φ - Γ_O·Δμ_O
+    
+    where:
+    - φ: reference surface energy at O-poor limit
+    - Γ_O: surface oxygen excess relative to bulk stoichiometry
+    - Δμ_O: oxygen chemical potential deviation (from decomposition limit to O2)
+    
+    Args:
+        bulk_structure: Bulk structure containing M, O
+        bulk_energy: Total energy of bulk structure (eV)
+        slab_structure: Slab structure
+        slab_energy: Total energy of slab (eV)
+        reference_energies: Dict with 'metal_energy_per_atom', 'oxygen_energy_per_atom'
+        formation_enthalpy: Dict with 'formation_enthalpy_ev'
+        sampling: Number of grid points for Δμ_O sampling
+        
+    Returns:
+        Dictionary containing surface energy data
+    """
+    grid_points = sampling.value
+    if grid_points <= 0:
+        raise ValueError('Sampling must be a positive integer')
+    
+    # Extract bulk composition
+    bulk_ase = bulk_structure.get_ase()
+    bulk_counts = Counter(bulk_ase.get_chemical_symbols())
+    
+    if 'O' not in bulk_counts:
+        raise ValueError('The bulk structure contains no oxygen; expected a binary oxide.')
+    
+    metal_elements = [element for element in bulk_counts if element != 'O']
+    if len(metal_elements) != 1:
+        raise ValueError(
+            f'Expected exactly one metal species; found: {metal_elements}'
+        )
+    
+    element_M = metal_elements[0]
+    element_O = 'O'
+    
+    # Get stoichiometry (x and y in M_x O_y)
+    x = bulk_counts[element_M]
+    y = bulk_counts[element_O]
+    
+    # Get reduced stoichiometry
+    common_divisor = gcd(x, y)
+    x_reduced = x // common_divisor
+    y_reduced = y // common_divisor
+    
+    # Extract reference energies and formation enthalpy
+    ref_data = reference_energies.get_dict()
+    formation_data = formation_enthalpy.get_dict()
+    
+    E_M_ref = float(ref_data['metal_energy_per_atom'])
+    E_O_ref = float(ref_data['oxygen_energy_per_atom'])
+    delta_h = float(formation_data['formation_enthalpy_ev'])
+    
+    # Calculate surface area
+    slab_ase = slab_structure.get_ase()
+    cell = slab_ase.get_cell()
+    a_vec = cell[0]
+    b_vec = cell[1]
+    cross = np.cross(a_vec, b_vec)
+    area = float(np.linalg.norm(cross))
+    
+    # Slab atom counts
+    slab_counts = Counter(slab_ase.get_chemical_symbols())
+    N_M_slab = slab_counts.get(element_M, 0)
+    N_O_slab = slab_counts.get(element_O, 0)
+    
+    # Stoichiometric imbalance: Δ_O = expected_O - actual_O
+    # Expected oxygen based on metal count and bulk stoichiometry
+    expected_O = (y / x) * N_M_slab
+    stoichiometric_imbalance = expected_O - N_O_slab
+    
+    # Oxygen chemical potential bounds
+    # Lower bound (O-poor): decomposition limit
+    mu_O_min = (bulk_energy.value - x * E_M_ref) / y
+    
+    # Upper bound (O-rich): from formation energy
+    mu_O_from_formation = mu_O_min + delta_h / y
+    mu_O_max = min(0.0, mu_O_from_formation)
+    
+    # Generate chemical potential range
+    delta_mu_O_range = np.linspace(mu_O_min, mu_O_max, grid_points)
+    
+    # Calculate surface energy at O-poor limit (reference)
+    phi = (
+        slab_energy.value
+        - N_M_slab * (bulk_energy.value / x)
+        + stoichiometric_imbalance * mu_O_min
+    ) / (2 * area)
+    
+    # Surface oxygen excess (per unit area)
+    Gamma_O = stoichiometric_imbalance / (2 * area)
+    
+    # Compute γ(Δμ_O) - 1D array
+    gamma_array = []
+    for mu_O in delta_mu_O_range:
+        gamma = phi - Gamma_O * (float(mu_O) - mu_O_min)
+        gamma_array.append(float(gamma))
+    
+    # Special values
+    gamma_O_poor = gamma_array[0]  # At mu_O_min
+    gamma_O_rich = gamma_array[-1]  # At mu_O_max
+    
+    return orm.Dict(
+        dict={
+            'phi': float(phi),
+            'Gamma_O': float(Gamma_O),
+            
+            # Chemical potential range
+            'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
+            
+            # Surface energy array: gamma_array[i] = γ(delta_mu_O[i])
+            # Easy to convert to numpy: gamma = np.array(data['gamma_array'])
+            # For plotting: plt.plot(delta_mu_O, gamma)
+            'gamma_array': gamma_array,
+            
+            # Special values
+            'gamma_O_poor': float(gamma_O_poor),
+            'gamma_O_rich': float(gamma_O_rich),
+            'gamma_at_reference': float(phi),
+            
+            # System information
+            'oxide_type': 'binary',
+            'area_A2': float(area),
+            'element_M': element_M,
+            'bulk_stoichiometry_MxOy': {
+                f'x_{element_M}': int(x_reduced),
+                f'y_O': int(y_reduced),
+            },
+            'slab_atom_counts': {
+                f'N_{element_M}': int(N_M_slab),
+                'N_O': int(N_O_slab),
+            },
+            'stoichiometric_imbalance': float(stoichiometric_imbalance),
+            'mu_O_min': float(mu_O_min),
+            'mu_O_max': float(mu_O_max),
+            'reference_energies_per_atom': {
+                element_M: float(E_M_ref),
+                'O': float(E_O_ref),
+            },
+            'E_slab_eV': float(slab_energy.value),
+            'E_bulk_eV': float(bulk_energy.value),
+            'formation_enthalpy_eV': float(delta_h),
+        }
+    )
+
+
 @task.graph
 def compute_surface_energies_scatter(
     slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
@@ -208,12 +407,14 @@ def compute_surface_energies_scatter(
     bulk_energy: orm.Float,
     reference_energies: orm.Dict,
     formation_enthalpy: orm.Dict,
+    oxide_type: orm.Str,
     sampling: int = 100,
 ) -> t.Annotated[dict, namespace(surface_energies=dynamic(orm.Dict))]:
     """
     Scatter-gather pattern for computing surface energies.
     
-    Computes surface energy γ(Δμ_M, Δμ_O) for each slab in parallel.
+    Automatically selects the appropriate calculation method (binary or ternary)
+    based on oxide_type and computes surface energy for each slab in parallel.
     
     Args:
         slabs: Dynamic namespace of slab structures
@@ -222,6 +423,7 @@ def compute_surface_energies_scatter(
         bulk_energy: Bulk total energy
         reference_energies: Dict from formation_enthalpy calculation
         formation_enthalpy: Dict from formation_enthalpy calculation
+        oxide_type: Type of oxide ('binary' or 'ternary') as Str node
         sampling: Grid resolution for chemical potential
         
     Returns:
@@ -231,11 +433,22 @@ def compute_surface_energies_scatter(
     surface_results = {}
     sampling_node = orm.Int(sampling)
     
+    # Extract string value from Str node
+    oxide_type_str = oxide_type.value
+    
+    # Select the appropriate calculation function based on oxide type
+    if oxide_type_str == 'ternary':
+        calc_func = calculate_surface_energy_ternary
+    elif oxide_type_str == 'binary':
+        calc_func = calculate_surface_energy_binary
+    else:
+        raise ValueError(f'Unknown oxide_type: {oxide_type_str}. Must be "binary" or "ternary".')
+    
     # Scatter: compute surface energy for each slab in parallel
     for key, slab_structure in slabs.items():
         slab_energy = energies[key]
         
-        surface_data = calculate_surface_energy_ternary(
+        surface_data = calc_func(
             bulk_structure=bulk_structure,
             bulk_energy=bulk_energy,
             slab_structure=slab_structure,

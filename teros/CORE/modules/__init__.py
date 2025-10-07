@@ -11,7 +11,9 @@ from .slabs import (
     extract_total_energy,
 )
 from .thermodynamics import (
+    identify_oxide_type,
     calculate_surface_energy_ternary,
+    calculate_surface_energy_binary,
     compute_surface_energies_scatter,
 )
 
@@ -22,6 +24,8 @@ __all__ = [
     'generate_slab_structures',
     'relax_slabs_scatter',
     'extract_total_energy',
+    'identify_oxide_type',
     'calculate_surface_energy_ternary',
+    'calculate_surface_energy_binary',
     'compute_surface_energies_scatter',
 ]
