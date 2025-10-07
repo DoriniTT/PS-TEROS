@@ -10,6 +10,10 @@ from .slabs import (
     relax_slabs_scatter,
     extract_total_energy,
 )
+from .thermodynamics import (
+    calculate_surface_energy_ternary,
+    compute_surface_energies_scatter,
+)
 
 __all__ = [
     'get_structure_from_file',
@@ -18,4 +22,6 @@ __all__ = [
     'generate_slab_structures',
     'relax_slabs_scatter',
     'extract_total_energy',
+    'calculate_surface_energy_ternary',
+    'compute_surface_energies_scatter',
 ]

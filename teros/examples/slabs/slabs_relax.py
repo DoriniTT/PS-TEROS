@@ -152,6 +152,10 @@ def main():
     in_unit_planes = False
     max_normal_search = None
 
+    # ===== THERMODYNAMICS PARAMETERS =====
+    compute_thermodynamics = True  # Enable surface energy calculations
+    thermodynamics_sampling = 100  # Grid resolution for chemical potential sampling
+
     # ===== SLAB RELAXATION PARAMETERS =====
     # Enable slab relaxation
     relax_slabs = True
@@ -281,6 +285,9 @@ def main():
         slab_options=slab_options,
         slab_potential_mapping=slab_potential_mapping,
         slab_kpoints_spacing=slab_kpoints_spacing,
+        # Thermodynamics
+        compute_thermodynamics=compute_thermodynamics,
+        thermodynamics_sampling=thermodynamics_sampling,
         name=f"Ag3PO4_SlabsRelax_{miller_indices[0]}{miller_indices[1]}{miller_indices[2]}",
     )
 
@@ -318,6 +325,8 @@ def main():
     print(f"\n  Relaxed slabs:")
     print(f"    - relaxed_slabs.term_0, term_1, ... (StructureData)")
     print(f"    - slab_energies.term_0, term_1, ... (Float)")
+    print(f"\n  Surface energies (thermodynamics):")
+    print(f"    - surface_energies.term_0, term_1, ... (Dict with γ(Δμ_M, Δμ_O))")
 
     print(f"\n{'-'*80}")
     print(f"ACCESSING RESULTS (after completion)")

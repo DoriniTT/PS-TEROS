@@ -16,6 +16,7 @@ from teros.CORE.modules.slabs import (
     relax_slabs_scatter,
     extract_total_energy,
 )
+from teros.CORE.modules.thermodynamics import compute_surface_energies_scatter
 
 def load_structure_from_file(filepath: str) -> orm.StructureData:
     """
@@ -51,7 +52,8 @@ def get_settings():
 @task.graph(outputs=[
     'bulk_energy', 'metal_energy', 'nonmetal_energy', 'oxygen_energy',
     'bulk_structure', 'metal_structure', 'nonmetal_structure', 'oxygen_structure',
-    'formation_enthalpy', 'slab_structures', 'relaxed_slabs', 'slab_energies'
+    'formation_enthalpy', 'slab_structures', 'relaxed_slabs', 'slab_energies',
+    'surface_energies',
 ])
 def core_workgraph(
     structures_dir: str,
@@ -89,12 +91,15 @@ def core_workgraph(
     in_unit_planes: bool = False,
     max_normal_search: int = None,
     relax_slabs: bool = False,
+    compute_thermodynamics: bool = False,
+    thermodynamics_sampling: int = 100,
 ):
     """
     Core WorkGraph for formation enthalpy calculations of ternary oxides with slab generation.
 
     This workflow relaxes the bulk compound and all reference elements in parallel,
     then calculates the formation enthalpy and generates slab structures from the relaxed bulk.
+    Optionally relaxes slabs and computes surface energies with thermodynamics.
     The workflow is general and works for any ternary oxide system (e.g., Ag3PO4, Fe2WO6, etc.).
     Each reference (metal, nonmetal, oxygen) can have its own specific calculation parameters.
 
@@ -134,15 +139,18 @@ def core_workgraph(
         in_unit_planes: Restrict Miller indices to unit planes. Default: False
         max_normal_search: Max normal search for Miller indices. Default: None
         relax_slabs: Whether to relax the generated slabs with VASP. Default: False
+        compute_thermodynamics: Whether to compute surface energies. Default: False (requires relax_slabs=True)
+        thermodynamics_sampling: Number of grid points for chemical potential sampling. Default: 100
 
     Returns:
-        Dictionary with energies, structures, formation enthalpy, and slab structures:
+        Dictionary with energies, structures, formation enthalpy, slab structures, and optionally surface energies:
             - bulk_energy, metal_energy, nonmetal_energy, oxygen_energy: Total energies (Float)
             - bulk_structure, metal_structure, nonmetal_structure, oxygen_structure: Relaxed structures (StructureData)
             - formation_enthalpy: Formation enthalpy and related data (Dict)
             - slab_structures: Dynamic namespace with all generated slab terminations (StructureData)
             - relaxed_slabs: Dynamic namespace with relaxed slab structures (if relax_slabs=True)
             - slab_energies: Dynamic namespace with slab energies (if relax_slabs=True)
+            - surface_energies: Dynamic namespace with surface energy data (if compute_thermodynamics=True)
     """
     # Load the code
     code = orm.load_code(code_label)
@@ -270,6 +278,23 @@ def core_workgraph(
         relaxed_slabs_output = relaxation_outputs.relaxed_structures
         slab_energies_output = relaxation_outputs.energies
 
+    # ===== THERMODYNAMICS CALCULATION (OPTIONAL) =====
+    surface_energies_output = None
+    if compute_thermodynamics and relax_slabs:
+        # Compute surface energies for all slabs
+        # The formation_hf.result Dict contains all needed reference energies
+        surface_outputs = compute_surface_energies_scatter(
+            slabs=relaxed_slabs_output,
+            energies=slab_energies_output,
+            bulk_structure=bulk_vasp.structure,
+            bulk_energy=bulk_energy.result,
+            reference_energies=formation_hf.result,  # Dict with reference energies
+            formation_enthalpy=formation_hf.result,  # Dict with formation_enthalpy_ev key
+            sampling=thermodynamics_sampling,
+        )
+        
+        surface_energies_output = surface_outputs.surface_energies
+
     # Return all outputs
     return {
         'bulk_energy': bulk_energy.result,
@@ -284,6 +309,7 @@ def core_workgraph(
         'slab_structures': slab_namespace,
         'relaxed_slabs': relaxed_slabs_output,
         'slab_energies': slab_energies_output,
+        'surface_energies': surface_energies_output,
     }
 
 
@@ -323,6 +349,8 @@ def build_core_workgraph(
     in_unit_planes: bool = False,
     max_normal_search: int = None,
     relax_slabs: bool = False,
+    compute_thermodynamics: bool = False,
+    thermodynamics_sampling: int = 100,
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -333,6 +361,8 @@ def build_core_workgraph(
 
     Args:
         relax_slabs: Whether to relax generated slabs with VASP. Default: False
+        compute_thermodynamics: Whether to compute surface energies. Default: False
+        thermodynamics_sampling: Grid resolution for chemical potential sampling. Default: 100
         slab_parameters: VASP parameters for slab relaxation. Default: None (uses bulk_parameters)
         slab_options: Scheduler options for slab calculations. Default: None (uses bulk_options)
         slab_potential_mapping: Potential mapping for slabs. Default: None (uses bulk_potential_mapping)
@@ -380,6 +410,8 @@ def build_core_workgraph(
         in_unit_planes=in_unit_planes,
         max_normal_search=max_normal_search,
         relax_slabs=relax_slabs,
+        compute_thermodynamics=compute_thermodynamics,
+        thermodynamics_sampling=thermodynamics_sampling,
     )
 
     # Set the name
@@ -424,6 +456,8 @@ def build_core_workgraph_with_map(
     in_unit_planes: bool = False,
     max_normal_search: int = None,
     relax_slabs: bool = False,
+    compute_thermodynamics: bool = False,
+    thermodynamics_sampling: int = 100,
     name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
@@ -483,6 +517,8 @@ def build_core_workgraph_with_map(
         in_unit_planes=in_unit_planes,
         max_normal_search=max_normal_search,
         relax_slabs=relax_slabs,
+        compute_thermodynamics=compute_thermodynamics,
+        thermodynamics_sampling=thermodynamics_sampling,
         name=name,
     )
 
