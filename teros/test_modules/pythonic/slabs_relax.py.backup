@@ -70,29 +70,19 @@ def _print_thermodynamics_results(title: str, thermo_namespace) -> None:
     """Pretty-print thermodynamics results."""
     print(title)
     
-    # Try direct dictionary-like access (AttributeDict after workflow.run())
-    if hasattr(thermo_namespace, 'keys'):
-        keys = list(thermo_namespace.keys())
-        for key in sorted(keys):
-            if not key.startswith('_'):
+    # Try direct attribute access (after workflow.run())
+    if hasattr(thermo_namespace, '__iter__') and not isinstance(thermo_namespace, (str, bytes)):
+        try:
+            for key in thermo_namespace:
                 thermo_data = thermo_namespace[key]
                 if hasattr(thermo_data, 'get_dict'):
                     data = thermo_data.get_dict()
                     print(f'    {key}:')
-                    phi = data.get('phi')
-                    gamma_m = data.get('Gamma_M_vs_Nref')
-                    gamma_o = data.get('Gamma_O_vs_Nref')
-                    area = data.get('area_A2')
-                    
-                    if phi is not None:
-                        print(f'      φ (reference surface energy): {phi:.6f} eV/Ų')
-                    if gamma_m is not None:
-                        print(f'      Γ_M (surface excess M): {gamma_m:.6f} atoms/Ų')
-                    if gamma_o is not None:
-                        print(f'      Γ_O (surface excess O): {gamma_o:.6f} atoms/Ų')
-                    if area is not None:
-                        print(f'      Surface area: {area:.2f} Ų')
-        return
+                    print(f'      phi: {data.get("phi", "N/A")}')
+                    print(f'      gamma_at_reference: {data.get("gamma_at_reference", "N/A")}')
+            return
+        except Exception:
+            pass
     
     # Try TaskSocketNamespace access (during building)
     if hasattr(thermo_namespace, '_sockets'):
@@ -101,52 +91,43 @@ def _print_thermodynamics_results(title: str, thermo_namespace) -> None:
             if hasattr(thermo_data, 'get_dict'):
                 data = thermo_data.get_dict()
                 print(f'    {key}:')
-                phi = data.get('phi')
-                gamma_m = data.get('Gamma_M_vs_Nref')
-                gamma_o = data.get('Gamma_O_vs_Nref')
-                area = data.get('area_A2')
-                
-                if phi is not None:
-                    print(f'      φ (reference surface energy): {phi:.6f} eV/Ų')
-                if gamma_m is not None:
-                    print(f'      Γ_M (surface excess M): {gamma_m:.6f} atoms/Ų')
-                if gamma_o is not None:
-                    print(f'      Γ_O (surface excess O): {gamma_o:.6f} atoms/Ų')
-                if area is not None:
-                    print(f'      Surface area: {area:.2f} Ų')
+                print(f'      phi: {data.get("phi", "N/A")}')
+                print(f'      gamma_at_reference: {data.get("gamma_at_reference", "N/A")}')
         return
     
     print('    (Unable to display thermodynamics results)')
 
 
 def _print_scalar_namespace(title: str, namespace: orm.Dict | dict) -> None:
-    """Pretty-print a namespace of scalar values."""
+    """Pretty-print thermodynamics results."""
     print(title)
     
-    # If it's a TaskSocketNamespace, iterate over its sockets
-    if hasattr(namespace, '_sockets'):
-        for key in sorted(namespace._sockets.keys()):
-            if not key.startswith('_'):
-                socket = getattr(namespace, key)
-                if hasattr(socket, 'value'):
-                    print(f'  {key}: {socket.value}')
-                else:
-                    print(f'  {key}: {socket}')
+    # Try direct attribute access (after workflow.run())
+    if hasattr(thermo_namespace, '__iter__') and not isinstance(thermo_namespace, (str, bytes)):
+        try:
+            for key in thermo_namespace:
+                thermo_data = thermo_namespace[key]
+                if hasattr(thermo_data, 'get_dict'):
+                    data = thermo_data.get_dict()
+                    print(f'    {key}:')
+                    print(f'      phi: {data.get("phi", "N/A")}')
+                    print(f'      gamma_at_reference: {data.get("gamma_at_reference", "N/A")}')
+            return
+        except Exception:
+            pass
+    
+    # Try TaskSocketNamespace access (during building)
+    if hasattr(thermo_namespace, '_sockets'):
+        for key in sorted(k for k in thermo_namespace._sockets.keys() if not k.startswith('_')):
+            thermo_data = getattr(thermo_namespace, key)
+            if hasattr(thermo_data, 'get_dict'):
+                data = thermo_data.get_dict()
+                print(f'    {key}:')
+                print(f'      phi: {data.get("phi", "N/A")}')
+                print(f'      gamma_at_reference: {data.get("gamma_at_reference", "N/A")}')
         return
     
-    # Otherwise handle as dict
-    if hasattr(namespace, 'value'):
-        data = namespace.value
-    else:
-        data = namespace
-
-    for key, value in sorted(data.items()):
-        if hasattr(value, 'value'):
-            numeric = value.value
-        else:
-            numeric = value
-        print(f'  {key}: {numeric}')
-
+    print('    (Unable to display thermodynamics results)')
 
     """Pretty-print a namespace of scalar values."""
     print(title)
@@ -193,45 +174,8 @@ def main(argv: list[str] | None = None) -> None:
         _print_scalar_namespace('  Source values:', workflow.outputs.source_values)
         _print_scalar_namespace('  Shifted values:', workflow.outputs.shifted_values)
         
-        # Display thermodynamics if computed
-        if args.with_thermodynamics:
-            # Try to get thermo_results from process outputs (after run) or workflow outputs (during build)
-            thermo_ns = None
-            if hasattr(workflow, 'process') and hasattr(workflow.process, 'outputs'):
-                if hasattr(workflow.process.outputs, 'thermo_results'):
-                    thermo_ns = workflow.process.outputs.thermo_results
-            elif hasattr(workflow, 'outputs') and hasattr(workflow.outputs, 'thermo_results'):
-                thermo_ns = workflow.outputs.thermo_results
-            
-            if thermo_ns is not None:
-                print('  Thermodynamics results:')
-                
-                # Get keys - check _sockets FIRST (TaskSocketNamespace), then keys (AttributeDict)
-                if hasattr(thermo_ns, '_sockets'):
-                    keys = [k for k in thermo_ns._sockets.keys() if not k.startswith('_')]
-                elif hasattr(thermo_ns, 'keys'):
-                    keys = [k for k in thermo_ns.keys() if not k.startswith('_')]
-                else:
-                    keys = []
-                
-                for key in sorted(keys):
-                    try:
-                        if hasattr(thermo_ns, '_sockets'):
-                            thermo_data = getattr(thermo_ns, key)
-                        else:
-                            thermo_data = thermo_ns[key]
-                        
-                        if hasattr(thermo_data, 'get_dict'):
-                            data = thermo_data.get_dict()
-                            print(f'    {key}:')
-                            phi = data.get('phi')
-                            if phi is not None:
-                                print(f'      φ: {phi:.6f}')
-                            gamma_m = data.get('Gamma_M_vs_Nref')
-                            if gamma_m is not None:
-                                print(f'      Γ_M: {gamma_m:.6f} atoms/Ų')
-                    except Exception as e:
-                        print(f'    {key}: Error - {e}')
+        if args.with_thermodynamics and hasattr(workflow.outputs, 'thermo_results'):
+            _print_thermodynamics_results('  Thermodynamics results:', workflow.outputs.thermo_results)
         return
 
     structures_dir = REPO_ROOT / 'structures'
@@ -274,18 +218,10 @@ def main(argv: list[str] | None = None) -> None:
     thermodynamics_kwargs = {}
     if args.with_thermodynamics:
         print('\nPreparing thermodynamics inputs (using mock data)...')
-        # Create mock inputs as plain AiiDA data nodes (not task outputs)
-        # We need to call the functions directly, not as tasks
-        from aiida_workgraph import task
-        
-        # Get the actual Python functions (not decorated versions)
-        bulk_energy = orm.Float(-100.0)  # Mock energy
-        reference_energies = orm.Dict(dict={
-            'ag_energy_per_atom': -2.7,
-            'p_energy_per_atom': -5.0,
-            'o_energy_per_atom': -4.5,
-        })
-        formation_enthalpy = orm.Float(-0.5)
+        # Create mock inputs
+        bulk_energy = create_mock_bulk_energy(bulk_structure=bulk_structure).result
+        reference_energies = create_mock_reference_energies().result
+        formation_enthalpy = create_mock_formation_enthalpy().result
         
         thermodynamics_kwargs = {
             'compute_thermodynamics': True,
@@ -342,18 +278,9 @@ def main(argv: list[str] | None = None) -> None:
         print('  Generated slabs: unavailable')
     
     # Print thermodynamics results if computed
-    if args.with_thermodynamics:
-        # Try to get thermo_results from process outputs (after run) or workflow outputs (during build)
-        thermo_ns = None
-        if hasattr(workflow, 'process') and hasattr(workflow.process, 'outputs'):
-            if hasattr(workflow.process.outputs, 'surface_energies'):
-                thermo_ns = workflow.process.outputs.surface_energies
-        elif hasattr(workflow, 'outputs') and hasattr(workflow.outputs, 'surface_energies'):
-            thermo_ns = workflow.outputs.surface_energies
-        
-        if thermo_ns is not None:
-            _print_thermodynamics_results('\n  Surface energy calculations:', thermo_ns)
-            print(f'\n  Use "verdi process show {process.pk if process else "PK"}" for full results')
+    if args.with_thermodynamics and hasattr(workflow, 'outputs') and hasattr(workflow.outputs, 'surface_energies'):
+        _print_thermodynamics_results('\n  Surface energy calculations:', workflow.outputs.surface_energies)
+        print(f'\n  Use "verdi process show {process.pk if process else "PK"}" for full results')
 
 
 

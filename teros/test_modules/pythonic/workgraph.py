@@ -11,6 +11,13 @@ from pymatgen.core.surface import SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
+from test_modules.pythonic.aiat_ternary import (
+    compute_surface_energies_scatter,
+    create_mock_bulk_energy,
+    create_mock_formation_enthalpy,
+    create_mock_reference_energies,
+)
+
 MappingStrAny = t.Mapping[str, t.Any]
 MappingStrStr = t.Mapping[str, str]
 
@@ -173,21 +180,59 @@ def slab_relaxation_scatter_gather(
     in_unit_planes: bool = False,
     max_normal_search: int | None = None,
     clean_workdir: bool = True,
+    compute_thermodynamics: bool = False,
+    bulk_energy: orm.Float | None = None,
+    reference_energies: orm.Dict | None = None,
+    formation_enthalpy: orm.Float | None = None,
+    sampling: int = 100,
 ) -> t.Annotated[
     dict,
     namespace(
         generated_slabs=dynamic(orm.StructureData),
         relaxed_slabs=dynamic(orm.StructureData),
         slab_energies=dynamic(orm.Float),
+        surface_energies=dynamic(orm.Dict),
     ),
 ]:
     """
-    Full scatter-gather workflow for slab relaxation.
+    Full scatter-gather workflow for slab relaxation with optional thermodynamics.
     
     This implements the scatter-gather pattern:
     1. Generate slabs from bulk structure
     2. Scatter: relax each slab in parallel
     3. Gather: collect relaxed structures and energies
+    4. (Optional) Compute ab initio atomistic thermodynamics
+    
+    Args:
+        bulk_structure: Bulk structure
+        miller_indices: Miller indices for surface
+        min_slab_thickness: Minimum slab thickness (Å)
+        min_vacuum_thickness: Minimum vacuum thickness (Å)
+        code_label: AiiDA code label
+        potential_family: Pseudopotential family
+        potential_mapping: Element to potential mapping
+        parameters: VASP/DFT parameters
+        options: Computation resources options
+        kpoints_spacing: K-points spacing (Å⁻¹)
+        lll_reduce: Apply LLL reduction
+        center_slab: Center slab in cell
+        symmetrize: Generate symmetrically distinct terminations
+        primitive: Use primitive cell
+        in_unit_planes: Thickness in unit planes
+        max_normal_search: Max normal search
+        clean_workdir: Clean remote directories
+        compute_thermodynamics: Whether to compute surface energies
+        bulk_energy: Bulk total energy (required if compute_thermodynamics=True)
+        reference_energies: Reference energies dict (required if compute_thermodynamics=True)
+        formation_enthalpy: Formation enthalpy (required if compute_thermodynamics=True)
+        sampling: Grid resolution for chemical potential
+        
+    Returns:
+        Dictionary with:
+        - generated_slabs: Original slab structures
+        - relaxed_slabs: Relaxed structures
+        - slab_energies: Total energies
+        - surface_energies: Surface energy data (if compute_thermodynamics=True)
     """
     if isinstance(miller_indices, tuple):
         miller_indices = list(miller_indices)
@@ -219,23 +264,68 @@ def slab_relaxation_scatter_gather(
         clean_workdir=clean_workdir,
     )
 
-    # Return all outputs
-    return {
+    # Prepare outputs
+    outputs = {
         'generated_slabs': slab_namespace,
         'relaxed_slabs': relaxation_outputs.relaxed_structures,
         'slab_energies': relaxation_outputs.energies,
     }
+
+    # Optional: Compute ab initio atomistic thermodynamics
+    if compute_thermodynamics:
+        if bulk_energy is None or reference_energies is None or formation_enthalpy is None:
+            raise ValueError(
+                'compute_thermodynamics=True requires bulk_energy, '
+                'reference_energies, and formation_enthalpy'
+            )
+        
+        surface_energy_data = compute_surface_energies_scatter(
+            slabs=relaxation_outputs.relaxed_structures,
+            energies=relaxation_outputs.energies,
+            bulk_structure=bulk_structure,
+            bulk_energy=bulk_energy,
+            reference_energies=reference_energies,
+            formation_enthalpy=formation_enthalpy,
+            sampling=sampling,
+        ).surface_energies
+        
+        outputs['surface_energies'] = surface_energy_data
+
+    return outputs
+
+
+@task.calcfunction
+def create_mock_thermo_data(value: orm.Float) -> orm.Dict:
+    """Create mock thermodynamics data from a shifted value."""
+    return orm.Dict(dict={
+        'phi': float(value.value) * 1.5,
+        'gamma_at_reference': float(value.value) * 1.5,
+        'mock_thermodynamics': True,
+    })
+
+
+@task.graph
+def compute_mock_thermodynamics(
+    data: t.Annotated[dict[str, orm.Float], dynamic(orm.Float)],
+) -> t.Annotated[dict, namespace(thermo=dynamic(orm.Dict))]:
+    """Scatter-gather: compute mock thermodynamics for each value."""
+    thermo = {}
+    for key, value in data.items():
+        thermo[key] = create_mock_thermo_data(value=value).result
+    return {'thermo': thermo}
 
 
 @task.graph
 def mock_scatter_gather(
     count: int = 3,
     delta: float = 0.5,
+    with_thermodynamics: bool = False,
 ) -> t.Annotated[
     dict,
     namespace(
         source_values=dynamic(orm.Float),
         shifted_values=dynamic(orm.Float),
+        thermo_results=dynamic(orm.Dict),
     ),
 ]:
     """
@@ -245,6 +335,7 @@ def mock_scatter_gather(
     1. Generate scalar values
     2. Scatter: shift each value in parallel
     3. Gather: collect shifted values
+    4. (Optional) Mock thermodynamics computation
     """
     # Generate inputs - direct access to .values namespace (no .result)
     data = generate_mock_scalars(count=orm.Int(count)).values
@@ -252,11 +343,18 @@ def mock_scatter_gather(
     # Scatter-gather: shift values in parallel
     shifted = scatter_shift_scalars(data=data, delta=delta).shifted
     
-    # Return outputs
-    return {
+    # Prepare outputs
+    outputs = {
         'source_values': data,
         'shifted_values': shifted,
     }
+    
+    # Optional mock thermodynamics
+    if with_thermodynamics:
+        thermo = compute_mock_thermodynamics(data=shifted).thermo
+        outputs['thermo_results'] = thermo
+    
+    return outputs
 
 
 def build_pythonic_workgraph(**kwargs) -> WorkGraph:
@@ -271,7 +369,13 @@ def build_mock_scatter_gather_workgraph(
     *,
     count: int = 3,
     delta: float = 0.5,
+    with_thermodynamics: bool = False,
 ) -> WorkGraph:
     """Return a lightweight ``WorkGraph`` using scatter-gather over scalars."""
-    return mock_scatter_gather.build(count=count, delta=delta)
+    return mock_scatter_gather.build(
+        count=count,
+        delta=delta,
+        with_thermodynamics=with_thermodynamics,
+    )
+
 
