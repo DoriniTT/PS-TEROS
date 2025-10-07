@@ -170,7 +170,7 @@ def main():
         "IBRION": 2,  # Conjugate gradient
         "ISIF": 2,  # Relax atoms only, keep cell fixed
         "NSW": 100,  # Max ionic steps
-        "EDIFFG": -0.02,  # Tighter force convergence for surfaces
+        "EDIFFG": -0.1,  # Tighter force convergence for surfaces
         "ALGO": "Normal",
         "LREAL": "Auto",
         "LWAVE": False,

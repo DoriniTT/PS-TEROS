@@ -2,31 +2,29 @@
 Slab Generation Module
 
 This module provides functions to generate surface slabs from bulk structures
-using Pymatgen's SlabGenerator.
+using Pymatgen's SlabGenerator with scatter-gather pattern for parallel relaxation.
 """
 
+import typing as t
 from aiida import orm
+from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, namespace, dynamic
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-from typing import Annotated
-from ase import Atoms
 
 
-@task
-def get_slabs(
-    relaxed_structure: Atoms,
-    miller_indices: list,
-    min_slab_thickness: float,
-    min_vacuum_thickness: float,
-    lll_reduce: bool = True,
-    center_slab: bool = True,
-    symmetrize: bool = True,
-    primitive: bool = True,
-    in_unit_planes: bool = False,
-    max_normal_search: int = None,
-) -> Annotated[dict, namespace(slabs=dynamic(orm.StructureData))]:
+@task.calcfunction
+def generate_slab_structures(
+    bulk_structure: orm.StructureData,
+    miller_indices: orm.List,
+    min_slab_thickness: orm.Float,
+    min_vacuum_thickness: orm.Float,
+    lll_reduce: orm.Bool,
+    center_slab: orm.Bool,
+    symmetrize: orm.Bool,
+    primitive: orm.Bool,
+) -> t.Annotated[dict, namespace(slabs=dynamic(orm.StructureData))]:
     """
     Generate slab structures from a bulk crystal structure using Pymatgen's SlabGenerator.
 
@@ -35,73 +33,144 @@ def get_slabs(
     generated with symmetric, reduced, c-axis orthogonal cells.
 
     Args:
-        relaxed_structure: ASE Atoms object of the bulk crystal (automatically unwrapped from StructureData)
-        miller_indices: List of Miller indices for slab generation (e.g., [1, 0, 0])
+        bulk_structure: AiiDA StructureData of the bulk crystal
+        miller_indices: AiiDA List of Miller indices for slab generation (e.g., [1, 0, 0])
         min_slab_thickness: Minimum slab thickness in Angstroms
         min_vacuum_thickness: Minimum vacuum thickness in Angstroms
-        lll_reduce: Reduce cell using LLL algorithm before slab generation. Default: False
-        center_slab: Center the slab in the c direction of the cell. Default: True
-        symmetrize: Generate symmetrically distinct terminations. Default: False
-        primitive: Find primitive cell before generating slabs. Default: True
-        in_unit_planes: Restrict Miller indices to unit planes. Default: False
-        max_normal_search: Max normal search for finding Miller indices. Default: None
+        lll_reduce: Reduce cell using LLL algorithm before slab generation
+        center_slab: Center the slab in the c direction of the cell
+        symmetrize: Generate symmetrically distinct terminations
+        primitive: Find primitive cell before generating slabs
 
     Returns:
         Dictionary with key 'slabs' containing a dict of slab structures.
         Each slab is keyed by termination identifier (e.g., "term_0", "term_1")
         and contains AiiDA StructureData nodes.
     """
-    # --- Helper functions for structure conversion ---
     adaptor = AseAtomsAdaptor()
 
-    def get_pymatgen_structure(atoms):
-        """Convert ASE Atoms to pymatgen Structure."""
-        return adaptor.get_structure(atoms)
+    ase_structure = bulk_structure.get_ase()
+    pymatgen_structure = adaptor.get_structure(ase_structure)
 
-    def get_aiida_structure(structure):
-        """Convert pymatgen Structure to AiiDA StructureData."""
-        ase_atoms = adaptor.get_atoms(structure)
-        return orm.StructureData(ase=ase_atoms)
+    if primitive.value:
+        analyzer = SpacegroupAnalyzer(pymatgen_structure)
+        pymatgen_structure = analyzer.get_primitive_standard_structure()
 
-    # --- Convert input structure to pymatgen format ---
-    bulk_structure = get_pymatgen_structure(relaxed_structure)
-
-    # --- Slab generation parameters ---
-    py_miller_indices = tuple(miller_indices)
-
-    # --- Optionally reduce to primitive cell for cleaner slabs ---
-    if primitive:
-        analyzer = SpacegroupAnalyzer(bulk_structure)
-        bulk_structure = analyzer.get_primitive_standard_structure()
-
-    # --- Create the slab generator object ---
-    slab_gen = SlabGenerator(
-        bulk_structure,
-        py_miller_indices,
-        min_slab_thickness,
-        min_vacuum_thickness,
-        lll_reduce=lll_reduce,
-        center_slab=center_slab,
-        max_normal_search=max_normal_search,
-        in_unit_planes=in_unit_planes,
+    generator = SlabGenerator(
+        pymatgen_structure,
+        tuple(miller_indices.get_list()),
+        min_slab_thickness.value,
+        min_vacuum_thickness.value,
+        center_slab=center_slab.value,
+        in_unit_planes=False,
+        max_normal_search=None,
+        lll_reduce=lll_reduce.value,
     )
 
-    # --- Generate all possible slabs for the given orientation ---
-    slabs = slab_gen.get_slabs(symmetrize=symmetrize)
+    slab_nodes: dict[str, orm.StructureData] = {}
+    for index, slab in enumerate(generator.get_slabs(symmetrize=symmetrize.value)):
+        orthogonal_slab = slab.get_orthogonal_c_slab()
+        ase_slab = adaptor.get_atoms(orthogonal_slab)
+        slab_nodes[f"term_{index}"] = orm.StructureData(ase=ase_slab)
 
-    # --- Convert slabs to orthogonal cells and then to AiiDA StructureData ---
-    slab_structures = {}
+    return {'slabs': slab_nodes}
 
-    for i, slab in enumerate(slabs):
-        ortho_slab = (
-            slab.get_orthogonal_c_slab()
-        )  # Convert to orthogonal cell along c-axis
-        super_slab = ortho_slab.make_supercell(
-            (1, 1, 1)
-        )  # No expansion, but could be changed
-        slab_structures[f"term_{i}"] = get_aiida_structure(
-            super_slab
-        )  # Convert to AiiDA StructureData
 
-    # --- Return dictionary with slabs nested in namespace ---
-    return {"slabs": slab_structures}
+@task.calcfunction
+def extract_total_energy(energies: orm.Dict) -> orm.Float:
+    """
+    Extract total energy from VASP energies output.
+    
+    Args:
+        energies: Dictionary containing energy outputs from VASP (from misc output)
+    
+    Returns:
+        Total energy as Float
+    """
+    energy_dict = energies.get_dict()
+    if 'total_energies' in energy_dict:
+        energy_dict = energy_dict['total_energies']
+
+    for key in ('energy_extrapolated', 'energy_no_entropy', 'energy'):
+        if key in energy_dict:
+            return orm.Float(energy_dict[key])
+
+    available = ', '.join(sorted(energy_dict.keys()))
+    raise ValueError(f'Unable to find total energy in VASP outputs. Available keys: {available}')
+
+
+def get_settings():
+    """
+    Parser settings for aiida-vasp.
+    """
+    return {
+        'parser_settings': {
+            'add_trajectory': True,
+            'add_structure': True,
+            'add_kpoints': True,
+        }
+    }
+
+
+@task.graph
+def relax_slabs_scatter(
+    slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
+    code: orm.Code,
+    potential_family: str,
+    potential_mapping: t.Mapping[str, str],
+    parameters: t.Mapping[str, t.Any],
+    options: t.Mapping[str, t.Any],
+    kpoints_spacing: float | None = None,
+    clean_workdir: bool = True,
+) -> t.Annotated[dict, namespace(relaxed_structures=dynamic(orm.StructureData), energies=dynamic(orm.Float))]:
+    """
+    Scatter-gather phase: relax each slab structure in parallel.
+    
+    This task graph iterates over the input slabs dictionary and creates
+    independent relaxation tasks that run in parallel. The loop wrapping
+    is necessary because slabs is a future output that isn't available
+    at graph construction time.
+    
+    Args:
+        slabs: Dictionary of slab structures to relax
+        code: AiiDA code for VASP
+        potential_family: Pseudopotential family
+        potential_mapping: Element to potential mapping
+        parameters: VASP parameters
+        options: Computation resources
+        kpoints_spacing: K-points spacing (optional)
+        clean_workdir: Whether to clean remote directories
+    
+    Returns:
+        Dictionary with relaxed_structures and energies namespaces
+    """
+    vasp_wc = WorkflowFactory('vasp.v2.vasp')
+    relax_task_cls = task(vasp_wc)
+    
+    relaxed: dict[str, orm.StructureData] = {}
+    energies_ns: dict[str, orm.Float] = {}
+
+    # Scatter: create independent tasks for each slab (runs in parallel)
+    for label, structure in slabs.items():
+        inputs: dict[str, t.Any] = {
+            'structure': structure,
+            'code': code,
+            'parameters': {'incar': dict(parameters)},
+            'options': dict(options),
+            'potential_family': potential_family,
+            'potential_mapping': dict(potential_mapping),
+            'clean_workdir': clean_workdir,
+            'settings': orm.Dict(dict=get_settings()),
+        }
+        if kpoints_spacing is not None:
+            inputs['kpoints_spacing'] = kpoints_spacing
+        
+        relaxation = relax_task_cls(**inputs)
+        relaxed[label] = relaxation.structure
+        energies_ns[label] = extract_total_energy(energies=relaxation.misc).result
+
+    # Gather: return collected results
+    return {
+        'relaxed_structures': relaxed,
+        'energies': energies_ns,
+    }

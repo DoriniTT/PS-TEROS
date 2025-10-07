@@ -1,68 +1,25 @@
 """
 PS-TEROS Core WorkGraph
 
-This module contains the core workflow for PS-TEROS calculations.
-One main WorkGraph with individual tasks running in parallel.
+This module contains the core workflow for PS-TEROS calculations using
+the pythonic scatter-gather pattern for parallel execution.
 """
 
+import typing as t
 from aiida import orm
 from aiida.plugins import WorkflowFactory
-from aiida_workgraph import task, WorkGraph, Map, dynamic, namespace
-from aiida_workgraph.engine import task_manager as _task_manager
-from aiida_workgraph.utils import get_nested_dict
+from aiida_workgraph import task, WorkGraph, dynamic, namespace
 from ase.io import read
-from typing import Annotated, Union, Any
-from aiida_workgraph import spec
-from ase import Atoms
-from collections.abc import Mapping
 from teros.CORE.modules.hf import calculate_formation_enthalpy
-from teros.CORE.modules.slabs import get_slabs
+from teros.CORE.modules.slabs import (
+    generate_slab_structures,
+    relax_slabs_scatter,
+    extract_total_energy,
+)
 
-# Temporary shim: aiida-workgraph 1.0.0b3 drops the ``source`` kwarg when the
-# map zone iterates over a Task output namespace. Patch ``TaskManager`` so the
-# ``source`` payload is recovered directly from the socket when missing.
-_ORIG_EXECUTE_MAP_TASK = _task_manager.TaskManager.execute_map_task
-
-
-def _patched_execute_map_task(self, task, kwargs):
-    kwargs = dict(kwargs)
-    source = kwargs.get('source')
-    if not source:
-        source = self.get_socket_value(task.inputs.source)
-    if not source:
-        links = getattr(task.inputs.source, '_links', [])
-        if links:
-            link = links[0]
-            results = self.ctx._task_results.get(link.from_node.name)
-            if results is not None:
-                scoped_name = link.from_socket._scoped_name
-                source = get_nested_dict(results, scoped_name, default=None)
-                if source is None:
-                    source = get_nested_dict(results, f'result.{scoped_name}', default=None)
-                if source is None:
-                    source = get_nested_dict(results, f'_outputs.{scoped_name}', default=None)
-                if source is None and isinstance(results, Mapping):
-                    result_namespace = results.get('result')
-                    if isinstance(result_namespace, Mapping):
-                        source = result_namespace.get(scoped_name)
-    if isinstance(source, Mapping):
-        source = dict(source)
-    kwargs['source'] = source or {}
-    return _ORIG_EXECUTE_MAP_TASK(self, task, kwargs)
-
-
-if not getattr(_task_manager.TaskManager.execute_map_task, '_zone_patch', False):
-    _task_manager.TaskManager.execute_map_task = _patched_execute_map_task
-    _task_manager.TaskManager.execute_map_task._zone_patch = True
-
-
-# NOTE: Slab relaxations use two-pass approach for parallel execution
-# All VASP tasks created first (independent) = parallel execution
-
-@task
-def load_structure(filepath: str):
+def load_structure_from_file(filepath: str) -> orm.StructureData:
     """
-    Load structure from a file using ASE.
+    Load structure from a file using ASE (helper function for graph construction).
 
     Args:
         filepath: Path to structure file
@@ -73,37 +30,23 @@ def load_structure(filepath: str):
     atoms = read(filepath)
     return orm.StructureData(ase=atoms)
 
-@task
-def extract_total_energy(energies: Union[orm.Dict, dict]):
+
+def get_settings():
     """
-    Extract total energy from VASP energies output.
-
-    Args:
-        energies: Dictionary containing energy outputs from VASP (from misc output)
-
-    Returns:
-        Total energy as Float
+    Parser settings for aiida-vasp.
     """
-    # Handle both orm.Dict and plain dict
-    if isinstance(energies, orm.Dict):
-        energy_dict = energies.get_dict()
-    else:
-        energy_dict = energies
+    return {
+        'parser_settings': {
+            'add_energy': True,
+            'add_trajectory': True,
+            'add_structure': True,
+            'add_kpoints': True,
+        }
+    }
 
-    # For VASP v2 workchain, energies are nested under 'total_energies'
-    if 'total_energies' in energy_dict:
-        energy_dict = energy_dict['total_energies']
 
-    # Try different keys in order of preference
-    for key in ['energy_extrapolated', 'energy_no_entropy', 'energy']:
-        if key in energy_dict:
-            return orm.Float(energy_dict[key])
-
-    raise ValueError(f"Could not find energy in energies dict. Available keys: {list(energy_dict.keys())}")
-
-# NOTE: Using two-pass approach for slab relaxations within @task.graph
-# All VASP tasks are created first (no dependencies), ensuring parallel execution
-
+# NOTE: Using scatter-gather pattern for slab relaxations
+# All VASP tasks created in parallel within @task.graph
 
 @task.graph(outputs=[
     'bulk_energy', 'metal_energy', 'nonmetal_energy', 'oxygen_energy',
@@ -209,10 +152,10 @@ def core_workgraph(
     VaspTask = task(VaspWorkChain)
 
     # ===== BULK RELAXATION =====
-    bulk_struct = load_structure(filepath=f"{structures_dir}/{bulk_name}")
+    bulk_struct = load_structure_from_file(f"{structures_dir}/{bulk_name}")
 
     bulk_vasp = VaspTask(
-        structure=bulk_struct.result,
+        structure=bulk_struct,
         code=code,
         parameters={'incar': bulk_parameters},
         options=bulk_options,
@@ -220,15 +163,16 @@ def core_workgraph(
         potential_family=potential_family,
         potential_mapping=bulk_potential_mapping,
         clean_workdir=clean_workdir,
+        settings=orm.Dict(dict=get_settings()),
     )
 
     bulk_energy = extract_total_energy(energies=bulk_vasp.misc)
 
     # ===== METAL RELAXATION =====
-    metal_struct = load_structure(filepath=f"{structures_dir}/{metal_name}")
+    metal_struct = load_structure_from_file(f"{structures_dir}/{metal_name}")
 
     metal_vasp = VaspTask(
-        structure=metal_struct.result,
+        structure=metal_struct,
         code=code,
         parameters={'incar': metal_parameters},
         options=metal_options,
@@ -236,15 +180,16 @@ def core_workgraph(
         potential_family=potential_family,
         potential_mapping=metal_potential_mapping,
         clean_workdir=clean_workdir,
+        settings=orm.Dict(dict=get_settings()),
     )
 
     metal_energy = extract_total_energy(energies=metal_vasp.misc)
 
     # ===== NONMETAL RELAXATION =====
-    nonmetal_struct = load_structure(filepath=f"{structures_dir}/{nonmetal_name}")
+    nonmetal_struct = load_structure_from_file(f"{structures_dir}/{nonmetal_name}")
 
     nonmetal_vasp = VaspTask(
-        structure=nonmetal_struct.result,
+        structure=nonmetal_struct,
         code=code,
         parameters={'incar': nonmetal_parameters},
         options=nonmetal_options,
@@ -252,15 +197,16 @@ def core_workgraph(
         potential_family=potential_family,
         potential_mapping=nonmetal_potential_mapping,
         clean_workdir=clean_workdir,
+        settings=orm.Dict(dict=get_settings()),
     )
 
     nonmetal_energy = extract_total_energy(energies=nonmetal_vasp.misc)
 
     # ===== OXYGEN RELAXATION =====
-    oxygen_struct = load_structure(filepath=f"{structures_dir}/{oxygen_name}")
+    oxygen_struct = load_structure_from_file(f"{structures_dir}/{oxygen_name}")
 
     oxygen_vasp = VaspTask(
-        structure=oxygen_struct.result,
+        structure=oxygen_struct,
         code=code,
         parameters={'incar': oxygen_parameters},
         options=oxygen_options,
@@ -268,6 +214,7 @@ def core_workgraph(
         potential_family=potential_family,
         potential_mapping=oxygen_potential_mapping,
         clean_workdir=clean_workdir,
+        settings=orm.Dict(dict=get_settings()),
     )
 
     oxygen_energy = extract_total_energy(energies=oxygen_vasp.misc)
@@ -285,18 +232,17 @@ def core_workgraph(
     )
 
     # ===== SLAB GENERATION =====
-    slabs = get_slabs(
-        relaxed_structure=bulk_vasp.structure,
-        miller_indices=miller_indices,
-        min_slab_thickness=min_slab_thickness,
-        min_vacuum_thickness=min_vacuum_thickness,
-        lll_reduce=lll_reduce,
-        center_slab=center_slab,
-        symmetrize=symmetrize,
-        primitive=primitive,
-        in_unit_planes=in_unit_planes,
-        max_normal_search=max_normal_search,
-    )
+    # Generate slabs using the pythonic scatter-gather pattern
+    slab_namespace = generate_slab_structures(
+        bulk_structure=bulk_vasp.structure,
+        miller_indices=orm.List(list=miller_indices),
+        min_slab_thickness=orm.Float(min_slab_thickness),
+        min_vacuum_thickness=orm.Float(min_vacuum_thickness),
+        lll_reduce=orm.Bool(lll_reduce),
+        center_slab=orm.Bool(center_slab),
+        symmetrize=orm.Bool(symmetrize),
+        primitive=orm.Bool(primitive),
+    ).slabs
 
     # ===== SLAB RELAXATION (OPTIONAL) =====
     relaxed_slabs_output = None
@@ -309,43 +255,20 @@ def core_workgraph(
         slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
         slab_kpts = slab_kpoints_spacing if slab_kpoints_spacing is not None else kpoints_spacing
 
-        # Two-pass approach for parallel slab relaxations
-        # Pass 1: Create all VASP tasks (no dependencies between them)
-        # Pass 2: Extract energies from all tasks
-        relaxed_slabs = {}
-        slab_energies_dict = {}
-        vasp_tasks = {}
+        # Use scatter-gather pattern for parallel slab relaxation
+        relaxation_outputs = relax_slabs_scatter(
+            slabs=slab_namespace,
+            code=code,
+            potential_family=potential_family,
+            potential_mapping=slab_pot_map,
+            parameters=slab_params,
+            options=slab_opts,
+            kpoints_spacing=slab_kpts,
+            clean_workdir=clean_workdir,
+        )
 
-        # Extract slabs from dynamic namespace
-        if hasattr(slabs.slabs, "_get_keys"):
-            slab_items = [(key, getattr(slabs.slabs, key)) for key in slabs.slabs._get_keys()]
-        else:
-            slab_items = list(slabs.slabs.items()) if isinstance(slabs.slabs, dict) else []
-
-        # PASS 1: Create all VASP tasks
-        # Since they're all independent, they run in parallel
-        for slab_id, slab_structure in slab_items:
-            vasp_tasks[slab_id] = VaspTask(
-                structure=slab_structure,
-                code=code,
-                parameters={'incar': slab_params},
-                options=slab_opts,
-                kpoints_spacing=slab_kpts,
-                potential_family=potential_family,
-                potential_mapping=slab_pot_map,
-                clean_workdir=clean_workdir,
-            )
-
-        # PASS 2: Extract energies and collect results
-        for slab_id in vasp_tasks:
-            vasp_task = vasp_tasks[slab_id]
-            energy = extract_total_energy(energies=vasp_task.misc)
-
-            relaxed_slabs[slab_id] = vasp_task.structure
-            slab_energies_dict[slab_id] = energy.result
-
-        relaxed_slabs_output = relaxed_slabs
-        slab_energies_output = slab_energies_dict
+        relaxed_slabs_output = relaxation_outputs.relaxed_structures
+        slab_energies_output = relaxation_outputs.energies
 
     # Return all outputs
     return {
@@ -358,7 +281,7 @@ def core_workgraph(
         'oxygen_energy': oxygen_energy.result,
         'oxygen_structure': oxygen_vasp.structure,
         'formation_enthalpy': formation_hf.result,
-        'slab_structures': slabs.slabs,
+        'slab_structures': slab_namespace,
         'relaxed_slabs': relaxed_slabs_output,
         'slab_energies': slab_energies_output,
     }
@@ -501,215 +424,67 @@ def build_core_workgraph_with_map(
     in_unit_planes: bool = False,
     max_normal_search: int = None,
     relax_slabs: bool = False,
-    name: str = 'FormationEnthalpy_MapZone',
+    name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
-    Build a formation enthalpy WorkGraph using Map zone for slab relaxations.
+    DEPRECATED: Now uses scatter-gather pattern instead of Map zone.
+
+    Build a formation enthalpy WorkGraph using scatter-gather pattern for slab relaxations.
 
     This function creates a WorkGraph that:
     1. Relaxes bulk and reference structures in parallel
     2. Calculates formation enthalpy
     3. Generates slab structures from relaxed bulk
-    4. Uses Map zone to relax all slabs in parallel (if relax_slabs=True)
+    4. Uses scatter-gather pattern (@task.graph) to relax all slabs in parallel (if relax_slabs=True)
 
-    This is the Map zone implementation that replaces the @task.graph two-pass approach.
+    Note: This function is now an alias for build_core_workgraph with updated
+    implementation using the pythonic scatter-gather pattern instead of Map zones.
 
     Args:
-        Same as build_core_workgraph, with Map zone for slab relaxations
+        Same as build_core_workgraph
 
     Returns:
         WorkGraph instance ready to be submitted
     """
-    # Set defaults
-    bulk_potential_mapping = bulk_potential_mapping or {}
-    metal_potential_mapping = metal_potential_mapping or {}
-    nonmetal_potential_mapping = nonmetal_potential_mapping or {}
-    oxygen_potential_mapping = oxygen_potential_mapping or {}
-    bulk_parameters = bulk_parameters or {}
-    bulk_options = bulk_options or {}
-    metal_parameters = metal_parameters or {}
-    metal_options = metal_options or {}
-    nonmetal_parameters = nonmetal_parameters or {}
-    nonmetal_options = nonmetal_options or {}
-    oxygen_parameters = oxygen_parameters or {}
-    oxygen_options = oxygen_options or {}
-
-    # Use slab-specific parameters or fall back to bulk parameters
-    slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
-    slab_opts = slab_options if slab_options is not None else bulk_options
-    slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
-    slab_kpts = slab_kpoints_spacing if slab_kpoints_spacing is not None else kpoints_spacing
-
-    # Define output specification
-    outputs_spec = namespace(
-        bulk_energy=orm.Float,
-        bulk_structure=orm.StructureData,
-        metal_energy=orm.Float,
-        metal_structure=orm.StructureData,
-        nonmetal_energy=orm.Float,
-        nonmetal_structure=orm.StructureData,
-        oxygen_energy=orm.Float,
-        oxygen_structure=orm.StructureData,
-        formation_enthalpy=orm.Dict,
-        slab_structures=dynamic(orm.StructureData),
-        relaxed_slabs=dynamic(orm.StructureData),
-        slab_energies=dynamic(orm.Float),
+    # Simply forward to build_core_workgraph which now uses scatter-gather
+    return build_core_workgraph(
+        structures_dir=structures_dir,
+        bulk_name=bulk_name,
+        metal_name=metal_name,
+        nonmetal_name=nonmetal_name,
+        oxygen_name=oxygen_name,
+        miller_indices=miller_indices,
+        min_slab_thickness=min_slab_thickness,
+        min_vacuum_thickness=min_vacuum_thickness,
+        code_label=code_label,
+        potential_family=potential_family,
+        bulk_potential_mapping=bulk_potential_mapping,
+        metal_potential_mapping=metal_potential_mapping,
+        nonmetal_potential_mapping=nonmetal_potential_mapping,
+        oxygen_potential_mapping=oxygen_potential_mapping,
+        kpoints_spacing=kpoints_spacing,
+        bulk_parameters=bulk_parameters,
+        bulk_options=bulk_options,
+        metal_parameters=metal_parameters,
+        metal_options=metal_options,
+        nonmetal_parameters=nonmetal_parameters,
+        nonmetal_options=nonmetal_options,
+        oxygen_parameters=oxygen_parameters,
+        oxygen_options=oxygen_options,
+        clean_workdir=clean_workdir,
+        slab_parameters=slab_parameters,
+        slab_options=slab_options,
+        slab_potential_mapping=slab_potential_mapping,
+        slab_kpoints_spacing=slab_kpoints_spacing,
+        lll_reduce=lll_reduce,
+        center_slab=center_slab,
+        symmetrize=symmetrize,
+        primitive=primitive,
+        in_unit_planes=in_unit_planes,
+        max_normal_search=max_normal_search,
+        relax_slabs=relax_slabs,
+        name=name,
     )
-
-    with WorkGraph(name=name, outputs=outputs_spec) as wg:
-        # Load the code
-        code = orm.load_code(code_label)
-
-        # Get VASP workchain and wrap it as a task
-        VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
-        vasp_task_cls = task(VaspWorkChain)
-
-        # Parser settings for VASP calculations
-        parser_settings = orm.Dict(dict={
-            'parser_settings': {
-                'add_forces': True,
-                'add_stress': True,
-                'add_energies': True,
-            }
-        })
-
-        # ===== BULK RELAXATION =====
-        bulk_struct = load_structure(filepath=f"{structures_dir}/{bulk_name}")
-
-        bulk_vasp = vasp_task_cls(
-            structure=bulk_struct.result,
-            code=code,
-            parameters={'incar': bulk_parameters},
-            options=bulk_options,
-            kpoints_spacing=kpoints_spacing,
-            potential_family=potential_family,
-            potential_mapping=bulk_potential_mapping,
-            clean_workdir=clean_workdir,
-            settings=parser_settings,
-        )
-
-        bulk_energy_task = extract_total_energy(energies=bulk_vasp.misc)
-
-        # ===== METAL RELAXATION =====
-        metal_struct = load_structure(filepath=f"{structures_dir}/{metal_name}")
-
-        metal_vasp = vasp_task_cls(
-            structure=metal_struct.result,
-            code=code,
-            parameters={'incar': metal_parameters},
-            options=metal_options,
-            kpoints_spacing=kpoints_spacing,
-            potential_family=potential_family,
-            potential_mapping=metal_potential_mapping,
-            clean_workdir=clean_workdir,
-            settings=parser_settings,
-        )
-
-        metal_energy_task = extract_total_energy(energies=metal_vasp.misc)
-
-        # ===== NONMETAL RELAXATION =====
-        nonmetal_struct = load_structure(filepath=f"{structures_dir}/{nonmetal_name}")
-
-        nonmetal_vasp = vasp_task_cls(
-            structure=nonmetal_struct.result,
-            code=code,
-            parameters={'incar': nonmetal_parameters},
-            options=nonmetal_options,
-            kpoints_spacing=kpoints_spacing,
-            potential_family=potential_family,
-            potential_mapping=nonmetal_potential_mapping,
-            clean_workdir=clean_workdir,
-            settings=parser_settings,
-        )
-
-        nonmetal_energy_task = extract_total_energy(energies=nonmetal_vasp.misc)
-
-        # ===== OXYGEN RELAXATION =====
-        oxygen_struct = load_structure(filepath=f"{structures_dir}/{oxygen_name}")
-
-        oxygen_vasp = vasp_task_cls(
-            structure=oxygen_struct.result,
-            code=code,
-            parameters={'incar': oxygen_parameters},
-            options=oxygen_options,
-            kpoints_spacing=kpoints_spacing,
-            potential_family=potential_family,
-            potential_mapping=oxygen_potential_mapping,
-            clean_workdir=clean_workdir,
-            settings=parser_settings,
-        )
-
-        oxygen_energy_task = extract_total_energy(energies=oxygen_vasp.misc)
-
-        # ===== FORMATION ENTHALPY CALCULATION =====
-        formation_hf = calculate_formation_enthalpy(
-            bulk_structure=bulk_vasp.structure,
-            bulk_energy=bulk_energy_task.result,
-            metal_structure=metal_vasp.structure,
-            metal_energy=metal_energy_task.result,
-            nonmetal_structure=nonmetal_vasp.structure,
-            nonmetal_energy=nonmetal_energy_task.result,
-            oxygen_structure=oxygen_vasp.structure,
-            oxygen_energy=oxygen_energy_task.result,
-        )
-
-        # ===== SLAB GENERATION =====
-        slab_namespace = get_slabs(
-            relaxed_structure=bulk_vasp.structure,
-            miller_indices=miller_indices,
-            min_slab_thickness=min_slab_thickness,
-            min_vacuum_thickness=min_vacuum_thickness,
-            lll_reduce=lll_reduce,
-            center_slab=center_slab,
-            symmetrize=symmetrize,
-            primitive=primitive,
-            in_unit_planes=in_unit_planes,
-            max_normal_search=max_normal_search,
-        ).slabs
-
-        # Set graph outputs for bulk calculations
-        wg.outputs.bulk_energy = bulk_energy_task.result
-        wg.outputs.bulk_structure = bulk_vasp.structure
-        wg.outputs.metal_energy = metal_energy_task.result
-        wg.outputs.metal_structure = metal_vasp.structure
-        wg.outputs.nonmetal_energy = nonmetal_energy_task.result
-        wg.outputs.nonmetal_structure = nonmetal_vasp.structure
-        wg.outputs.oxygen_energy = oxygen_energy_task.result
-        wg.outputs.oxygen_structure = oxygen_vasp.structure
-        wg.outputs.formation_enthalpy = formation_hf.result
-        wg.outputs.slab_structures = slab_namespace
-
-        # ===== SLAB RELAXATION WITH MAP ZONE =====
-        if relax_slabs:
-            with Map(slab_namespace) as map_zone:
-                # Relax each slab using VASP WorkChain
-                relax_inputs = {
-                    'structure': map_zone.item.value,
-                    'code': code,
-                    'parameters': {'incar': slab_params},
-                    'options': slab_opts,
-                    'potential_family': potential_family,
-                    'potential_mapping': slab_pot_map,
-                    'clean_workdir': clean_workdir,
-                    'settings': parser_settings,
-                }
-                if slab_kpts is not None:
-                    relax_inputs['kpoints_spacing'] = slab_kpts
-
-                relaxation = vasp_task_cls(**relax_inputs)
-                energy = extract_total_energy(energies=relaxation.misc).result
-
-                # Gather results from each iteration
-                map_zone.gather({
-                    'relaxed_slabs': relaxation.structure,
-                    'slab_energies': energy,
-                })
-
-            # Connect Map zone outputs to WorkGraph outputs
-            wg.outputs.relaxed_slabs = map_zone.outputs.relaxed_slabs
-            wg.outputs.slab_energies = map_zone.outputs.slab_energies
-
-    return wg
 
 
 if __name__ == '__main__':
