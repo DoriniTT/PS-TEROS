@@ -26,7 +26,7 @@ Usage:
 """
 
 from aiida import load_profile, orm
-from teros.workgraph import build_core_workgraph_with_map
+from teros.core.workgraph import build_core_workgraph_with_map
 
 
 def main():
@@ -37,7 +37,7 @@ def main():
     load_profile()
 
     # Define structures directory
-    structures_dir = "/home/thiagotd/git/PS-TEROS/teros/structures"
+    structures_dir = "/home/thiagotd/git/PS-TEROS/examples/structures"
 
     # Define calculation parameters
     code_label = "VASP-VTST-6.4.3@bohr"

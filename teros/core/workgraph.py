@@ -10,13 +10,13 @@ from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, WorkGraph, dynamic, namespace
 from ase.io import read
-from teros.CORE.modules.hf import calculate_formation_enthalpy
-from teros.CORE.modules.slabs import (
+from teros.core.hf import calculate_formation_enthalpy
+from teros.core.slabs import (
     generate_slab_structures,
     relax_slabs_scatter,
     extract_total_energy,
 )
-from teros.CORE.modules.thermodynamics import (
+from teros.core.thermodynamics import (
     identify_oxide_type,
     compute_surface_energies_scatter,
 )
