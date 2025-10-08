@@ -48,7 +48,6 @@ def get_settings():
         }
     }
 
-
 # NOTE: Using scatter-gather pattern for slab relaxations
 # All VASP tasks created in parallel within @task.graph
 
