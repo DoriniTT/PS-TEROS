@@ -14,6 +14,35 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 
+@task.graph
+def wrap_input_slabs(
+    **slabs: orm.StructureData
+) -> t.Annotated[dict, namespace(slabs=dynamic(orm.StructureData))]:
+    """
+    Wrap user-provided slab structures into the proper namespace format.
+    
+    This function takes pre-generated slab structures and returns them
+    in the same format as generate_slab_structures, allowing user-provided
+    slabs to work with the scatter-gather relaxation pattern.
+    
+    This is a @task.graph (not calcfunction) to avoid creating cycles in the 
+    provenance graph when using already-stored StructureData nodes. This matches
+    the scatter-gather pattern used in relax_slabs_scatter.
+    
+    Args:
+        **slabs: Keyword arguments where each key is a slab identifier
+                 (e.g., "term_0") and value is a StructureData node
+    
+    Returns:
+        Dictionary with key 'slabs' containing a dict of slab structures.
+        Each slab is keyed by termination identifier (e.g., "term_0", "term_1")
+        and contains AiiDA StructureData nodes.
+    """
+    # Simply return the slabs in the same format as generate_slab_structures
+    # Using @task.graph instead of @task.calcfunction avoids provenance cycles
+    return {'slabs': dict(slabs)}
+
+
 @task.calcfunction
 def generate_slab_structures(
     bulk_structure: orm.StructureData,

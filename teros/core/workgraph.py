@@ -13,6 +13,7 @@ from ase.io import read
 from teros.core.hf import calculate_formation_enthalpy
 from teros.core.slabs import (
     generate_slab_structures,
+    wrap_input_slabs,
     relax_slabs_scatter,
     extract_total_energy,
 )
@@ -79,9 +80,9 @@ def core_workgraph(
     oxygen_parameters: dict,
     oxygen_options: dict,
     clean_workdir: bool,
-    miller_indices: list,
-    min_slab_thickness: float,
-    min_vacuum_thickness: float,
+    miller_indices: list = None,
+    min_slab_thickness: float = None,
+    min_vacuum_thickness: float = None,
     slab_parameters: dict = None,
     slab_options: dict = None,
     slab_potential_mapping: dict = None,
@@ -95,6 +96,8 @@ def core_workgraph(
     relax_slabs: bool = False,
     compute_thermodynamics: bool = False,
     thermodynamics_sampling: int = 100,
+    input_slabs: dict = None,
+    use_input_slabs: bool = False,  # Signal to skip slab generation
 ):
     """
     Core WorkGraph for formation enthalpy calculations of ternary oxides with slab generation.
@@ -127,9 +130,9 @@ def core_workgraph(
         oxygen_parameters: VASP parameters for oxygen reference
         oxygen_options: Scheduler options for oxygen reference
         clean_workdir: Whether to clean work directory
-        miller_indices: Miller indices for slab generation (e.g., [1, 0, 0])
-        min_slab_thickness: Minimum slab thickness in Angstroms
-        min_vacuum_thickness: Minimum vacuum thickness in Angstroms
+        miller_indices: Miller indices for slab generation (e.g., [1, 0, 0]). Not required if input_slabs provided.
+        min_slab_thickness: Minimum slab thickness in Angstroms. Not required if input_slabs provided.
+        min_vacuum_thickness: Minimum vacuum thickness in Angstroms. Not required if input_slabs provided.
         slab_parameters: VASP parameters for slab relaxation. Default: None (uses bulk_parameters)
         slab_options: Scheduler options for slab calculations. Default: None (uses bulk_options)
         slab_potential_mapping: Potential mapping for slabs. Default: None (uses bulk_potential_mapping)
@@ -143,6 +146,8 @@ def core_workgraph(
         relax_slabs: Whether to relax the generated slabs with VASP. Default: False
         compute_thermodynamics: Whether to compute surface energies. Default: False (requires relax_slabs=True)
         thermodynamics_sampling: Number of grid points for chemical potential sampling. Default: 100
+        input_slabs: Dictionary of pre-generated slab structures (e.g., {'term_0': StructureData, ...}). 
+                     If provided, slab generation is skipped. Default: None
 
     Returns:
         Dictionary with energies, structures, formation enthalpy, slab structures, and optionally surface energies:
@@ -242,23 +247,35 @@ def core_workgraph(
     )
 
     # ===== SLAB GENERATION =====
-    # Generate slabs using the pythonic scatter-gather pattern
-    slab_namespace = generate_slab_structures(
-        bulk_structure=bulk_vasp.structure,
-        miller_indices=orm.List(list=miller_indices),
-        min_slab_thickness=orm.Float(min_slab_thickness),
-        min_vacuum_thickness=orm.Float(min_vacuum_thickness),
-        lll_reduce=orm.Bool(lll_reduce),
-        center_slab=orm.Bool(center_slab),
-        symmetrize=orm.Bool(symmetrize),
-        primitive=orm.Bool(primitive),
-    ).slabs
+    # Use input slabs if provided, otherwise generate them
+    if use_input_slabs:
+        # User will provide pre-generated slabs after building
+        # Skip slab generation entirely
+        slab_namespace = None  # Will be set post-build
+    else:
+        # Generate slabs using the pythonic scatter-gather pattern
+        if miller_indices is None or min_slab_thickness is None or min_vacuum_thickness is None:
+            raise ValueError(
+                "When input_slabs is not provided, miller_indices, min_slab_thickness, "
+                "and min_vacuum_thickness are required for slab generation."
+            )
+        
+        slab_namespace = generate_slab_structures(
+            bulk_structure=bulk_vasp.structure,
+            miller_indices=orm.List(list=miller_indices),
+            min_slab_thickness=orm.Float(min_slab_thickness),
+            min_vacuum_thickness=orm.Float(min_vacuum_thickness),
+            lll_reduce=orm.Bool(lll_reduce),
+            center_slab=orm.Bool(center_slab),
+            symmetrize=orm.Bool(symmetrize),
+            primitive=orm.Bool(primitive),
+        ).slabs
 
     # ===== SLAB RELAXATION (OPTIONAL) =====
-    relaxed_slabs_output = None
-    slab_energies_output = None
+    relaxed_slabs_output = {}
+    slab_energies_output = {}
 
-    if relax_slabs:
+    if relax_slabs and slab_namespace is not None:
         # Use slab-specific parameters or fall back to bulk parameters
         slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
         slab_opts = slab_options if slab_options is not None else bulk_options
@@ -281,7 +298,7 @@ def core_workgraph(
         slab_energies_output = relaxation_outputs.energies
 
     # ===== THERMODYNAMICS CALCULATION (OPTIONAL) =====
-    surface_energies_output = None
+    surface_energies_output = {}
     if compute_thermodynamics and relax_slabs:
         # Identify oxide type (binary or ternary)
         oxide_type_result = identify_oxide_type(bulk_structure=bulk_vasp.structure)
@@ -312,7 +329,7 @@ def core_workgraph(
         'oxygen_energy': oxygen_energy.result,
         'oxygen_structure': oxygen_vasp.structure,
         'formation_enthalpy': formation_hf.result,
-        'slab_structures': slab_namespace,
+        'slab_structures': slab_namespace if slab_namespace is not None else {},
         'relaxed_slabs': relaxed_slabs_output,
         'slab_energies': slab_energies_output,
         'surface_energies': surface_energies_output,
@@ -325,9 +342,9 @@ def build_core_workgraph(
     metal_name: str,
     nonmetal_name: str,
     oxygen_name: str,
-    miller_indices: list,
-    min_slab_thickness: float,
-    min_vacuum_thickness: float,
+    miller_indices: list = None,
+    min_slab_thickness: float = None,
+    min_vacuum_thickness: float = None,
     code_label: str = 'VASP-VTST-6.4.3@bohr',
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
@@ -357,6 +374,7 @@ def build_core_workgraph(
     relax_slabs: bool = False,
     compute_thermodynamics: bool = False,
     thermodynamics_sampling: int = 100,
+    input_slabs: dict = None,
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -373,12 +391,19 @@ def build_core_workgraph(
         slab_options: Scheduler options for slab calculations. Default: None (uses bulk_options)
         slab_potential_mapping: Potential mapping for slabs. Default: None (uses bulk_potential_mapping)
         slab_kpoints_spacing: K-points spacing for slabs. Default: None (uses kpoints_spacing)
+        input_slabs: Dictionary of pre-generated slab structures. If provided, skips slab generation. Default: None
+        miller_indices: Miller indices for slab generation. Not required if input_slabs provided.
+        min_slab_thickness: Minimum slab thickness. Not required if input_slabs provided.
+        min_vacuum_thickness: Minimum vacuum thickness. Not required if input_slabs provided.
         ... (other parameters as before)
 
     Returns:
         WorkGraph instance ready to be submitted
     """
-    # Build the workgraph
+    # Special handling for input_slabs: stored nodes can't be passed through @task.graph
+    use_input_slabs = input_slabs is not None and len(input_slabs) > 0
+    
+    # Build the workgraph (pass None for input_slabs to avoid serialization issues)
     # Note: parameters will be wrapped with {'incar': ...} inside the graph
     wg = core_workgraph.build(
         structures_dir=structures_dir,
@@ -402,9 +427,9 @@ def build_core_workgraph(
         oxygen_parameters=oxygen_parameters or {},
         oxygen_options=oxygen_options or {},
         clean_workdir=clean_workdir,
-        miller_indices=miller_indices,
-        min_slab_thickness=min_slab_thickness,
-        min_vacuum_thickness=min_vacuum_thickness,
+        miller_indices=miller_indices if not use_input_slabs else [0, 0, 1],  # Dummy value
+        min_slab_thickness=min_slab_thickness if not use_input_slabs else 10.0,  # Dummy value
+        min_vacuum_thickness=min_vacuum_thickness if not use_input_slabs else 10.0,  # Dummy value
         slab_parameters=slab_parameters,
         slab_options=slab_options,
         slab_potential_mapping=slab_potential_mapping,
@@ -418,7 +443,42 @@ def build_core_workgraph(
         relax_slabs=relax_slabs,
         compute_thermodynamics=compute_thermodynamics,
         thermodynamics_sampling=thermodynamics_sampling,
+        input_slabs=None,  # Always pass None to avoid serialization
+        use_input_slabs=use_input_slabs,  # Pass the flag
     )
+    
+    # If user provided slabs, manually add the relax_slabs_scatter task
+    if use_input_slabs and relax_slabs:
+        from teros.core.slabs import relax_slabs_scatter
+        from aiida.orm import Code, load_code
+        
+        # Get code
+        code = load_code(code_label)
+        
+        # Get parameters
+        slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
+        slab_opts = slab_options if slab_options is not None else bulk_options
+        slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
+        slab_kpts = slab_kpoints_spacing if slab_kpoints_spacing is not None else kpoints_spacing
+        
+        # Add the scatter task manually with user slabs as input
+        scatter_task = wg.add_task(
+            relax_slabs_scatter,
+            name='relax_slabs_scatter',
+            slabs=input_slabs,
+            code=code,
+            potential_family=potential_family,
+            potential_mapping=slab_pot_map,
+            parameters=slab_params,
+            options=slab_opts,
+            kpoints_spacing=slab_kpts,
+            clean_workdir=clean_workdir,
+        )
+        
+        # Connect outputs to graph outputs
+        wg.outputs.relaxed_slabs = scatter_task.outputs.relaxed_structures
+        wg.outputs.slab_energies = scatter_task.outputs.energies
+        wg.outputs.slab_structures = input_slabs
 
     # Set the name
     wg.name = name
@@ -432,9 +492,9 @@ def build_core_workgraph_with_map(
     metal_name: str,
     nonmetal_name: str,
     oxygen_name: str,
-    miller_indices: list,
-    min_slab_thickness: float,
-    min_vacuum_thickness: float,
+    miller_indices: list = None,
+    min_slab_thickness: float = None,
+    min_vacuum_thickness: float = None,
     code_label: str = 'VASP-VTST-6.4.3@bohr',
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
@@ -464,6 +524,7 @@ def build_core_workgraph_with_map(
     relax_slabs: bool = False,
     compute_thermodynamics: bool = False,
     thermodynamics_sampling: int = 100,
+    input_slabs: dict = None,
     name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
@@ -525,6 +586,7 @@ def build_core_workgraph_with_map(
         relax_slabs=relax_slabs,
         compute_thermodynamics=compute_thermodynamics,
         thermodynamics_sampling=thermodynamics_sampling,
+        input_slabs=input_slabs,
         name=name,
     )
 
