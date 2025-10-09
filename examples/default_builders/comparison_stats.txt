@@ -1,0 +1,29 @@
+====================================================================
+DEFAULT BUILDERS MODULE - CODE COMPARISON
+====================================================================
+
+FILE STATISTICS:
+
+Original file (with all parameters defined):
+  File: slabs_input_relax_ag3po4.py
+  Lines: $(wc -l < slabs_input_relax_ag3po4.py)
+  Size: $(du -h slabs_input_relax_ag3po4.py | cut -f1)
+
+Simplified file (using default_builders):
+  File: slabs_input_relax_ag3po4_simplified.py  
+  Lines: $(wc -l < slabs_input_relax_ag3po4_simplified.py)
+  Size: $(du -h slabs_input_relax_ag3po4_simplified.py | cut -f1)
+
+Default builders module:
+  File: ../../teros/default_builders.py
+  Lines: $(wc -l < ../../teros/default_builders.py)
+  Size: $(du -h ../../teros/default_builders.py | cut -f1)
+
+====================================================================
+CODE REDUCTION:
+====================================================================
+
+  377 slabs_input_relax_ag3po4.py
+  193 slabs_input_relax_ag3po4_simplified.py
+  325 ../../teros/default_builders.py
+  895 total
