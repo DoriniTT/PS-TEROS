@@ -9,19 +9,20 @@ This script demonstrates how to:
 4. Set up slab relaxation parameters (VASP INCAR, scheduler options)
 5. Create and run a WorkGraph that:
    - Relaxes the bulk structure
-   - Relaxes reference structures (metal, nonmetal, oxygen)
+   - Relaxes reference structures (metal, oxygen) - NO nonmetal for binary oxides
    - Calculates formation enthalpy
    - Relaxes user-provided slabs in parallel with VASP (skips slab generation)
 6. Access the relaxed slab structures and energies
 
-Example: Ag3PO4 (100) surface with user-provided slab structures
-    - Relaxes Ag₃PO₄ bulk structure and references
+Example: Ag2O (100) surface with user-provided slab structures
+    - Relaxes Ag₂O bulk structure and references
+    - Binary oxide: only metal (Ag) and oxygen (O2) references needed
     - Uses pre-generated slab structures from files
     - Relaxes each provided slab in parallel
     - Outputs relaxed slabs and their energies
 
 Usage:
-    source ~/envs/psteros/bin/activate && python slabs_input_relax.py
+    source ~/envs/psteros/bin/activate && python slabs_input_relax_ag2o.py
 """
 
 from aiida import load_profile, orm
@@ -72,6 +73,9 @@ def main():
     }
 
     # ===== REFERENCE STRUCTURE PARAMETERS =====
+    # For binary oxides like Ag2O, we only need metal (Ag) and oxygen (O2)
+    # NO nonmetal parameters needed!
+    
     metal_parameters = {
         "PREC": "Accurate",
         "ENCUT": 520,
@@ -89,30 +93,6 @@ def main():
     }
 
     metal_options = {
-        "resources": {
-            "num_machines": 1,
-            "num_cores_per_machine": 40,
-        },
-        "queue_name": "par40",
-    }
-
-    nonmetal_parameters = {
-        "PREC": "Accurate",
-        "ENCUT": 520,
-        "EDIFF": 1e-6,
-        "ISMEAR": 0,
-        "SIGMA": 0.05,
-        "IBRION": 2,
-        "ISIF": 3,
-        "NSW": 100,
-        "EDIFFG": -0.1,
-        "ALGO": "Normal",
-        "LREAL": "Auto",
-        "LWAVE": False,
-        "LCHARG": False,
-    }
-
-    nonmetal_options = {
         "resources": {
             "num_machines": 1,
             "num_cores_per_machine": 40,
@@ -154,7 +134,7 @@ def main():
         "IBRION": 2,
         "ISIF": 2,  # Relax ions only, keep cell fixed
         "NSW": 100,
-        "EDIFFG": -0.02,
+        "EDIFFG": -0.1,
         "ALGO": "Normal",
         "LREAL": "Auto",
         "LWAVE": False,
@@ -169,7 +149,7 @@ def main():
         "queue_name": "par40",
     }
 
-    slab_potential_mapping = {"Ag": "Ag", "P": "P", "O": "O"}
+    slab_potential_mapping = {"Ag": "Ag", "O": "O"}
     slab_kpoints_spacing = 0.3
 
     # ===== LOAD PRE-GENERATED SLABS FROM FILES =====
@@ -182,9 +162,8 @@ def main():
     # Example: Load slab structures from CIF/POSCAR files
     # You can load as many slabs as you have files
     slab_files = [
-        "slab_term_0.cif",  # Replace with your actual filenames
-        "slab_term_1.cif",
-        "slab_term_2.cif",
+        "slab_term_0_bin.cif",  # Replace with your actual filenames
+        #"slab_term_1.cif",
     ]
     
     for idx, slab_file in enumerate(slab_files):
@@ -210,14 +189,17 @@ def main():
 
     # ===== WORKFLOW DESCRIPTION =====
     print(f"\n{'='*80}")
-    print("PS-TEROS WORKFLOW: User-Provided Slab Relaxation")
+    print("PS-TEROS WORKFLOW: User-Provided Slab Relaxation (Binary Oxide)")
     print(f"{'='*80}")
     print(f"\nThis workflow will:")
-    print(f"  1. Relax bulk Ag₃PO₄ structure")
-    print(f"  2. Relax reference structures (Ag, P, O₂)")
+    print(f"  1. Relax bulk Ag₂O structure")
+    print(f"  2. Relax reference structures (Ag metal, O₂ molecule)")
+    print(f"     NOTE: No nonmetal reference needed for binary oxides!")
     print(f"  3. Calculate formation enthalpy")
     print(f"  4. Relax {len(input_slabs)} user-provided slab structures in parallel")
     print(f"  5. Extract energies for each relaxed slab")
+    print(f"  6. Calculate surface energies as function of chemical potential")
+
 
     # ===== CREATE WORKGRAPH =====
     print(f"\n{'='*80}")
@@ -226,23 +208,22 @@ def main():
 
     wg = build_core_workgraph_with_map(
         structures_dir=structures_dir,
-        bulk_name="ag3po4.cif",
+        bulk_name="ag2o.cif",
         metal_name="Ag.cif",
-        nonmetal_name="P.cif",
+        # NO nonmetal_name for binary oxides!
         oxygen_name="O2.cif",
         code_label=code_label,
         potential_family=potential_family,
-        bulk_potential_mapping={"Ag": "Ag", "P": "P", "O": "O"},
+        bulk_potential_mapping={"Ag": "Ag", "O": "O"},
         metal_potential_mapping={"Ag": "Ag"},
-        nonmetal_potential_mapping={"P": "P"},
+        # NO nonmetal_potential_mapping for binary oxides!
         oxygen_potential_mapping={"O": "O"},
         kpoints_spacing=0.3,
         bulk_parameters=bulk_parameters,
         bulk_options=bulk_options,
         metal_parameters=metal_parameters,
         metal_options=metal_options,
-        nonmetal_parameters=nonmetal_parameters,
-        nonmetal_options=nonmetal_options,
+        # NO nonmetal_parameters or nonmetal_options for binary oxides!
         oxygen_parameters=oxygen_parameters,
         oxygen_options=oxygen_options,
         clean_workdir=True,
@@ -254,12 +235,15 @@ def main():
         slab_options=slab_options,
         slab_potential_mapping=slab_potential_mapping,
         slab_kpoints_spacing=slab_kpoints_spacing,
-        name="Ag3PO4_InputSlabs_Relax",
+        # Thermodynamics calculation
+        compute_thermodynamics=True,
+        thermodynamics_sampling=100,
+        name="Ag2O_InputSlabs_Relax",
     )
 
     # Optional: Export to HTML
     try:
-        html_file = "ag3po4_input_slabs_relax.html"
+        html_file = "ag2o_input_slabs_relax.html"
         wg.to_html(html_file)
         print(f"\n✓ WorkGraph visualization saved to: {html_file}")
     except Exception as e:
@@ -291,6 +275,8 @@ def main():
     print(f"\n  Relaxed slabs:")
     print(f"    - relaxed_slabs.term_0, term_1, ... (StructureData)")
     print(f"    - slab_energies.term_0, term_1, ... (Float)")
+    print(f"\n  Surface energies:")
+    print(f"    - surface_energies.term_0, term_1, ... (Dict with γ(Δμ))")
 
     print(f"\n{'-'*80}")
     print(f"ACCESSING RESULTS (after completion)")
@@ -312,6 +298,12 @@ def main():
     print(f"    for term_id in energies.keys():")
     print(f"        energy = energies[term_id].value")
     print(f"        print(f'{{term_id}}: {{energy}} eV')")
+    print(f"    ")
+    print(f"    # Get surface energies")
+    print(f"    surface_energies = wg.outputs.surface_energies")
+    print(f"    for term_id in surface_energies.keys():")
+    print(f"        data = surface_energies[term_id].get_dict()")
+    print(f"        print(f'{{term_id}}: γ = {{data[\"gamma_array\"]}} J/m²')")
     print(f"    ")
     print(f"    # Export relaxed slab to file")
     print(f"    relaxed_term_0 = relaxed['term_0']")

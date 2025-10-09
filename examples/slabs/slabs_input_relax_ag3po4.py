@@ -1,41 +1,46 @@
 #!/usr/bin/env python
 """
-Example script for generating and relaxing slab structures from a relaxed bulk oxide using PS-TEROS.
+Example script for relaxing slab structures from user-provided input slabs using PS-TEROS.
 
 This script demonstrates how to:
 1. Load the AiiDA profile
-2. Set up parameters for bulk relaxation
-3. Set up slab generation parameters (Miller indices, thickness, vacuum, etc.)
+2. Load pre-generated slab structures from files
+3. Set up parameters for bulk and reference relaxation
 4. Set up slab relaxation parameters (VASP INCAR, scheduler options)
 5. Create and run a WorkGraph that:
    - Relaxes the bulk structure
-   - Generates all slab terminations
-   - Relaxes all slabs in parallel with VASP
+   - Relaxes reference structures (metal, nonmetal, oxygen)
+   - Calculates formation enthalpy
+   - Relaxes user-provided slabs in parallel with VASP (skips slab generation)
 6. Access the relaxed slab structures and energies
 
-Example: Ag3PO4 (100) surface with full slab relaxation
-    - Relaxes Ag₃PO₄ bulk structure
-    - Generates all unique terminations for the (100) orientation
-    - Relaxes each slab termination in parallel
+Example: Ag3PO4 (100) surface with user-provided slab structures
+    - Relaxes Ag₃PO₄ bulk structure and references
+    - Uses pre-generated slab structures from files
+    - Relaxes each provided slab in parallel
     - Outputs relaxed slabs and their energies
 
 Usage:
-    source ~/envs/aiida/bin/activate && python slabs_relax.py
+    source ~/envs/psteros/bin/activate && python slabs_input_relax.py
 """
 
 from aiida import load_profile, orm
-from teros.workgraph import build_core_workgraph_with_map
+from ase.io import read
+from teros.core.workgraph import build_core_workgraph_with_map
 
 
 def main():
-    """Main function to run the slab generation and relaxation workflow."""
+    """Main function to run the slab relaxation workflow with input slabs."""
 
     # Load AiiDA profile
     print("Loading AiiDA profile...")
     load_profile()
 
     # Define structures directory
-    structures_dir = "/home/thiagotd/git/PS-TEROS/teros/structures"
+    structures_dir = "/home/thiagotd/git/PS-TEROS/examples/structures"
+    
+    # Define directory containing pre-generated slab structures
+    slabs_dir = "/home/thiagotd/git/PS-TEROS/examples/slabs/input_structures"
 
     # Define calculation parameters
     code_label = "VASP-VTST-6.4.3@bohr"
@@ -139,53 +144,23 @@ def main():
         "queue_name": "par40",
     }
 
-    # ===== SLAB GENERATION PARAMETERS =====
-    miller_indices = [1, 0, 0]  # (100) surface
-    min_slab_thickness = 10.0  # Angstroms
-    min_vacuum_thickness = 15.0  # Angstroms
-
-    # Slab generation options
-    lll_reduce = True
-    center_slab = True
-    symmetrize = True
-    primitive = True
-    in_unit_planes = False
-    max_normal_search = None
-
-    # ===== THERMODYNAMICS PARAMETERS =====
-    compute_thermodynamics = True  # Enable surface energy calculations
-    thermodynamics_sampling = 100  # Grid resolution for chemical potential sampling
-
     # ===== SLAB RELAXATION PARAMETERS =====
-    # Enable slab relaxation
-    relax_slabs = True
-
-    # VASP parameters for slab relaxation
-    # For slabs, we typically want to:
-    # - Fix bottom layers (not implemented here, but can be added via SELECTIVE DYNAMICS)
-    # - Relax only atomic positions, not cell (ISIF=2)
-    # - Use dipole corrections for asymmetric slabs (IDIPOL, LDIPOL)
     slab_parameters = {
         "PREC": "Accurate",
         "ENCUT": 520,
         "EDIFF": 1e-6,
         "ISMEAR": 0,
         "SIGMA": 0.05,
-        "IBRION": 2,  # Conjugate gradient
-        "ISIF": 2,  # Relax atoms only, keep cell fixed
-        "NSW": 100,  # Max ionic steps
-        "EDIFFG": -0.1,  # Tighter force convergence for surfaces
+        "IBRION": 2,
+        "ISIF": 2,  # Relax ions only, keep cell fixed
+        "NSW": 100,
+        "EDIFFG": -0.1,
         "ALGO": "Normal",
         "LREAL": "Auto",
         "LWAVE": False,
         "LCHARG": False,
-        # Optional: Add dipole corrections for asymmetric slabs
-        # "IDIPOL": 3,      # Dipole correction along z-axis (c-axis)
-        # "LDIPOL": True,   # Turn on dipole corrections
     }
 
-    # Scheduler options for slab calculations
-    # Slabs are typically larger than bulk, may need more resources
     slab_options = {
         "resources": {
             "num_machines": 1,
@@ -194,53 +169,56 @@ def main():
         "queue_name": "par40",
     }
 
-    # Use the same potential mapping and kpoints as bulk
-    # But you can customize if needed
     slab_potential_mapping = {"Ag": "Ag", "P": "P", "O": "O"}
-    slab_kpoints_spacing = 0.3  # Can be different from bulk if needed
+    slab_kpoints_spacing = 0.3
 
-    # ===== PRINT WORKFLOW INFO =====
+    # ===== LOAD PRE-GENERATED SLABS FROM FILES =====
+    print("\nLoading pre-generated slab structures from files...")
+    
+    # Create a dictionary of slab structures
+    # Keys should follow the pattern "term_0", "term_1", etc.
+    input_slabs = {}
+    
+    # Example: Load slab structures from CIF/POSCAR files
+    # You can load as many slabs as you have files
+    slab_files = [
+        "slab_term_0.cif",  # Replace with your actual filenames
+        #"slab_term_1.cif",
+    ]
+    
+    for idx, slab_file in enumerate(slab_files):
+        try:
+            slab_path = f"{slabs_dir}/{slab_file}"
+            atoms = read(slab_path)
+            structure = orm.StructureData(ase=atoms)
+            # Store the structure so it can be used in the workflow
+            structure.store()
+            input_slabs[f"term_{idx}"] = structure
+            print(f"  ✓ Loaded {slab_file} as term_{idx}")
+        except FileNotFoundError:
+            print(f"  ✗ Warning: {slab_file} not found, skipping...")
+    
+    if not input_slabs:
+        print("\n✗ Error: No slab structures loaded!")
+        print(f"  Please create slab structure files in: {slabs_dir}")
+        print(f"  Expected files: {', '.join(slab_files)}")
+        return None
+    
+    print(f"\n✓ Successfully loaded {len(input_slabs)} slab structures")
+    print(f"✓ All structures stored in AiiDA database")
+
+    # ===== WORKFLOW DESCRIPTION =====
     print(f"\n{'='*80}")
-    print(f"SLAB GENERATION + RELAXATION WORKFLOW FOR Ag3PO4")
+    print("PS-TEROS WORKFLOW: User-Provided Slab Relaxation")
     print(f"{'='*80}")
-    print(f"\nStructures directory: {structures_dir}")
-    print(f"Code: {code_label}")
-    print(f"Potential family: {potential_family}")
-
-    print(f"\n{'-'*80}")
-    print(f"BULK RELAXATION")
-    print(f"{'-'*80}")
-    print(f"  Structure: ag3po4.cif")
-    print(f"  ISIF=3 (full relaxation: cell + atoms)")
-
-    print(f"\n{'-'*80}")
-    print(f"SLAB GENERATION")
-    print(f"{'-'*80}")
-    print(f"  Miller indices: {miller_indices}")
-    print(f"  Min slab thickness: {min_slab_thickness} Å")
-    print(f"  Min vacuum thickness: {min_vacuum_thickness} Å")
-    print(f"  Symmetrize: {symmetrize}")
-    print(f"  LLL reduce: {lll_reduce}")
-
-    print(f"\n{'-'*80}")
-    print(f"SLAB RELAXATION")
-    print(f"{'-'*80}")
-    print(f"  Enabled: {relax_slabs}")
-    print(f"  ISIF=2 (relax atoms only, fixed cell)")
-    print(f"  EDIFFG={slab_parameters['EDIFFG']} (tighter convergence)")
-    print(f"  All slabs will be relaxed in parallel")
-
-    print(f"\n{'-'*80}")
-    print(f"WORKFLOW STEPS")
-    print(f"{'-'*80}")
-    print(f"  1. Relax bulk Ag3PO4 structure")
-    print(f"  2. Relax reference structures (Ag, P, O2) in parallel")
+    print(f"\nThis workflow will:")
+    print(f"  1. Relax bulk Ag₃PO₄ structure")
+    print(f"  2. Relax reference structures (Ag, P, O₂)")
     print(f"  3. Calculate formation enthalpy")
-    print(
-        f"  4. Generate all slab terminations for ({miller_indices[0]}{miller_indices[1]}{miller_indices[2]}) orientation"
-    )
-    print(f"  5. Relax ALL slab terminations in parallel with VASP")
-    print(f"  6. Extract energies for each relaxed slab")
+    print(f"  4. Relax {len(input_slabs)} user-provided slab structures in parallel")
+    print(f"  5. Extract energies for each relaxed slab")
+    print(f"  6. Calculate surface energies as function of chemical potential")
+
 
     # ===== CREATE WORKGRAPH =====
     print(f"\n{'='*80}")
@@ -269,31 +247,23 @@ def main():
         oxygen_parameters=oxygen_parameters,
         oxygen_options=oxygen_options,
         clean_workdir=True,
-        # Slab generation
-        miller_indices=miller_indices,
-        min_slab_thickness=min_slab_thickness,
-        min_vacuum_thickness=min_vacuum_thickness,
-        lll_reduce=lll_reduce,
-        center_slab=center_slab,
-        symmetrize=symmetrize,
-        primitive=primitive,
-        in_unit_planes=in_unit_planes,
-        max_normal_search=max_normal_search,
+        # Input slabs parameters (no slab generation needed!)
+        input_slabs=input_slabs,
         # Slab relaxation
-        relax_slabs=relax_slabs,
+        relax_slabs=True,
         slab_parameters=slab_parameters,
         slab_options=slab_options,
         slab_potential_mapping=slab_potential_mapping,
         slab_kpoints_spacing=slab_kpoints_spacing,
-        # Thermodynamics
-        compute_thermodynamics=compute_thermodynamics,
-        thermodynamics_sampling=thermodynamics_sampling,
-        name=f"Ag3PO4_SlabsRelax_{miller_indices[0]}{miller_indices[1]}{miller_indices[2]}",
+        # Thermodynamics calculation
+        compute_thermodynamics=True,
+        thermodynamics_sampling=100,
+        name="Ag3PO4_InputSlabs_Relax",
     )
 
     # Optional: Export to HTML
     try:
-        html_file = f"ag3po4_slabs_relax_{miller_indices[0]}{miller_indices[1]}{miller_indices[2]}.html"
+        html_file = "ag3po4_input_slabs_relax.html"
         wg.to_html(html_file)
         print(f"\n✓ WorkGraph visualization saved to: {html_file}")
     except Exception as e:
@@ -320,13 +290,13 @@ def main():
     print(f"{'-'*80}")
     print(f"  Formation enthalpy:")
     print(f"    - formation_enthalpy (Dict with ΔH_f)")
-    print(f"\n  Unrelaxed slabs:")
+    print(f"\n  Input slabs (passed through):")
     print(f"    - slab_structures.term_0, term_1, ... (StructureData)")
     print(f"\n  Relaxed slabs:")
     print(f"    - relaxed_slabs.term_0, term_1, ... (StructureData)")
     print(f"    - slab_energies.term_0, term_1, ... (Float)")
-    print(f"\n  Surface energies (thermodynamics):")
-    print(f"    - surface_energies.term_0, term_1, ... (Dict with γ(Δμ_M, Δμ_O))")
+    print(f"\n  Surface energies:")
+    print(f"    - surface_energies.term_0, term_1, ... (Dict with γ(Δμ))")
 
     print(f"\n{'-'*80}")
     print(f"ACCESSING RESULTS (after completion)")
@@ -335,9 +305,9 @@ def main():
     print(f"    from aiida import load_node")
     print(f"    wg = load_node({wg.pk})")
     print(f"    ")
-    print(f"    # Get unrelaxed slabs")
-    print(f"    unrelaxed = wg.outputs.slab_structures")
-    print(f"    print(list(unrelaxed.keys()))")
+    print(f"    # Get input slabs")
+    print(f"    input_slabs = wg.outputs.slab_structures")
+    print(f"    print(list(input_slabs.keys()))")
     print(f"    ")
     print(f"    # Get relaxed slabs")
     print(f"    relaxed = wg.outputs.relaxed_slabs")
@@ -348,6 +318,12 @@ def main():
     print(f"    for term_id in energies.keys():")
     print(f"        energy = energies[term_id].value")
     print(f"        print(f'{{term_id}}: {{energy}} eV')")
+    print(f"    ")
+    print(f"    # Get surface energies")
+    print(f"    surface_energies = wg.outputs.surface_energies")
+    print(f"    for term_id in surface_energies.keys():")
+    print(f"        data = surface_energies[term_id].get_dict()")
+    print(f"        print(f'{{term_id}}: γ = {{data[\"gamma_array\"]}} J/m²')")
     print(f"    ")
     print(f"    # Export relaxed slab to file")
     print(f"    relaxed_term_0 = relaxed['term_0']")
@@ -361,7 +337,7 @@ def main():
 
 if __name__ == "__main__":
     """
-    Run the slab generation and relaxation workflow.
+    Run the slab relaxation workflow with user-provided slabs.
 
     Before running:
     1. Make sure AiiDA profile 'psteros' is set as default:
@@ -373,11 +349,17 @@ if __name__ == "__main__":
     3. Start daemon if not running:
        verdi daemon start
 
-    4. Clear Python cache if you made changes:
+    4. Create your slab structure files in:
+       /home/thiagotd/git/PS-TEROS/examples/slabs/input_structures/
+       
+       Example formats: CIF, POSCAR, xyz, etc.
+       Naming: slab_term_0.cif, slab_term_1.cif, ...
+
+    5. Clear Python cache if you made changes:
        find . -type d -name __pycache__ -exec rm -rf {} + && find . -name "*.pyc" -delete
 
-    5. Run this script:
-       source ~/envs/aiida/bin/activate && python slabs_relax.py
+    6. Run this script:
+       source ~/envs/psteros/bin/activate && python slabs_input_relax.py
     """
     try:
         wg = main()

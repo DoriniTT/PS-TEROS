@@ -62,24 +62,24 @@ def core_workgraph(
     structures_dir: str,
     bulk_name: str,
     metal_name: str,
-    nonmetal_name: str,
     oxygen_name: str,
     code_label: str,
     potential_family: str,
     bulk_potential_mapping: dict,
     metal_potential_mapping: dict,
-    nonmetal_potential_mapping: dict,
     oxygen_potential_mapping: dict,
     kpoints_spacing: float,
     bulk_parameters: dict,
     bulk_options: dict,
     metal_parameters: dict,
     metal_options: dict,
-    nonmetal_parameters: dict,
-    nonmetal_options: dict,
     oxygen_parameters: dict,
     oxygen_options: dict,
     clean_workdir: bool,
+    nonmetal_name: str = None,
+    nonmetal_potential_mapping: dict = None,
+    nonmetal_parameters: dict = None,
+    nonmetal_options: dict = None,
     miller_indices: list = None,
     min_slab_thickness: float = None,
     min_vacuum_thickness: float = None,
@@ -100,26 +100,29 @@ def core_workgraph(
     use_input_slabs: bool = False,  # Signal to skip slab generation
 ):
     """
-    Core WorkGraph for formation enthalpy calculations of ternary oxides with slab generation.
+    Core WorkGraph for formation enthalpy calculations of binary and ternary oxides with slab generation.
 
     This workflow relaxes the bulk compound and all reference elements in parallel,
     then calculates the formation enthalpy and generates slab structures from the relaxed bulk.
     Optionally relaxes slabs and computes surface energies with thermodynamics.
-    The workflow is general and works for any ternary oxide system (e.g., Ag3PO4, Fe2WO6, etc.).
+    The workflow is general and works for any binary oxide (e.g., Ag2O, CuO) or ternary oxide 
+    system (e.g., Ag3PO4, Fe2WO6, etc.). For binary oxides, nonmetal parameters should be None.
     Each reference (metal, nonmetal, oxygen) can have its own specific calculation parameters.
 
     Args:
         structures_dir: Directory containing all structure files
-        bulk_name: Filename of bulk structure (e.g., 'ag3po4.cif')
+        bulk_name: Filename of bulk structure (e.g., 'ag2o.cif' or 'ag3po4.cif')
         metal_name: Filename of metal reference structure (e.g., 'Ag.cif')
-        nonmetal_name: Filename of nonmetal reference structure (e.g., 'P.cif')
         oxygen_name: Filename of oxygen reference structure (e.g., 'O2.cif')
         code_label: Label of the VASP code in AiiDA
         potential_family: Name of the potential family
-        bulk_potential_mapping: Mapping for bulk (e.g., {'Ag': 'Ag', 'P': 'P', 'O': 'O'})
+        bulk_potential_mapping: Mapping for bulk (e.g., {'Ag': 'Ag', 'O': 'O'} for binary or {'Ag': 'Ag', 'P': 'P', 'O': 'O'} for ternary)
         metal_potential_mapping: Mapping for metal (e.g., {'Ag': 'Ag'})
-        nonmetal_potential_mapping: Mapping for nonmetal (e.g., {'P': 'P'})
         oxygen_potential_mapping: Mapping for oxygen (e.g., {'O': 'O'})
+        nonmetal_name: Filename of nonmetal reference structure (e.g., 'P.cif'). Optional, None for binary oxides.
+        nonmetal_potential_mapping: Mapping for nonmetal (e.g., {'P': 'P'}). Optional, None for binary oxides.
+        nonmetal_parameters: VASP parameters for nonmetal reference. Optional, None for binary oxides.
+        nonmetal_options: Scheduler options for nonmetal reference. Optional, None for binary oxides.
         kpoints_spacing: K-points spacing in A^-1 * 2pi
         bulk_parameters: VASP parameters for bulk
         bulk_options: Scheduler options for bulk
@@ -200,22 +203,27 @@ def core_workgraph(
 
     metal_energy = extract_total_energy(energies=metal_vasp.misc)
 
-    # ===== NONMETAL RELAXATION =====
-    nonmetal_struct = load_structure_from_file(f"{structures_dir}/{nonmetal_name}")
+    # ===== NONMETAL RELAXATION (ONLY FOR TERNARY OXIDES) =====
+    if nonmetal_name is not None:
+        nonmetal_struct = load_structure_from_file(f"{structures_dir}/{nonmetal_name}")
 
-    nonmetal_vasp = VaspTask(
-        structure=nonmetal_struct,
-        code=code,
-        parameters={'incar': nonmetal_parameters},
-        options=nonmetal_options,
-        kpoints_spacing=kpoints_spacing,
-        potential_family=potential_family,
-        potential_mapping=nonmetal_potential_mapping,
-        clean_workdir=clean_workdir,
-        settings=orm.Dict(dict=get_settings()),
-    )
+        nonmetal_vasp = VaspTask(
+            structure=nonmetal_struct,
+            code=code,
+            parameters={'incar': nonmetal_parameters},
+            options=nonmetal_options,
+            kpoints_spacing=kpoints_spacing,
+            potential_family=potential_family,
+            potential_mapping=nonmetal_potential_mapping,
+            clean_workdir=clean_workdir,
+            settings=orm.Dict(dict=get_settings()),
+        )
 
-    nonmetal_energy = extract_total_energy(energies=nonmetal_vasp.misc)
+        nonmetal_energy = extract_total_energy(energies=nonmetal_vasp.misc)
+    else:
+        # For binary oxides, use dummy values (will be ignored by calculate_formation_enthalpy)
+        nonmetal_vasp = type('obj', (object,), {'structure': metal_vasp.structure})()
+        nonmetal_energy = type('obj', (object,), {'result': metal_energy.result})()
 
     # ===== OXYGEN RELAXATION =====
     oxygen_struct = load_structure_from_file(f"{structures_dir}/{oxygen_name}")
@@ -299,7 +307,7 @@ def core_workgraph(
 
     # ===== THERMODYNAMICS CALCULATION (OPTIONAL) =====
     surface_energies_output = {}
-    if compute_thermodynamics and relax_slabs:
+    if compute_thermodynamics and relax_slabs and slab_namespace is not None:
         # Identify oxide type (binary or ternary)
         oxide_type_result = identify_oxide_type(bulk_structure=bulk_vasp.structure)
         
@@ -340,7 +348,6 @@ def build_core_workgraph(
     structures_dir: str,
     bulk_name: str,
     metal_name: str,
-    nonmetal_name: str,
     oxygen_name: str,
     miller_indices: list = None,
     min_slab_thickness: float = None,
@@ -349,15 +356,16 @@ def build_core_workgraph(
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
     metal_potential_mapping: dict = None,
-    nonmetal_potential_mapping: dict = None,
     oxygen_potential_mapping: dict = None,
+    nonmetal_name: str = None,
+    nonmetal_potential_mapping: dict = None,
+    nonmetal_parameters: dict = None,
+    nonmetal_options: dict = None,
     kpoints_spacing: float = 0.3,
     bulk_parameters: dict = None,
     bulk_options: dict = None,
     metal_parameters: dict = None,
     metal_options: dict = None,
-    nonmetal_parameters: dict = None,
-    nonmetal_options: dict = None,
     oxygen_parameters: dict = None,
     oxygen_options: dict = None,
     clean_workdir: bool = True,
@@ -378,12 +386,17 @@ def build_core_workgraph(
     name: str = 'FormationEnthalpy',
 ):
     """
-    Build a formation enthalpy WorkGraph for any ternary oxide with slab generation and optional relaxation.
+    Build a formation enthalpy WorkGraph for binary or ternary oxides with slab generation and optional relaxation.
 
     This is a convenience wrapper that builds and returns a WorkGraph
     ready to calculate formation enthalpy, generate slab structures, and optionally relax them.
 
     Args:
+        structures_dir: Directory containing structure files
+        bulk_name: Filename of bulk structure
+        metal_name: Filename of metal reference structure
+        oxygen_name: Filename of oxygen reference structure
+        nonmetal_name: Filename of nonmetal reference structure. None for binary oxides. Default: None
         relax_slabs: Whether to relax generated slabs with VASP. Default: False
         compute_thermodynamics: Whether to compute surface energies. Default: False
         thermodynamics_sampling: Grid resolution for chemical potential sampling. Default: 100
@@ -409,21 +422,21 @@ def build_core_workgraph(
         structures_dir=structures_dir,
         bulk_name=bulk_name,
         metal_name=metal_name,
-        nonmetal_name=nonmetal_name,
         oxygen_name=oxygen_name,
         code_label=code_label,
         potential_family=potential_family,
         bulk_potential_mapping=bulk_potential_mapping or {},
         metal_potential_mapping=metal_potential_mapping or {},
-        nonmetal_potential_mapping=nonmetal_potential_mapping or {},
         oxygen_potential_mapping=oxygen_potential_mapping or {},
+        nonmetal_name=nonmetal_name,
+        nonmetal_potential_mapping=nonmetal_potential_mapping or {} if nonmetal_name else None,
         kpoints_spacing=kpoints_spacing,
         bulk_parameters=bulk_parameters or {},
         bulk_options=bulk_options or {},
         metal_parameters=metal_parameters or {},
         metal_options=metal_options or {},
-        nonmetal_parameters=nonmetal_parameters or {},
-        nonmetal_options=nonmetal_options or {},
+        nonmetal_parameters=nonmetal_parameters or {} if nonmetal_name else None,
+        nonmetal_options=nonmetal_options or {} if nonmetal_name else None,
         oxygen_parameters=oxygen_parameters or {},
         oxygen_options=oxygen_options or {},
         clean_workdir=clean_workdir,
@@ -450,6 +463,7 @@ def build_core_workgraph(
     # If user provided slabs, manually add the relax_slabs_scatter task
     if use_input_slabs and relax_slabs:
         from teros.core.slabs import relax_slabs_scatter
+        from teros.core.thermodynamics import identify_oxide_type, compute_surface_energies_scatter
         from aiida.orm import Code, load_code
         
         # Get code
@@ -475,10 +489,41 @@ def build_core_workgraph(
             clean_workdir=clean_workdir,
         )
         
-        # Connect outputs to graph outputs
+        # Connect slab outputs to graph outputs
         wg.outputs.relaxed_slabs = scatter_task.outputs.relaxed_structures
         wg.outputs.slab_energies = scatter_task.outputs.energies
         wg.outputs.slab_structures = input_slabs
+        
+        # Add thermodynamics calculation if requested
+        if compute_thermodynamics:
+            # Get tasks that were created in the core_workgraph
+            bulk_vasp_task = wg.tasks['VaspWorkChain']  # Bulk relaxation task
+            bulk_energy_task = wg.tasks['extract_total_energy']  # Bulk energy extraction
+            formation_hf_task = wg.tasks['calculate_formation_enthalpy']
+            
+            # Add oxide type identification task with unique name
+            oxide_type_task = wg.add_task(
+                identify_oxide_type,
+                name='identify_oxide_type_input_slabs',
+                bulk_structure=bulk_vasp_task.outputs.structure,
+            )
+            
+            # Add surface energies scatter task with unique name
+            surface_energies_task = wg.add_task(
+                compute_surface_energies_scatter,
+                name='compute_surface_energies_input_slabs',
+                slabs=scatter_task.outputs.relaxed_structures,
+                energies=scatter_task.outputs.energies,
+                bulk_structure=bulk_vasp_task.outputs.structure,
+                bulk_energy=bulk_energy_task.outputs.result,
+                reference_energies=formation_hf_task.outputs.result,
+                formation_enthalpy=formation_hf_task.outputs.result,
+                oxide_type=oxide_type_task.outputs.result,
+                sampling=thermodynamics_sampling,
+            )
+            
+            # Connect surface energies output
+            wg.outputs.surface_energies = surface_energies_task.outputs.surface_energies
 
     # Set the name
     wg.name = name
@@ -490,7 +535,6 @@ def build_core_workgraph_with_map(
     structures_dir: str,
     bulk_name: str,
     metal_name: str,
-    nonmetal_name: str,
     oxygen_name: str,
     miller_indices: list = None,
     min_slab_thickness: float = None,
@@ -499,15 +543,16 @@ def build_core_workgraph_with_map(
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
     metal_potential_mapping: dict = None,
-    nonmetal_potential_mapping: dict = None,
     oxygen_potential_mapping: dict = None,
+    nonmetal_name: str = None,
+    nonmetal_potential_mapping: dict = None,
+    nonmetal_parameters: dict = None,
+    nonmetal_options: dict = None,
     kpoints_spacing: float = 0.3,
     bulk_parameters: dict = None,
     bulk_options: dict = None,
     metal_parameters: dict = None,
     metal_options: dict = None,
-    nonmetal_parameters: dict = None,
-    nonmetal_options: dict = None,
     oxygen_parameters: dict = None,
     oxygen_options: dict = None,
     clean_workdir: bool = True,
@@ -552,8 +597,8 @@ def build_core_workgraph_with_map(
         structures_dir=structures_dir,
         bulk_name=bulk_name,
         metal_name=metal_name,
-        nonmetal_name=nonmetal_name,
         oxygen_name=oxygen_name,
+        nonmetal_name=nonmetal_name,
         miller_indices=miller_indices,
         min_slab_thickness=min_slab_thickness,
         min_vacuum_thickness=min_vacuum_thickness,
