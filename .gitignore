@@ -176,3 +176,11 @@ teros.egg-info
 legacy
 results_vasp
 article
+CLAUDE.md
+# Python
+__pycache__/
+*.pyc
+
+# Environment
+.env
+venv/
