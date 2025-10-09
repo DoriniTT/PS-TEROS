@@ -56,7 +56,7 @@ def get_settings():
     'bulk_energy', 'metal_energy', 'nonmetal_energy', 'oxygen_energy',
     'bulk_structure', 'metal_structure', 'nonmetal_structure', 'oxygen_structure',
     'formation_enthalpy', 'slab_structures', 'relaxed_slabs', 'slab_energies',
-    'surface_energies',
+    'surface_energies', 'slab_remote',
 ])
 def core_workgraph(
     structures_dir: str,
@@ -160,6 +160,7 @@ def core_workgraph(
             - slab_structures: Dynamic namespace with all generated slab terminations (StructureData)
             - relaxed_slabs: Dynamic namespace with relaxed slab structures (if relax_slabs=True)
             - slab_energies: Dynamic namespace with slab energies (if relax_slabs=True)
+            - slab_remote: Dynamic namespace with RemoteData nodes for each slab relaxation (if relax_slabs=True)
             - surface_energies: Dynamic namespace with surface energy data (if compute_thermodynamics=True)
     """
     # Load the code
@@ -282,6 +283,7 @@ def core_workgraph(
     # ===== SLAB RELAXATION (OPTIONAL) =====
     relaxed_slabs_output = {}
     slab_energies_output = {}
+    slab_remote_output = {}
 
     if relax_slabs and slab_namespace is not None:
         # Use slab-specific parameters or fall back to bulk parameters
@@ -304,6 +306,7 @@ def core_workgraph(
 
         relaxed_slabs_output = relaxation_outputs.relaxed_structures
         slab_energies_output = relaxation_outputs.energies
+        slab_remote_output = relaxation_outputs.remote_folders
 
     # ===== THERMODYNAMICS CALCULATION (OPTIONAL) =====
     surface_energies_output = {}
@@ -341,6 +344,7 @@ def core_workgraph(
         'relaxed_slabs': relaxed_slabs_output,
         'slab_energies': slab_energies_output,
         'surface_energies': surface_energies_output,
+        'slab_remote': slab_remote_output,
     }
 
 
@@ -492,6 +496,7 @@ def build_core_workgraph(
         # Connect slab outputs to graph outputs
         wg.outputs.relaxed_slabs = scatter_task.outputs.relaxed_structures
         wg.outputs.slab_energies = scatter_task.outputs.energies
+        wg.outputs.slab_remote = scatter_task.outputs.remote_folders
         wg.outputs.slab_structures = input_slabs
         
         # Add thermodynamics calculation if requested
