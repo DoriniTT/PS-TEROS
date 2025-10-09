@@ -100,7 +100,7 @@ def core_workgraph(
     thermodynamics_sampling: int = 100,
     input_slabs: dict = None,
     use_input_slabs: bool = False,  # Signal to skip slab generation
-    compute_cleavage: bool = False,
+    compute_cleavage: bool = True,
 ):
     """
     Core WorkGraph for formation enthalpy calculations of binary and ternary oxides with slab generation.
@@ -335,7 +335,7 @@ def core_workgraph(
         surface_energies_output = surface_outputs.surface_energies
 
     # ===== CLEAVAGE ENERGY CALCULATION (OPTIONAL) =====
-    cleavage_energies_output = None
+    cleavage_energies_output = {}
     if compute_cleavage and relax_slabs:
         # Compute cleavage energies for all complementary slab pairs
         cleavage_outputs = compute_cleavage_energies_scatter(
@@ -406,7 +406,7 @@ def build_core_workgraph(
     compute_thermodynamics: bool = False,
     thermodynamics_sampling: int = 100,
     input_slabs: dict = None,
-    compute_cleavage: bool = False,
+    compute_cleavage: bool = True,
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -597,7 +597,7 @@ def build_core_workgraph_with_map(
     compute_thermodynamics: bool = False,
     thermodynamics_sampling: int = 100,
     input_slabs: dict = None,
-    compute_cleavage: bool = False,
+    compute_cleavage: bool = True,
     name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
