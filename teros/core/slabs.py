@@ -151,7 +151,7 @@ def relax_slabs_scatter(
     options: t.Mapping[str, t.Any],
     kpoints_spacing: float | None = None,
     clean_workdir: bool = True,
-) -> t.Annotated[dict, namespace(relaxed_structures=dynamic(orm.StructureData), energies=dynamic(orm.Float))]:
+) -> t.Annotated[dict, namespace(relaxed_structures=dynamic(orm.StructureData), energies=dynamic(orm.Float), remote_folders=dynamic(orm.RemoteData))]:
     """
     Scatter-gather phase: relax each slab structure in parallel.
     
@@ -171,13 +171,14 @@ def relax_slabs_scatter(
         clean_workdir: Whether to clean remote directories
     
     Returns:
-        Dictionary with relaxed_structures and energies namespaces
+        Dictionary with relaxed_structures, energies, and remote_folders namespaces
     """
     vasp_wc = WorkflowFactory('vasp.v2.vasp')
     relax_task_cls = task(vasp_wc)
     
     relaxed: dict[str, orm.StructureData] = {}
     energies_ns: dict[str, orm.Float] = {}
+    remote_folders: dict[str, orm.RemoteData] = {}
 
     # Scatter: create independent tasks for each slab (runs in parallel)
     for label, structure in slabs.items():
@@ -197,9 +198,11 @@ def relax_slabs_scatter(
         relaxation = relax_task_cls(**inputs)
         relaxed[label] = relaxation.structure
         energies_ns[label] = extract_total_energy(energies=relaxation.misc).result
+        remote_folders[label] = relaxation.remote_folder
 
     # Gather: return collected results
     return {
         'relaxed_structures': relaxed,
         'energies': energies_ns,
+        'remote_folders': remote_folders,
     }
