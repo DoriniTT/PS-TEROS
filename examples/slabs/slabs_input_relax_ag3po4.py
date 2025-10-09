@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/home/thiagotd/envs/psteros/bin/python
 """
 Example script for relaxing slab structures from user-provided input slabs using PS-TEROS.
 
@@ -34,7 +34,7 @@ def main():
 
     # Load AiiDA profile
     print("Loading AiiDA profile...")
-    load_profile()
+    load_profile(profile='psteros')
 
     # Define structures directory
     structures_dir = "/home/thiagotd/git/PS-TEROS/examples/structures"
