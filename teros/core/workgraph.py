@@ -336,8 +336,9 @@ def core_workgraph(
 
     # ===== CLEAVAGE ENERGY CALCULATION (OPTIONAL) =====
     cleavage_energies_output = {}
-    if compute_cleavage and relax_slabs:
-        # Compute cleavage energies for all complementary slab pairs
+    if compute_cleavage and relax_slabs and not use_input_slabs:
+        # Only compute cleavage inside core_workgraph if slabs were generated/relaxed here
+        # When use_input_slabs=True, cleavage will be added in build_core_workgraph
         cleavage_outputs = compute_cleavage_energies_scatter(
             slabs=relaxed_slabs_output,
             energies=slab_energies_output,
@@ -391,7 +392,7 @@ def build_core_workgraph(
     metal_options: dict = None,
     oxygen_parameters: dict = None,
     oxygen_options: dict = None,
-    clean_workdir: bool = True,
+    clean_workdir: bool = False,
     slab_parameters: dict = None,
     slab_options: dict = None,
     slab_potential_mapping: dict = None,
@@ -407,6 +408,7 @@ def build_core_workgraph(
     thermodynamics_sampling: int = 100,
     input_slabs: dict = None,
     compute_cleavage: bool = True,
+    restart_from_node: int = None,  # PK of previous workgraph to restart from
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -433,11 +435,55 @@ def build_core_workgraph(
         miller_indices: Miller indices for slab generation. Not required if input_slabs provided.
         min_slab_thickness: Minimum slab thickness. Not required if input_slabs provided.
         min_vacuum_thickness: Minimum vacuum thickness. Not required if input_slabs provided.
+        restart_from_node: PK of a previous PS-TEROS workgraph to restart from. If provided, 
+                          the slab structures and RemoteData from that run will be extracted 
+                          and used to restart the slab relaxation calculations. This is useful 
+                          when previous calculations failed or need to be continued with different 
+                          parameters (e.g., tighter convergence, more NSW steps). Default: None
         ... (other parameters as before)
 
     Returns:
         WorkGraph instance ready to be submitted
     """
+    # Handle restart from previous workgraph
+    restart_folders = None
+    restart_slabs = None
+    if restart_from_node is not None:
+        from teros.core.slabs import extract_restart_folders_from_node
+        print(f"\n{'='*70}")
+        print(f"RESTART MODE: Loading data from node {restart_from_node}")
+        print(f"{'='*70}")
+        
+        # Load the previous workgraph node
+        try:
+            prev_node = orm.load_node(restart_from_node)
+            
+            # Extract restart folders (RemoteData)
+            restart_folders = extract_restart_folders_from_node(restart_from_node)
+            print(f"  ✓ Extracted restart folders: {list(restart_folders.keys())}")
+            
+            # Extract slab structures from previous run
+            if hasattr(prev_node.outputs, 'slab_structures'):
+                restart_slabs = {}
+                for label in prev_node.outputs.slab_structures.keys():
+                    restart_slabs[label] = prev_node.outputs.slab_structures[label]
+                print(f"  ✓ Extracted slab structures: {list(restart_slabs.keys())}")
+            else:
+                print(f"  ! Warning: Previous node has no slab_structures, will generate new slabs")
+                
+            # Override input_slabs with slabs from previous run
+            if restart_slabs:
+                input_slabs = restart_slabs
+                print(f"  → Using slabs from previous run")
+                
+            print(f"{'='*70}\n")
+            
+        except ValueError as e:
+            print(f"  ✗ Error extracting restart data: {e}")
+            print(f"  → Proceeding without restart\n")
+            restart_folders = None
+            restart_slabs = None
+    
     # Special handling for input_slabs: stored nodes can't be passed through @task.graph
     use_input_slabs = input_slabs is not None and len(input_slabs) > 0
     
@@ -501,25 +547,110 @@ def build_core_workgraph(
         slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
         slab_kpts = slab_kpoints_spacing if slab_kpoints_spacing is not None else kpoints_spacing
         
-        # Add the scatter task manually with user slabs as input
-        scatter_task = wg.add_task(
-            relax_slabs_scatter,
-            name='relax_slabs_scatter',
-            slabs=input_slabs,
-            code=code,
-            potential_family=potential_family,
-            potential_mapping=slab_pot_map,
-            parameters=slab_params,
-            options=slab_opts,
-            kpoints_spacing=slab_kpts,
-            clean_workdir=clean_workdir,
-        )
-        
-        # Connect slab outputs to graph outputs
-        wg.outputs.relaxed_slabs = scatter_task.outputs.relaxed_structures
-        wg.outputs.slab_energies = scatter_task.outputs.energies
-        wg.outputs.slab_remote = scatter_task.outputs.remote_folders
-        wg.outputs.slab_structures = input_slabs
+        # Check if we have restart folders
+        if restart_folders is not None:
+            # RESTART MODE: Manually add VASP tasks with restart_folder
+            print(f"  → Building workgraph with restart_folder for each slab")
+            
+            from aiida.plugins import WorkflowFactory
+            from teros.core.slabs import extract_total_energy
+            
+            VaspWC = WorkflowFactory('vasp.v2.vasp')
+            
+            # Store task references for building output dictionaries
+            vasp_tasks = {}
+            energy_tasks = {}
+            
+            # Create VASP tasks for each slab with restart_folder
+            for label, slab_struct in input_slabs.items():
+                # Build VASP inputs
+                vasp_inputs = {
+                    'structure': slab_struct,
+                    'code': code,
+                    'parameters': {'incar': slab_params},
+                    'options': slab_opts,
+                    'potential_family': potential_family,
+                    'potential_mapping': slab_pot_map,
+                    'kpoints_spacing': slab_kpts,
+                    'clean_workdir': clean_workdir,
+                    'settings': orm.Dict(dict={'parser_settings': {'add_structure': True, 'add_trajectory': True}}),
+                }
+                
+                # Add restart_folder if available for this slab
+                if label in restart_folders:
+                    vasp_inputs['restart_folder'] = restart_folders[label]
+                    print(f"    → {label}: using restart_folder PK {restart_folders[label].pk}")
+                
+                # Add VASP task
+                vasp_task = wg.add_task(
+                    VaspWC,
+                    name=f'VaspWorkChain_slab_{label}',
+                    **vasp_inputs
+                )
+                vasp_tasks[label] = vasp_task
+                
+                # Add energy extraction task
+                energy_task = wg.add_task(
+                    extract_total_energy,
+                    name=f'extract_energy_{label}',
+                    energies=vasp_task.outputs.misc,
+                )
+                energy_tasks[label] = energy_task
+            
+            # Build output dictionaries that can be passed to thermodynamics/cleavage
+            # These are socket dictionaries, not plain dictionaries
+            relaxed_slabs_dict = {label: vasp_tasks[label].outputs.structure for label in input_slabs.keys()}
+            slab_energies_dict = {label: energy_tasks[label].outputs.result for label in input_slabs.keys()}
+            slab_remote_dict = {label: vasp_tasks[label].outputs.remote_folder for label in input_slabs.keys()}
+            
+            # Use a collector task to properly expose outputs in WorkGraph format
+            from teros.core.slabs import collect_slab_outputs
+            
+            collector = wg.add_task(
+                collect_slab_outputs,
+                name='collect_slab_outputs_restart',
+                structures=relaxed_slabs_dict,
+                energies=slab_energies_dict,
+                remote_folders=slab_remote_dict,
+            )
+            
+            # Connect collector outputs to WorkGraph outputs
+            wg.outputs.relaxed_slabs = collector.outputs.structures
+            wg.outputs.slab_energies = collector.outputs.energies
+            wg.outputs.slab_remote = collector.outputs.remote_folders
+            wg.outputs.slab_structures = input_slabs
+            
+            print(f"  ✓ Created {len(vasp_tasks)} VASP tasks with restart capability")
+            print(f"  ✓ All slab outputs connected via collector task")
+            
+        else:
+            # NO RESTART: Use normal relax_slabs_scatter
+            scatter_task_inputs = {
+                'slabs': input_slabs,
+                'code': code,
+                'potential_family': potential_family,
+                'potential_mapping': slab_pot_map,
+                'parameters': slab_params,
+                'options': slab_opts,
+                'kpoints_spacing': slab_kpts,
+                'clean_workdir': clean_workdir,
+            }
+            
+            scatter_task = wg.add_task(
+                relax_slabs_scatter,
+                name='relax_slabs_scatter',
+                **scatter_task_inputs
+            )
+            
+            # Connect slab outputs to graph outputs
+            wg.outputs.relaxed_slabs = scatter_task.outputs.relaxed_structures
+            wg.outputs.slab_energies = scatter_task.outputs.energies
+            wg.outputs.slab_remote = scatter_task.outputs.remote_folders
+            wg.outputs.slab_structures = input_slabs
+            
+            # Use scatter task outputs for thermodynamics
+            relaxed_slabs_dict = scatter_task.outputs.relaxed_structures
+            slab_energies_dict = scatter_task.outputs.energies
         
         # Add thermodynamics calculation if requested
         if compute_thermodynamics:
@@ -535,12 +666,15 @@ def build_core_workgraph(
                 bulk_structure=bulk_vasp_task.outputs.structure,
             )
             
+            # Use the output dictionaries created above (works for both restart and non-restart)
+            # relaxed_slabs_dict and slab_energies_dict are defined in both branches
+            
             # Add surface energies scatter task with unique name
             surface_energies_task = wg.add_task(
                 compute_surface_energies_scatter,
                 name='compute_surface_energies_input_slabs',
-                slabs=scatter_task.outputs.relaxed_structures,
-                energies=scatter_task.outputs.energies,
+                slabs=relaxed_slabs_dict,
+                energies=slab_energies_dict,
                 bulk_structure=bulk_vasp_task.outputs.structure,
                 bulk_energy=bulk_energy_task.outputs.result,
                 reference_energies=formation_hf_task.outputs.result,
@@ -551,6 +685,34 @@ def build_core_workgraph(
             
             # Connect surface energies output
             wg.outputs.surface_energies = surface_energies_task.outputs.surface_energies
+            print(f"  ✓ Thermodynamics calculation enabled (surface energies)")
+        
+        # Add cleavage energies calculation if requested
+        # Note: Only add manually if we're in input_slabs mode (restart or manual slabs)
+        # In normal mode, compute_cleavage is handled inside core_workgraph
+        if compute_cleavage and use_input_slabs:
+            from teros.core.cleavage import compute_cleavage_energies_scatter
+            
+            # Get tasks that were created in the core_workgraph
+            bulk_vasp_task = wg.tasks['VaspWorkChain']  # Bulk relaxation task
+            bulk_energy_task = wg.tasks['extract_total_energy']  # Bulk energy extraction
+            
+            # Use the output dictionaries created above (works for both restart and non-restart)
+            # relaxed_slabs_dict and slab_energies_dict are defined in both branches
+            
+            # Add cleavage energies scatter task
+            cleavage_task = wg.add_task(
+                compute_cleavage_energies_scatter,
+                name='compute_cleavage_energies_scatter_input_slabs',
+                slabs=relaxed_slabs_dict,
+                energies=slab_energies_dict,
+                bulk_structure=bulk_vasp_task.outputs.structure,
+                bulk_energy=bulk_energy_task.outputs.result,
+            )
+            
+            # Connect cleavage energies output
+            wg.outputs.cleavage_energies = cleavage_task.outputs.cleavage_energies
+            print(f"  ✓ Cleavage energies calculation enabled")
 
     # Set the name
     wg.name = name
@@ -582,7 +744,7 @@ def build_core_workgraph_with_map(
     metal_options: dict = None,
     oxygen_parameters: dict = None,
     oxygen_options: dict = None,
-    clean_workdir: bool = True,
+    clean_workdir: bool = False,
     slab_parameters: dict = None,
     slab_options: dict = None,
     slab_potential_mapping: dict = None,

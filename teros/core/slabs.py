@@ -14,6 +14,59 @@ from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
 
+def extract_restart_folders_from_node(node_pk: int) -> dict[str, orm.RemoteData]:
+    """
+    Extract restart folders from a previous PS-TEROS workgraph run.
+    
+    This function loads a completed (or failed) PS-TEROS workgraph node and extracts
+    the RemoteData nodes from its slab_remote outputs. These can then be used to
+    restart the slab relaxation calculations from where they left off.
+    
+    Args:
+        node_pk: PK of the previous PS-TEROS workgraph node
+    
+    Returns:
+        Dictionary mapping slab labels (e.g., 'term_0', 'term_1') to RemoteData nodes
+    
+    Raises:
+        ValueError: If the node doesn't have slab_remote outputs or is invalid
+    
+    Example:
+        >>> restart_folders = extract_restart_folders_from_node(19774)
+        >>> print(restart_folders.keys())
+        dict_keys(['term_0', 'term_1'])
+        >>> # Use in a new workgraph
+        >>> wg = build_core_workgraph(..., restart_from_node=19774)
+    """
+    try:
+        node = orm.load_node(node_pk)
+    except Exception as e:
+        raise ValueError(f"Could not load node {node_pk}: {e}")
+    
+    # Check if the node has slab_remote outputs
+    if not hasattr(node.outputs, 'slab_remote'):
+        raise ValueError(
+            f"Node {node_pk} does not have 'slab_remote' outputs. "
+            f"This might not be a PS-TEROS workgraph with slab relaxations, "
+            f"or it was run with an older version of the code. "
+            f"Available outputs: {list(node.outputs)}"
+        )
+    
+    # Extract the RemoteData nodes
+    slab_remote = node.outputs.slab_remote
+    restart_folders = {}
+    
+    for label in slab_remote.keys():
+        remote_data = slab_remote[label]
+        if not isinstance(remote_data, orm.RemoteData):
+            raise ValueError(
+                f"Expected RemoteData for {label}, got {type(remote_data).__name__}"
+            )
+        restart_folders[label] = remote_data
+    
+    return restart_folders
+
+
 @task.graph
 def wrap_input_slabs(
     **slabs: orm.StructureData
@@ -41,6 +94,38 @@ def wrap_input_slabs(
     # Simply return the slabs in the same format as generate_slab_structures
     # Using @task.graph instead of @task.calcfunction avoids provenance cycles
     return {'slabs': dict(slabs)}
+
+
+@task.graph
+def collect_slab_outputs(
+    structures: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
+    energies: t.Annotated[dict[str, orm.Float], dynamic(orm.Float)],
+    remote_folders: t.Annotated[dict[str, orm.RemoteData], dynamic(orm.RemoteData)],
+) -> t.Annotated[dict, namespace(
+    structures=dynamic(orm.StructureData),
+    energies=dynamic(orm.Float),
+    remote_folders=dynamic(orm.RemoteData)
+)]:
+    """
+    Collect and passthrough slab outputs in the proper format.
+    
+    This is a passthrough task that takes dictionaries of slab outputs
+    and returns them in the format expected by WorkGraph dynamic outputs.
+    Used in restart mode to properly expose outputs from individual VASP tasks.
+    
+    Args:
+        structures: Dictionary of relaxed slab structures
+        energies: Dictionary of slab energies
+        remote_folders: Dictionary of RemoteData nodes
+    
+    Returns:
+        Dictionary with structures, energies, and remote_folders namespaces
+    """
+    return {
+        'structures': structures,
+        'energies': energies,
+        'remote_folders': remote_folders,
+    }
 
 
 @task.calcfunction
@@ -151,6 +236,7 @@ def relax_slabs_scatter(
     options: t.Mapping[str, t.Any],
     kpoints_spacing: float | None = None,
     clean_workdir: bool = True,
+    restart_folders: dict = None,
 ) -> t.Annotated[dict, namespace(relaxed_structures=dynamic(orm.StructureData), energies=dynamic(orm.Float), remote_folders=dynamic(orm.RemoteData))]:
     """
     Scatter-gather phase: relax each slab structure in parallel.
@@ -169,6 +255,9 @@ def relax_slabs_scatter(
         options: Computation resources
         kpoints_spacing: K-points spacing (optional)
         clean_workdir: Whether to clean remote directories
+        restart_folders: Dictionary of RemoteData nodes for restarting calculations (optional).
+                        Keys must match slab labels (e.g., 'term_0', 'term_1'). 
+                        If provided, calculations will restart from these remote folders.
     
     Returns:
         Dictionary with relaxed_structures, energies, and remote_folders namespaces
@@ -194,6 +283,10 @@ def relax_slabs_scatter(
         }
         if kpoints_spacing is not None:
             inputs['kpoints_spacing'] = kpoints_spacing
+        
+        # Add restart_folder if provided for this slab
+        if restart_folders is not None and label in restart_folders:
+            inputs['restart_folder'] = restart_folders[label]
         
         relaxation = relax_task_cls(**inputs)
         relaxed[label] = relaxation.structure

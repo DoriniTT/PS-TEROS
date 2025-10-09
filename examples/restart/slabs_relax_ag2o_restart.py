@@ -46,7 +46,7 @@ def main():
     # ===== BULK RELAXATION PARAMETERS =====
     bulk_parameters = {
         "PREC": "Accurate",
-        "ENCUT": 520,
+        "ENCUT": 500,
         "EDIFF": 1e-6,
         "ISMEAR": 0,
         "SIGMA": 0.05,
@@ -253,7 +253,7 @@ def main():
         nonmetal_options=nonmetal_options,
         oxygen_parameters=oxygen_parameters,
         oxygen_options=oxygen_options,
-        clean_workdir=True,
+        clean_workdir=False,
         # Slab generation
         miller_indices=miller_indices,
         min_slab_thickness=min_slab_thickness,
