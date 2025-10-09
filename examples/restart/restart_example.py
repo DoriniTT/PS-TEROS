@@ -30,7 +30,7 @@ def main():
     
     # ===== IMPORTANT: SET THIS TO YOUR PREVIOUS WORKGRAPH PK =====
     # This is the PK of a previous PS-TEROS run that you want to restart from
-    PREVIOUS_RUN_PK = 22223  # Replace with your actual PK
+    PREVIOUS_RUN_PK = 23332  # Replace with your actual PK
     
     print(f"\n{'='*80}")
     print("RESTART EXAMPLE: Continuing slab relaxations from previous run")
