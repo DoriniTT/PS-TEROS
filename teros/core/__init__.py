@@ -16,6 +16,10 @@ from .thermodynamics import (
     calculate_surface_energy_binary,
     compute_surface_energies_scatter,
 )
+from .cleavage import (
+    calculate_cleavage_energy,
+    compute_cleavage_energies_scatter,
+)
 
 __all__ = [
     'get_structure_from_file',
@@ -28,4 +32,6 @@ __all__ = [
     'calculate_surface_energy_ternary',
     'calculate_surface_energy_binary',
     'compute_surface_energies_scatter',
+    'calculate_cleavage_energy',
+    'compute_cleavage_energies_scatter',
 ]

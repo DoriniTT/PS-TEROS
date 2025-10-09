@@ -56,9 +56,8 @@ Folders:
 
 ---
 
-## Essential Documentation
+## Documentation
 
-All the main documentation on how AiiDA-Workgraph works can be found here:
-/home/thiagotd/git/unicamp_posdoc/coding/AiiDA/documentations_workgraph/workgraph/*.py
+When developing a new feature to the code, please create the documentation in the folder where the test script is in the example, not in the root git directory.
 
 ---

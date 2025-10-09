@@ -21,6 +21,7 @@ from teros.core.thermodynamics import (
     identify_oxide_type,
     compute_surface_energies_scatter,
 )
+from teros.core.cleavage import compute_cleavage_energies_scatter
 
 def load_structure_from_file(filepath: str) -> orm.StructureData:
     """
@@ -56,7 +57,7 @@ def get_settings():
     'bulk_energy', 'metal_energy', 'nonmetal_energy', 'oxygen_energy',
     'bulk_structure', 'metal_structure', 'nonmetal_structure', 'oxygen_structure',
     'formation_enthalpy', 'slab_structures', 'relaxed_slabs', 'slab_energies',
-    'surface_energies',
+    'surface_energies', 'cleavage_energies',
 ])
 def core_workgraph(
     structures_dir: str,
@@ -98,6 +99,7 @@ def core_workgraph(
     thermodynamics_sampling: int = 100,
     input_slabs: dict = None,
     use_input_slabs: bool = False,  # Signal to skip slab generation
+    compute_cleavage: bool = False,
 ):
     """
     Core WorkGraph for formation enthalpy calculations of binary and ternary oxides with slab generation.
@@ -151,6 +153,7 @@ def core_workgraph(
         thermodynamics_sampling: Number of grid points for chemical potential sampling. Default: 100
         input_slabs: Dictionary of pre-generated slab structures (e.g., {'term_0': StructureData, ...}). 
                      If provided, slab generation is skipped. Default: None
+        compute_cleavage: Whether to compute cleavage energies for complementary slab pairs. Default: False (requires relax_slabs=True)
 
     Returns:
         Dictionary with energies, structures, formation enthalpy, slab structures, and optionally surface energies:
@@ -161,6 +164,7 @@ def core_workgraph(
             - relaxed_slabs: Dynamic namespace with relaxed slab structures (if relax_slabs=True)
             - slab_energies: Dynamic namespace with slab energies (if relax_slabs=True)
             - surface_energies: Dynamic namespace with surface energy data (if compute_thermodynamics=True)
+            - cleavage_energies: Dynamic namespace with cleavage energy data (if compute_cleavage=True)
     """
     # Load the code
     code = orm.load_code(code_label)
@@ -326,6 +330,19 @@ def core_workgraph(
         
         surface_energies_output = surface_outputs.surface_energies
 
+    # ===== CLEAVAGE ENERGY CALCULATION (OPTIONAL) =====
+    cleavage_energies_output = None
+    if compute_cleavage and relax_slabs:
+        # Compute cleavage energies for all complementary slab pairs
+        cleavage_outputs = compute_cleavage_energies_scatter(
+            slabs=relaxed_slabs_output,
+            energies=slab_energies_output,
+            bulk_structure=bulk_vasp.structure,
+            bulk_energy=bulk_energy.result,
+        )
+        
+        cleavage_energies_output = cleavage_outputs.cleavage_energies
+
     # Return all outputs
     return {
         'bulk_energy': bulk_energy.result,
@@ -341,6 +358,7 @@ def core_workgraph(
         'relaxed_slabs': relaxed_slabs_output,
         'slab_energies': slab_energies_output,
         'surface_energies': surface_energies_output,
+        'cleavage_energies': cleavage_energies_output,
     }
 
 
@@ -383,6 +401,7 @@ def build_core_workgraph(
     compute_thermodynamics: bool = False,
     thermodynamics_sampling: int = 100,
     input_slabs: dict = None,
+    compute_cleavage: bool = False,
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -400,6 +419,7 @@ def build_core_workgraph(
         relax_slabs: Whether to relax generated slabs with VASP. Default: False
         compute_thermodynamics: Whether to compute surface energies. Default: False
         thermodynamics_sampling: Grid resolution for chemical potential sampling. Default: 100
+        compute_cleavage: Whether to compute cleavage energies. Default: False
         slab_parameters: VASP parameters for slab relaxation. Default: None (uses bulk_parameters)
         slab_options: Scheduler options for slab calculations. Default: None (uses bulk_options)
         slab_potential_mapping: Potential mapping for slabs. Default: None (uses bulk_potential_mapping)
@@ -458,6 +478,7 @@ def build_core_workgraph(
         thermodynamics_sampling=thermodynamics_sampling,
         input_slabs=None,  # Always pass None to avoid serialization
         use_input_slabs=use_input_slabs,  # Pass the flag
+        compute_cleavage=compute_cleavage,
     )
     
     # If user provided slabs, manually add the relax_slabs_scatter task
@@ -570,6 +591,7 @@ def build_core_workgraph_with_map(
     compute_thermodynamics: bool = False,
     thermodynamics_sampling: int = 100,
     input_slabs: dict = None,
+    compute_cleavage: bool = False,
     name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
@@ -632,6 +654,7 @@ def build_core_workgraph_with_map(
         compute_thermodynamics=compute_thermodynamics,
         thermodynamics_sampling=thermodynamics_sampling,
         input_slabs=input_slabs,
+        compute_cleavage=compute_cleavage,
         name=name,
     )
 
