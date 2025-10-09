@@ -187,6 +187,15 @@ def generate_slab_structures(
         ase_slab = adaptor.get_atoms(orthogonal_slab)
         slab_nodes[f"term_{index}"] = orm.StructureData(ase=ase_slab)
 
+    if not slab_nodes:
+        raise ValueError(
+            f"No slabs were generated for the specified surface orientation "
+            f"({miller_index.value[0]}, {miller_index.value[1]}, {miller_index.value[2]}). "
+            f"This may occur if the Miller indices are invalid for the given structure, "
+            f"or if the slab generation parameters (min_slab_size={min_slab_size.value}, "
+            f"min_vacuum_size={min_vacuum_size.value}) are too restrictive."
+        )
+
     return {'slabs': slab_nodes}
 
 
