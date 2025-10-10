@@ -1,5 +1,135 @@
 # Changelog
 
+## [Unreleased] - Relaxation Energy Module
+
+### New Feature: Relaxation Energy Calculation
+
+**Overview**: Added optional calculation of relaxation energies for slab terminations, quantifying the energetic stabilization from atomic relaxation at surfaces.
+
+**Formula**: `E_relax = E_relaxed - E_unrelaxed`
+
+**Implementation**:
+- Three separate WorkGraphs created when `compute_relaxation_energy=True`:
+  1. `scf_slabs_scatter` - SCF calculations on unrelaxed slabs (NSW=0, IBRION=-1)
+  2. `relax_slabs_scatter` - Slab relaxation (existing, unchanged)
+  3. `calculate_relaxation_energies_scatter` - Energy difference calculation
+- All workgraphs use scatter-gather pattern for parallel execution
+- Fully optional: controlled by `compute_relaxation_energy` parameter (default: False)
+- **Backward compatible**: Default behavior unchanged
+
+### API Changes
+
+**New Parameter**:
+```python
+build_core_workgraph(
+    # ... existing parameters ...
+    compute_relaxation_energy=False,  # NEW: Enable relaxation energy calculation
+)
+```
+
+**New Outputs** (when `compute_relaxation_energy=True`):
+- `unrelaxed_slab_energies`: Total energies from SCF calculations (NSW=0, IBRION=-1)
+- `unrelaxed_slab_remote`: RemoteData nodes from SCF calculations
+- `relaxation_energies`: E_relaxed - E_unrelaxed for each slab termination
+
+### Modified Files
+
+**Core Implementation**:
+- `teros/core/slabs.py`:
+  - Added `scf_slabs_scatter()` - SCF workgraph for unrelaxed slabs
+  - Added `calculate_relaxation_energies_scatter()` - Energy calculation workgraph
+  - Added `calculate_energy_difference()` - Helper calcfunction
+  - Added `scf_relax_and_calculate_relaxation_energy()` - Combined function (alternative approach)
+
+- `teros/core/workgraph.py`:
+  - Added `compute_relaxation_energy` parameter to `core_workgraph()`
+  - Added conditional logic to create SCF and relaxation energy workgraphs
+  - Updated `build_core_workgraph()` to pass new parameter
+  - Enhanced docstrings with new parameter documentation
+
+### New Files
+
+**Examples**:
+- `examples/slabs/ag2o_100_relaxation_energy.py`: Complete working example
+- `examples/slabs/monitor_relaxation_energy.py`: Monitoring script
+- `examples/slabs/README_RELAXATION_ENERGY.md`: Example documentation
+
+**Documentation**:
+- `docs/RELAXATION_ENERGY.md`: Comprehensive user guide and API reference
+- `QUICKSTART_RELAXATION_ENERGY.md`: Quick start guide
+- `RELAXATION_ENERGY_IMPLEMENTATION.md`: Technical implementation details
+- `IMPLEMENTATION_SUCCESS.md`: Verification and test results
+
+### Usage Example
+
+```python
+wg = build_core_workgraph(
+    structures_dir="/path/to/structures",
+    bulk_name="oxide.cif",
+    metal_name="metal.cif",
+    oxygen_name="O2.cif",
+    # ... other parameters ...
+    relax_slabs=True,                    # Enable slab relaxation
+    compute_relaxation_energy=True,      # Enable relaxation energy (OPTIONAL)
+)
+```
+
+### Benefits
+
+- **Physical Insight**: Quantifies atomic rearrangement energy at surfaces
+- **Termination Comparison**: Compare stability of different terminations
+- **Optional**: Only calculated when explicitly requested
+- **Parallel**: All slabs processed simultaneously within each workgraph
+- **Provenance**: Full AiiDA tracking of all calculations
+- **Efficient**: SCF adds ~5-10% computational overhead
+
+### Test Results
+
+**Verified with**: Ag2O (100) surface (PK 25230)
+- term_0: E_relax = -1.009 eV (stabilization)
+- term_1: E_relax = -2.056 eV (more stabilization)
+
+Both values indicate surface stabilization through atomic relaxation, with term_1 showing more substantial atomic rearrangement.
+
+### Workflow Architecture
+
+```
+When compute_relaxation_energy=True:
+
+  [Bulk + References] → [Slab Generation]
+                              ↓
+        ┌─────────────────────┼─────────────────────┐
+        ↓                     ↓                     ↓
+  [SCF (NSW=0)]       [Relaxation]          [Cleavage]
+  WorkGraph 1         WorkGraph 2           WorkGraph 4
+        ↓                     ↓
+        └─────────┬───────────┘
+                  ↓
+     [Calculate Relaxation Energy]
+            WorkGraph 3
+                  ↓
+          [All outputs available]
+```
+
+### Backward Compatibility
+
+✅ **Fully backward compatible**
+- Default `compute_relaxation_energy=False` preserves existing behavior
+- No changes required to existing scripts
+- SCF calculations only performed when explicitly requested
+
+### Physical Interpretation
+
+- **Negative values**: Surface stabilized by relaxation (typical)
+- **Magnitude**: Indicates extent of atomic rearrangement
+- **Comparison**: Different terminations can be compared quantitatively
+- **Convergence indicator**: Very large values may indicate need for:
+  - More relaxation steps (higher NSW)
+  - Tighter convergence (lower EDIFFG)
+  - Thicker slabs
+
+---
+
 ## [v1.0.0] - Major Update: AiiDA/WorkGraph Modernization & New Features
 
 ### Breaking Changes
