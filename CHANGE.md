@@ -1,5 +1,54 @@
 # Changelog
 
+## [v1.0.0] - Major Update: AiiDA/WorkGraph Modernization & New Features
+
+### Breaking Changes
+- Updated to latest versions of AiiDA and AiiDA-WorkGraph
+- Modernized entire codebase for compatibility with current AiiDA ecosystem
+
+### New Features
+
+#### Manual Termination Input
+- Added ability to manually input pre-generated slab structures via `input_slabs` parameter
+- Bypasses automatic termination generation when custom slabs are provided
+- Enables precise control over surface structures and terminations
+
+#### Cleavage Energy Module
+- New module `teros/core/cleavage.py` for calculating cleavage energies
+- Computes energy required to split crystals into complementary surfaces
+- Automatic pairing of complementary terminations following pymatgen convention
+- Parallel computation using scatter-gather pattern
+- Formula: `Ec(i,j) = 1/(2A) * (E_i^slab + E_j^slab - n*E_bulk)`
+- Returns energies in both eV/Ų and J/m²
+- Reference: See `examples/cleavage/*.md` for implementation details
+
+#### Default Builders
+- Added `teros.default_builders` module for simplified workflow setup
+- Pre-configured parameter sets for common oxide systems
+- Reduces workflow script complexity by ~200 lines
+- Easy parameter override capability
+- Examples in `examples/default_builders/`
+
+#### Restart Functionality
+- New restart mode using `restart_from_node` parameter
+- Accepts PK of previous PS-TEROS calculation
+- Reuses RemoteData from incomplete slab relaxations as restart points
+- Automatically extracts structures and remote folders from previous run
+- Enables continuation of failed or unconverged calculations
+- VASP reads WAVECAR and CONTCAR from previous calculation
+- Reference: See `examples/restart/*.md` for usage patterns
+
+### Implementation Details
+- Modified `teros/core/workgraph.py`: Added restart logic and cleavage integration
+- Modified `teros/core/slabs.py`: Added restart folder extraction and collection functions
+- Updated all builder functions to support new parameters
+- Enhanced documentation throughout core modules
+
+### Backward Compatibility
+⚠️ Requires update to latest AiiDA and AiiDA-WorkGraph versions
+
+---
+
 ## [v0.2.0] - User-Provided Slab Structures Feature
 
 ### New Feature: Input Slabs Support
