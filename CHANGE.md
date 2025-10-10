@@ -73,44 +73,6 @@ wg = build_core_workgraph(
     compute_relaxation_energy=True,      # Enable relaxation energy (OPTIONAL)
 )
 ```
-
-### Benefits
-
-- **Physical Insight**: Quantifies atomic rearrangement energy at surfaces
-- **Termination Comparison**: Compare stability of different terminations
-- **Optional**: Only calculated when explicitly requested
-- **Parallel**: All slabs processed simultaneously within each workgraph
-- **Provenance**: Full AiiDA tracking of all calculations
-- **Efficient**: SCF adds ~5-10% computational overhead
-
-### Test Results
-
-**Verified with**: Ag2O (100) surface (PK 25230)
-- term_0: E_relax = -1.009 eV (stabilization)
-- term_1: E_relax = -2.056 eV (more stabilization)
-
-Both values indicate surface stabilization through atomic relaxation, with term_1 showing more substantial atomic rearrangement.
-
-### Workflow Architecture
-
-```
-When compute_relaxation_energy=True:
-
-  [Bulk + References] → [Slab Generation]
-                              ↓
-        ┌─────────────────────┼─────────────────────┐
-        ↓                     ↓                     ↓
-  [SCF (NSW=0)]       [Relaxation]          [Cleavage]
-  WorkGraph 1         WorkGraph 2           WorkGraph 4
-        ↓                     ↓
-        └─────────┬───────────┘
-                  ↓
-     [Calculate Relaxation Energy]
-            WorkGraph 3
-                  ↓
-          [All outputs available]
-```
-
 ### Backward Compatibility
 
 ✅ **Fully backward compatible**
