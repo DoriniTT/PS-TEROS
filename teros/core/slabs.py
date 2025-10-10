@@ -236,6 +236,195 @@ def get_settings():
 
 
 @task.graph
+def scf_relax_and_calculate_relaxation_energy(
+    slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
+    code: orm.Code,
+    potential_family: str,
+    potential_mapping: t.Mapping[str, str],
+    parameters: t.Mapping[str, t.Any],
+    options: t.Mapping[str, t.Any],
+    kpoints_spacing: float | None = None,
+    clean_workdir: bool = True,
+    restart_folders: dict = None,
+) -> t.Annotated[dict, namespace(
+    unrelaxed_energies=dynamic(orm.Float),
+    unrelaxed_remote_folders=dynamic(orm.RemoteData),
+    relaxed_structures=dynamic(orm.StructureData),
+    relaxed_energies=dynamic(orm.Float),
+    relaxed_remote_folders=dynamic(orm.RemoteData),
+    relaxation_energies=dynamic(orm.Float),
+)]:
+    """
+    Combined workflow: SCF → Relax → Calculate relaxation energy for all slabs.
+    
+    This function performs three steps in sequence:
+    1. SCF calculation on unrelaxed slabs (NSW=0, IBRION=-1)
+    2. Relaxation of slabs (user-specified parameters)
+    3. Calculation of relaxation energy (E_relaxed - E_unrelaxed)
+    
+    Args:
+        slabs: Dictionary of slab structures
+        code: AiiDA code for VASP
+        potential_family: Pseudopotential family
+        potential_mapping: Element to potential mapping
+        parameters: VASP parameters (for relaxation; NSW/IBRION overridden for SCF)
+        options: Computation resources
+        kpoints_spacing: K-points spacing (optional)
+        clean_workdir: Whether to clean remote directories
+        restart_folders: Dictionary of RemoteData for restarting relaxations (optional)
+    
+    Returns:
+        Dictionary with all outputs:
+        - unrelaxed_energies: Energies from SCF
+        - unrelaxed_remote_folders: RemoteData from SCF
+        - relaxed_structures: Relaxed structures
+        - relaxed_energies: Energies from relaxation
+        - relaxed_remote_folders: RemoteData from relaxation
+        - relaxation_energies: E_relaxed - E_unrelaxed
+    """
+    vasp_wc = WorkflowFactory('vasp.v2.vasp')
+    vasp_task_cls = task(vasp_wc)
+    
+    # Dictionaries for outputs
+    unrelaxed_energies_dict: dict[str, orm.Float] = {}
+    unrelaxed_remote_dict: dict[str, orm.RemoteData] = {}
+    relaxed_structures_dict: dict[str, orm.StructureData] = {}
+    relaxed_energies_dict: dict[str, orm.Float] = {}
+    relaxed_remote_dict: dict[str, orm.RemoteData] = {}
+    relaxation_energies_dict: dict[str, orm.Float] = {}
+    
+    # Process each slab
+    for label, structure in slabs.items():
+        # ==== STEP 1: SCF on unrelaxed slab ====
+        scf_params = dict(parameters)
+        scf_params['NSW'] = 0
+        scf_params['IBRION'] = -1
+        
+        scf_inputs: dict[str, t.Any] = {
+            'structure': structure,
+            'code': code,
+            'parameters': {'incar': scf_params},
+            'options': dict(options),
+            'potential_family': potential_family,
+            'potential_mapping': dict(potential_mapping),
+            'clean_workdir': clean_workdir,
+            'settings': orm.Dict(dict=get_settings()),
+        }
+        if kpoints_spacing is not None:
+            scf_inputs['kpoints_spacing'] = kpoints_spacing
+        
+        scf_calc = vasp_task_cls(**scf_inputs)
+        unrelaxed_energies_dict[label] = extract_total_energy(energies=scf_calc.misc).result
+        unrelaxed_remote_dict[label] = scf_calc.remote_folder
+        
+        # ==== STEP 2: Relaxation ====
+        relax_inputs: dict[str, t.Any] = {
+            'structure': structure,
+            'code': code,
+            'parameters': {'incar': dict(parameters)},
+            'options': dict(options),
+            'potential_family': potential_family,
+            'potential_mapping': dict(potential_mapping),
+            'clean_workdir': clean_workdir,
+            'settings': orm.Dict(dict=get_settings()),
+        }
+        if kpoints_spacing is not None:
+            relax_inputs['kpoints_spacing'] = kpoints_spacing
+        if restart_folders is not None and label in restart_folders:
+            relax_inputs['restart_folder'] = restart_folders[label]
+        
+        relax_calc = vasp_task_cls(**relax_inputs)
+        relaxed_structures_dict[label] = relax_calc.structure
+        relaxed_energies_dict[label] = extract_total_energy(energies=relax_calc.misc).result
+        relaxed_remote_dict[label] = relax_calc.remote_folder
+        
+        # ==== STEP 3: Calculate relaxation energy ====
+        relax_energy = calculate_energy_difference(
+            energy_final=relaxed_energies_dict[label],
+            energy_initial=unrelaxed_energies_dict[label],
+        ).result
+        relaxation_energies_dict[label] = relax_energy
+    
+    # Return all outputs
+    return {
+        'unrelaxed_energies': unrelaxed_energies_dict,
+        'unrelaxed_remote_folders': unrelaxed_remote_dict,
+        'relaxed_structures': relaxed_structures_dict,
+        'relaxed_energies': relaxed_energies_dict,
+        'relaxed_remote_folders': relaxed_remote_dict,
+        'relaxation_energies': relaxation_energies_dict,
+    }
+
+
+@task.graph
+def scf_slabs_scatter(
+    slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
+    code: orm.Code,
+    potential_family: str,
+    potential_mapping: t.Mapping[str, str],
+    parameters: t.Mapping[str, t.Any],
+    options: t.Mapping[str, t.Any],
+    kpoints_spacing: float | None = None,
+    clean_workdir: bool = True,
+) -> t.Annotated[dict, namespace(energies=dynamic(orm.Float), remote_folders=dynamic(orm.RemoteData))]:
+    """
+    Scatter-gather phase: perform SCF calculations on unrelaxed slab structures in parallel.
+    
+    This task graph performs single-point energy calculations (NSW=0, IBRION=-1)
+    on unrelaxed slab structures to obtain the initial energy before relaxation.
+    This is needed for calculating relaxation energies.
+    
+    Args:
+        slabs: Dictionary of slab structures (unrelaxed)
+        code: AiiDA code for VASP
+        potential_family: Pseudopotential family
+        potential_mapping: Element to potential mapping
+        parameters: VASP parameters (NSW and IBRION will be overridden)
+        options: Computation resources
+        kpoints_spacing: K-points spacing (optional)
+        clean_workdir: Whether to clean remote directories
+    
+    Returns:
+        Dictionary with energies and remote_folders namespaces
+    """
+    vasp_wc = WorkflowFactory('vasp.v2.vasp')
+    scf_task_cls = task(vasp_wc)
+    
+    energies_ns: dict[str, orm.Float] = {}
+    remote_folders: dict[str, orm.RemoteData] = {}
+
+    # Scatter: create independent SCF tasks for each slab (runs in parallel)
+    for label, structure in slabs.items():
+        # Create SCF parameters by overriding NSW and IBRION
+        scf_params = dict(parameters)
+        scf_params['NSW'] = 0
+        scf_params['IBRION'] = -1
+        
+        inputs: dict[str, t.Any] = {
+            'structure': structure,
+            'code': code,
+            'parameters': {'incar': scf_params},
+            'options': dict(options),
+            'potential_family': potential_family,
+            'potential_mapping': dict(potential_mapping),
+            'clean_workdir': clean_workdir,
+            'settings': orm.Dict(dict=get_settings()),
+        }
+        if kpoints_spacing is not None:
+            inputs['kpoints_spacing'] = kpoints_spacing
+        
+        scf_calc = scf_task_cls(**inputs)
+        energies_ns[label] = extract_total_energy(energies=scf_calc.misc).result
+        remote_folders[label] = scf_calc.remote_folder
+
+    # Gather: return collected results
+    return {
+        'energies': energies_ns,
+        'remote_folders': remote_folders,
+    }
+
+
+@task.graph
 def relax_slabs_scatter(
     slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
     code: orm.Code,
@@ -308,3 +497,55 @@ def relax_slabs_scatter(
         'energies': energies_ns,
         'remote_folders': remote_folders,
     }
+
+
+@task.graph
+def calculate_relaxation_energies_scatter(
+    unrelaxed_energies: t.Annotated[dict[str, orm.Float], dynamic(orm.Float)],
+    relaxed_energies: t.Annotated[dict[str, orm.Float], dynamic(orm.Float)],
+) -> t.Annotated[dict, namespace(relaxation_energies=dynamic(orm.Float))]:
+    """
+    Calculate relaxation energy for each slab termination.
+    
+    The relaxation energy is defined as:
+        E_relax = E_relaxed - E_unrelaxed
+    
+    A negative relaxation energy indicates that the relaxation stabilizes the system.
+    
+    Args:
+        unrelaxed_energies: Dictionary of energies from SCF calculations on unrelaxed slabs
+        relaxed_energies: Dictionary of energies from relaxation calculations
+    
+    Returns:
+        Dictionary with relaxation_energies namespace containing the energy difference
+        for each slab termination
+    """
+    relaxation_energies: dict[str, orm.Float] = {}
+    
+    for label in unrelaxed_energies.keys():
+        if label in relaxed_energies:
+            relax_energy = calculate_energy_difference(
+                energy_final=relaxed_energies[label],
+                energy_initial=unrelaxed_energies[label],
+            ).result
+            relaxation_energies[label] = relax_energy
+    
+    return {'relaxation_energies': relaxation_energies}
+
+
+@task.calcfunction
+def calculate_energy_difference(
+    energy_final: orm.Float,
+    energy_initial: orm.Float,
+) -> orm.Float:
+    """
+    Calculate energy difference: E_final - E_initial
+    
+    Args:
+        energy_final: Final energy (e.g., relaxed)
+        energy_initial: Initial energy (e.g., unrelaxed)
+    
+    Returns:
+        Energy difference as Float (in eV)
+    """
+    return orm.Float(energy_final.value - energy_initial.value)

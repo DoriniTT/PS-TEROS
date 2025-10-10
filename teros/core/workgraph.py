@@ -14,7 +14,9 @@ from teros.core.hf import calculate_formation_enthalpy
 from teros.core.slabs import (
     generate_slab_structures,
     wrap_input_slabs,
+    scf_slabs_scatter,
     relax_slabs_scatter,
+    calculate_relaxation_energies_scatter,
     extract_total_energy,
 )
 from teros.core.thermodynamics import (
@@ -57,8 +59,9 @@ def get_settings():
     'bulk_energy', 'metal_energy', 'nonmetal_energy', 'oxygen_energy',
     'bulk_structure', 'metal_structure', 'nonmetal_structure', 'oxygen_structure',
     'formation_enthalpy', 'slab_structures', 'relaxed_slabs', 'slab_energies',
+    'unrelaxed_slab_energies', 'relaxation_energies',
     'surface_energies', 'cleavage_energies',
-    'surface_energies', 'slab_remote',
+    'surface_energies', 'slab_remote', 'unrelaxed_slab_remote',
 ])
 def core_workgraph(
     structures_dir: str,
@@ -98,6 +101,7 @@ def core_workgraph(
     relax_slabs: bool = False,
     compute_thermodynamics: bool = False,
     thermodynamics_sampling: int = 100,
+    compute_relaxation_energy: bool = False,  # NEW: Enable relaxation energy calculation
     input_slabs: dict = None,
     use_input_slabs: bool = False,  # Signal to skip slab generation
     compute_cleavage: bool = True,
@@ -152,6 +156,7 @@ def core_workgraph(
         relax_slabs: Whether to relax the generated slabs with VASP. Default: False
         compute_thermodynamics: Whether to compute surface energies. Default: False (requires relax_slabs=True)
         thermodynamics_sampling: Number of grid points for chemical potential sampling. Default: 100
+        compute_relaxation_energy: Whether to compute relaxation energies. Default: False (requires relax_slabs=True)
         input_slabs: Dictionary of pre-generated slab structures (e.g., {'term_0': StructureData, ...}). 
                      If provided, slab generation is skipped. Default: None
         compute_cleavage: Whether to compute cleavage energies for complementary slab pairs. Default: False (requires relax_slabs=True)
@@ -163,8 +168,11 @@ def core_workgraph(
             - formation_enthalpy: Formation enthalpy and related data (Dict)
             - slab_structures: Dynamic namespace with all generated slab terminations (StructureData)
             - relaxed_slabs: Dynamic namespace with relaxed slab structures (if relax_slabs=True)
-            - slab_energies: Dynamic namespace with slab energies (if relax_slabs=True)
+            - slab_energies: Dynamic namespace with relaxed slab energies (if relax_slabs=True)
+            - unrelaxed_slab_energies: Dynamic namespace with unrelaxed slab energies from SCF (if relax_slabs=True)
+            - relaxation_energies: Dynamic namespace with relaxation energies (E_relaxed - E_unrelaxed) (if relax_slabs=True)
             - slab_remote: Dynamic namespace with RemoteData nodes for each slab relaxation (if relax_slabs=True)
+            - unrelaxed_slab_remote: Dynamic namespace with RemoteData nodes for each SCF calculation (if relax_slabs=True)
             - surface_energies: Dynamic namespace with surface energy data (if compute_thermodynamics=True)
             - cleavage_energies: Dynamic namespace with cleavage energy data (if compute_cleavage=True)
     """
@@ -289,6 +297,9 @@ def core_workgraph(
     relaxed_slabs_output = {}
     slab_energies_output = {}
     slab_remote_output = {}
+    unrelaxed_slab_energies_output = {}
+    unrelaxed_slab_remote_output = {}
+    relaxation_energies_output = {}
 
     if relax_slabs and slab_namespace is not None:
         # Use slab-specific parameters or fall back to bulk parameters
@@ -297,7 +308,22 @@ def core_workgraph(
         slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
         slab_kpts = slab_kpoints_spacing if slab_kpoints_spacing is not None else kpoints_spacing
 
-        # Use scatter-gather pattern for parallel slab relaxation
+        # OPTIONAL: SCF calculation on unrelaxed slabs (only if relaxation energy requested)
+        if compute_relaxation_energy:
+            scf_outputs = scf_slabs_scatter(
+                slabs=slab_namespace,
+                code=code,
+                potential_family=potential_family,
+                potential_mapping=slab_pot_map,
+                parameters=slab_params,
+                options=slab_opts,
+                kpoints_spacing=slab_kpts,
+                clean_workdir=clean_workdir,
+            )
+            unrelaxed_slab_energies_output = scf_outputs.energies
+            unrelaxed_slab_remote_output = scf_outputs.remote_folders
+
+        # ALWAYS: Relax slabs
         relaxation_outputs = relax_slabs_scatter(
             slabs=slab_namespace,
             code=code,
@@ -308,10 +334,18 @@ def core_workgraph(
             kpoints_spacing=slab_kpts,
             clean_workdir=clean_workdir,
         )
-
+        
         relaxed_slabs_output = relaxation_outputs.relaxed_structures
         slab_energies_output = relaxation_outputs.energies
         slab_remote_output = relaxation_outputs.remote_folders
+
+        # OPTIONAL: Calculate relaxation energies (only if SCF was done)
+        if compute_relaxation_energy:
+            relax_energy_outputs = calculate_relaxation_energies_scatter(
+                unrelaxed_energies=unrelaxed_slab_energies_output,
+                relaxed_energies=slab_energies_output,
+            )
+            relaxation_energies_output = relax_energy_outputs.relaxation_energies
 
     # ===== THERMODYNAMICS CALCULATION (OPTIONAL) =====
     surface_energies_output = {}
@@ -362,9 +396,12 @@ def core_workgraph(
         'slab_structures': slab_namespace if slab_namespace is not None else {},
         'relaxed_slabs': relaxed_slabs_output,
         'slab_energies': slab_energies_output,
+        'unrelaxed_slab_energies': unrelaxed_slab_energies_output,
+        'relaxation_energies': relaxation_energies_output,
         'surface_energies': surface_energies_output,
         'cleavage_energies': cleavage_energies_output,
         'slab_remote': slab_remote_output,
+        'unrelaxed_slab_remote': unrelaxed_slab_remote_output,
     }
 
 
@@ -406,6 +443,7 @@ def build_core_workgraph(
     relax_slabs: bool = False,
     compute_thermodynamics: bool = False,
     thermodynamics_sampling: int = 100,
+    compute_relaxation_energy: bool = False,  # NEW: Enable relaxation energy calculation
     input_slabs: dict = None,
     compute_cleavage: bool = True,
     restart_from_node: int = None,  # PK of previous workgraph to restart from
@@ -426,6 +464,8 @@ def build_core_workgraph(
         relax_slabs: Whether to relax generated slabs with VASP. Default: False
         compute_thermodynamics: Whether to compute surface energies. Default: False
         thermodynamics_sampling: Grid resolution for chemical potential sampling. Default: 100
+        compute_relaxation_energy: Whether to compute relaxation energies (E_relaxed - E_unrelaxed). 
+                                   Requires relax_slabs=True. Default: False
         compute_cleavage: Whether to compute cleavage energies. Default: False
         slab_parameters: VASP parameters for slab relaxation. Default: None (uses bulk_parameters)
         slab_options: Scheduler options for slab calculations. Default: None (uses bulk_options)
@@ -527,6 +567,7 @@ def build_core_workgraph(
         relax_slabs=relax_slabs,
         compute_thermodynamics=compute_thermodynamics,
         thermodynamics_sampling=thermodynamics_sampling,
+        compute_relaxation_energy=compute_relaxation_energy,  # NEW parameter
         input_slabs=None,  # Always pass None to avoid serialization
         use_input_slabs=use_input_slabs,  # Pass the flag
         compute_cleavage=compute_cleavage,
@@ -624,7 +665,24 @@ def build_core_workgraph(
             print(f"  ✓ All slab outputs connected via collector task")
             
         else:
-            # NO RESTART: Use normal relax_slabs_scatter
+            # NO RESTART: Use normal scf + relax + relaxation_energy calculation
+            from teros.core.slabs import scf_slabs_scatter, calculate_relaxation_energies_scatter
+            
+            # Step 1: Add SCF task for unrelaxed slabs
+            scf_task = wg.add_task(
+                scf_slabs_scatter,
+                name='scf_slabs_scatter',
+                slabs=input_slabs,
+                code=code,
+                potential_family=potential_family,
+                potential_mapping=slab_pot_map,
+                parameters=slab_params,
+                options=slab_opts,
+                kpoints_spacing=slab_kpts,
+                clean_workdir=clean_workdir,
+            )
+            
+            # Step 2: Add relaxation task
             scatter_task_inputs = {
                 'slabs': input_slabs,
                 'code': code,
@@ -642,10 +700,21 @@ def build_core_workgraph(
                 **scatter_task_inputs
             )
             
+            # Step 3: Add relaxation energy calculation
+            relax_energy_task = wg.add_task(
+                calculate_relaxation_energies_scatter,
+                name='calculate_relaxation_energies_scatter',
+                unrelaxed_energies=scf_task.outputs.energies,
+                relaxed_energies=scatter_task.outputs.energies,
+            )
+            
             # Connect slab outputs to graph outputs
             wg.outputs.relaxed_slabs = scatter_task.outputs.relaxed_structures
             wg.outputs.slab_energies = scatter_task.outputs.energies
             wg.outputs.slab_remote = scatter_task.outputs.remote_folders
+            wg.outputs.unrelaxed_slab_energies = scf_task.outputs.energies
+            wg.outputs.unrelaxed_slab_remote = scf_task.outputs.remote_folders
+            wg.outputs.relaxation_energies = relax_energy_task.outputs.relaxation_energies
             wg.outputs.slab_structures = input_slabs
             
             # Use scatter task outputs for thermodynamics
