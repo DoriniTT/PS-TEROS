@@ -80,16 +80,6 @@ wg = build_core_workgraph(
 - No changes required to existing scripts
 - SCF calculations only performed when explicitly requested
 
-### Physical Interpretation
-
-- **Negative values**: Surface stabilized by relaxation (typical)
-- **Magnitude**: Indicates extent of atomic rearrangement
-- **Comparison**: Different terminations can be compared quantitatively
-- **Convergence indicator**: Very large values may indicate need for:
-  - More relaxation steps (higher NSW)
-  - Tighter convergence (lower EDIFFG)
-  - Thicker slabs
-
 ---
 
 ## [v1.0.0] - Major Update: AiiDA/WorkGraph Modernization & New Features

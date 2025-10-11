@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 Example script for running bulk relaxation of Ag3PO4 using PS-TEROS WorkGraph.
 
@@ -14,7 +14,7 @@ Usage:
 
 import sys
 from aiida import load_profile, orm
-from teros.workgraph import build_relaxation_workgraph
+from teros.core.workgraph import build_relaxation_workgraph
 
 
 def main():
@@ -22,7 +22,7 @@ def main():
 
     # Load AiiDA profile
     print("Loading AiiDA profile...")
-    load_profile()
+    load_profile(profile='psteros')
 
     # Define structure path
     structure_path = '/home/thiagotd/git/PS-TEROS/teros/structures/ag3po4.cif'
