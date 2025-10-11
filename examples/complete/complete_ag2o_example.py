@@ -31,6 +31,7 @@ Usage:
 import sys
 import os
 from aiida import load_profile, orm
+from ase.io import read
 from teros.core.workgraph import build_core_workgraph
 
 
@@ -44,6 +45,10 @@ def main():
     print("\nLoading AiiDA profile...")
     load_profile(profile='psteros')
 
+    # ===== IMPORTANT: SET THIS TO YOUR PREVIOUS WORKGRAPH PK IN CASE YOU WANT TO RESTART =====
+    # This is the PK of a previous PS-TEROS run that you want to restart from
+    PREVIOUS_RUN_PK = 27054  # Replace with your actual PK
+
     # Define structure path (relative to this script)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     structures_dir = os.path.join(script_dir, 'structures')
@@ -52,6 +57,39 @@ def main():
     bulk_filename = 'ag2o.cif'
     metal_filename = 'Ag.cif'
     oxygen_filename = 'O2.cif'
+
+    # Create a dictionary of slab structures
+    # Keys should follow the pattern "term_0", "term_1", etc.
+    slabs_dir = "/home/thiagotd/git/worktree/PS-TEROS/feature-relax-energy/examples/complete/input_structures/ag2o"
+    input_slabs = {}
+    
+    # Example: Load slab structures from CIF/POSCAR files
+    # You can load as many slabs as you have files
+    slab_files = [
+        "slab_term_0_bin.cif",  # Replace with your actual filenames
+        "slab_term_1_bin.cif",
+    ]
+    
+    for idx, slab_file in enumerate(slab_files):
+        try:
+            slab_path = f"{slabs_dir}/{slab_file}"
+            atoms = read(slab_path)
+            structure = orm.StructureData(ase=atoms)
+            # Store the structure so it can be used in the workflow
+            structure.store()
+            input_slabs[f"term_{idx}"] = structure
+            print(f"  ✓ Loaded {slab_file} as term_{idx}")
+        except FileNotFoundError:
+            print(f"  ✗ Warning: {slab_file} not found, skipping...")
+    
+    if not input_slabs:
+        print("\n✗ Error: No slab structures loaded!")
+        print(f"  Please create slab structure files in: {slabs_dir}")
+        print(f"  Expected files: {', '.join(slab_files)}")
+        return None
+    
+    print(f"\n✓ Successfully loaded {len(input_slabs)} slab structures")
+    print(f"✓ All structures stored in AiiDA database")
 
     # Define calculation parameters
     code_label = 'VASP-VTST-6.4.3@bohr'
@@ -192,7 +230,7 @@ def main():
         'IBRION': 2,
         'ISIF': 2,    # Relax atoms only, keep cell fixed for slabs
         'NSW': 100,
-        'EDIFFG': -0.1,  # Slightly relaxed convergence for slabs
+        'EDIFFG': -0.09,  # Slightly relaxed convergence for slabs
         'ALGO': 'Normal',
         'LREAL': 'Auto',
         'LWAVE': True,
@@ -276,8 +314,10 @@ def main():
         min_vacuum_thickness=min_vacuum_thickness,
 
         # Slab relaxation
+        restart_from_node=PREVIOUS_RUN_PK,
         slab_parameters=slab_parameters,
         slab_options=slab_options,
+        #input_slabs=input_slabs, # Predefined slab structures
         relax_slabs=relax_slabs,
 
         # Calculation flags (all enabled by default, but specified for clarity)

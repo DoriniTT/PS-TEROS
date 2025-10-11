@@ -592,6 +592,17 @@ def build_core_workgraph(
     # Special handling for input_slabs: stored nodes can't be passed through @task.graph
     use_input_slabs = input_slabs is not None and len(input_slabs) > 0
 
+    # Automatically disable cleavage calculation when using manual slabs
+    if use_input_slabs and compute_cleavage:
+        print(f"\n{'='*70}")
+        print(f"WARNING: Cleavage calculation disabled")
+        print(f"  Reason: Manual slabs (input_slabs) provided")
+        print(f"  Cleavage energies require complementary slab pairs from")
+        print(f"  automatic slab generation, which is bypassed when using")
+        print(f"  manually provided slabs.")
+        print(f"{'='*70}\n")
+        compute_cleavage = False
+
     # Build the workgraph (pass None for input_slabs to avoid serialization issues)
     # Note: parameters will be wrapped with {'incar': ...} inside the graph
     wg = core_workgraph.build(
