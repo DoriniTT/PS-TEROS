@@ -512,6 +512,10 @@ def build_core_workgraph(
     input_slabs: dict = None,
     compute_cleavage: bool = True,
     restart_from_node: int = None,  # PK of previous workgraph to restart from
+    compute_electronic_properties_bulk: bool = False,  # NEW: Enable DOS and bands
+    bands_parameters: dict = None,  # NEW: INCAR parameters
+    bands_options: dict = None,  # NEW: Scheduler options
+    band_settings: dict = None,  # NEW: Band workflow settings
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -525,6 +529,7 @@ def build_core_workgraph(
     - Relaxation energy calculation (controlled by compute_relaxation_energy flag, default: True)
     - Cleavage energy calculation (controlled by compute_cleavage flag, default: True)
     - Surface thermodynamics (controlled by compute_thermodynamics flag, default: True, requires references)
+    - Electronic properties calculation (controlled by compute_electronic_properties_bulk flag, default: False)
 
     Args:
         structures_dir: Directory containing structure files
@@ -565,6 +570,13 @@ def build_core_workgraph(
         compute_cleavage: Compute cleavage energies. Default: True
         input_slabs: Pre-generated slab structures dict. Skips slab generation if provided. Default: None
         restart_from_node: PK of previous workgraph to restart from (extracts slabs and RemoteData). Default: None
+        compute_electronic_properties_bulk: Compute DOS and bands for relaxed bulk. Default: False
+        bands_parameters: Dict with 'scf', 'bands', 'dos' keys containing INCAR dicts, plus
+                          optional 'scf_kpoints_distance'. Use get_electronic_properties_defaults().
+                          Default: None
+        bands_options: Scheduler options for bands calculation. Default: None (uses bulk_options)
+        band_settings: Dict with band workflow settings. Use get_electronic_properties_defaults()
+                       ['band_settings']. Default: None
         name: WorkGraph name. Default: 'FormationEnthalpy'
 
     Returns:
@@ -694,6 +706,10 @@ def build_core_workgraph(
         input_slabs=None,  # Always pass None to avoid serialization
         use_input_slabs=use_input_slabs,  # Pass the flag
         compute_cleavage=compute_cleavage,
+        compute_electronic_properties_bulk=False,  # NEW: Will be handled manually below
+        bands_parameters=None,  # NEW: Will be handled manually below
+        bands_options=None,  # NEW: Will be handled manually below
+        band_settings=None,  # NEW: Will be handled manually below
     )
 
     # If user provided slabs, manually add the relax_slabs_scatter task
@@ -906,6 +922,70 @@ def build_core_workgraph(
             wg.outputs.cleavage_energies = cleavage_task.outputs.cleavage_energies
             print(f"  ✓ Cleavage energies calculation enabled")
 
+    # NEW: Add electronic properties calculation if requested
+    if compute_electronic_properties_bulk:
+        from aiida.plugins import WorkflowFactory
+        from aiida.orm import load_code
+
+        BandsWC = WorkflowFactory('vasp.v2.bands')
+
+        # Get bulk task from workgraph
+        bulk_vasp_task = wg.tasks['VaspWorkChain']
+
+        # Get code
+        code = load_code(code_label)
+
+        # Use bands-specific options or fall back to bulk options
+        bands_opts = bands_options if bands_options is not None else bulk_options
+
+        # Prepare basic inputs
+        bands_inputs = {
+            'structure': bulk_vasp_task.outputs.structure,
+            'code': code,
+            'potential_family': potential_family,
+            'potential_mapping': bulk_potential_mapping,
+            'options': bands_opts,
+            'clean_workdir': clean_workdir,
+        }
+
+        # Add band_settings if provided
+        if band_settings:
+            bands_inputs['band_settings'] = orm.Dict(dict=band_settings)
+
+        # Add nested namespace parameters (scf, bands, dos)
+        # bands_parameters should be a dict with keys: 'scf', 'bands', 'dos'
+        if bands_parameters:
+            for namespace in ['scf', 'bands', 'dos']:
+                if namespace in bands_parameters:
+                    # Use dot notation for nested namespace
+                    bands_inputs[f'{namespace}.parameters'] = orm.Dict(
+                        dict={'incar': bands_parameters[namespace]}
+                    )
+
+            # Add SCF k-points if provided
+            if 'scf_kpoints_distance' in bands_parameters:
+                from aiida.orm import KpointsData
+                kpoints = KpointsData()
+                kpoints.set_cell_from_structure(bulk_vasp_task.outputs.structure)
+                kpoints.set_kpoints_mesh_from_density(
+                    bands_parameters['scf_kpoints_distance']
+                )
+                bands_inputs['scf.kpoints'] = kpoints
+
+        # Add the bands task
+        bands_task = wg.add_task(
+            BandsWC,
+            name='BandsWorkChain_bulk',
+            **bands_inputs
+        )
+
+        # Connect outputs
+        wg.outputs.bulk_bands = bands_task.outputs.bands
+        wg.outputs.bulk_dos = bands_task.outputs.dos
+        wg.outputs.bulk_electronic_properties_misc = bands_task.outputs.misc
+
+        print(f"  ✓ Electronic properties calculation enabled (DOS and bands)")
+
     # Set the name
     wg.name = name
 
@@ -952,6 +1032,10 @@ def build_core_workgraph_with_map(
     thermodynamics_sampling: int = 100,
     input_slabs: dict = None,
     compute_cleavage: bool = True,
+    compute_electronic_properties_bulk: bool = False,  # NEW
+    bands_parameters: dict = None,  # NEW
+    bands_options: dict = None,  # NEW
+    band_settings: dict = None,  # NEW
     name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
@@ -1015,6 +1099,10 @@ def build_core_workgraph_with_map(
         thermodynamics_sampling=thermodynamics_sampling,
         input_slabs=input_slabs,
         compute_cleavage=compute_cleavage,
+        compute_electronic_properties_bulk=compute_electronic_properties_bulk,  # NEW
+        bands_parameters=bands_parameters,  # NEW
+        bands_options=bands_options,  # NEW
+        band_settings=band_settings,  # NEW
         name=name,
     )
 
