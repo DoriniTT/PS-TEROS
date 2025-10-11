@@ -1,11 +1,11 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-Complete example testing ALL features of PS-TEROS WorkGraph.
+Complete example testing ALL features of PS-TEROS WorkGraph for Ag2O.
 
 This script demonstrates the full capabilities of the build_core_workgraph function,
 including:
 1. Bulk structure relaxation
-2. Reference structures relaxation (metal, nonmetal, oxygen)
+2. Reference structures relaxation (metal, oxygen)
 3. Formation enthalpy calculation
 4. Slab generation from bulk structure
 5. Slab relaxation (with unrelaxed SCF calculations)
@@ -18,15 +18,14 @@ This tests all boolean flags and calculation modes:
 - compute_cleavage=True (default)
 - compute_thermodynamics=True (default)
 
-Material: Ag3PO4 (ternary oxide)
-- Bulk: Ag3PO4
+Material: Ag2O (binary oxide)
+- Bulk: Ag2O (cuprite structure)
 - Metal reference: Ag
-- Nonmetal reference: P (phosphorus)
 - Oxygen reference: O2
-- Slabs: (1,0,0) Miller index with multiple terminations
+- Slabs: (1,1,1) Miller index with multiple terminations
 
 Usage:
-    source ~/envs/aiida/bin/activate && python complete_example.py
+    source ~/envs/aiida/bin/activate && python complete_ag2o_example.py
 """
 
 import sys
@@ -40,7 +39,7 @@ def main():
 
     # Load AiiDA profile
     print("=" * 80)
-    print("PS-TEROS COMPLETE EXAMPLE - Testing ALL Features")
+    print("PS-TEROS COMPLETE EXAMPLE - Testing ALL Features (Ag2O)")
     print("=" * 80)
     print("\nLoading AiiDA profile...")
     load_profile(profile='psteros')
@@ -50,9 +49,8 @@ def main():
     structures_dir = os.path.join(script_dir, 'structures')
 
     # Structure filenames
-    bulk_filename = 'ag3po4.cif'
+    bulk_filename = 'ag2o.cif'
     metal_filename = 'Ag.cif'
-    nonmetal_filename = 'P.cif'
     oxygen_filename = 'O2.cif'
 
     # Define calculation parameters
@@ -62,12 +60,11 @@ def main():
     print(f"\nStructures directory: {structures_dir}")
     print(f"  - Bulk: {bulk_filename}")
     print(f"  - Metal: {metal_filename}")
-    print(f"  - Nonmetal: {nonmetal_filename}")
     print(f"  - Oxygen: {oxygen_filename}")
 
-    # ===== BULK PARAMETERS (Ag3PO4) =====
+    # ===== BULK PARAMETERS (Ag2O) =====
     print("\n" + "=" * 80)
-    print("BULK RELAXATION PARAMETERS (Ag3PO4)")
+    print("BULK RELAXATION PARAMETERS (Ag2O)")
     print("=" * 80)
 
     bulk_parameters = {
@@ -96,7 +93,6 @@ def main():
 
     bulk_potential_mapping = {
         'Ag': 'Ag',
-        'P': 'P',
         'O': 'O',
     }
 
@@ -138,42 +134,6 @@ def main():
 
     print(f"  ISMEAR: {metal_parameters['ISMEAR']} (Methfessel-Paxton for metals)")
     print(f"  SIGMA: {metal_parameters['SIGMA']}")
-
-    # ===== NONMETAL REFERENCE PARAMETERS (P) =====
-    print("\n" + "=" * 80)
-    print("NONMETAL REFERENCE PARAMETERS (P)")
-    print("=" * 80)
-
-    nonmetal_parameters = {
-        'PREC': 'Accurate',
-        'ENCUT': 520,
-        'EDIFF': 1e-6,
-        'ISMEAR': 0,
-        'SIGMA': 0.05,
-        'IBRION': 2,
-        'ISIF': 3,
-        'NSW': 100,
-        'EDIFFG': -0.01,
-        'ALGO': 'Normal',
-        'LREAL': 'Auto',
-        'LWAVE': False,
-        'LCHARG': False,
-    }
-
-    nonmetal_options = {
-        'resources': {
-            'num_machines': 1,
-            "num_cores_per_machine": 40,
-        },
-        'queue_name': 'par40',
-    }
-
-    nonmetal_potential_mapping = {
-        'P': 'P',
-    }
-
-    print(f"  Element: Phosphorus (P)")
-    print(f"  ENCUT: {nonmetal_parameters['ENCUT']} eV")
 
     # ===== OXYGEN REFERENCE PARAMETERS (O2) =====
     print("\n" + "=" * 80)
@@ -217,7 +177,7 @@ def main():
     print("SLAB GENERATION AND RELAXATION PARAMETERS")
     print("=" * 80)
 
-    miller_indices = [1, 0, 0]  # (100) surface
+    miller_indices = [1, 1, 1]  # (111) surface
     min_slab_thickness = 15.0   # Angstroms
     min_vacuum_thickness = 15.0  # Angstroms
 
@@ -275,7 +235,7 @@ def main():
     print(f"      → Calculate cleavage energies for complementary terminations")
     print(f"  ✓ compute_thermodynamics: {compute_thermodynamics}")
     print(f"      → Calculate surface energies with chemical potential sampling")
-    print(f"      → Sampling grid: {thermodynamics_sampling}x{thermodynamics_sampling} points")
+    print(f"      → Sampling grid: {thermodynamics_sampling} points")
 
     # ===== CREATE WORKGRAPH =====
     print("\n" + "=" * 80)
@@ -302,10 +262,8 @@ def main():
         metal_parameters=metal_parameters,
         metal_options=metal_options,
 
-        nonmetal_name=nonmetal_filename,
-        nonmetal_potential_mapping=nonmetal_potential_mapping,
-        nonmetal_parameters=nonmetal_parameters,
-        nonmetal_options=nonmetal_options,
+        # No nonmetal reference for binary oxide (Ag2O)
+        # nonmetal_name=None,
 
         oxygen_name=oxygen_filename,
         oxygen_potential_mapping=oxygen_potential_mapping,
@@ -332,7 +290,7 @@ def main():
         kpoints_spacing=0.4,
         clean_workdir=False,
 
-        name='Ag3PO4_Complete_Workflow',
+        name='Ag2O_Complete_Workflow',
     )
 
     print("  ✓ WorkGraph created successfully")
@@ -347,9 +305,8 @@ def main():
 
     print("\nExpected workflow steps:")
     print("  1. Parallel relaxation of:")
-    print("     - Bulk structure (Ag3PO4)")
+    print("     - Bulk structure (Ag2O)")
     print("     - Metal reference (Ag)")
-    print("     - Nonmetal reference (P)")
     print("     - Oxygen reference (O2)")
     print("  2. Formation enthalpy calculation")
     print("  3. Slab generation from relaxed bulk")
@@ -369,7 +326,7 @@ def main():
     print("=" * 80)
 
     try:
-        html_file = 'ag3po4_complete_workgraph.html'
+        html_file = 'ag2o_complete_workgraph.html'
         wg.to_html(html_file)
         print(f"  ✓ WorkGraph visualization saved to: {html_file}")
         print(f"    Open this file in a browser to see the full workflow structure")
@@ -405,7 +362,7 @@ def main():
     print(f"\nTo check specific outputs after completion:")
     print(f"  verdi process show {wg.pk}")
     print(f"  # Outputs will include:")
-    print(f"  #   - bulk_energy, metal_energy, nonmetal_energy, oxygen_energy")
+    print(f"  #   - bulk_energy, metal_energy, oxygen_energy")
     print(f"  #   - formation_enthalpy")
     print(f"  #   - slab_structures (all generated terminations)")
     print(f"  #   - slab_energies (relaxed)")
@@ -421,16 +378,15 @@ def main():
 
     print("\nUpon successful completion, the workflow will produce:")
     print("\n1. Bulk and Reference Energies:")
-    print("   - bulk_energy: Total energy of relaxed Ag3PO4")
+    print("   - bulk_energy: Total energy of relaxed Ag2O")
     print("   - metal_energy: Total energy of relaxed Ag")
-    print("   - nonmetal_energy: Total energy of relaxed P")
     print("   - oxygen_energy: Total energy of relaxed O2")
 
     print("\n2. Formation Enthalpy:")
-    print("   - formation_enthalpy: ΔH_f of Ag3PO4 in eV/formula unit")
+    print("   - formation_enthalpy: ΔH_f of Ag2O in eV/formula unit")
 
     print("\n3. Slab Structures:")
-    print("   - slab_structures: All generated (100) terminations")
+    print("   - slab_structures: All generated (111) terminations")
 
     print("\n4. Slab Energies:")
     print("   - unrelaxed_slab_energies: SCF energies")
@@ -441,7 +397,7 @@ def main():
     print("   - cleavage_energies: For complementary termination pairs")
 
     print("\n6. Surface Thermodynamics:")
-    print("   - surface_energies: γ(μ_O, μ_P) for each termination")
+    print("   - surface_energies: γ(μ_O) for each termination")
     print("   - Chemical potential range from metal-rich to oxygen-rich")
 
     print("\n" + "=" * 80)
@@ -453,7 +409,7 @@ def main():
 
 if __name__ == '__main__':
     """
-    Run the complete workflow testing all PS-TEROS features.
+    Run the complete workflow testing all PS-TEROS features for Ag2O.
 
     Before running:
     1. Make sure AiiDA profile 'psteros' is set as default:
@@ -469,7 +425,7 @@ if __name__ == '__main__':
        find . -type d -name __pycache__ -exec rm -rf {} + && find . -name "*.pyc" -delete
 
     5. Run this script:
-       source ~/envs/aiida/bin/activate && python complete_example.py
+       source ~/envs/aiida/bin/activate && python complete_ag2o_example.py
 
     This example will test ALL features:
     - Bulk and reference relaxations
