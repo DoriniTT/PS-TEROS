@@ -56,6 +56,89 @@ Folders:
 
 ---
 
+## GitHub Workflow
+
+After you successfully implement and test a new feature, you may add, commit, and merge it into the **`develop`** branch. Below is the recommended workflow.
+
+---
+
+### Repository Structure and Branch Management
+
+The main development branch is located at:
+
+```
+/home/thiagotd/git/PS-TEROS
+```
+
+For each new feature or update to the PS-TEROS code, create a dedicated worktree branch. This ensures that each feature is isolated and can be tested independently before merging.
+
+```bash
+git worktree add ../worktree/PS-TEROS/<feature_name> <feature_branch>
+```
+
+Then move into the new branch directory:
+
+```bash
+cd ../worktree/PS-TEROS/<feature_name>
+```
+
+You will perform all feature development in this directory.
+
+---
+
+### Testing Before Merging
+
+Every feature must be **fully tested** before merging into `develop`.
+To do this, create a **new folder** inside:
+
+```
+/home/thiagotd/git/PS-TEROS/examples/
+```
+
+Use this folder to run complete test cases that validate your new functionality. You may also create small scripts to test specific parts of the code, but final validation must be performed using **production-like parameters**, similar to those used in the existing example folders.
+
+Your implementation is considered correct and ready to merge when:
+
+* The main node returns a `[0]`, indicating successful completion.
+* The feature you implemented appears correctly in the main node output and behaves as expected.
+
+---
+
+### Committing and Pushing Changes
+
+Once the above criteria are met, you can commit and push your changes:
+
+```bash
+git add -A
+git commit -m "Describe the feature or fix clearly."
+git pull
+git push
+```
+
+Then return to the `develop` branch:
+
+```bash
+cd /home/thiagotd/git/PS-TEROS
+```
+
+And merge your feature branch:
+
+```bash
+git merge <feature_branch>
+```
+
+---
+
+### Handling Merge Conflicts
+
+If conflicts occur, **stop immediately** so they can be reviewed.
+You may resolve simple conflicts yourself (e.g., cache files, `__init__.py`, etc.), but for more complex cases, wait for a manual review.
+
+Do **not delete** the `<feature_branch>` after merging.
+A final validation will be performed on the `develop` branch to ensure that the integration works as intended.
+
+---
+
 ## Documentation
 
 When developing a new feature to the code, please create the documentation in the folder where the test script is in the example, not in the root git directory.

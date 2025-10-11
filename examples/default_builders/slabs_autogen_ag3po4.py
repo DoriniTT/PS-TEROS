@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 Example using default_ag3po4_builders for automatic slab generation and relaxation.
 

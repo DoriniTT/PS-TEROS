@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 Example script for generating and relaxing slab structures from a relaxed BINARY oxide using PS-TEROS.
 
