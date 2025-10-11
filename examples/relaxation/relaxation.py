@@ -8,13 +8,19 @@ This script demonstrates how to:
 3. Create and run a bulk relaxation WorkGraph
 4. Retrieve and analyze results
 
+This example performs bulk relaxation only (no reference structures).
+The compute_relaxation_energy, compute_cleavage, and compute_thermodynamics
+flags control what gets calculated. Since no metal_name/oxygen_name are provided,
+thermodynamics will be skipped even though the flag defaults to True.
+
 Usage:
     source ~/envs/aiida/bin/activate && python relaxation.py
 """
 
 import sys
+import os
 from aiida import load_profile, orm
-from teros.core.workgraph import build_relaxation_workgraph
+from teros.core.workgraph import build_core_workgraph
 
 
 def main():
@@ -24,15 +30,17 @@ def main():
     print("Loading AiiDA profile...")
     load_profile(profile='psteros')
 
-    # Define structure path
-    structure_path = '/home/thiagotd/git/PS-TEROS/teros/structures/ag3po4.cif'
+    # Define structure path (relative to this script)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    structures_dir = os.path.join(script_dir, 'structures')
+    bulk_filename = 'ag3po4.cif'
 
     # Define calculation parameters
     code_label = 'VASP-VTST-6.4.3@bohr'
     potential_family = 'PBE'
 
-    # VASP parameters for relaxation
-    parameters = {'incar': {
+    # VASP parameters for relaxation (INCAR tags)
+    bulk_parameters = {
         'PREC': 'Accurate',
         'ENCUT': 520,
         'EDIFF': 1e-6,
@@ -46,10 +54,10 @@ def main():
         'LREAL': 'Auto',
         'LWAVE': False,
         'LCHARG': False,
-        }
     }
+
     # Scheduler options
-    options = {
+    bulk_options = {
         'resources': {
             'num_machines': 1,
             'num_mpiprocs_per_machine': 40,
@@ -59,28 +67,34 @@ def main():
 
     # Potential mapping (element -> potential)
     # For Ag3PO4: Ag, P, O
-    potential_mapping = {
+    bulk_potential_mapping = {
         'Ag': 'Ag',
         'P': 'P',
         'O': 'O',
     }
 
-    print(f"\nSetting up bulk relaxation for: {structure_path}")
+    print(f"\nSetting up bulk relaxation for: {os.path.join(structures_dir, bulk_filename)}")
     print(f"Code: {code_label}")
     print(f"Potential family: {potential_family}")
+    print(f"Mode: Bulk relaxation only (no formation enthalpy)")
 
     # Create the WorkGraph
+    # By default, all calculation flags are True, but thermodynamics
+    # will be skipped since metal_name and oxygen_name are not provided
     print("\nCreating WorkGraph...")
-    wg = build_relaxation_workgraph(
-        structure_path=structure_path,
+    wg = build_core_workgraph(
+        structures_dir=structures_dir,
+        bulk_name=bulk_filename,
         code_label=code_label,
-        kpoints_spacing=0.3,  # A^-1 * 2pi
         potential_family=potential_family,
-        potential_mapping=potential_mapping,
-        parameters=parameters,
-        options=options,
-        clean_workdir=True,
+        bulk_potential_mapping=bulk_potential_mapping,
+        bulk_parameters=bulk_parameters,
+        bulk_options=bulk_options,
         name='Ag3PO4_BulkRelaxation',
+        # Optional: Override default flags if needed
+        # compute_relaxation_energy=False,  # Default: True
+        # compute_cleavage=False,           # Default: True
+        # compute_thermodynamics=False,     # Default: True (but requires metal/oxygen refs)
     )
 
     # Optional: Export WorkGraph to HTML for visualization
