@@ -1097,6 +1097,11 @@ def build_core_workgraph_with_map(
     bands_parameters: dict = None,  # NEW
     bands_options: dict = None,  # NEW
     band_settings: dict = None,  # NEW
+    compute_electronic_properties_slabs: bool = False,  # NEW
+    slab_electronic_properties: dict = None,  # NEW
+    slab_bands_parameters: dict = None,  # NEW
+    slab_bands_options: dict = None,  # NEW
+    slab_band_settings: dict = None,  # NEW
     name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
@@ -1164,6 +1169,11 @@ def build_core_workgraph_with_map(
         bands_parameters=bands_parameters,  # NEW
         bands_options=bands_options,  # NEW
         band_settings=band_settings,  # NEW
+        compute_electronic_properties_slabs=compute_electronic_properties_slabs,  # NEW
+        slab_electronic_properties=slab_electronic_properties,  # NEW
+        slab_bands_parameters=slab_bands_parameters,  # NEW
+        slab_bands_options=slab_bands_options,  # NEW
+        slab_band_settings=slab_band_settings,  # NEW
         name=name,
     )
 
