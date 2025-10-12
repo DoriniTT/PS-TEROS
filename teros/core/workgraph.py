@@ -65,6 +65,8 @@ def get_settings():
     'slab_remote', 'unrelaxed_slab_remote',
     # Electronic properties outputs
     'bulk_bands', 'bulk_dos', 'bulk_primitive_structure', 'bulk_seekpath_parameters',
+    # Slab electronic properties outputs
+    'slab_bands', 'slab_dos', 'slab_primitive_structures', 'slab_seekpath_parameters',
 ])
 def core_workgraph(
     structures_dir: str,
@@ -413,6 +415,12 @@ def core_workgraph(
 
         cleavage_energies_output = cleavage_outputs.cleavage_energies
 
+    # Initialize output dictionaries for slab electronic properties
+    slab_bands_output = {}
+    slab_dos_output = {}
+    slab_primitive_structures_output = {}
+    slab_seekpath_parameters_output = {}
+
     # Return all outputs
     # Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
     # are added dynamically in build_core_workgraph, not returned here
@@ -435,6 +443,10 @@ def core_workgraph(
         'cleavage_energies': cleavage_energies_output,
         'slab_remote': slab_remote_output,
         'unrelaxed_slab_remote': unrelaxed_slab_remote_output,
+        'slab_bands': slab_bands_output,
+        'slab_dos': slab_dos_output,
+        'slab_primitive_structures': slab_primitive_structures_output,
+        'slab_seekpath_parameters': slab_seekpath_parameters_output,
     }
 
 
