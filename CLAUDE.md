@@ -1,3 +1,151 @@
+digraph CLAUDE {
+    // Main process using proper shapes from style guide
+
+    // WHEN: New request
+    subgraph cluster_request {
+        "Request arrives" [shape=ellipse];
+        "Do I understand?" [shape=diamond];
+        "Ask specific questions" [shape=box];
+        "grep -r 'similar' ." [shape=plaintext];
+        "Read similar files" [shape=box];
+        "Will change >10 files?" [shape=diamond];
+        "STOP: Get permission" [shape=octagon, style=filled, fillcolor=orange];
+        "Begin implementation" [shape=doublecircle];
+
+        "Request arrives" -> "Do I understand?";
+        "Do I understand?" -> "Ask specific questions" [label="no"];
+        "Do I understand?" -> "grep -r 'similar' ." [label="yes"];
+        "Ask specific questions" -> "Do I understand?";
+        "grep -r 'similar' ." -> "Read similar files";
+        "Read similar files" -> "Will change >10 files?";
+        "Will change >10 files?" -> "STOP: Get permission" [label="yes"];
+        "Will change >10 files?" -> "Begin implementation" [label="no"];
+        "STOP: Get permission" -> "Request arrives" [label="denied"];
+        "STOP: Get permission" -> "Begin implementation" [label="approved"];
+    }
+
+    // WHEN: Writing code
+    subgraph cluster_implement {
+        "Write ONE failing test" [shape=box];
+        "npm test" [shape=plaintext];
+        "Test fails as expected" [shape=ellipse];
+        "Write MINIMAL code" [shape=box];
+        "npm test" [shape=plaintext];
+        "Test passes?" [shape=diamond];
+        "git add file1 file2" [shape=plaintext];
+        "git commit -m 'desc'" [shape=plaintext];
+        "More to implement?" [shape=diamond];
+        "Implementation complete" [shape=doublecircle];
+
+        "Begin implementation" -> "Write ONE failing test";
+        "Write ONE failing test" -> "npm test";
+        "npm test" -> "Test fails as expected";
+        "Test fails as expected" -> "Write MINIMAL code";
+        "Write MINIMAL code" -> "npm test";
+        "npm test" -> "Test passes?";
+        "Test passes?" -> "Write MINIMAL code" [label="no"];
+        "Test passes?" -> "git add file1 file2" [label="yes"];
+        "git add file1 file2" -> "git commit -m 'desc'";
+        "git commit -m 'desc'" -> "More to implement?";
+        "More to implement?" -> "Write ONE failing test" [label="yes"];
+        "More to implement?" -> "Implementation complete" [label="no"];
+    }
+
+    // WHEN: Stuck
+    subgraph cluster_stuck {
+        "I'm stuck" [shape=ellipse];
+        "Document the problem" [shape=box];
+        "Third attempt?" [shape=diamond];
+        "Say: I don't understand X" [shape=box];
+        "Remove half the code" [shape=box];
+        "Add debug output" [shape=box];
+        "console.log(state)" [shape=plaintext];
+        "Copy working example" [shape=box];
+
+        "I'm stuck" -> "Document the problem";
+        "Document the problem" -> "Third attempt?";
+        "Third attempt?" -> "Say: I don't understand X" [label="yes"];
+        "Third attempt?" -> "Remove half the code" [label="no"];
+        "Say: I don't understand X" -> "Request arrives" [label="after help"];
+        "Remove half the code" -> "Add debug output";
+        "Add debug output" -> "console.log(state)";
+        "console.log(state)" -> "Copy working example";
+        "Copy working example" -> "I'm stuck" [label="still stuck"];
+        "Copy working example" -> "Write MINIMAL code" [label="unstuck"];
+    }
+
+    // WHEN: Debugging
+    subgraph cluster_debug {
+        "Test is failing" [shape=ellipse];
+        "Read error CAREFULLY" [shape=box];
+        "Can reproduce?" [shape=diamond];
+        "Simplify test case" [shape=box];
+        "git diff HEAD~1" [shape=plaintext];
+        "Find working example" [shape=box];
+        "grep -r 'working_pattern' ." [shape=plaintext];
+        "Compare differences" [shape=box];
+        "Form ONE hypothesis" [shape=box];
+        "Hypothesis correct?" [shape=diamond];
+        "Apply minimal fix" [shape=box];
+
+        "Test is failing" -> "Read error CAREFULLY";
+        "Read error CAREFULLY" -> "Can reproduce?";
+        "Can reproduce?" -> "Simplify test case" [label="no"];
+        "Can reproduce?" -> "git diff HEAD~1" [label="yes"];
+        "Simplify test case" -> "Can reproduce?";
+        "git diff HEAD~1" -> "Find working example";
+        "Find working example" -> "grep -r 'working_pattern' .";
+        "grep -r 'working_pattern' ." -> "Compare differences";
+        "Compare differences" -> "Form ONE hypothesis";
+        "Form ONE hypothesis" -> "Hypothesis correct?";
+        "Hypothesis correct?" -> "Apply minimal fix" [label="yes"];
+        "Hypothesis correct?" -> "Form ONE hypothesis" [label="no"];
+        "Apply minimal fix" -> "npm test";
+    }
+
+    // WHEN: Verifying complete
+    subgraph cluster_verify {
+        "Ready to complete" [shape=ellipse];
+        "All tests pass?" [shape=diamond];
+        "npm test" [shape=plaintext];
+        "Style matches?" [shape=diamond];
+        "npm run lint" [shape=plaintext];
+        "Debug output removed?" [shape=diamond];
+        "grep -r 'console.log' src/" [shape=plaintext];
+        "TODOs updated?" [shape=diamond];
+        "Fix issues" [shape=box];
+        "Task complete" [shape=doublecircle];
+
+        "Ready to complete" -> "All tests pass?";
+        "All tests pass?" -> "npm test" [label="check"];
+        "npm test" -> "Style matches?" [label="pass"];
+        "npm test" -> "Fix issues" [label="fail"];
+        "Style matches?" -> "npm run lint" [label="check"];
+        "npm run lint" -> "Debug output removed?" [label="pass"];
+        "npm run lint" -> "Fix issues" [label="fail"];
+        "Debug output removed?" -> "grep -r 'console.log' src/" [label="check"];
+        "grep -r 'console.log' src/" -> "TODOs updated?" [label="clean"];
+        "grep -r 'console.log' src/" -> "Fix issues" [label="found"];
+        "TODOs updated?" -> "Task complete" [label="yes"];
+        "TODOs updated?" -> "Fix issues" [label="no"];
+        "Fix issues" -> "Ready to complete";
+    }
+
+    // Critical warnings
+    subgraph cluster_warnings {
+        "NEVER git add -A" [shape=octagon, style=filled, fillcolor=red, fontcolor=white];
+        "STOP if breaking rules" [shape=octagon, style=filled, fillcolor=red, fontcolor=white];
+        "Test MUST come first" [shape=octagon, style=filled, fillcolor=red, fontcolor=white];
+        "Say I don't understand" [shape=octagon, style=filled, fillcolor=orange];
+    }
+
+    // Process transitions (dotted = cross-process)
+    "npm test" -> "I'm stuck" [label="confused", style=dotted];
+    "npm test" -> "Test is failing" [label="fails", style=dotted];
+    "Task complete" -> "Request arrives" [label="next", style=dotted];
+    "Implementation complete" -> "Ready to complete" [style=dotted];
+}
+
 # Working with PS-TEROS and AiiDA-WorkGraph
 
 This is a comprehensive guide for developing and working with the **PS-TEROS** code using **AiiDA** and **AiiDA-WorkGraph**.

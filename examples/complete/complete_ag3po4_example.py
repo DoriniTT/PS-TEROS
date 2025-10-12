@@ -58,36 +58,36 @@ def main():
 
     # Create a dictionary of slab structures
     # Keys should follow the pattern "term_0", "term_1", etc.
-    slabs_dir = "/home/thiagotd/git/worktree/PS-TEROS/feature-relax-energy/examples/complete/input_structures/ag3po4"
-    input_slabs = {}
+    #slabs_dir = "/home/thiagotd/git/worktree/PS-TEROS/feature-relax-energy/examples/complete/input_structures/ag3po4"
+    #input_slabs = {}
     
-    # Example: Load slab structures from CIF/POSCAR files
-    # You can load as many slabs as you have files
-    slab_files = [
-        "slab_term_0_ter.cif",  # Replace with your actual filenames
-        "slab_term_1_ter.cif",
-    ]
+    ## Example: Load slab structures from CIF/POSCAR files
+    ## You can load as many slabs as you have files
+    #slab_files = [
+    #    "slab_term_0_ter.cif",  # Replace with your actual filenames
+    #    "slab_term_1_ter.cif",
+    #]
     
-    for idx, slab_file in enumerate(slab_files):
-        try:
-            slab_path = f"{slabs_dir}/{slab_file}"
-            atoms = read(slab_path)
-            structure = orm.StructureData(ase=atoms)
-            # Store the structure so it can be used in the workflow
-            structure.store()
-            input_slabs[f"term_{idx}"] = structure
-            print(f"  ✓ Loaded {slab_file} as term_{idx}")
-        except FileNotFoundError:
-            print(f"  ✗ Warning: {slab_file} not found, skipping...")
+    #for idx, slab_file in enumerate(slab_files):
+    #    try:
+    #        slab_path = f"{slabs_dir}/{slab_file}"
+    #        atoms = read(slab_path)
+    #        structure = orm.StructureData(ase=atoms)
+    #        # Store the structure so it can be used in the workflow
+    #        structure.store()
+    #        input_slabs[f"term_{idx}"] = structure
+    #        print(f"  ✓ Loaded {slab_file} as term_{idx}")
+    #    except FileNotFoundError:
+    #        print(f"  ✗ Warning: {slab_file} not found, skipping...")
     
-    if not input_slabs:
-        print("\n✗ Error: No slab structures loaded!")
-        print(f"  Please create slab structure files in: {slabs_dir}")
-        print(f"  Expected files: {', '.join(slab_files)}")
-        return None
+    #if not input_slabs:
+    #    print("\n✗ Error: No slab structures loaded!")
+    #    print(f"  Please create slab structure files in: {slabs_dir}")
+    #    print(f"  Expected files: {', '.join(slab_files)}")
+    #    return None
     
-    print(f"\n✓ Successfully loaded {len(input_slabs)} slab structures")
-    print(f"✓ All structures stored in AiiDA database")
+    #print(f"\n✓ Successfully loaded {len(input_slabs)} slab structures")
+    #print(f"✓ All structures stored in AiiDA database")
 
     # Define calculation parameters
     code_label = 'VASP-VTST-6.4.3@bohr'
@@ -300,7 +300,7 @@ def main():
     compute_relaxation_energy = True
     compute_cleavage = True
     compute_thermodynamics = True
-    thermodynamics_sampling = 50  # Grid points for chemical potential sampling
+    thermodynamics_sampling = 10  # Grid points for chemical potential sampling
 
     print(f"  ✓ relax_slabs: {relax_slabs}")
     print(f"  ✓ compute_relaxation_energy: {compute_relaxation_energy}")
@@ -354,7 +354,7 @@ def main():
         # Slab relaxation
         slab_parameters=slab_parameters,
         slab_options=slab_options,
-        input_slabs=input_slabs, # Predefined slab structures
+        #input_slabs=input_slabs, # Predefined slab structures
         relax_slabs=relax_slabs,
 
         # Calculation flags (all enabled by default, but specified for clarity)
