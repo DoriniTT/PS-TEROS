@@ -496,6 +496,11 @@ def build_core_workgraph(
     bands_parameters: dict = None,  # NEW: INCAR parameters
     bands_options: dict = None,  # NEW: Scheduler options
     band_settings: dict = None,  # NEW: Band workflow settings
+    compute_electronic_properties_slabs: bool = False,  # NEW: Enable slab electronic properties
+    slab_electronic_properties: dict = None,  # NEW: Per-slab parameter overrides
+    slab_bands_parameters: dict = None,  # NEW: Default slab parameters
+    slab_bands_options: dict = None,  # NEW: Default slab scheduler options
+    slab_band_settings: dict = None,  # NEW: Default slab band settings
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -557,6 +562,16 @@ def build_core_workgraph(
         bands_options: Scheduler options for bands calculation. Default: None (uses bulk_options)
         band_settings: Dict with band workflow settings. Use get_electronic_properties_defaults()
                        ['band_settings']. Default: None
+        compute_electronic_properties_slabs: Compute DOS and bands for selected slabs. Default: False
+        slab_electronic_properties: Dict mapping slab labels to parameter overrides.
+                                    Format: {'term_0': {'bands_parameters': ..., 'bands_options': ..., 'band_settings': ...}}
+                                    If a parameter key is missing, falls back to slab_bands_* defaults.
+                                    Default: None
+        slab_bands_parameters: Default parameters for all slabs. Use get_slab_electronic_properties_defaults().
+                               Default: None
+        slab_bands_options: Default scheduler options for slab electronic properties. Default: None (uses bulk_options)
+        slab_band_settings: Default band settings for slabs. Use get_slab_electronic_properties_defaults()
+                           ['band_settings']. Default: None
         name: WorkGraph name. Default: 'FormationEnthalpy'
 
     Returns:
