@@ -62,7 +62,7 @@ def get_settings():
     'unrelaxed_slab_energies', 'relaxation_energies',
     'surface_energies', 'cleavage_energies',
     'slab_remote', 'unrelaxed_slab_remote',
-    'bulk_bands', 'bulk_dos', 'bulk_electronic_properties_misc',  # NEW: Electronic properties outputs
+    # Note: bulk_bands, bulk_dos, bulk_electronic_properties_misc are added dynamically in build_core_workgraph
 ])
 def core_workgraph(
     structures_dir: str,
@@ -106,10 +106,7 @@ def core_workgraph(
     input_slabs: dict = None,
     use_input_slabs: bool = False,  # Signal to skip slab generation
     compute_cleavage: bool = True,
-    compute_electronic_properties_bulk: bool = False,  # NEW: Enable DOS and bands
-    bands_parameters: dict = None,  # NEW: INCAR parameters for scf/bands/dos stages
-    bands_options: dict = None,  # NEW: Scheduler options for bands calculation
-    band_settings: dict = None,  # NEW: Band workflow settings (symprec, band_mode, etc.)
+    # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
     Core WorkGraph for formation enthalpy calculations of binary and ternary oxides with optional slab calculations.
@@ -127,7 +124,8 @@ def core_workgraph(
         - compute_cleavage: Calculate cleavage energies for complementary slab pairs
         - compute_thermodynamics: Calculate surface energies with chemical potential sampling
           (requires metal_name and oxygen_name to be provided)
-        - compute_electronic_properties_bulk: Calculate DOS and band structure for relaxed bulk
+
+    Note: Electronic properties (DOS/bands) are handled in build_core_workgraph, not here
 
     Args:
         structures_dir: Directory containing all structure files
@@ -171,12 +169,6 @@ def core_workgraph(
         input_slabs: Dictionary of pre-generated slab structures (e.g., {'term_0': StructureData, ...}).
                      If provided, slab generation is skipped. Default: None
         compute_cleavage: Whether to compute cleavage energies for complementary slab pairs. Default: True (requires relax_slabs=True)
-        compute_electronic_properties_bulk: Whether to compute DOS and bands for bulk. Default: False
-        bands_parameters: Dictionary with 'scf', 'bands', 'dos' keys containing INCAR dicts.
-                          Use get_electronic_properties_defaults() builder. Default: None
-        bands_options: Scheduler options for bands calculation. Default: None (uses bulk_options)
-        band_settings: Dict with band workflow settings (symprec, band_mode, kpoints_distance, etc.).
-                       Use get_electronic_properties_defaults()['band_settings']. Default: None
 
     Returns:
         Dictionary with energies, structures, formation enthalpy, slab structures, and optionally surface energies:
@@ -192,9 +184,9 @@ def core_workgraph(
             - unrelaxed_slab_remote: Dynamic namespace with RemoteData nodes for each SCF calculation (if relax_slabs=True)
             - surface_energies: Dynamic namespace with surface energy data (if compute_thermodynamics=True)
             - cleavage_energies: Dynamic namespace with cleavage energy data (if compute_cleavage=True)
-            - bulk_bands: BandsData with electronic band structure (if compute_electronic_properties_bulk=True)
-            - bulk_dos: ArrayData with density of states (if compute_electronic_properties_bulk=True)
-            - bulk_electronic_properties_misc: Dict with additional outputs (if compute_electronic_properties_bulk=True)
+
+    Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
+          are added in build_core_workgraph when compute_electronic_properties_bulk=True
     """
     # Load the code
     code = orm.load_code(code_label)
@@ -305,33 +297,8 @@ def core_workgraph(
         formation_hf = type('obj', (object,), {'result': bulk_energy.result})()  # Placeholder
 
     # ===== ELECTRONIC PROPERTIES CALCULATION (OPTIONAL) =====
-    bulk_bands_output = None
-    bulk_dos_output = None
-    bulk_electronic_misc_output = {}
-
-    if compute_electronic_properties_bulk:
-        # Get BandsWorkChain and wrap it as a task
-        BandsWorkChain = WorkflowFactory('vasp.v2.bands')
-        BandsTask = task(BandsWorkChain)
-
-        # Use bands-specific options or fall back to bulk options
-        bands_opts = bands_options if bands_options is not None else bulk_options
-
-        # Build bands workchain task - uses relaxed bulk structure
-        # Note: vasp.v2.bands handles SCF → bands → DOS chain internally
-        bands_calc = BandsTask(
-            structure=bulk_vasp.structure,  # Use relaxed structure from bulk calculation
-            code=code,
-            potential_family=potential_family,
-            potential_mapping=bulk_potential_mapping,
-            options=bands_opts,
-            clean_workdir=clean_workdir,
-        )
-
-        # Extract outputs
-        bulk_bands_output = bands_calc.outputs.bands
-        bulk_dos_output = bands_calc.outputs.dos
-        bulk_electronic_misc_output = bands_calc.outputs.misc
+    # Note: Electronic properties are added in build_core_workgraph, not here
+    # This keeps core_workgraph focused on base calculations
 
     # ===== SLAB GENERATION =====
     # Use input slabs if provided, otherwise generate them
@@ -445,6 +412,8 @@ def core_workgraph(
         cleavage_energies_output = cleavage_outputs.cleavage_energies
 
     # Return all outputs
+    # Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
+    # are added dynamically in build_core_workgraph, not returned here
     return {
         'bulk_energy': bulk_energy.result,
         'bulk_structure': bulk_vasp.structure,
@@ -464,9 +433,6 @@ def core_workgraph(
         'cleavage_energies': cleavage_energies_output,
         'slab_remote': slab_remote_output,
         'unrelaxed_slab_remote': unrelaxed_slab_remote_output,
-        'bulk_bands': bulk_bands_output,  # NEW: Band structure data
-        'bulk_dos': bulk_dos_output,  # NEW: DOS data
-        'bulk_electronic_properties_misc': bulk_electronic_misc_output,  # NEW: Misc outputs
     }
 
 
@@ -702,14 +668,11 @@ def build_core_workgraph(
         relax_slabs=relax_slabs,
         compute_thermodynamics=compute_thermodynamics,
         thermodynamics_sampling=thermodynamics_sampling,
-        compute_relaxation_energy=compute_relaxation_energy,  # NEW parameter
+        compute_relaxation_energy=compute_relaxation_energy,
         input_slabs=None,  # Always pass None to avoid serialization
         use_input_slabs=use_input_slabs,  # Pass the flag
         compute_cleavage=compute_cleavage,
-        compute_electronic_properties_bulk=False,  # NEW: Will be handled manually below
-        bands_parameters=None,  # NEW: Will be handled manually below
-        bands_options=None,  # NEW: Will be handled manually below
-        band_settings=None,  # NEW: Will be handled manually below
+        # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
     # If user provided slabs, manually add the relax_slabs_scatter task
