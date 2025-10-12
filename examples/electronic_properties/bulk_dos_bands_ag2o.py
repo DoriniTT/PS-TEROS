@@ -17,10 +17,15 @@ Usage:
     source ~/envs/psteros/bin/activate && python bulk_dos_bands_ag2o.py
 """
 
+import sys
+import os
+# Add PS-TEROS root to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
 from aiida import load_profile
 from teros.core.workgraph import build_core_workgraph
 from teros.core.builders.default_ag2o_builders import get_ag2o_defaults
-from teros.core.builders.electronic_properties_builder import get_electronic_properties_defaults
+from teros.core.builders import get_electronic_properties_defaults
 
 
 def main():

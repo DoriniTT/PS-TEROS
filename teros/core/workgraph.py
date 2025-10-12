@@ -925,15 +925,11 @@ def build_core_workgraph(
                         dict={'incar': bands_parameters[namespace]}
                     )
 
-            # Add SCF k-points if provided
+            # Add SCF k-points distance if provided
+            # Note: Use kpoints_spacing instead of creating KpointsData
+            # The bands workchain will create the k-points mesh internally
             if 'scf_kpoints_distance' in bands_parameters:
-                from aiida.orm import KpointsData
-                kpoints = KpointsData()
-                kpoints.set_cell_from_structure(bulk_vasp_task.outputs.structure)
-                kpoints.set_kpoints_mesh_from_density(
-                    bands_parameters['scf_kpoints_distance']
-                )
-                bands_inputs['scf.kpoints'] = kpoints
+                bands_inputs['scf.kpoints_spacing'] = bands_parameters['scf_kpoints_distance']
 
         # Add the bands task
         bands_task = wg.add_task(
