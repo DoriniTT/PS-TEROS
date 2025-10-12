@@ -9,6 +9,7 @@ import typing as t
 from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, WorkGraph, dynamic, namespace
+from aiida.engine import submit
 from ase.io import read
 from teros.core.hf import calculate_formation_enthalpy
 from teros.core.slabs import (
@@ -62,7 +63,8 @@ def get_settings():
     'unrelaxed_slab_energies', 'relaxation_energies',
     'surface_energies', 'cleavage_energies',
     'slab_remote', 'unrelaxed_slab_remote',
-    # Note: bulk_bands, bulk_dos, bulk_electronic_properties_misc are added dynamically in build_core_workgraph
+    # Electronic properties outputs
+    'bulk_bands', 'bulk_dos', 'bulk_primitive_structure', 'bulk_seekpath_parameters',
 ])
 def core_workgraph(
     structures_dir: str,
@@ -890,7 +892,9 @@ def build_core_workgraph(
         from aiida.plugins import WorkflowFactory
         from aiida.orm import load_code
 
-        BandsWC = WorkflowFactory('vasp.v2.bands')
+        # Get BandsWorkChain and wrap it as a task (same pattern as VaspWorkChain)
+        BandsWorkChain = WorkflowFactory('vasp.v2.bands')
+        BandsTask = task(BandsWorkChain)
 
         # Get bulk task from workgraph
         bulk_vasp_task = wg.tasks['VaspWorkChain']
@@ -901,47 +905,69 @@ def build_core_workgraph(
         # Use bands-specific options or fall back to bulk options
         bands_opts = bands_options if bands_options is not None else bulk_options
 
-        # Prepare basic inputs
+        # Build inputs dictionary
+        # BandsWorkChain expects inputs in namespaces: scf, bands, dos
         bands_inputs = {
-            'structure': bulk_vasp_task.outputs.structure,
+            'structure': bulk_vasp_task.outputs.structure,  # Socket from bulk task
+            'metadata': {
+                'label': 'Bulk_Electronic_Properties',
+                'description': 'DOS and bands calculation for relaxed bulk structure',
+            }
+        }
+
+        # Add band_settings if provided
+        if band_settings:
+            bands_inputs['band_settings'] = band_settings
+
+        # Build SCF namespace inputs (required)
+        scf_inputs = {
             'code': code,
             'potential_family': potential_family,
             'potential_mapping': bulk_potential_mapping,
             'options': bands_opts,
             'clean_workdir': clean_workdir,
         }
+        if bands_parameters and 'scf' in bands_parameters:
+            scf_inputs['parameters'] = {'incar': bands_parameters['scf']}
+        if bands_parameters and 'scf_kpoints_distance' in bands_parameters:
+            scf_inputs['kpoints_spacing'] = bands_parameters['scf_kpoints_distance']
+        
+        bands_inputs['scf'] = scf_inputs
 
-        # Add band_settings if provided
-        if band_settings:
-            bands_inputs['band_settings'] = orm.Dict(dict=band_settings)
+        # Build Bands namespace inputs (optional)
+        if bands_parameters and 'bands' in bands_parameters:
+            bands_inputs['bands'] = {
+                'code': code,
+                'potential_family': potential_family,
+                'potential_mapping': bulk_potential_mapping,
+                'options': bands_opts,
+                'clean_workdir': clean_workdir,
+                'parameters': {'incar': bands_parameters['bands']},
+            }
 
-        # Add nested namespace parameters (scf, bands, dos)
-        # bands_parameters should be a dict with keys: 'scf', 'bands', 'dos'
-        if bands_parameters:
-            for namespace in ['scf', 'bands', 'dos']:
-                if namespace in bands_parameters:
-                    # Use dot notation for nested namespace
-                    bands_inputs[f'{namespace}.parameters'] = orm.Dict(
-                        dict={'incar': bands_parameters[namespace]}
-                    )
+        # Build DOS namespace inputs (optional)
+        if bands_parameters and 'dos' in bands_parameters:
+            bands_inputs['dos'] = {
+                'code': code,
+                'potential_family': potential_family,
+                'potential_mapping': bulk_potential_mapping,
+                'options': bands_opts,
+                'clean_workdir': clean_workdir,
+                'parameters': {'incar': bands_parameters['dos']},
+            }
 
-            # Add SCF k-points distance if provided
-            # Note: Use kpoints_spacing instead of creating KpointsData
-            # The bands workchain will create the k-points mesh internally
-            if 'scf_kpoints_distance' in bands_parameters:
-                bands_inputs['scf.kpoints_spacing'] = bands_parameters['scf_kpoints_distance']
-
-        # Add the bands task
+        # Add the bands task to the workgraph
         bands_task = wg.add_task(
-            BandsWC,
+            BandsTask,
             name='BandsWorkChain_bulk',
             **bands_inputs
         )
 
-        # Connect outputs
-        wg.outputs.bulk_bands = bands_task.outputs.bands
+        # Connect all outputs from BandsWorkChain
+        wg.outputs.bulk_bands = bands_task.outputs.band_structure
         wg.outputs.bulk_dos = bands_task.outputs.dos
-        wg.outputs.bulk_electronic_properties_misc = bands_task.outputs.misc
+        wg.outputs.bulk_primitive_structure = bands_task.outputs.primitive_structure
+        wg.outputs.bulk_seekpath_parameters = bands_task.outputs.seekpath_parameters
 
         print(f"  ✓ Electronic properties calculation enabled (DOS and bands)")
 

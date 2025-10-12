@@ -7,16 +7,18 @@ including:
 1. Bulk structure relaxation
 2. Reference structures relaxation (metal, oxygen)
 3. Formation enthalpy calculation
-4. Slab generation from bulk structure
-5. Slab relaxation (with unrelaxed SCF calculations)
-6. Relaxation energy calculation (E_relaxed - E_unrelaxed)
-7. Cleavage energy calculation for complementary slabs
-8. Surface thermodynamics with chemical potential sampling
+4. Electronic properties (DOS and band structure) for bulk
+5. Slab generation from bulk structure
+6. Slab relaxation (with unrelaxed SCF calculations)
+7. Relaxation energy calculation (E_relaxed - E_unrelaxed)
+8. Cleavage energy calculation for complementary slabs
+9. Surface thermodynamics with chemical potential sampling
 
 This tests all boolean flags and calculation modes:
 - compute_relaxation_energy=True (default)
 - compute_cleavage=True (default)
 - compute_thermodynamics=True (default)
+- compute_electronic_properties_bulk=True (NEW!)
 
 Material: Ag2O (binary oxide)
 - Bulk: Ag2O (cuprite structure)
@@ -33,6 +35,7 @@ import os
 from aiida import load_profile, orm
 from ase.io import read
 from teros.core.workgraph import build_core_workgraph
+from teros.core.builders import get_electronic_properties_defaults
 
 
 def main():
@@ -60,36 +63,36 @@ def main():
 
     # Create a dictionary of slab structures
     # Keys should follow the pattern "term_0", "term_1", etc.
-    slabs_dir = "/home/thiagotd/git/worktree/PS-TEROS/feature-relax-energy/examples/complete/input_structures/ag2o"
-    input_slabs = {}
+    #slabs_dir = "/home/thiagotd/git/worktree/PS-TEROS/feature-relax-energy/examples/complete/input_structures/ag2o"
+    #input_slabs = {}
     
-    # Example: Load slab structures from CIF/POSCAR files
-    # You can load as many slabs as you have files
-    slab_files = [
-        "slab_term_0_bin.cif",  # Replace with your actual filenames
-        "slab_term_1_bin.cif",
-    ]
+    ## Example: Load slab structures from CIF/POSCAR files
+    ## You can load as many slabs as you have files
+    #slab_files = [
+    #    "slab_term_0_bin.cif",  # Replace with your actual filenames
+    #    "slab_term_1_bin.cif",
+    #]
     
-    for idx, slab_file in enumerate(slab_files):
-        try:
-            slab_path = f"{slabs_dir}/{slab_file}"
-            atoms = read(slab_path)
-            structure = orm.StructureData(ase=atoms)
-            # Store the structure so it can be used in the workflow
-            structure.store()
-            input_slabs[f"term_{idx}"] = structure
-            print(f"  ✓ Loaded {slab_file} as term_{idx}")
-        except FileNotFoundError:
-            print(f"  ✗ Warning: {slab_file} not found, skipping...")
+    #for idx, slab_file in enumerate(slab_files):
+    #    try:
+    #        slab_path = f"{slabs_dir}/{slab_file}"
+    #        atoms = read(slab_path)
+    #        structure = orm.StructureData(ase=atoms)
+    #        # Store the structure so it can be used in the workflow
+    #        structure.store()
+    #        input_slabs[f"term_{idx}"] = structure
+    #        print(f"  ✓ Loaded {slab_file} as term_{idx}")
+    #    except FileNotFoundError:
+    #        print(f"  ✗ Warning: {slab_file} not found, skipping...")
     
-    if not input_slabs:
-        print("\n✗ Error: No slab structures loaded!")
-        print(f"  Please create slab structure files in: {slabs_dir}")
-        print(f"  Expected files: {', '.join(slab_files)}")
-        return None
+    #if not input_slabs:
+    #    print("\n✗ Error: No slab structures loaded!")
+    #    print(f"  Please create slab structure files in: {slabs_dir}")
+    #    print(f"  Expected files: {', '.join(slab_files)}")
+    #    return None
     
-    print(f"\n✓ Successfully loaded {len(input_slabs)} slab structures")
-    print(f"✓ All structures stored in AiiDA database")
+    #print(f"\n✓ Successfully loaded {len(input_slabs)} slab structures")
+    #print(f"✓ All structures stored in AiiDA database")
 
     # Define calculation parameters
     code_label = 'VASP-VTST-6.4.3@bohr'
@@ -275,6 +278,40 @@ def main():
     print(f"      → Calculate surface energies with chemical potential sampling")
     print(f"      → Sampling grid: {thermodynamics_sampling} points")
 
+    # ===== ELECTRONIC PROPERTIES PARAMETERS (NEW!) =====
+    print("\n" + "=" * 80)
+    print("ELECTRONIC PROPERTIES PARAMETERS (DOS & Bands)")
+    print("=" * 80)
+
+    # Get electronic properties defaults
+    ep_defaults = get_electronic_properties_defaults(
+        energy_cutoff=bulk_parameters['ENCUT'],  # Match bulk ENCUT
+        electronic_convergence=1e-5,
+        ncore=4,
+        ispin=2,  # Spin-polarized for Ag2O
+        lasph=True,
+        lreal="Auto",
+        kpoints_mesh_density=0.3,  # SCF k-mesh density
+        band_kpoints_distance=0.2,  # Band path density
+        dos_kpoints_distance=0.2,  # DOS k-mesh density
+        line_density=0.2,  # Points along high-symmetry lines
+        nedos=2000,  # DOS grid points
+        sigma_bands=0.01,  # Smearing for bands (eV)
+        symprec=1e-4,  # Symmetry precision
+        band_mode="seekpath-aiida",  # Use seekpath for band paths
+    )
+
+    compute_electronic_properties_bulk = True  # Enable DOS and bands
+
+    print(f"  Band mode: {ep_defaults['band_settings']['band_mode']}")
+    print(f"  Band k-points distance: {ep_defaults['band_settings']['band_kpoints_distance']}")
+    print(f"  DOS k-points distance: {ep_defaults['band_settings']['dos_kpoints_distance']}")
+    print(f"  Line density: {ep_defaults['band_settings']['line_density']}")
+    print(f"  NEDOS (DOS grid points): {ep_defaults['dos']['NEDOS']}")
+    print(f"  SCF k-mesh density: {ep_defaults['scf_kpoints_distance']}")
+    print(f"\n  ✓ compute_electronic_properties_bulk: {compute_electronic_properties_bulk}")
+    print(f"      → Calculate DOS and band structure for relaxed bulk")
+
     # ===== CREATE WORKGRAPH =====
     print("\n" + "=" * 80)
     print("CREATING WORKGRAPH")
@@ -314,7 +351,7 @@ def main():
         min_vacuum_thickness=min_vacuum_thickness,
 
         # Slab relaxation
-        restart_from_node=PREVIOUS_RUN_PK,
+        #restart_from_node=PREVIOUS_RUN_PK,
         slab_parameters=slab_parameters,
         slab_options=slab_options,
         #input_slabs=input_slabs, # Predefined slab structures
@@ -325,6 +362,12 @@ def main():
         compute_cleavage=compute_cleavage,
         compute_thermodynamics=compute_thermodynamics,
         thermodynamics_sampling=thermodynamics_sampling,
+
+        # Electronic properties (NEW!)
+        compute_electronic_properties_bulk=compute_electronic_properties_bulk,
+        bands_parameters=ep_defaults,
+        band_settings=ep_defaults['band_settings'],
+        bands_options=bulk_options,  # Use same resources as bulk
 
         # Other settings
         kpoints_spacing=0.4,
@@ -349,13 +392,17 @@ def main():
     print("     - Metal reference (Ag)")
     print("     - Oxygen reference (O2)")
     print("  2. Formation enthalpy calculation")
-    print("  3. Slab generation from relaxed bulk")
-    print("  4. For each slab termination:")
+    print("  3. Electronic properties for bulk (NEW!):")
+    print("     a) SCF calculation (LWAVE=True, LCHARG=True)")
+    print("     b) Band structure along high-symmetry paths")
+    print("     c) Density of states (DOS) with tetrahedron method")
+    print("  4. Slab generation from relaxed bulk")
+    print("  5. For each slab termination:")
     print("     a) SCF calculation (unrelaxed)")
     print("     b) Full relaxation")
     print("     c) Relaxation energy (E_relaxed - E_unrelaxed)")
-    print("  5. Cleavage energy calculation")
-    print("  6. Surface thermodynamics:")
+    print("  6. Cleavage energy calculation")
+    print("  7. Surface thermodynamics:")
     print("     - Oxide type identification")
     print("     - Chemical potential sampling")
     print("     - Surface energy calculation for each slab")
@@ -404,6 +451,7 @@ def main():
     print(f"  # Outputs will include:")
     print(f"  #   - bulk_energy, metal_energy, oxygen_energy")
     print(f"  #   - formation_enthalpy")
+    print(f"  #   - bulk_bands, bulk_dos (NEW!)")
     print(f"  #   - slab_structures (all generated terminations)")
     print(f"  #   - slab_energies (relaxed)")
     print(f"  #   - unrelaxed_slab_energies")
@@ -425,18 +473,23 @@ def main():
     print("\n2. Formation Enthalpy:")
     print("   - formation_enthalpy: ΔH_f of Ag2O in eV/formula unit")
 
-    print("\n3. Slab Structures:")
+    print("\n3. Electronic Properties (NEW!):")
+    print("   - bulk_bands: Band structure along high-symmetry paths")
+    print("   - bulk_dos: Density of states")
+    print("   - bulk_electronic_properties_misc: Seekpath parameters")
+
+    print("\n4. Slab Structures:")
     print("   - slab_structures: All generated (111) terminations")
 
-    print("\n4. Slab Energies:")
+    print("\n5. Slab Energies:")
     print("   - unrelaxed_slab_energies: SCF energies")
     print("   - slab_energies: Relaxed energies")
     print("   - relaxation_energies: E_relax - E_unrelaxed for each slab")
 
-    print("\n5. Cleavage Energies:")
+    print("\n6. Cleavage Energies:")
     print("   - cleavage_energies: For complementary termination pairs")
 
-    print("\n6. Surface Thermodynamics:")
+    print("\n7. Surface Thermodynamics:")
     print("   - surface_energies: γ(μ_O) for each termination")
     print("   - Chemical potential range from metal-rich to oxygen-rich")
 
@@ -470,6 +523,7 @@ if __name__ == '__main__':
     This example will test ALL features:
     - Bulk and reference relaxations
     - Formation enthalpy calculation
+    - Electronic properties (DOS and bands) for bulk
     - Slab generation
     - Slab relaxation with unrelaxed SCF
     - Relaxation energy calculation

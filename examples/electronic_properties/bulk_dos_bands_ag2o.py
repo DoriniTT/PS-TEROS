@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 Example demonstrating electronic properties (DOS and bands) calculation for relaxed bulk.
 
@@ -119,6 +119,8 @@ def main():
         oxygen_parameters=bulk_defaults['oxygen_parameters'],
         oxygen_options=bulk_defaults['oxygen_options'],
         clean_workdir=False,
+        # Disable slab-related calculations (we only want bulk electronic properties)
+        compute_cleavage=False,
         # Electronic properties flags
         compute_electronic_properties_bulk=True,  # Enable DOS and bands
         bands_parameters=ep_defaults,  # Pass all electronic properties params
@@ -168,8 +170,9 @@ def main():
     print(f"    - formation_enthalpy (Dict) - ΔH_f for Ag2O")
     print(f"\n  Electronic properties (NEW!):")
     print(f"    - bulk_bands (BandsData) - Band structure along high-symmetry paths")
-    print(f"    - bulk_dos (ArrayData) - Density of states")
-    print(f"    - bulk_electronic_properties_misc (Dict) - Additional outputs")
+    print(f"    - bulk_dos (BandsData) - Density of states")
+    print(f"    - bulk_primitive_structure (StructureData) - Primitive cell used for bands")
+    print(f"    - bulk_seekpath_parameters (Dict) - Seekpath symmetry analysis")
 
     print(f"\n{'-'*80}")
     print(f"ACCESSING RESULTS (after completion)")
