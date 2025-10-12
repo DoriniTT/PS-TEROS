@@ -319,17 +319,17 @@ def calculate_surface_energy_ternary(
             'formation_enthalpy_eV': float(delta_h),
             
             # ===== Legacy keys for backward compatibility =====
-            'phi': float(phi),
-            'Gamma_M_vs_Nref': float(gamma_M),
-            'Gamma_O_vs_Nref': float(gamma_O),
-            'delta_mu_M_range': [float(x) for x in delta_mu_M_range],
-            'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
-            'gamma_grid': gamma_grid_2d,
-            'gamma_at_muM_zero': gamma_at_muM_zero,
-            'gamma_at_muO_zero': gamma_at_muO_zero,
-            'gamma_at_reference': float(phi),
-            'element_M_independent': element_M,
-            'element_N_reference': element_N_ref,
+            #'phi': float(phi),
+            #'Gamma_M_vs_Nref': float(gamma_M),
+            #'Gamma_O_vs_Nref': float(gamma_O),
+            #'delta_mu_M_range': [float(x) for x in delta_mu_M_range],
+            #'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
+            #'gamma_grid': gamma_grid_2d,
+            #'gamma_at_muM_zero': gamma_at_muM_zero,
+            #'gamma_at_muO_zero': gamma_at_muO_zero,
+            #'gamma_at_reference': float(phi),
+            #'element_M_independent': element_M,
+            #'element_N_reference': element_N_ref,
         }
     )
 

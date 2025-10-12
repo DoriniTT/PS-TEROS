@@ -1,170 +1,176 @@
-# Electronic Properties Implementation Summary
-
-## Date: 2025-10-12
+# Implementation Summary: B-based Formulation for Ternary Oxides
 
 ## Overview
-Successfully implemented DOS (Density of States) and band structure calculations for bulk structures in PS-TEROS using AiiDA-VASP's `BandsWorkChain`.
 
-## Changes Made
+The `calculate_surface_energy_ternary` function in `teros/core/thermodynamics.py` has been extended to compute surface free energy with respect to **both** metal elements in a ternary oxide system.
 
-### 1. Core WorkGraph Module (`teros/core/workgraph.py`)
+## What Was Added
 
-#### Added Output Declarations
-- Added `'bulk_bands'`, `'bulk_dos'`, and `'bulk_electronic_properties_misc'` to the `@task.graph` outputs decorator (line 59-67)
+### Dual Formulation Support
 
-#### Implemented BandsWorkChain Integration (lines 889-966)
-Added a new conditional block that:
-1. Loads and wraps `BandsWorkChain` as a task
-2. Connects it to the bulk relaxation output structure
-3. Configures three sub-workchains:
-   - **SCF**: Self-consistent field calculation with LWAVE=True, LCHARG=True
-   - **Bands**: Band structure along high-symmetry paths
-   - **DOS**: Density of states with tetrahedron method
-4. Properly sets metadata (label and description) to avoid AiiDA exceptions
-5. Connects outputs to the workgraph
+For a ternary oxide **A_x B_y O_z** (e.g., Ag₃PO₄), the function now returns:
 
-#### Key Implementation Details
-- **Task wrapping**: Used `BandsTask = task(BandsWorkChain)` pattern (same as VaspWorkChain)
-- **Nested namespaces**: BandsWorkChain requires inputs in `scf`, `bands`, and `dos` namespaces
-- **Metadata**: Added `metadata` dict with `label` and `description` to prevent KeyError exceptions
-- **Outputs mapping**:
-  - `bulk_bands` → `band_structure` output from BandsWorkChain
-  - `bulk_dos` → `dos` output from BandsWorkChain
-  - `bulk_electronic_properties_misc` → `seekpath_parameters` output
+1. **A-based formulation**: γ(Δμ_A, Δμ_O)
+   - Element A as independent variable (e.g., Ag)
+   - Element B as reference (eliminated via bulk equilibrium) (e.g., P)
+   
+2. **B-based formulation**: γ(Δμ_B, Δμ_O)  [NEW]
+   - Element B as independent variable (e.g., P)
+   - Element A as reference (eliminated via bulk equilibrium) (e.g., Ag)
 
-### 2. Builder Module (`teros/core/builders/electronic_properties.py`)
+### Output Structure
 
-Created new builder function `get_electronic_properties_defaults()` that provides:
-- SCF parameters (LWAVE, LCHARG, ISMEAR, SIGMA, etc.)
-- Bands parameters (Gaussian smearing)
-- DOS parameters (tetrahedron method, NEDOS)
-- Band settings (seekpath mode, k-point distances, line density)
-- K-points configuration for SCF, bands, and DOS
+The function returns a dictionary with three main sections:
 
-### 3. Example Script (`examples/electronic_properties/bulk_dos_bands_ag2o.py`)
+```python
+{
+    'A_based': {
+        'phi': float,                    # Reference surface energy
+        'Gamma_A': float,                # Surface excess of A
+        'Gamma_O': float,                # Surface excess of O
+        'delta_mu_A_range': list,        # Chemical potential range for A
+        'delta_mu_O_range': list,        # Chemical potential range for O
+        'gamma_grid': 2D list,           # Surface energy γ(Δμ_A, Δμ_O)
+        'gamma_at_muA_zero': list,       # 1D slice at Δμ_A=0
+        'gamma_at_muO_zero': list,       # 1D slice at Δμ_O=0
+        'element_A_independent': str,    # Name of element A
+        'element_B_reference': str,      # Name of element B
+    },
+    
+    'B_based': {
+        'phi': float,                    # Reference surface energy (B-based)
+        'Gamma_B': float,                # Surface excess of B
+        'Gamma_O': float,                # Surface excess of O (with A as ref)
+        'delta_mu_B_range': list,        # Chemical potential range for B
+        'delta_mu_O_range': list,        # Chemical potential range for O
+        'gamma_grid': 2D list,           # Surface energy γ(Δμ_B, Δμ_O)
+        'gamma_at_muB_zero': list,       # 1D slice at Δμ_B=0
+        'gamma_at_muO_zero': list,       # 1D slice at Δμ_O=0
+        'element_B_independent': str,    # Name of element B
+        'element_A_reference': str,      # Name of element A
+    },
+    
+    # Common information
+    'oxide_type': 'ternary',
+    'area_A2': float,
+    'bulk_stoichiometry_AxByOz': dict,
+    'slab_atom_counts': dict,
+    'reference_energies_per_atom': dict,
+    'E_slab_eV': float,
+    'E_bulk_fu_eV': float,
+    'formation_enthalpy_eV': float,
+    
+    # Legacy keys (for backward compatibility)
+    'phi': float,
+    'Gamma_M_vs_Nref': float,
+    'Gamma_O_vs_Nref': float,
+    'delta_mu_M_range': list,
+    'delta_mu_O_range': list,
+    'gamma_grid': 2D list,
+    'gamma_at_muM_zero': list,
+    'gamma_at_muO_zero': list,
+    'element_M_independent': str,
+    'element_N_reference': str,
+}
+```
 
-Created comprehensive example demonstrating:
-- Loading default builders for bulk and electronic properties
-- Creating workgraph with `compute_electronic_properties_bulk=True`
-- Submitting and monitoring the workflow
-- Accessing and visualizing results
+## Mathematical Framework
 
-## Technical Challenges Resolved
+### A-based Formulation (Original)
 
-### Challenge 1: Namespace Input Structure
-**Problem**: Initial attempts treated BandsWorkChain like VaspWorkChain with flat inputs  
-**Solution**: Organized inputs into proper namespaces (`scf`, `bands`, `dos`) as required by BandsWorkChain spec
-
-### Challenge 2: Missing Metadata
-**Problem**: BandsWorkChain internally accesses `self.inputs.metadata.label`, causing AttributeError  
-**Solution**: Added metadata dict with label and description to bands_inputs
-
-### Challenge 3: Output Socket Definition
-**Problem**: Dynamic output addition not supported - must declare in @task.graph decorator  
-**Solution**: Added electronic properties outputs to the outputs list in the decorator
-
-### Challenge 4: Task Wrapping
-**Problem**: Direct WorkChain usage vs task-wrapped version  
-**Solution**: Followed VaspWorkChain pattern: wrap with task() before using in add_task()
-
-## Workflow Architecture
+For ternary oxide A_x B_y O_z, eliminate μ_B using bulk equilibrium:
 
 ```
-WorkGraph: Ag2O_Bulk_Electronic_Properties
-├── VaspWorkChain (bulk Ag2O relaxation)
-├── VaspWorkChain1 (metal Ag reference)
-├── VaspWorkChain2 (O2 reference)
-└── BandsWorkChain_bulk
-    ├── seekpath (determine high-symmetry paths)
-    ├── scf (SCF with CHGCAR/WAVECAR output)
-    ├── bands (non-SCF band structure)
-    └── dos (non-SCF DOS calculation)
+μ_B = (E_bulk - x·μ_A - z·μ_O) / y
 ```
+
+Surface energy becomes:
+```
+γ(Δμ_A, Δμ_O) = φ_A - Γ_A·Δμ_A - Γ_O·Δμ_O
+```
+
+where:
+- Γ_A = (N_A - x·N_B/y) / (2A)
+- Γ_O = (N_O - z·N_B/y) / (2A)
+
+### B-based Formulation (New)
+
+Eliminate μ_A instead of μ_B:
+
+```
+μ_A = (E_bulk - y·μ_B - z·μ_O) / x
+```
+
+Surface energy becomes:
+```
+γ(Δμ_B, Δμ_O) = φ_B - Γ_B·Δμ_B - Γ_O·Δμ_O
+```
+
+where:
+- Γ_B = (y·N_A/x - N_B) / (2A)
+- Γ_O = (z·N_A/x - N_O) / (2A)
+
+## Use Cases
+
+### For Ag₃PO₄ System
+
+**A-based (original):** Analyze surface stability as a function of silver chemical potential
+- Useful for understanding Ag-rich vs Ag-poor environments
+- Γ_Ag indicates silver excess/deficiency at surface
+- Use when interested in silver deposition/dissolution
+
+**B-based (new):** Analyze surface stability as a function of phosphorus chemical potential
+- Useful for understanding P-rich vs P-poor environments
+- Γ_P indicates phosphorus excess/deficiency at surface
+- Use when interested in phosphate chemistry effects
+
+## Backward Compatibility
+
+The function maintains full backward compatibility by including legacy keys at the top level of the output dictionary. Existing code that accesses `result['gamma_grid']` or `result['phi']` will continue to work unchanged, receiving the A-based formulation results.
+
+## Theoretical Documentation
+
+See `derivation_B_element.tex` for the complete mathematical derivation of the B-based formulation, including:
+- Detailed step-by-step derivation
+- Chemical potential constraints
+- Comparison with A-based formulation
+- Application to Ag₃PO₄
+
+## Files Modified
+
+1. **teros/core/thermodynamics.py**
+   - Modified `calculate_surface_energy_ternary()` function
+   - Added ~80 lines of code for B-based computation
+   - Maintained backward compatibility
+
+2. **derivation_B_element.tex** (new)
+   - Complete LaTeX documentation of the derivation
+   - Can be compiled to PDF with: `pdflatex derivation_B_element.tex`
 
 ## Testing
 
-### Test Run: PK 28346
-- Status: Running successfully
-- BandsWorkChain PK: 28410
-- SCF calculation launched successfully
-- No exceptions or errors in the new code
+The implementation has been tested with mock Ag₃PO₄ structures and successfully produces:
+- Both A-based and B-based results
+- Correct surface excesses (Γ_A, Γ_B, Γ_O)
+- Valid chemical potential ranges
+- 2D gamma grids for plotting phase diagrams
 
-### Verification Commands
-```bash
-verdi process show 28346          # Main workgraph
-verdi process show 28410          # BandsWorkChain
-verdi process report 28410        # Detailed progress
-```
+## Next Steps
 
-## Usage Example
+To use this in your workflows:
 
-```python
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_electronic_properties_defaults
+1. **Access A-based results** (Ag as independent):
+   ```python
+   gamma_Ag_O = result['A_based']['gamma_grid']
+   delta_mu_Ag = result['A_based']['delta_mu_A_range']
+   ```
 
-# Get electronic properties configuration
-ep_defaults = get_electronic_properties_defaults(
-    energy_cutoff=400,
-    kpoints_mesh_density=0.3,
-    band_kpoints_distance=0.2,
-    dos_kpoints_distance=0.2,
-    nedos=2000,
-)
+2. **Access B-based results** (P as independent):
+   ```python
+   gamma_P_O = result['B_based']['gamma_grid']
+   delta_mu_P = result['B_based']['delta_mu_B_range']
+   ```
 
-# Create workgraph with electronic properties
-wg = build_core_workgraph(
-    # ... bulk parameters ...
-    compute_electronic_properties_bulk=True,
-    bands_parameters=ep_defaults,
-    band_settings=ep_defaults['band_settings'],
-    bands_options=bulk_options,
-)
+3. **Plot both phase diagrams** to understand surface stability from different perspectives
 
-# Submit
-wg.submit(wait=False)
-
-# Access results (after completion)
-bands = wg.outputs.bulk_bands
-dos = wg.outputs.bulk_dos
-```
-
-## Expected Outputs
-
-1. **bulk_bands** (BandsData): Band structure along high-symmetry paths
-2. **bulk_dos** (ArrayData): Density of states with energy grid
-3. **bulk_electronic_properties_misc** (Dict): Seekpath parameters and symmetry info
-
-## Future Work
-
-### Potential Enhancements
-1. **Slab electronic properties**: Extend to compute DOS/bands for relaxed slabs
-2. **Band gap analysis**: Add automatic band gap detection and characterization
-3. **Projected DOS**: Add orbital and atom-projected DOS calculations
-4. **Effective mass**: Calculate effective masses from band structure
-5. **Optical properties**: Add LOPTICS calculations for optics
-6. **Hybrid functionals**: Support for HSE06 band structure calculations
-7. **Band unfolding**: For supercell calculations
-
-### Code Improvements
-1. Add validation for band_settings parameters
-2. Add error handling for failed BandsWorkChain
-3. Create visualization utilities for bands and DOS
-4. Add unit tests for electronic properties workflow
-5. Document the band_settings configuration options
-
-## References
-
-- AiiDA-VASP BandsWorkChain: https://aiida-vasp.readthedocs.io/en/latest/workchains/bands.html
-- Seekpath: https://seekpath.readthedocs.io/
-- PS-TEROS documentation: `docs/`
-
-## Notes
-
-- The implementation follows the existing PS-TEROS pattern of using scatter-gather for parallel execution
-- Clean separation between bulk and electronic properties parameters
-- Backward compatible - existing workflows not affected
-- BandsWorkChain automatically handles:
-  - Symmetry analysis with seekpath
-  - k-path generation
-  - CHGCAR/WAVECAR management
-  - Non-SCF restart from SCF
+4. **Compare surface excesses** to understand which element is more important for surface structure
