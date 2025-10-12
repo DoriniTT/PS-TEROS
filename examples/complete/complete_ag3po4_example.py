@@ -34,6 +34,7 @@ import os
 from aiida import load_profile, orm
 from ase.io import read
 from teros.core.workgraph import build_core_workgraph
+from teros.core.builders import get_electronic_properties_defaults
 
 
 def main():
@@ -311,6 +312,40 @@ def main():
     print(f"      → Calculate surface energies with chemical potential sampling")
     print(f"      → Sampling grid: {thermodynamics_sampling}x{thermodynamics_sampling} points")
 
+    # ===== ELECTRONIC PROPERTIES PARAMETERS (NEW!) =====
+    print("\n" + "=" * 80)
+    print("ELECTRONIC PROPERTIES PARAMETERS (DOS & Bands)")
+    print("=" * 80)
+
+    # Get electronic properties defaults
+    ep_defaults = get_electronic_properties_defaults(
+        energy_cutoff=bulk_parameters['ENCUT'],  # Match bulk ENCUT
+        electronic_convergence=1e-5,
+        ncore=4,
+        ispin=2,  # Spin-polarized for Ag2O
+        lasph=True,
+        lreal="Auto",
+        kpoints_mesh_density=0.3,  # SCF k-mesh density
+        band_kpoints_distance=0.2,  # Band path density
+        dos_kpoints_distance=0.2,  # DOS k-mesh density
+        line_density=0.2,  # Points along high-symmetry lines
+        nedos=2000,  # DOS grid points
+        sigma_bands=0.01,  # Smearing for bands (eV)
+        symprec=1e-4,  # Symmetry precision
+        band_mode="seekpath-aiida",  # Use seekpath for band paths
+    )
+
+    compute_electronic_properties_bulk = True  # Enable DOS and bands
+
+    print(f"  Band mode: {ep_defaults['band_settings']['band_mode']}")
+    print(f"  Band k-points distance: {ep_defaults['band_settings']['band_kpoints_distance']}")
+    print(f"  DOS k-points distance: {ep_defaults['band_settings']['dos_kpoints_distance']}")
+    print(f"  Line density: {ep_defaults['band_settings']['line_density']}")
+    print(f"  NEDOS (DOS grid points): {ep_defaults['dos']['NEDOS']}")
+    print(f"  SCF k-mesh density: {ep_defaults['scf_kpoints_distance']}")
+    print(f"\n  ✓ compute_electronic_properties_bulk: {compute_electronic_properties_bulk}")
+    print(f"      → Calculate DOS and band structure for relaxed bulk")
+
     # ===== CREATE WORKGRAPH =====
     print("\n" + "=" * 80)
     print("CREATING WORKGRAPH")
@@ -362,6 +397,12 @@ def main():
         compute_cleavage=compute_cleavage,
         compute_thermodynamics=compute_thermodynamics,
         thermodynamics_sampling=thermodynamics_sampling,
+
+        # Electronic properties (NEW!)
+        compute_electronic_properties_bulk=compute_electronic_properties_bulk,
+        bands_parameters=ep_defaults,
+        band_settings=ep_defaults['band_settings'],
+        bands_options=bulk_options,  # Use same resources as bulk
 
         # Other settings
         kpoints_spacing=0.4,
