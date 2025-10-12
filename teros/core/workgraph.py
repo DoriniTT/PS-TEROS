@@ -914,7 +914,56 @@ def build_core_workgraph(
             wg.outputs.cleavage_energies = cleavage_task.outputs.cleavage_energies
             print(f"  ✓ Cleavage energies calculation enabled")
 
-    # NEW: Add electronic properties calculation if requested
+    # NEW: Add slab electronic properties calculation if requested
+    # Currently only supported for input_slabs mode (including restart)
+    if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties and use_input_slabs:
+        from teros.core.slabs import calculate_electronic_properties_slabs_scatter
+
+        # Get default parameters (per-slab overrides handled in scatter function)
+        default_params = slab_bands_parameters if slab_bands_parameters else {}
+        default_opts = slab_bands_options if slab_bands_options else bulk_options
+        default_settings = slab_band_settings if slab_band_settings else {}
+
+        # Get code
+        code = load_code(code_label)
+
+        # Get slab parameters
+        slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
+        slab_opts = slab_options if slab_options is not None else bulk_options
+        slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
+
+        # Determine which slabs output to use
+        if restart_folders is not None:
+            # Restart mode: use collector outputs
+            relaxed_slabs_source = collector.outputs.structures
+        else:
+            # Non-restart input_slabs: use scatter task outputs
+            relaxed_slabs_source = scatter_task.outputs.relaxed_structures
+
+        # Add electronic properties task
+        slab_elec_task = wg.add_task(
+            calculate_electronic_properties_slabs_scatter,
+            name='calculate_electronic_properties_slabs',
+            slabs=relaxed_slabs_source,
+            slab_electronic_properties=slab_electronic_properties,
+            code=code,
+            potential_family=potential_family,
+            potential_mapping=slab_pot_map,
+            clean_workdir=clean_workdir,
+            default_bands_parameters=default_params,
+            default_bands_options=default_opts,
+            default_band_settings=default_settings,
+        )
+
+        # Connect outputs
+        wg.outputs.slab_bands = slab_elec_task.outputs.slab_bands
+        wg.outputs.slab_dos = slab_elec_task.outputs.slab_dos
+        wg.outputs.slab_primitive_structures = slab_elec_task.outputs.slab_primitive_structures
+        wg.outputs.slab_seekpath_parameters = slab_elec_task.outputs.slab_seekpath_parameters
+
+        print(f"  ✓ Slab electronic properties calculation enabled for {len(slab_electronic_properties)} slabs")
+
+    # Add electronic properties calculation if requested
     if compute_electronic_properties_bulk:
         from aiida.plugins import WorkflowFactory
         from aiida.orm import load_code
