@@ -445,7 +445,6 @@ def core_workgraph(
 
         aimd_outputs = {
             'final_structures': aimd_results.final_structures,
-            'final_trajectories': aimd_results.final_trajectories,
             'final_remote_folders': aimd_results.final_remote_folders,
         }
 

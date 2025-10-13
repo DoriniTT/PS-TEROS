@@ -64,7 +64,7 @@ def aimd_slabs_scatter(
     options: dict,
     kpoints_spacing: float,
     clean_workdir: bool,
-) -> t.Annotated[dict, namespace(final_structures=dynamic(orm.StructureData), final_trajectories=dynamic(orm.TrajectoryData), final_remote_folders=dynamic(orm.RemoteData))]:
+) -> t.Annotated[dict, namespace(final_structures=dynamic(orm.StructureData), final_remote_folders=dynamic(orm.RemoteData))]:
     """
     Run AIMD on all slabs in parallel using scatter-gather pattern.
 
@@ -85,7 +85,6 @@ def aimd_slabs_scatter(
     Returns:
         Dictionary with grouped AIMD outputs:
             - final_structures: dict of final structures per slab
-            - final_trajectories: dict of final trajectories per slab
             - final_remote_folders: dict of final remote folders per slab
     """
     # Get VASP workchain
@@ -93,7 +92,6 @@ def aimd_slabs_scatter(
     VaspTask = task(VaspWorkChain)
     
     final_structures = {}
-    final_trajectories = {}
     final_remote_folders = {}
 
     # Scatter: create AIMD sequence for each slab
@@ -134,16 +132,13 @@ def aimd_slabs_scatter(
             # Update for next stage
             prev_structure = aimd_task.structure
             prev_remote = aimd_task.remote_folder
-            prev_trajectory = aimd_task.trajectory
 
         # Store final outputs for this slab
         final_structures[slab_label] = prev_structure
-        final_trajectories[slab_label] = prev_trajectory
         final_remote_folders[slab_label] = prev_remote
 
     # Gather: return collected results
     return {
         'final_structures': final_structures,
-        'final_trajectories': final_trajectories,
         'final_remote_folders': final_remote_folders,
     }
