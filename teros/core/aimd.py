@@ -53,6 +53,71 @@ def prepare_aimd_parameters(
     return params
 
 
+def _aimd_single_stage_scatter_impl(
+    slabs: dict,
+    temperature: float,
+    steps: int,
+    code: orm.Code,
+    aimd_parameters: dict,
+    potential_family: str,
+    potential_mapping: dict,
+    options: dict,
+    kpoints_spacing: float,
+    clean_workdir: bool,
+    restart_folders: dict = None,
+):
+    """
+    Internal implementation of AIMD single stage scatter.
+    This is the actual logic without @task.graph decorator.
+    """
+    from aiida.plugins import WorkflowFactory
+    
+    # Get VASP workchain
+    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
+    VaspTask = task(VaspWorkChain)
+
+    structures_out = {}
+    remote_folders_out = {}
+    energies_out = {}
+
+    # Scatter: create AIMD task for each slab (runs in parallel)
+    for slab_label, slab_structure in slabs.items():
+        # Prepare parameters for this stage
+        stage_params = prepare_aimd_parameters(aimd_parameters, temperature, steps)
+
+        # Build VASP inputs
+        vasp_inputs = {
+            'structure': slab_structure,
+            'code': code,
+            'parameters': {'incar': stage_params},
+            'options': dict(options),
+            'potential_family': potential_family,
+            'potential_mapping': dict(potential_mapping),
+            'kpoints_spacing': kpoints_spacing,
+            'clean_workdir': clean_workdir,
+            'settings': orm.Dict(dict=get_settings()),
+        }
+
+        # Add restart folder if provided for this slab
+        if restart_folders and slab_label in restart_folders:
+            vasp_inputs['restart_folder'] = restart_folders[slab_label]
+
+        # Create VASP task
+        aimd_task = VaspTask(**vasp_inputs)
+
+        # Store outputs for this slab
+        structures_out[slab_label] = aimd_task.structure
+        remote_folders_out[slab_label] = aimd_task.remote_folder
+        energies_out[slab_label] = extract_total_energy(energies=aimd_task.misc).result
+
+    # Gather: return collected results
+    return {
+        'structures': structures_out,
+        'remote_folders': remote_folders_out,
+        'energies': energies_out,
+    }
+
+
 @task.graph
 def aimd_single_stage_scatter(
     slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
@@ -65,7 +130,7 @@ def aimd_single_stage_scatter(
     options: dict,
     kpoints_spacing: float,
     clean_workdir: bool,
-    restart_folders=None,
+    restart_folders: t.Annotated[dict[str, orm.RemoteData], dynamic(orm.RemoteData)] = {},
 ) -> t.Annotated[dict, namespace(structures=dynamic(orm.StructureData), remote_folders=dynamic(orm.RemoteData), energies=dynamic(orm.Float))]:
     """
     Run single AIMD stage on all slabs in parallel using scatter-gather pattern.
@@ -119,7 +184,7 @@ def aimd_single_stage_scatter(
         }
 
         # Add restart folder if provided for this slab
-        if restart_folders is not None and slab_label in restart_folders:
+        if restart_folders and slab_label in restart_folders:
             vasp_inputs['restart_folder'] = restart_folders[slab_label]
 
         # Create VASP task

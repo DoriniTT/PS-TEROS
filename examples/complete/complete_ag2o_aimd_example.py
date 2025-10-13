@@ -329,8 +329,8 @@ def main():
 
     # Define AIMD sequence - shorter for testing
     aimd_sequence = [
-        {'temperature': 300, 'steps': 100},  # Short test run
-        {'temperature': 300, 'steps': 100},  # Another short run
+        {'temperature': 300, 'steps': 10},  # Short test run
+        {'temperature': 300, 'steps': 10},  # Another short run
     ]
 
     print(f"  AIMD sequence: {len(aimd_sequence)} stages")

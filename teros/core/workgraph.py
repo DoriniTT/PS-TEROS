@@ -1051,7 +1051,7 @@ def build_core_workgraph(
         
         # Sequential AIMD stages: add tasks manually with explicit wiring
         current_structures = initial_slabs_source
-        current_remotes = None
+        current_remotes = {}  # Empty dict for first stage (no restart), will be populated by previous stage outputs
         stage_tasks = []
         
         for stage_idx, stage_config in enumerate(aimd_sequence):
@@ -1059,6 +1059,7 @@ def build_core_workgraph(
             print(f"     Stage {stage_idx}: {stage_config['temperature']}K × {stage_config['steps']} steps")
             
             # Add AIMD task for this stage
+            # Note: restart_folders should be {} for first stage (default), socket output for subsequent stages
             stage_task = wg.add_task(
                 aimd_single_stage_scatter,
                 name=stage_name,
