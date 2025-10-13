@@ -25,6 +25,7 @@ from teros.core.thermodynamics import (
     compute_surface_energies_scatter,
 )
 from teros.core.cleavage import compute_cleavage_energies_scatter
+from teros.core.aimd import aimd_slabs_scatter
 
 def load_structure_from_file(filepath: str) -> orm.StructureData:
     """
@@ -65,6 +66,7 @@ def get_settings():
     'slab_remote', 'unrelaxed_slab_remote',
     # Electronic properties outputs
     'bulk_bands', 'bulk_dos', 'bulk_primitive_structure', 'bulk_seekpath_parameters',
+    'aimd_results',
 ])
 def core_workgraph(
     structures_dir: str,
@@ -108,6 +110,12 @@ def core_workgraph(
     input_slabs: dict = None,
     use_input_slabs: bool = False,  # Signal to skip slab generation
     compute_cleavage: bool = True,
+    run_aimd: bool = False,
+    aimd_sequence: list = None,
+    aimd_parameters: dict = None,
+    aimd_options: dict = None,
+    aimd_potential_mapping: dict = None,
+    aimd_kpoints_spacing: float = None,
     # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
@@ -413,6 +421,30 @@ def core_workgraph(
 
         cleavage_energies_output = cleavage_outputs.cleavage_energies
 
+    # ===== AIMD CALCULATION (OPTIONAL) =====
+    aimd_outputs = {}
+    if run_aimd and slab_namespace is not None:
+        # Use AIMD-specific parameters or fall back to slab parameters
+        aimd_params = aimd_parameters if aimd_parameters is not None else slab_params
+        aimd_opts = aimd_options if aimd_options is not None else slab_opts
+        aimd_pot_map = aimd_potential_mapping if aimd_potential_mapping is not None else slab_pot_map
+        aimd_kpts = aimd_kpoints_spacing if aimd_kpoints_spacing is not None else slab_kpts
+
+        # Run AIMD on all slabs in parallel
+        aimd_results = aimd_slabs_scatter(
+            slabs=slab_namespace,
+            aimd_sequence=aimd_sequence,
+            code=code,
+            aimd_parameters=aimd_params,
+            potential_family=potential_family,
+            potential_mapping=aimd_pot_map,
+            options=aimd_opts,
+            kpoints_spacing=aimd_kpts,
+            clean_workdir=clean_workdir,
+        )
+
+        aimd_outputs = aimd_results
+
     # Return all outputs
     # Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
     # are added dynamically in build_core_workgraph, not returned here
@@ -435,6 +467,7 @@ def core_workgraph(
         'cleavage_energies': cleavage_energies_output,
         'slab_remote': slab_remote_output,
         'unrelaxed_slab_remote': unrelaxed_slab_remote_output,
+        'aimd_results': aimd_outputs,
     }
 
 
