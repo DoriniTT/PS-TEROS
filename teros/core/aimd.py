@@ -162,7 +162,7 @@ def aimd_slabs_scatter(
     options: dict,
     kpoints_spacing: float,
     clean_workdir: bool,
-) -> t.Annotated[dict, namespace(**{})]:
+) -> dict:
     """
     Run AIMD on all slabs in parallel using scatter-gather pattern.
 
@@ -180,10 +180,7 @@ def aimd_slabs_scatter(
         clean_workdir: Whether to clean work directory
 
     Returns:
-        Dictionary with AIMD results for each slab:
-            - term_0: {stage_00_300K_structure, ..., final_structure}
-            - term_1: {stage_00_300K_structure, ..., final_structure}
-            - ...
+        Dictionary with AIMD results for each slab (dynamically structured)
     """
     aimd_outputs = {}
 
@@ -202,7 +199,7 @@ def aimd_slabs_scatter(
             clean_workdir=clean_workdir,
         )
 
-        # Store outputs for this slab
+        # Store outputs for this slab - unwrap the dict returned by task.graph
         aimd_outputs[slab_label] = slab_aimd_result
 
     return aimd_outputs
