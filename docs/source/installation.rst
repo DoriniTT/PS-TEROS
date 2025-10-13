@@ -5,7 +5,7 @@ Installation
 ============
 
 Requirements
------------
+------------
 
 TEROS requires:
 
@@ -38,7 +38,7 @@ This typically involves:
     $ verdi status
 
 From Source
-----------
+-----------
 
 The sources for AiiDA-TEROS can be downloaded from the `Github repo`_.
 

@@ -68,3 +68,10 @@ intersphinx_mapping = {
 # https://www.sphinx-doc.org/en/master/usage/extensions/todo.html#configuration
 
 todo_include_todos = True
+
+# -- RST substitutions -------------------------------------------------------
+# Define common substitutions for use across documentation
+
+rst_prolog = """
+.. |E_relax| replace:: E\ :sub:`relax`
+"""
