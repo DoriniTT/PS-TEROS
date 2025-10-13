@@ -517,6 +517,12 @@ def build_core_workgraph(
     bands_parameters: dict = None,  # NEW: INCAR parameters
     bands_options: dict = None,  # NEW: Scheduler options
     band_settings: dict = None,  # NEW: Band workflow settings
+    run_aimd: bool = False,
+    aimd_sequence: list = None,
+    aimd_parameters: dict = None,
+    aimd_options: dict = None,
+    aimd_potential_mapping: dict = None,
+    aimd_kpoints_spacing: float = None,
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -578,6 +584,12 @@ def build_core_workgraph(
         bands_options: Scheduler options for bands calculation. Default: None (uses bulk_options)
         band_settings: Dict with band workflow settings. Use get_electronic_properties_defaults()
                        ['band_settings']. Default: None
+        run_aimd: Run AIMD on generated/input slabs. Default: False
+        aimd_sequence: List of AIMD stages [{'temperature': K, 'steps': N}, ...]. Default: None
+        aimd_parameters: AIMD INCAR parameters (use get_aimd_defaults()). Default: None
+        aimd_options: Scheduler options for AIMD. Default: None (uses slab_options)
+        aimd_potential_mapping: Potential mapping for AIMD. Default: None (uses slab_potential_mapping)
+        aimd_kpoints_spacing: K-points spacing for AIMD. Default: None (uses slab_kpoints_spacing)
         name: WorkGraph name. Default: 'FormationEnthalpy'
 
     Returns:
@@ -707,6 +719,12 @@ def build_core_workgraph(
         input_slabs=None,  # Always pass None to avoid serialization
         use_input_slabs=use_input_slabs,  # Pass the flag
         compute_cleavage=compute_cleavage,
+        run_aimd=run_aimd,
+        aimd_sequence=aimd_sequence,
+        aimd_parameters=aimd_parameters,
+        aimd_options=aimd_options,
+        aimd_potential_mapping=aimd_potential_mapping,
+        aimd_kpoints_spacing=aimd_kpoints_spacing,
         # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
