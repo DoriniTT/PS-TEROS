@@ -152,7 +152,7 @@ def aimd_sequential_slab(
 
 
 def aimd_slabs_scatter(
-    slabs: dict,
+    slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
     aimd_sequence: list,
     code: orm.Code,
     aimd_parameters: dict,
@@ -161,7 +161,7 @@ def aimd_slabs_scatter(
     options: dict,
     kpoints_spacing: float,
     clean_workdir: bool,
-) -> t.Annotated[dict, dynamic(namespace())]:
+) -> t.Annotated[dict, namespace(**{})]:
     """
     Run AIMD on all slabs in parallel using scatter-gather pattern.
 
@@ -179,7 +179,7 @@ def aimd_slabs_scatter(
         clean_workdir: Whether to clean work directory
 
     Returns:
-        Dynamic namespace with nested structure:
+        Dictionary with AIMD results for each slab:
             - term_0: {stage_00_300K_structure, ..., final_structure}
             - term_1: {stage_00_300K_structure, ..., final_structure}
             - ...
