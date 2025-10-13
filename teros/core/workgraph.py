@@ -66,6 +66,8 @@ def get_settings():
     # Electronic properties outputs
     'bulk_bands', 'bulk_dos', 'bulk_primitive_structure', 'bulk_seekpath_parameters',
     'aimd_results',
+    # Slab electronic properties outputs
+    'slab_bands', 'slab_dos', 'slab_primitive_structures', 'slab_seekpath_parameters',
 ])
 def core_workgraph(
     structures_dir: str,
@@ -115,6 +117,11 @@ def core_workgraph(
     aimd_options: dict = None,
     aimd_potential_mapping: dict = None,
     aimd_kpoints_spacing: float = None,
+    compute_electronic_properties_slabs: bool = False,  # NEW
+    slab_electronic_properties: dict = None,  # NEW
+    slab_bands_parameters: dict = None,  # NEW
+    slab_bands_options: dict = None,  # NEW
+    slab_band_settings: dict = None,  # NEW
     # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
@@ -424,6 +431,47 @@ def core_workgraph(
     # Note: AIMD tasks are added manually in build_core_workgraph using wg.add_task()
     # Sequential dependencies cannot be created inside @task.graph
     aimd_outputs = {}
+    # ===== SLAB ELECTRONIC PROPERTIES CALCULATION (OPTIONAL) =====
+    # Initialize output dictionaries for slab electronic properties
+    slab_bands_output = {}
+    slab_dos_output = {}
+    slab_primitive_structures_output = {}
+    slab_seekpath_parameters_output = {}
+    
+    # Add electronic properties for auto-generated slabs (same pattern as cleavage)
+    if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties and not use_input_slabs:
+        from teros.core.slabs import calculate_electronic_properties_slabs_scatter
+        from aiida.orm import load_code
+        
+        # Get code
+        code = load_code(code_label)
+        
+        # Get default parameters
+        default_params = slab_bands_parameters if slab_bands_parameters else {}
+        default_opts = slab_bands_options if slab_bands_options else bulk_options
+        default_settings = slab_band_settings if slab_band_settings else {}
+        
+        # Get slab parameters
+        slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
+        
+        # Calculate electronic properties for selected slabs
+        slab_elec_outputs = calculate_electronic_properties_slabs_scatter(
+            slabs=relaxed_slabs_output,
+            slab_electronic_properties=slab_electronic_properties,
+            code=code,
+            potential_family=potential_family,
+            potential_mapping=slab_pot_map,
+            clean_workdir=clean_workdir,
+            default_bands_parameters=default_params,
+            default_bands_options=default_opts,
+            default_band_settings=default_settings,
+        )
+        
+        # Collect outputs
+        slab_bands_output = slab_elec_outputs.slab_bands
+        slab_dos_output = slab_elec_outputs.slab_dos
+        slab_primitive_structures_output = slab_elec_outputs.slab_primitive_structures
+        slab_seekpath_parameters_output = slab_elec_outputs.slab_seekpath_parameters
 
     # Return all outputs
     # Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
@@ -448,6 +496,10 @@ def core_workgraph(
         'slab_remote': slab_remote_output,
         'unrelaxed_slab_remote': unrelaxed_slab_remote_output,
         'aimd_results': aimd_outputs,
+        'slab_bands': slab_bands_output,
+        'slab_dos': slab_dos_output,
+        'slab_primitive_structures': slab_primitive_structures_output,
+        'slab_seekpath_parameters': slab_seekpath_parameters_output,
     }
 
 
@@ -503,6 +555,11 @@ def build_core_workgraph(
     aimd_options: dict = None,
     aimd_potential_mapping: dict = None,
     aimd_kpoints_spacing: float = None,
+    compute_electronic_properties_slabs: bool = False,  # NEW: Enable slab electronic properties
+    slab_electronic_properties: dict = None,  # NEW: Per-slab parameter overrides
+    slab_bands_parameters: dict = None,  # NEW: Default slab parameters
+    slab_bands_options: dict = None,  # NEW: Default slab scheduler options
+    slab_band_settings: dict = None,  # NEW: Default slab band settings
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -570,6 +627,16 @@ def build_core_workgraph(
         aimd_options: Scheduler options for AIMD. Default: None (uses slab_options)
         aimd_potential_mapping: Potential mapping for AIMD. Default: None (uses slab_potential_mapping)
         aimd_kpoints_spacing: K-points spacing for AIMD. Default: None (uses slab_kpoints_spacing)
+        compute_electronic_properties_slabs: Compute DOS and bands for selected slabs. Default: False
+        slab_electronic_properties: Dict mapping slab labels to parameter overrides.
+                                    Format: {'term_0': {'bands_parameters': ..., 'bands_options': ..., 'band_settings': ...}}
+                                    If a parameter key is missing, falls back to slab_bands_* defaults.
+                                    Default: None
+        slab_bands_parameters: Default parameters for all slabs. Use get_slab_electronic_properties_defaults().
+                               Default: None
+        slab_bands_options: Default scheduler options for slab electronic properties. Default: None (uses bulk_options)
+        slab_band_settings: Default band settings for slabs. Use get_slab_electronic_properties_defaults()
+                           ['band_settings']. Default: None
         name: WorkGraph name. Default: 'FormationEnthalpy'
 
     Returns:
@@ -705,6 +772,11 @@ def build_core_workgraph(
         aimd_options=aimd_options,
         aimd_potential_mapping=aimd_potential_mapping,
         aimd_kpoints_spacing=aimd_kpoints_spacing,
+        compute_electronic_properties_slabs=compute_electronic_properties_slabs,  # NEW
+        slab_electronic_properties=slab_electronic_properties,  # NEW
+        slab_bands_parameters=slab_bands_parameters,  # NEW
+        slab_bands_options=slab_bands_options,  # NEW
+        slab_band_settings=slab_band_settings,  # NEW
         # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
@@ -918,7 +990,56 @@ def build_core_workgraph(
             wg.outputs.cleavage_energies = cleavage_task.outputs.cleavage_energies
             print(f"  ✓ Cleavage energies calculation enabled")
 
-    # NEW: Add electronic properties calculation if requested
+    # NEW: Add slab electronic properties calculation if requested
+    # Currently only supported for input_slabs mode (including restart)
+    if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties and use_input_slabs:
+        from teros.core.slabs import calculate_electronic_properties_slabs_scatter
+
+        # Get default parameters (per-slab overrides handled in scatter function)
+        default_params = slab_bands_parameters if slab_bands_parameters else {}
+        default_opts = slab_bands_options if slab_bands_options else bulk_options
+        default_settings = slab_band_settings if slab_band_settings else {}
+
+        # Get code
+        code = load_code(code_label)
+
+        # Get slab parameters
+        slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
+        slab_opts = slab_options if slab_options is not None else bulk_options
+        slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
+
+        # Determine which slabs output to use
+        if restart_folders is not None:
+            # Restart mode: use collector outputs
+            relaxed_slabs_source = collector.outputs.structures
+        else:
+            # Non-restart input_slabs: use scatter task outputs
+            relaxed_slabs_source = scatter_task.outputs.relaxed_structures
+
+        # Add electronic properties task
+        slab_elec_task = wg.add_task(
+            calculate_electronic_properties_slabs_scatter,
+            name='calculate_electronic_properties_slabs',
+            slabs=relaxed_slabs_source,
+            slab_electronic_properties=slab_electronic_properties,
+            code=code,
+            potential_family=potential_family,
+            potential_mapping=slab_pot_map,
+            clean_workdir=clean_workdir,
+            default_bands_parameters=default_params,
+            default_bands_options=default_opts,
+            default_band_settings=default_settings,
+        )
+
+        # Connect outputs
+        wg.outputs.slab_bands = slab_elec_task.outputs.slab_bands
+        wg.outputs.slab_dos = slab_elec_task.outputs.slab_dos
+        wg.outputs.slab_primitive_structures = slab_elec_task.outputs.slab_primitive_structures
+        wg.outputs.slab_seekpath_parameters = slab_elec_task.outputs.slab_seekpath_parameters
+
+        print(f"  ✓ Slab electronic properties calculation enabled for {len(slab_electronic_properties)} slabs")
+
+    # Add electronic properties calculation if requested
     if compute_electronic_properties_bulk:
         from aiida.plugins import WorkflowFactory
         from aiida.orm import load_code
@@ -1139,6 +1260,11 @@ def build_core_workgraph_with_map(
     bands_parameters: dict = None,  # NEW
     bands_options: dict = None,  # NEW
     band_settings: dict = None,  # NEW
+    compute_electronic_properties_slabs: bool = False,  # NEW
+    slab_electronic_properties: dict = None,  # NEW
+    slab_bands_parameters: dict = None,  # NEW
+    slab_bands_options: dict = None,  # NEW
+    slab_band_settings: dict = None,  # NEW
     name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
@@ -1206,6 +1332,11 @@ def build_core_workgraph_with_map(
         bands_parameters=bands_parameters,  # NEW
         bands_options=bands_options,  # NEW
         band_settings=band_settings,  # NEW
+        compute_electronic_properties_slabs=compute_electronic_properties_slabs,  # NEW
+        slab_electronic_properties=slab_electronic_properties,  # NEW
+        slab_bands_parameters=slab_bands_parameters,  # NEW
+        slab_bands_options=slab_bands_options,  # NEW
+        slab_band_settings=slab_band_settings,  # NEW
         name=name,
     )
 

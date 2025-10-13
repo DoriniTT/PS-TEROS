@@ -549,3 +549,156 @@ def calculate_energy_difference(
         Energy difference as Float (in eV)
     """
     return orm.Float(energy_final.value - energy_initial.value)
+
+
+@task.graph
+def calculate_electronic_properties_slabs_scatter(
+    slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
+    slab_electronic_properties: t.Mapping[str, t.Mapping[str, t.Any]],
+    code: orm.Code,
+    potential_family: str,
+    potential_mapping: t.Mapping[str, str],
+    clean_workdir: bool,
+    default_bands_parameters: t.Mapping[str, t.Any] = None,
+    default_bands_options: t.Mapping[str, t.Any] = None,
+    default_band_settings: t.Mapping[str, t.Any] = None,
+) -> t.Annotated[dict, namespace(
+    slab_bands=dynamic(orm.BandsData),
+    slab_dos=dynamic(orm.ArrayData),
+    slab_primitive_structures=dynamic(orm.StructureData),
+    slab_seekpath_parameters=dynamic(orm.Dict),
+)]:
+    """
+    Scatter-gather phase: calculate electronic properties (DOS and bands) for selected slabs.
+
+    This task graph creates independent BandsWorkChain tasks for each selected slab,
+    allowing per-slab parameter overrides. Only slabs present in slab_electronic_properties
+    dictionary will have their electronic properties calculated.
+
+    Args:
+        slabs: Dictionary of relaxed slab structures
+        slab_electronic_properties: Dictionary mapping slab labels to parameter configs.
+                                    Each config can contain:
+                                    - 'bands_parameters': Dict with 'scf', 'bands', 'dos' keys
+                                    - 'bands_options': Scheduler options
+                                    - 'band_settings': Band workflow settings
+                                    If keys are missing, defaults are used.
+        code: AiiDA code for VASP
+        potential_family: Pseudopotential family
+        potential_mapping: Element to potential mapping
+        clean_workdir: Whether to clean remote directories
+        default_bands_parameters: Default parameters (fallback)
+        default_bands_options: Default scheduler options (fallback)
+        default_band_settings: Default band settings (fallback)
+
+    Returns:
+        Dictionary with four namespaces:
+        - slab_bands: BandsData for each selected slab
+        - slab_dos: DOS ArrayData for each selected slab
+        - slab_primitive_structures: Primitive structures used for band paths
+        - slab_seekpath_parameters: Seekpath parameters for each slab
+
+    Example:
+        >>> scatter_outputs = calculate_electronic_properties_slabs_scatter(
+        ...     slabs=relaxed_slabs_dict,
+        ...     slab_electronic_properties={
+        ...         'term_0': {'bands_parameters': defaults},
+        ...         'term_2': {'bands_parameters': custom_params, 'bands_options': high_mem},
+        ...     },
+        ...     code=code,
+        ...     potential_family='PBE',
+        ...     potential_mapping={'Ag': 'Ag', 'O': 'O'},
+        ...     clean_workdir=True,
+        ... )
+    """
+    from aiida.plugins import WorkflowFactory
+
+    # Get BandsWorkChain and wrap as task
+    BandsWorkChain = WorkflowFactory('vasp.v2.bands')
+    BandsTask = task(BandsWorkChain)
+
+    # Output dictionaries
+    bands_dict: dict[str, orm.BandsData] = {}
+    dos_dict: dict[str, orm.ArrayData] = {}
+    primitive_structures_dict: dict[str, orm.StructureData] = {}
+    seekpath_parameters_dict: dict[str, orm.Dict] = {}
+
+    # Scatter: create independent tasks for each selected slab
+    for label, slab_config in slab_electronic_properties.items():
+        # Skip if slab doesn't exist
+        if label not in slabs:
+            continue
+
+        structure = slabs[label]
+
+        # Extract per-slab parameters with fallback to defaults
+        bands_params = slab_config.get('bands_parameters', default_bands_parameters or {})
+        bands_opts = slab_config.get('bands_options', default_bands_options or {})
+        band_settings = slab_config.get('band_settings', default_band_settings or {})
+
+        # Build BandsWorkChain inputs (same structure as bulk)
+        bands_inputs: dict[str, t.Any] = {
+            'structure': structure,
+            'metadata': {
+                'label': f'Slab_{label}_Electronic_Properties',
+                'description': f'DOS and bands calculation for slab termination {label}',
+            }
+        }
+
+        # Add band_settings if provided
+        if band_settings:
+            bands_inputs['band_settings'] = band_settings
+
+        # Build SCF namespace inputs (required)
+        scf_inputs = {
+            'code': code,
+            'potential_family': potential_family,
+            'potential_mapping': dict(potential_mapping),
+            'options': dict(bands_opts),
+            'clean_workdir': clean_workdir,
+        }
+        if bands_params and 'scf' in bands_params:
+            scf_inputs['parameters'] = {'incar': bands_params['scf']}
+        if bands_params and 'scf_kpoints_distance' in bands_params:
+            scf_inputs['kpoints_spacing'] = bands_params['scf_kpoints_distance']
+
+        bands_inputs['scf'] = scf_inputs
+
+        # Build Bands namespace inputs (optional)
+        if bands_params and 'bands' in bands_params:
+            bands_inputs['bands'] = {
+                'code': code,
+                'potential_family': potential_family,
+                'potential_mapping': dict(potential_mapping),
+                'options': dict(bands_opts),
+                'clean_workdir': clean_workdir,
+                'parameters': {'incar': bands_params['bands']},
+            }
+
+        # Build DOS namespace inputs (optional)
+        if bands_params and 'dos' in bands_params:
+            bands_inputs['dos'] = {
+                'code': code,
+                'potential_family': potential_family,
+                'potential_mapping': dict(potential_mapping),
+                'options': dict(bands_opts),
+                'clean_workdir': clean_workdir,
+                'parameters': {'incar': bands_params['dos']},
+            }
+
+        # Create BandsWorkChain task
+        bands_task = BandsTask(**bands_inputs)
+
+        # Collect outputs
+        bands_dict[label] = bands_task.band_structure
+        dos_dict[label] = bands_task.dos
+        primitive_structures_dict[label] = bands_task.primitive_structure
+        seekpath_parameters_dict[label] = bands_task.seekpath_parameters
+
+    # Gather: return collected results
+    return {
+        'slab_bands': bands_dict,
+        'slab_dos': dos_dict,
+        'slab_primitive_structures': primitive_structures_dict,
+        'slab_seekpath_parameters': seekpath_parameters_dict,
+    }
