@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 STEP 3: Slab Generation and Relaxation
 
@@ -73,8 +73,7 @@ def main():
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'max_wallclock_seconds': 3600 * 10,
-        'queue_name': 'qchem',
+        'queue_name': 'par40',
     }
     
     print("\n3. Building workgraph...")
@@ -106,7 +105,7 @@ def main():
         bulk_options=common_options,
         
         # Slab generation
-        miller_indices=[1, 1, 1],
+        miller_indices=[1, 0, 0],
         min_slab_thickness=18.0,
         min_vacuum_thickness=15.0,
         lll_reduce=True,
@@ -119,7 +118,7 @@ def main():
         slab_options=common_options,
         slab_kpoints_spacing=0.4,
         
-        name='Step03_SlabRelaxation_Ag2O_111',
+        name='Step03_SlabRelaxation_Ag2O_100',
     )
     
     print("   ✓ WorkGraph built successfully")

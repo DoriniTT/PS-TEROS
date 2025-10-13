@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 STEP 4: Cleavage Energy Calculation
 
@@ -56,7 +56,7 @@ def main():
         'IBRION': 2,
         'ISIF': 3,
         'NSW': 100,
-        'EDIFFG': -0.01,
+        'EDIFFG': -0.05,
         'ALGO': 'Normal',
         'LREAL': 'Auto',
         'LWAVE': False,
@@ -71,8 +71,7 @@ def main():
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'max_wallclock_seconds': 3600 * 10,
-        'queue_name': 'qchem',
+        'queue_name': 'par40',
     }
     
     print("\n3. Building workgraph...")
@@ -101,7 +100,7 @@ def main():
         bulk_options=common_options,
         
         # Slab generation
-        miller_indices=[1, 1, 1],
+        miller_indices=[1, 0, 0],
         min_slab_thickness=18.0,
         min_vacuum_thickness=15.0,
         lll_reduce=True,

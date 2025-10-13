@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 STEP 6: Electronic Properties (DOS and Band Structure)
 
@@ -66,8 +66,7 @@ def main():
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'max_wallclock_seconds': 3600 * 10,
-        'queue_name': 'qchem',
+        'queue_name': 'par40',
     }
     
     # Get electronic properties defaults
@@ -100,7 +99,7 @@ def main():
         bulk_options=common_options,
         
         # Electronic properties
-        bands_parameters=elec_defaults['bands_parameters'],
+        bands_parameters=elec_defaults,
         bands_options=common_options,
         band_settings=elec_defaults['band_settings'],
         

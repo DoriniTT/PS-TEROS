@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 STEP 2: Formation Enthalpy Calculation
 
@@ -57,7 +57,24 @@ def main():
         'IBRION': 2,
         'ISIF': 3,
         'NSW': 100,
-        'EDIFFG': -0.01,
+        'EDIFFG': -0.05,
+        'ALGO': 'Normal',
+        'LREAL': 'Auto',
+        'LWAVE': False,
+        'LCHARG': False,
+    }
+
+    # Common VASP parameters
+    vasp_params_o2 = {
+        'PREC': 'Accurate',
+        'ENCUT': 520,
+        'EDIFF': 1e-6,
+        'ISMEAR': 0,
+        'SIGMA': 0.05,
+        'IBRION': 2,
+        'ISIF': 2,
+        'NSW': 100,
+        'EDIFFG': -0.05,
         'ALGO': 'Normal',
         'LREAL': 'Auto',
         'LWAVE': False,
@@ -69,8 +86,7 @@ def main():
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'max_wallclock_seconds': 3600 * 10,
-        'queue_name': 'qchem',
+        'queue_name': 'par40',
     }
     
     print("\n3. Building workgraph...")
@@ -104,7 +120,7 @@ def main():
         
         # Oxygen (O2)
         oxygen_potential_mapping={'O': 'O'},
-        oxygen_parameters=vasp_params.copy(),
+        oxygen_parameters=vasp_params_o2.copy(),
         oxygen_options=common_options,
         
         name='Step02_FormationEnthalpy_Ag2O',

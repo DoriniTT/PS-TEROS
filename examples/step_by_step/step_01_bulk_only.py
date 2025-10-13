@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 STEP 1: Bulk Relaxation Only
 
@@ -67,8 +67,7 @@ def main():
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'max_wallclock_seconds': 3600 * 10,
-        'queue_name': 'qchem',
+        'queue_name': 'par40',
     }
     
     print("\n3. Building workgraph...")

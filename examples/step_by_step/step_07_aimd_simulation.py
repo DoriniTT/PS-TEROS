@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 STEP 7: AIMD Simulation
 
@@ -72,15 +72,14 @@ def main():
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'max_wallclock_seconds': 3600 * 20,  # Longer for AIMD
-        'queue_name': 'qchem',
+        'queue_name': 'par40',
     }
     
     # AIMD configuration
     print("\n3. AIMD configuration:")
     aimd_sequence = [
-        {'temperature': 300, 'steps': 1000},  # 1 ps equilibration
-        {'temperature': 300, 'steps': 5000},  # 5 ps production
+        {'temperature': 300, 'steps': 50}, 
+        {'temperature': 300, 'steps': 100}, 
     ]
     
     for i, stage in enumerate(aimd_sequence):
