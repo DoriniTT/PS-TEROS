@@ -25,6 +25,12 @@ from teros.core.thermodynamics import (
     compute_surface_energies_scatter,
 )
 from teros.core.cleavage import compute_cleavage_energies_scatter
+from teros.core.workflow_presets import (
+    resolve_preset,
+    validate_preset_inputs,
+    validate_flag_dependencies,
+    check_old_style_api,
+)
 
 def load_structure_from_file(filepath: str) -> orm.StructureData:
     """
@@ -538,24 +544,25 @@ def build_core_workgraph(
     primitive: bool = True,
     in_unit_planes: bool = False,
     max_normal_search: int = None,
-    relax_slabs: bool = True,
-    compute_thermodynamics: bool = True,
+    workflow_preset: str = None,  # NEW: Workflow preset name
+    relax_slabs: bool = None,  # CHANGED: Now defaults to None (preset controls)
+    compute_thermodynamics: bool = None,  # CHANGED: Now defaults to None
     thermodynamics_sampling: int = 100,
-    compute_relaxation_energy: bool = True,  # Calculate relaxation energy by default
+    compute_relaxation_energy: bool = None,  # CHANGED: Now defaults to None
     input_slabs: dict = None,
-    compute_cleavage: bool = True,
+    compute_cleavage: bool = None,  # CHANGED: Now defaults to None
     restart_from_node: int = None,  # PK of previous workgraph to restart from
-    compute_electronic_properties_bulk: bool = False,  # NEW: Enable DOS and bands
+    compute_electronic_properties_bulk: bool = None,  # CHANGED: Now defaults to None
     bands_parameters: dict = None,  # NEW: INCAR parameters
     bands_options: dict = None,  # NEW: Scheduler options
     band_settings: dict = None,  # NEW: Band workflow settings
-    run_aimd: bool = False,
+    run_aimd: bool = None,  # CHANGED: Now defaults to None
     aimd_sequence: list = None,
     aimd_parameters: dict = None,
     aimd_options: dict = None,
     aimd_potential_mapping: dict = None,
     aimd_kpoints_spacing: float = None,
-    compute_electronic_properties_slabs: bool = False,  # NEW: Enable slab electronic properties
+    compute_electronic_properties_slabs: bool = None,  # CHANGED: Now defaults to None
     slab_electronic_properties: dict = None,  # NEW: Per-slab parameter overrides
     slab_bands_parameters: dict = None,  # NEW: Default slab parameters
     slab_bands_options: dict = None,  # NEW: Default slab scheduler options
@@ -570,12 +577,40 @@ def build_core_workgraph(
     - Reference structure relaxation (if metal_name and oxygen_name provided)
     - Formation enthalpy calculation (if references provided)
     - Slab generation and relaxation (if miller_indices or input_slabs provided)
-    - Relaxation energy calculation (controlled by compute_relaxation_energy flag, default: True)
-    - Cleavage energy calculation (controlled by compute_cleavage flag, default: True)
-    - Surface thermodynamics (controlled by compute_thermodynamics flag, default: True, requires references)
-    - Electronic properties calculation (controlled by compute_electronic_properties_bulk flag, default: False)
+    - Relaxation energy calculation (controlled by workflow preset or compute_relaxation_energy flag)
+    - Cleavage energy calculation (controlled by workflow preset or compute_cleavage flag)
+    - Surface thermodynamics (controlled by workflow preset or compute_thermodynamics flag, requires references)
+    - Electronic properties calculation (controlled by workflow preset or compute_electronic_properties_bulk flag)
+    - AIMD simulations (controlled by workflow preset or run_aimd flag)
+
+    **NEW: Workflow Preset System**
+    
+    Instead of manually setting 7+ boolean flags, you can use workflow presets for common use cases:
+    
+    - 'surface_thermodynamics' (default): Complete surface thermodynamics workflow
+    - 'surface_thermodynamics_unrelaxed': Quick unrelaxed surface energy screening
+    - 'cleavage_only': Cleavage energy calculations only
+    - 'relaxation_energy_only': Relaxation energy calculations only
+    - 'bulk_only': Bulk relaxation only (no surfaces)
+    - 'formation_enthalpy_only': Formation enthalpy without surfaces
+    - 'electronic_structure_bulk_only': Electronic properties (DOS/bands) for bulk
+    - 'aimd_only': AIMD simulation on slabs
+    - 'comprehensive': Complete analysis (all features enabled)
+    
+    Use list_workflow_presets() to see all available presets with descriptions.
+    
+    Presets can be overridden by explicitly setting individual flags:
+        wg = build_core_workgraph(
+            workflow_preset='surface_thermodynamics',
+            compute_cleavage=False,  # Override preset default
+            ...
+        )
 
     Args:
+        workflow_preset: Name of workflow preset to use. If None, defaults to 'surface_thermodynamics'.
+                        Use list_workflow_presets() to see available presets.
+        workflow_preset: Name of workflow preset to use. If None, defaults to 'surface_thermodynamics'.
+                        Use list_workflow_presets() to see available presets.
         structures_dir: Directory containing structure files
         bulk_name: Filename of bulk structure (e.g., 'ag3po4.cif')
         code_label: VASP code label in AiiDA. Default: 'VASP-VTST-6.4.3@bohr'
@@ -607,27 +642,27 @@ def build_core_workgraph(
         slab_potential_mapping: Potential mapping for slabs. Default: None (uses bulk_potential_mapping)
         slab_kpoints_spacing: K-points spacing for slabs. Default: None (uses kpoints_spacing)
 
-        relax_slabs: Relax generated slabs. Default: False
-        compute_thermodynamics: Compute surface energies (requires metal_name and oxygen_name). Default: True
+        relax_slabs: Relax generated slabs. Default: None (controlled by preset)
+        compute_thermodynamics: Compute surface energies (requires metal_name and oxygen_name). Default: None (controlled by preset)
         thermodynamics_sampling: Grid resolution for chemical potential sampling. Default: 100
-        compute_relaxation_energy: Compute relaxation energies (E_relaxed - E_unrelaxed). Default: True
-        compute_cleavage: Compute cleavage energies. Default: True
+        compute_relaxation_energy: Compute relaxation energies (E_relaxed - E_unrelaxed). Default: None (controlled by preset)
+        compute_cleavage: Compute cleavage energies. Default: None (controlled by preset)
         input_slabs: Pre-generated slab structures dict. Skips slab generation if provided. Default: None
         restart_from_node: PK of previous workgraph to restart from (extracts slabs and RemoteData). Default: None
-        compute_electronic_properties_bulk: Compute DOS and bands for relaxed bulk. Default: False
+        compute_electronic_properties_bulk: Compute DOS and bands for relaxed bulk. Default: None (controlled by preset)
         bands_parameters: Dict with 'scf', 'bands', 'dos' keys containing INCAR dicts, plus
                           optional 'scf_kpoints_distance'. Use get_electronic_properties_defaults().
                           Default: None
         bands_options: Scheduler options for bands calculation. Default: None (uses bulk_options)
         band_settings: Dict with band workflow settings. Use get_electronic_properties_defaults()
                        ['band_settings']. Default: None
-        run_aimd: Run AIMD on generated/input slabs. Default: False
+        run_aimd: Run AIMD on generated/input slabs. Default: None (controlled by preset)
         aimd_sequence: List of AIMD stages [{'temperature': K, 'steps': N}, ...]. Default: None
         aimd_parameters: AIMD INCAR parameters (use get_aimd_defaults()). Default: None
         aimd_options: Scheduler options for AIMD. Default: None (uses slab_options)
         aimd_potential_mapping: Potential mapping for AIMD. Default: None (uses slab_potential_mapping)
         aimd_kpoints_spacing: K-points spacing for AIMD. Default: None (uses slab_kpoints_spacing)
-        compute_electronic_properties_slabs: Compute DOS and bands for selected slabs. Default: False
+        compute_electronic_properties_slabs: Compute DOS and bands for selected slabs. Default: None (controlled by preset)
         slab_electronic_properties: Dict mapping slab labels to parameter overrides.
                                     Format: {'term_0': {'bands_parameters': ..., 'bands_options': ..., 'band_settings': ...}}
                                     If a parameter key is missing, falls back to slab_bands_* defaults.
@@ -643,6 +678,25 @@ def build_core_workgraph(
         WorkGraph instance ready to be submitted
 
     Examples:
+        Using workflow preset (recommended):
+        >>> wg = build_core_workgraph(
+        ...     workflow_preset='surface_thermodynamics',
+        ...     structures_dir='structures',
+        ...     bulk_name='ag3po4.cif',
+        ...     metal_name='Ag.cif',
+        ...     oxygen_name='O2.cif',
+        ...     bulk_potential_mapping={'Ag': 'Ag', 'P': 'P', 'O': 'O'},
+        ...     bulk_parameters={...},
+        ...     bulk_options={...},
+        ... )
+        
+        Overriding preset defaults:
+        >>> wg = build_core_workgraph(
+        ...     workflow_preset='surface_thermodynamics',
+        ...     compute_cleavage=False,  # Override
+        ...     ...
+        ... )
+        
         Bulk-only relaxation:
         >>> wg = build_core_workgraph(
         ...     structures_dir='structures',
@@ -669,6 +723,101 @@ def build_core_workgraph(
         ...     nonmetal_parameters={...},
         ... )
     """
+    # ========================================================================
+    # WORKFLOW PRESET RESOLUTION
+    # ========================================================================
+    
+    # Check for deprecated old-style API usage
+    check_old_style_api(
+        workflow_preset,
+        relax_slabs,
+        compute_thermodynamics,
+        compute_cleavage,
+        compute_relaxation_energy,
+        compute_electronic_properties_bulk,
+        compute_electronic_properties_slabs,
+        run_aimd,
+    )
+    
+    # Resolve preset and apply user overrides
+    resolved_preset_name, resolved_flags = resolve_preset(
+        workflow_preset,
+        relax_slabs,
+        compute_thermodynamics,
+        compute_cleavage,
+        compute_relaxation_energy,
+        compute_electronic_properties_bulk,
+        compute_electronic_properties_slabs,
+        run_aimd,
+    )
+    
+    # Extract resolved flags
+    relax_slabs = resolved_flags['relax_slabs']
+    compute_thermodynamics = resolved_flags['compute_thermodynamics']
+    compute_cleavage = resolved_flags['compute_cleavage']
+    compute_relaxation_energy = resolved_flags['compute_relaxation_energy']
+    compute_electronic_properties_bulk = resolved_flags['compute_electronic_properties_bulk']
+    compute_electronic_properties_slabs = resolved_flags['compute_electronic_properties_slabs']
+    run_aimd = resolved_flags['run_aimd']
+    
+    # Validate preset requirements
+    validation_errors = validate_preset_inputs(
+        resolved_preset_name,
+        metal_name=metal_name,
+        oxygen_name=oxygen_name,
+        nonmetal_name=nonmetal_name,
+        miller_indices=miller_indices,
+        bands_parameters=bands_parameters,
+        bands_options=bands_options,
+        band_settings=band_settings,
+        aimd_sequence=aimd_sequence,
+        aimd_parameters=aimd_parameters,
+        aimd_options=aimd_options,
+        aimd_potential_mapping=aimd_potential_mapping,
+        aimd_kpoints_spacing=aimd_kpoints_spacing,
+        slab_bands_parameters=slab_bands_parameters,
+        slab_bands_options=slab_bands_options,
+        slab_band_settings=slab_band_settings,
+        slab_electronic_properties=slab_electronic_properties,
+    )
+    
+    if validation_errors:
+        error_msg = "\n".join(validation_errors)
+        raise ValueError(f"Preset validation failed:\n{error_msg}")
+    
+    # Check flag dependencies and emit warnings
+    dependency_warnings = validate_flag_dependencies(
+        resolved_flags,
+        metal_name=metal_name,
+        oxygen_name=oxygen_name,
+        miller_indices=miller_indices,
+        input_slabs=input_slabs,
+        bands_parameters=bands_parameters,
+        slab_bands_parameters=slab_bands_parameters,
+        aimd_sequence=aimd_sequence,
+        aimd_parameters=aimd_parameters,
+    )
+    
+    for warning in dependency_warnings:
+        if warning.startswith("ERROR:"):
+            raise ValueError(warning)
+        print(f"\n⚠️  {warning}\n")
+    
+    # Print workflow configuration
+    print(f"\n{'='*70}")
+    print(f"WORKFLOW CONFIGURATION")
+    print(f"{'='*70}")
+    print(f"Preset: {resolved_preset_name}")
+    print(f"\nActive Components:")
+    for flag_name, flag_value in resolved_flags.items():
+        status = "✓" if flag_value else "✗"
+        print(f"  {status} {flag_name}: {flag_value}")
+    print(f"{'='*70}\n")
+    
+    # ========================================================================
+    # RESTART HANDLING
+    # ========================================================================
+    
     # Handle restart from previous workgraph
     restart_folders = None
     restart_slabs = None
