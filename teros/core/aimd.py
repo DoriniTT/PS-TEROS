@@ -149,3 +149,59 @@ def aimd_sequential_slab(
     all_outputs['final_trajectory'] = aimd_task.trajectory
 
     return all_outputs
+
+
+def aimd_slabs_scatter(
+    slabs: dict,
+    aimd_sequence: list,
+    code: orm.Code,
+    aimd_parameters: dict,
+    potential_family: str,
+    potential_mapping: dict,
+    options: dict,
+    kpoints_spacing: float,
+    clean_workdir: bool,
+) -> t.Annotated[dict, dynamic(namespace())]:
+    """
+    Run AIMD on all slabs in parallel using scatter-gather pattern.
+
+    Each slab gets the same AIMD sequence but runs independently in parallel.
+
+    Args:
+        slabs: Dictionary of slab structures (from slab generation)
+        aimd_sequence: List of {'temperature': K, 'steps': N} dicts
+        code: VASP code
+        aimd_parameters: Base AIMD INCAR parameters
+        potential_family: Potential family name
+        potential_mapping: Element to potential mapping
+        options: Scheduler options
+        kpoints_spacing: K-points spacing
+        clean_workdir: Whether to clean work directory
+
+    Returns:
+        Dynamic namespace with nested structure:
+            - term_0: {stage_00_300K_structure, ..., final_structure}
+            - term_1: {stage_00_300K_structure, ..., final_structure}
+            - ...
+    """
+    aimd_outputs = {}
+
+    for slab_label, slab_structure in slabs.items():
+        # Run sequential AIMD for this slab
+        slab_aimd_result = aimd_sequential_slab(
+            slab_label=slab_label,
+            structure=slab_structure,
+            aimd_sequence=aimd_sequence,
+            code=code,
+            aimd_parameters=aimd_parameters,
+            potential_family=potential_family,
+            potential_mapping=potential_mapping,
+            options=options,
+            kpoints_spacing=kpoints_spacing,
+            clean_workdir=clean_workdir,
+        )
+
+        # Store outputs for this slab
+        aimd_outputs[slab_label] = slab_aimd_result
+
+    return aimd_outputs
