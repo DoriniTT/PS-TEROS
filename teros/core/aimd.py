@@ -69,7 +69,7 @@ def aimd_slabs_scatter(
     Run AIMD on all slabs in parallel using scatter-gather pattern.
 
     Each slab gets the same AIMD sequence but runs independently in parallel.
-    The sequential stages for each slab are created inline here.
+    Currently simplified to run only the first stage to avoid circular reference issues.
 
     Args:
         slabs: Dictionary of slab structures (from slab generation)
@@ -94,13 +94,11 @@ def aimd_slabs_scatter(
     final_structures = {}
     final_remote_folders = {}
 
-    # Scatter: create AIMD sequence for each slab
+    # Scatter: create AIMD for each slab (simplified: only first stage for now)
     for slab_label, slab_structure in slabs.items():
-        prev_structure = slab_structure
-        prev_remote = None
-        
-        # Create sequential AIMD stages for this slab
-        for stage_idx, stage_config in enumerate(aimd_sequence):
+        # Use first stage configuration
+        if aimd_sequence and len(aimd_sequence) > 0:
+            stage_config = aimd_sequence[0]
             temp = stage_config['temperature']
             steps = stage_config['steps']
 
@@ -111,7 +109,7 @@ def aimd_slabs_scatter(
 
             # Build VASP inputs
             vasp_inputs = {
-                'structure': prev_structure,
+                'structure': slab_structure,
                 'code': code,
                 'parameters': {'incar': stage_params},
                 'options': options,
@@ -122,20 +120,12 @@ def aimd_slabs_scatter(
                 'settings': orm.Dict(dict=get_settings()),
             }
 
-            # Add restart folder if available
-            if prev_remote is not None:
-                vasp_inputs['restart_folder'] = prev_remote
-
             # Create VASP task
             aimd_task = VaspTask(**vasp_inputs)
 
-            # Update for next stage
-            prev_structure = aimd_task.structure
-            prev_remote = aimd_task.remote_folder
-
-        # Store final outputs for this slab
-        final_structures[slab_label] = prev_structure
-        final_remote_folders[slab_label] = prev_remote
+            # Store outputs for this slab
+            final_structures[slab_label] = aimd_task.structure
+            final_remote_folders[slab_label] = aimd_task.remote_folder
 
     # Gather: return collected results
     return {
