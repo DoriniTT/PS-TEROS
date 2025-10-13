@@ -54,104 +54,6 @@ def prepare_aimd_parameters(
 
 
 @task.graph
-def aimd_sequential_slab(
-    slab_label: str,
-    structure: orm.StructureData,
-    aimd_sequence: list,
-    code: orm.Code,
-    aimd_parameters: dict,
-    potential_family: str,
-    potential_mapping: dict,
-    options: dict,
-    kpoints_spacing: float,
-    clean_workdir: bool,
-) -> t.Annotated[dict, dynamic(namespace())]:
-    """
-    Run sequential AIMD stages for a single slab termination.
-
-    Creates a chain of VASP calculations where each stage:
-    1. Uses structure from previous stage (or initial for first)
-    2. Uses restart_folder from previous stage for WAVECAR/CHGCAR
-    3. Runs MD at specified temperature for specified steps
-
-    Args:
-        slab_label: Label for this slab (e.g., 'term_0')
-        structure: Initial slab structure
-        aimd_sequence: List of dicts with 'temperature' and 'steps' keys
-        code: VASP code
-        aimd_parameters: Base AIMD INCAR parameters
-        potential_family: Potential family name
-        potential_mapping: Element to potential mapping
-        options: Scheduler options
-        kpoints_spacing: K-points spacing
-        clean_workdir: Whether to clean work directory
-
-    Returns:
-        Dictionary with flattened outputs for all stages:
-            - stage_00_300K_structure, stage_00_300K_trajectory, etc.
-            - final_structure, final_remote, final_trajectory
-    """
-    # Get VASP workchain
-    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
-    VaspTask = task(VaspWorkChain)
-
-    prev_structure = structure
-    prev_remote = None
-    all_outputs = {}
-
-    # Loop through AIMD sequence
-    for stage_idx, stage_config in enumerate(aimd_sequence):
-        temp = stage_config['temperature']
-        steps = stage_config['steps']
-
-        # Prepare parameters for this stage
-        stage_params = prepare_aimd_parameters(
-            aimd_parameters, temp, steps
-        )
-
-        # Build VASP inputs
-        vasp_inputs = {
-            'structure': prev_structure,
-            'code': code,
-            'parameters': {'incar': stage_params},
-            'options': options,
-            'potential_family': potential_family,
-            'potential_mapping': potential_mapping,
-            'kpoints_spacing': kpoints_spacing,
-            'clean_workdir': clean_workdir,
-            'settings': orm.Dict(dict=get_settings()),
-        }
-
-        # Add restart folder if available
-        if prev_remote is not None:
-            vasp_inputs['restart_folder'] = prev_remote
-
-        # Create VASP task
-        aimd_task = VaspTask(**vasp_inputs)
-
-        # Store outputs with descriptive keys
-        stage_prefix = f"stage_{stage_idx:02d}_{temp:03.0f}K"
-        all_outputs[f"{stage_prefix}_structure"] = aimd_task.structure
-        all_outputs[f"{stage_prefix}_trajectory"] = aimd_task.trajectory
-        all_outputs[f"{stage_prefix}_energy"] = extract_total_energy(
-            energies=aimd_task.misc
-        ).result
-        all_outputs[f"{stage_prefix}_remote"] = aimd_task.remote_folder
-        all_outputs[f"{stage_prefix}_retrieved"] = aimd_task.retrieved
-
-        # Update for next stage
-        prev_structure = aimd_task.structure
-        prev_remote = aimd_task.remote_folder
-
-    # Add final outputs
-    all_outputs['final_structure'] = prev_structure
-    all_outputs['final_remote'] = prev_remote
-    all_outputs['final_trajectory'] = aimd_task.trajectory
-
-    return all_outputs
-
-
-@task.graph
 def aimd_slabs_scatter(
     slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
     aimd_sequence: list,
@@ -167,6 +69,7 @@ def aimd_slabs_scatter(
     Run AIMD on all slabs in parallel using scatter-gather pattern.
 
     Each slab gets the same AIMD sequence but runs independently in parallel.
+    The sequential stages for each slab are created inline here.
 
     Args:
         slabs: Dictionary of slab structures (from slab generation)
@@ -180,26 +83,66 @@ def aimd_slabs_scatter(
         clean_workdir: Whether to clean work directory
 
     Returns:
-        Dictionary with AIMD results for each slab (dynamically structured)
+        Dictionary with all AIMD outputs (flat structure with prefixed keys)
     """
-    aimd_outputs = {}
+    # Get VASP workchain
+    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
+    VaspTask = task(VaspWorkChain)
+    
+    all_outputs = {}
 
+    # Scatter: create AIMD sequence for each slab
     for slab_label, slab_structure in slabs.items():
-        # Run sequential AIMD for this slab
-        slab_aimd_result = aimd_sequential_slab(
-            slab_label=slab_label,
-            structure=slab_structure,
-            aimd_sequence=aimd_sequence,
-            code=code,
-            aimd_parameters=aimd_parameters,
-            potential_family=potential_family,
-            potential_mapping=potential_mapping,
-            options=options,
-            kpoints_spacing=kpoints_spacing,
-            clean_workdir=clean_workdir,
-        )
+        prev_structure = slab_structure
+        prev_remote = None
+        
+        # Create sequential AIMD stages for this slab
+        for stage_idx, stage_config in enumerate(aimd_sequence):
+            temp = stage_config['temperature']
+            steps = stage_config['steps']
 
-        # Store outputs for this slab - unwrap the dict returned by task.graph
-        aimd_outputs[slab_label] = slab_aimd_result
+            # Prepare parameters for this stage
+            stage_params = prepare_aimd_parameters(
+                aimd_parameters, temp, steps
+            )
 
-    return aimd_outputs
+            # Build VASP inputs
+            vasp_inputs = {
+                'structure': prev_structure,
+                'code': code,
+                'parameters': {'incar': stage_params},
+                'options': options,
+                'potential_family': potential_family,
+                'potential_mapping': potential_mapping,
+                'kpoints_spacing': kpoints_spacing,
+                'clean_workdir': clean_workdir,
+                'settings': orm.Dict(dict=get_settings()),
+            }
+
+            # Add restart folder if available
+            if prev_remote is not None:
+                vasp_inputs['restart_folder'] = prev_remote
+
+            # Create VASP task
+            aimd_task = VaspTask(**vasp_inputs)
+
+            # Store outputs with descriptive keys (flat structure)
+            stage_prefix = f"{slab_label}_stage_{stage_idx:02d}_{temp:03.0f}K"
+            all_outputs[f"{stage_prefix}_structure"] = aimd_task.structure
+            all_outputs[f"{stage_prefix}_trajectory"] = aimd_task.trajectory
+            all_outputs[f"{stage_prefix}_energy"] = extract_total_energy(
+                energies=aimd_task.misc
+            ).result
+            all_outputs[f"{stage_prefix}_remote"] = aimd_task.remote_folder
+            all_outputs[f"{stage_prefix}_retrieved"] = aimd_task.retrieved
+
+            # Update for next stage
+            prev_structure = aimd_task.structure
+            prev_remote = aimd_task.remote_folder
+
+        # Add final outputs for this slab
+        all_outputs[f"{slab_label}_final_structure"] = prev_structure
+        all_outputs[f"{slab_label}_final_remote"] = prev_remote
+        all_outputs[f"{slab_label}_final_trajectory"] = aimd_task.trajectory
+
+    return all_outputs
