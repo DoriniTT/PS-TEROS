@@ -53,6 +53,7 @@ def prepare_aimd_parameters(
     return params
 
 
+@task.graph
 def aimd_slabs_scatter(
     slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
     aimd_sequence: list,
@@ -63,15 +64,12 @@ def aimd_slabs_scatter(
     options: dict,
     kpoints_spacing: float,
     clean_workdir: bool,
-) -> dict:
+) -> t.Annotated[dict, namespace(final_structures=dynamic(orm.StructureData), final_trajectories=dynamic(orm.TrajectoryData), final_remote_folders=dynamic(orm.RemoteData))]:
     """
     Run AIMD on all slabs in parallel using scatter-gather pattern.
 
     Each slab gets the same AIMD sequence but runs independently in parallel.
     The sequential stages for each slab are created inline here.
-
-    This is NOT a @task.graph function - it's meant to be called from within
-    core_workgraph's @task.graph context.
 
     Args:
         slabs: Dictionary of slab structures (from slab generation)
@@ -85,13 +83,18 @@ def aimd_slabs_scatter(
         clean_workdir: Whether to clean work directory
 
     Returns:
-        Dictionary with all AIMD outputs (flat structure with prefixed keys)
+        Dictionary with grouped AIMD outputs:
+            - final_structures: dict of final structures per slab
+            - final_trajectories: dict of final trajectories per slab
+            - final_remote_folders: dict of final remote folders per slab
     """
     # Get VASP workchain
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
     VaspTask = task(VaspWorkChain)
     
-    all_outputs = {}
+    final_structures = {}
+    final_trajectories = {}
+    final_remote_folders = {}
 
     # Scatter: create AIMD sequence for each slab
     for slab_label, slab_structure in slabs.items():
@@ -128,23 +131,19 @@ def aimd_slabs_scatter(
             # Create VASP task
             aimd_task = VaspTask(**vasp_inputs)
 
-            # Store outputs with descriptive keys (flat structure)
-            stage_prefix = f"{slab_label}_stage_{stage_idx:02d}_{temp:03.0f}K"
-            all_outputs[f"{stage_prefix}_structure"] = aimd_task.structure
-            all_outputs[f"{stage_prefix}_trajectory"] = aimd_task.trajectory
-            all_outputs[f"{stage_prefix}_energy"] = extract_total_energy(
-                energies=aimd_task.misc
-            ).result
-            all_outputs[f"{stage_prefix}_remote"] = aimd_task.remote_folder
-            all_outputs[f"{stage_prefix}_retrieved"] = aimd_task.retrieved
-
             # Update for next stage
             prev_structure = aimd_task.structure
             prev_remote = aimd_task.remote_folder
+            prev_trajectory = aimd_task.trajectory
 
-        # Add final outputs for this slab
-        all_outputs[f"{slab_label}_final_structure"] = prev_structure
-        all_outputs[f"{slab_label}_final_remote"] = prev_remote
-        all_outputs[f"{slab_label}_final_trajectory"] = aimd_task.trajectory
+        # Store final outputs for this slab
+        final_structures[slab_label] = prev_structure
+        final_trajectories[slab_label] = prev_trajectory
+        final_remote_folders[slab_label] = prev_remote
 
-    return all_outputs
+    # Gather: return collected results
+    return {
+        'final_structures': final_structures,
+        'final_trajectories': final_trajectories,
+        'final_remote_folders': final_remote_folders,
+    }
