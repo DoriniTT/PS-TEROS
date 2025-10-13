@@ -13,12 +13,14 @@ including:
 7. Relaxation energy calculation (E_relaxed - E_unrelaxed)
 8. Cleavage energy calculation for complementary slabs
 9. Surface thermodynamics with chemical potential sampling
+10. Electronic properties (DOS and band structure) for selected slabs (NEW!)
 
 This tests all boolean flags and calculation modes:
 - compute_relaxation_energy=True (default)
 - compute_cleavage=True (default)
 - compute_thermodynamics=True (default)
-- compute_electronic_properties_bulk=True (NEW!)
+- compute_electronic_properties_bulk=True
+- compute_electronic_properties_slabs=True (NEW!)
 
 Material: Ag2O (binary oxide)
 - Bulk: Ag2O (cuprite structure)
@@ -35,7 +37,10 @@ import os
 from aiida import load_profile, orm
 from ase.io import read
 from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_electronic_properties_defaults
+from teros.core.builders import (
+    get_electronic_properties_defaults,
+    get_slab_electronic_properties_defaults,
+)
 
 
 def main():
@@ -312,6 +317,77 @@ def main():
     print(f"\n  ✓ compute_electronic_properties_bulk: {compute_electronic_properties_bulk}")
     print(f"      → Calculate DOS and band structure for relaxed bulk")
 
+    # ===== SLAB ELECTRONIC PROPERTIES PARAMETERS (NEW!) =====
+    print("\n" + "=" * 80)
+    print("SLAB ELECTRONIC PROPERTIES PARAMETERS (DOS & Bands)")
+    print("=" * 80)
+
+    # Get slab electronic properties defaults (denser k-point sampling for 2D systems)
+    slab_ep_defaults = get_slab_electronic_properties_defaults(
+        energy_cutoff=slab_parameters['ENCUT'],  # Match slab ENCUT
+        electronic_convergence=1e-5,
+        ncore=4,
+        ispin=2,  # Spin-polarized for Ag2O
+        lasph=True,
+        lreal="Auto",
+        kpoints_mesh_density=0.25,  # Denser than bulk for 2D
+        band_kpoints_distance=0.15,  # Denser path sampling
+        dos_kpoints_distance=0.2,
+        line_density=0.15,  # More points along paths
+        nedos=2000,
+        sigma_bands=0.01,
+        symprec=1e-4,
+        band_mode="seekpath-aiida",
+    )
+
+    # Enable slab electronic properties calculation
+    compute_electronic_properties_slabs = True
+
+    # Define which slabs to calculate electronic properties for
+    # You can specify per-slab parameter overrides here
+    # For this example, we'll calculate for term_0 and term_1 with different settings
+    slab_electronic_properties = {
+        'term_0': {
+            'bands_parameters': slab_ep_defaults,
+            'bands_options': {
+                'resources': {
+                    'num_machines': 1,
+                    'num_cores_per_machine': 40,
+                },
+                'queue_name': 'par40',
+            },
+            'band_settings': slab_ep_defaults['band_settings'],
+        },
+        'term_1': {
+            'bands_parameters': slab_ep_defaults,
+            'bands_options': {
+                'resources': {
+                    'num_machines': 1,
+                    'num_cores_per_machine': 40,
+                },
+                'queue_name': 'par40',
+            },
+            'band_settings': slab_ep_defaults['band_settings'],
+        },
+        # You can add more terminations here or use custom parameters per slab:
+        # 'term_2': {
+        #     'bands_parameters': custom_params,
+        #     'bands_options': high_memory_options,
+        #     'band_settings': custom_settings,
+        # },
+    }
+
+    print(f"  Band mode: {slab_ep_defaults['band_settings']['band_mode']}")
+    print(f"  Band k-points distance: {slab_ep_defaults['band_settings']['band_kpoints_distance']}")
+    print(f"  DOS k-points distance: {slab_ep_defaults['band_settings']['dos_kpoints_distance']}")
+    print(f"  Line density: {slab_ep_defaults['band_settings']['line_density']}")
+    print(f"  NEDOS (DOS grid points): {slab_ep_defaults['dos']['NEDOS']}")
+    print(f"  SCF k-mesh density: {slab_ep_defaults['scf_kpoints_distance']}")
+    print(f"\n  ✓ compute_electronic_properties_slabs: {compute_electronic_properties_slabs}")
+    print(f"      → Calculate DOS and band structure for selected slabs")
+    print(f"      → Selected terminations: {list(slab_electronic_properties.keys())}")
+    print(f"      → Note: Denser k-point sampling tuned for 2D slab systems")
+
     # ===== CREATE WORKGRAPH =====
     print("\n" + "=" * 80)
     print("CREATING WORKGRAPH")
@@ -369,6 +445,13 @@ def main():
         band_settings=ep_defaults['band_settings'],
         bands_options=bulk_options,  # Use same resources as bulk
 
+        # Slab electronic properties (NEW!)
+        compute_electronic_properties_slabs=compute_electronic_properties_slabs,
+        slab_electronic_properties=slab_electronic_properties,
+        slab_bands_parameters=slab_ep_defaults,
+        slab_band_settings=slab_ep_defaults['band_settings'],
+        slab_bands_options=slab_options,  # Use same resources as slab relaxation
+
         # Other settings
         kpoints_spacing=0.4,
         clean_workdir=False,
@@ -392,7 +475,7 @@ def main():
     print("     - Metal reference (Ag)")
     print("     - Oxygen reference (O2)")
     print("  2. Formation enthalpy calculation")
-    print("  3. Electronic properties for bulk (NEW!):")
+    print("  3. Electronic properties for bulk:")
     print("     a) SCF calculation (LWAVE=True, LCHARG=True)")
     print("     b) Band structure along high-symmetry paths")
     print("     c) Density of states (DOS) with tetrahedron method")
@@ -406,6 +489,11 @@ def main():
     print("     - Oxide type identification")
     print("     - Chemical potential sampling")
     print("     - Surface energy calculation for each slab")
+    print("  8. Electronic properties for selected slabs (NEW!):")
+    print("     a) SCF calculation (LWAVE=True, LCHARG=True)")
+    print("     b) Band structure along high-symmetry paths")
+    print("     c) Density of states (DOS)")
+    print(f"     d) For terminations: {list(slab_electronic_properties.keys())}")
 
     # ===== EXPORT VISUALIZATION =====
     print("\n" + "=" * 80)
@@ -451,13 +539,14 @@ def main():
     print(f"  # Outputs will include:")
     print(f"  #   - bulk_energy, metal_energy, oxygen_energy")
     print(f"  #   - formation_enthalpy")
-    print(f"  #   - bulk_bands, bulk_dos (NEW!)")
+    print(f"  #   - bulk_bands, bulk_dos, bulk_primitive_structure, bulk_seekpath_parameters")
     print(f"  #   - slab_structures (all generated terminations)")
     print(f"  #   - slab_energies (relaxed)")
     print(f"  #   - unrelaxed_slab_energies")
     print(f"  #   - relaxation_energies")
     print(f"  #   - cleavage_energies")
     print(f"  #   - surface_energies")
+    print(f"  #   - slab_bands, slab_dos, slab_primitive_structures, slab_seekpath_parameters (NEW!)")
 
     # ===== EXPECTED OUTPUTS =====
     print("\n" + "=" * 80)
@@ -473,10 +562,11 @@ def main():
     print("\n2. Formation Enthalpy:")
     print("   - formation_enthalpy: ΔH_f of Ag2O in eV/formula unit")
 
-    print("\n3. Electronic Properties (NEW!):")
+    print("\n3. Electronic Properties:")
     print("   - bulk_bands: Band structure along high-symmetry paths")
     print("   - bulk_dos: Density of states")
-    print("   - bulk_electronic_properties_misc: Seekpath parameters")
+    print("   - bulk_primitive_structure: Primitive cell used for band calculation")
+    print("   - bulk_seekpath_parameters: Seekpath symmetry information")
 
     print("\n4. Slab Structures:")
     print("   - slab_structures: All generated (111) terminations")
@@ -492,6 +582,13 @@ def main():
     print("\n7. Surface Thermodynamics:")
     print("   - surface_energies: γ(μ_O) for each termination")
     print("   - Chemical potential range from metal-rich to oxygen-rich")
+
+    print("\n8. Slab Electronic Properties (NEW!):")
+    print("   - slab_bands: Band structures for selected slabs")
+    print("   - slab_dos: Density of states for selected slabs")
+    print("   - slab_primitive_structures: Primitive cells for each slab")
+    print("   - slab_seekpath_parameters: Seekpath info for each slab")
+    print(f"   - Available for: {list(slab_electronic_properties.keys())}")
 
     print("\n" + "=" * 80)
     print("WORKFLOW SUBMITTED - Check status with verdi commands above")
@@ -529,6 +626,7 @@ if __name__ == '__main__':
     - Relaxation energy calculation
     - Cleavage energy calculation
     - Surface thermodynamics with chemical potential sampling
+    - Electronic properties (DOS and bands) for selected slabs (NEW!)
     """
     try:
         wg = main()
