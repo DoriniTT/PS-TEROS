@@ -25,7 +25,6 @@ from teros.core.thermodynamics import (
     compute_surface_energies_scatter,
 )
 from teros.core.cleavage import compute_cleavage_energies_scatter
-from teros.core.aimd import aimd_slabs_scatter
 
 def load_structure_from_file(filepath: str) -> orm.StructureData:
     """
@@ -422,31 +421,9 @@ def core_workgraph(
         cleavage_energies_output = cleavage_outputs.cleavage_energies
 
     # ===== AIMD CALCULATION (OPTIONAL) =====
+    # Note: AIMD tasks are added manually in build_core_workgraph using wg.add_task()
+    # Sequential dependencies cannot be created inside @task.graph
     aimd_outputs = {}
-    if run_aimd and slab_namespace is not None:
-        # Use AIMD-specific parameters or fall back to slab parameters
-        aimd_params = aimd_parameters if aimd_parameters is not None else slab_params
-        aimd_opts = aimd_options if aimd_options is not None else slab_opts
-        aimd_pot_map = aimd_potential_mapping if aimd_potential_mapping is not None else slab_pot_map
-        aimd_kpts = aimd_kpoints_spacing if aimd_kpoints_spacing is not None else slab_kpts
-
-        # Run AIMD on all slabs in parallel
-        aimd_results = aimd_slabs_scatter(
-            slabs=slab_namespace,
-            aimd_sequence=aimd_sequence,
-            code=code,
-            aimd_parameters=aimd_params,
-            potential_family=potential_family,
-            potential_mapping=aimd_pot_map,
-            options=aimd_opts,
-            kpoints_spacing=aimd_kpts,
-            clean_workdir=clean_workdir,
-        )
-
-        aimd_outputs = {
-            'final_structures': aimd_results.final_structures,
-            'final_remote_folders': aimd_results.final_remote_folders,
-        }
 
     # Return all outputs
     # Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
@@ -1024,6 +1001,92 @@ def build_core_workgraph(
         wg.outputs.bulk_seekpath_parameters = bands_task.outputs.seekpath_parameters
 
         print(f"  ✓ Electronic properties calculation enabled (DOS and bands)")
+
+    # ===== AIMD CALCULATION (OPTIONAL) =====
+    # Check if AIMD should be added: need run_aimd=True, aimd_sequence, and either input_slabs or generated slabs
+    should_add_aimd = run_aimd and aimd_sequence is not None and (input_slabs is not None or miller_indices is not None)
+    
+    if should_add_aimd:
+        print("\n  → Adding AIMD stages to workflow")
+        print(f"     Number of stages: {len(aimd_sequence)}")
+        
+        from teros.core.aimd import aimd_single_stage_scatter
+        from aiida.orm import Code, load_code
+        
+        # Load code
+        code = load_code(code_label)
+        
+        # Get parameters - use AIMD-specific or fall back to slab/bulk parameters
+        slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
+        slab_opts = slab_options if slab_options is not None else bulk_options
+        slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
+        slab_kpts = slab_kpoints_spacing if slab_kpoints_spacing is not None else kpoints_spacing
+        
+        aimd_params = aimd_parameters if aimd_parameters is not None else slab_params
+        aimd_opts = aimd_options if aimd_options is not None else slab_opts
+        aimd_pot_map = aimd_potential_mapping if aimd_potential_mapping is not None else slab_pot_map
+        aimd_kpts = aimd_kpoints_spacing if aimd_kpoints_spacing is not None else slab_kpts
+        
+        # Determine which slabs to use as initial structures
+        # Get the actual task that produces relaxed slabs, not the WorkGraph output
+        if relax_slabs and 'relax_slabs_scatter' in wg.tasks:
+            # Use relaxed slabs from the relax_slabs_scatter task
+            relax_task = wg.tasks['relax_slabs_scatter']
+            initial_slabs_source = relax_task.outputs.relaxed_structures
+            print(f"     Using relaxed slabs from relax_slabs_scatter task")
+        elif relax_slabs and 'collect_slab_outputs_restart' in wg.tasks:
+            # Use relaxed slabs from restart collector
+            collector_task = wg.tasks['collect_slab_outputs_restart']
+            initial_slabs_source = collector_task.outputs.structures
+            print(f"     Using relaxed slabs from restart collector")
+        elif input_slabs is not None:
+            # input_slabs without relaxation
+            initial_slabs_source = input_slabs
+            print(f"     Using unrelaxed input slabs as initial structures")
+        else:
+            # Generated but unrelaxed slabs - get from generate_slab_structures task
+            gen_task = wg.tasks['generate_slab_structures']
+            initial_slabs_source = gen_task.outputs.slabs
+            print(f"     Using unrelaxed generated slabs as initial structures")
+        
+        # Sequential AIMD stages: add tasks manually with explicit wiring
+        current_structures = initial_slabs_source
+        current_remotes = None
+        stage_tasks = []
+        
+        for stage_idx, stage_config in enumerate(aimd_sequence):
+            stage_name = f"aimd_stage_{stage_idx:02d}_{stage_config['temperature']}K"
+            print(f"     Stage {stage_idx}: {stage_config['temperature']}K × {stage_config['steps']} steps")
+            
+            # Add AIMD task for this stage
+            stage_task = wg.add_task(
+                aimd_single_stage_scatter,
+                name=stage_name,
+                slabs=current_structures,
+                temperature=stage_config['temperature'],
+                steps=stage_config['steps'],
+                code=code,
+                aimd_parameters=aimd_params,
+                potential_family=potential_family,
+                potential_mapping=aimd_pot_map,
+                options=aimd_opts,
+                kpoints_spacing=aimd_kpts,
+                clean_workdir=clean_workdir,
+                restart_folders=current_remotes,
+            )
+            
+            stage_tasks.append(stage_task)
+            
+            # Wire outputs of this stage to inputs of next stage
+            current_structures = stage_task.outputs.structures
+            current_remotes = stage_task.outputs.remote_folders
+        
+        # Note: AIMD outputs are stored in the individual stage tasks
+        # Users can access them via: wg.tasks['aimd_stage_00_300K'].outputs.structures, etc.
+        # To access final outputs: wg.tasks['aimd_stage_XX_XXXK'].outputs where XX is the last stage
+        
+        print(f"  ✓ AIMD calculation enabled ({len(aimd_sequence)} sequential stages)")
+        print(f"     Access AIMD outputs via: wg.tasks['aimd_stage_XX_XXXK'].outputs")
 
     # Set the name
     wg.name = name
