@@ -110,6 +110,11 @@ def core_workgraph(
     input_slabs: dict = None,
     use_input_slabs: bool = False,  # Signal to skip slab generation
     compute_cleavage: bool = True,
+    compute_electronic_properties_slabs: bool = False,  # NEW
+    slab_electronic_properties: dict = None,  # NEW
+    slab_bands_parameters: dict = None,  # NEW
+    slab_bands_options: dict = None,  # NEW
+    slab_band_settings: dict = None,  # NEW
     # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
@@ -415,11 +420,47 @@ def core_workgraph(
 
         cleavage_energies_output = cleavage_outputs.cleavage_energies
 
+    # ===== SLAB ELECTRONIC PROPERTIES CALCULATION (OPTIONAL) =====
     # Initialize output dictionaries for slab electronic properties
     slab_bands_output = {}
     slab_dos_output = {}
     slab_primitive_structures_output = {}
     slab_seekpath_parameters_output = {}
+    
+    # Add electronic properties for auto-generated slabs (same pattern as cleavage)
+    if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties and not use_input_slabs:
+        from teros.core.slabs import calculate_electronic_properties_slabs_scatter
+        from aiida.orm import load_code
+        
+        # Get code
+        code = load_code(code_label)
+        
+        # Get default parameters
+        default_params = slab_bands_parameters if slab_bands_parameters else {}
+        default_opts = slab_bands_options if slab_bands_options else bulk_options
+        default_settings = slab_band_settings if slab_band_settings else {}
+        
+        # Get slab parameters
+        slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
+        
+        # Calculate electronic properties for selected slabs
+        slab_elec_outputs = calculate_electronic_properties_slabs_scatter(
+            slabs=relaxed_slabs_output,
+            slab_electronic_properties=slab_electronic_properties,
+            code=code,
+            potential_family=potential_family,
+            potential_mapping=slab_pot_map,
+            clean_workdir=clean_workdir,
+            default_bands_parameters=default_params,
+            default_bands_options=default_opts,
+            default_band_settings=default_settings,
+        )
+        
+        # Collect outputs
+        slab_bands_output = slab_elec_outputs.slab_bands
+        slab_dos_output = slab_elec_outputs.slab_dos
+        slab_primitive_structures_output = slab_elec_outputs.slab_primitive_structures
+        slab_seekpath_parameters_output = slab_elec_outputs.slab_seekpath_parameters
 
     # Return all outputs
     # Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
@@ -701,6 +742,11 @@ def build_core_workgraph(
         input_slabs=None,  # Always pass None to avoid serialization
         use_input_slabs=use_input_slabs,  # Pass the flag
         compute_cleavage=compute_cleavage,
+        compute_electronic_properties_slabs=compute_electronic_properties_slabs,  # NEW
+        slab_electronic_properties=slab_electronic_properties,  # NEW
+        slab_bands_parameters=slab_bands_parameters,  # NEW
+        slab_bands_options=slab_bands_options,  # NEW
+        slab_band_settings=slab_band_settings,  # NEW
         # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
