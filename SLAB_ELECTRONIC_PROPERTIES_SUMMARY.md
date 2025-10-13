@@ -6,8 +6,9 @@ Successfully implemented selective electronic properties calculation (DOS and ba
 
 **Date:** 2025-10-13  
 **Branch:** feature-bands-slabs  
-**Total commits:** 10  
-**Status:** ✅ Production-ready and tested
+**Total commits:** 12  
+**Status:** ✅ Production-ready and tested  
+**Supports:** Auto-generated slabs AND input_slabs modes
 
 ---
 
@@ -223,10 +224,11 @@ surface_energies = node.outputs.surface_energies
 
 ## Current Limitations
 
-1. **Only works with `input_slabs` mode** (manual slabs and restart mode)
-2. **Auto-generated slabs mode not yet supported**
-   - Would require refactoring to expose `relaxed_slabs` from `core_workgraph`
+1. ~~**Only works with `input_slabs` mode** (manual slabs and restart mode)~~ ✅ **FIXED**
+2. ~~**Auto-generated slabs mode not yet supported**~~ ✅ **FIXED**
 3. **Requires slabs to be relaxed first** (`relax_slabs=True`)
+
+**Update:** As of commit c99af08, slab electronic properties now works for **both** auto-generated slabs (miller_indices mode) and input_slabs mode!
 
 ---
 
@@ -234,7 +236,7 @@ surface_energies = node.outputs.surface_energies
 
 Potential improvements identified in the implementation:
 
-1. Support for auto-generated slabs mode
+1. ~~Support for auto-generated slabs mode~~ ✅ **IMPLEMENTED**
 2. Validation for `slab_electronic_properties` dictionary structure
 3. Helper function to auto-populate from relaxed slabs
 4. More comprehensive examples with real calculation results
