@@ -53,7 +53,6 @@ def prepare_aimd_parameters(
     return params
 
 
-@task.graph
 def aimd_slabs_scatter(
     slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
     aimd_sequence: list,
@@ -70,6 +69,9 @@ def aimd_slabs_scatter(
 
     Each slab gets the same AIMD sequence but runs independently in parallel.
     The sequential stages for each slab are created inline here.
+
+    This is NOT a @task.graph function - it's meant to be called from within
+    core_workgraph's @task.graph context.
 
     Args:
         slabs: Dictionary of slab structures (from slab generation)

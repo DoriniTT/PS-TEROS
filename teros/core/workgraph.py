@@ -422,7 +422,6 @@ def core_workgraph(
         cleavage_energies_output = cleavage_outputs.cleavage_energies
 
     # ===== AIMD CALCULATION (OPTIONAL) =====
-    aimd_outputs = {}
     if run_aimd and slab_namespace is not None:
         # Use AIMD-specific parameters or fall back to slab parameters
         aimd_params = aimd_parameters if aimd_parameters is not None else slab_params
@@ -430,8 +429,8 @@ def core_workgraph(
         aimd_pot_map = aimd_potential_mapping if aimd_potential_mapping is not None else slab_pot_map
         aimd_kpts = aimd_kpoints_spacing if aimd_kpoints_spacing is not None else slab_kpts
 
-        # Run AIMD on all slabs in parallel
-        aimd_results = aimd_slabs_scatter(
+        # Run AIMD on all slabs in parallel (inline - not a task)
+        aimd_outputs = aimd_slabs_scatter(
             slabs=slab_namespace,
             aimd_sequence=aimd_sequence,
             code=code,
@@ -442,8 +441,8 @@ def core_workgraph(
             kpoints_spacing=aimd_kpts,
             clean_workdir=clean_workdir,
         )
-
-        aimd_outputs = aimd_results
+    else:
+        aimd_outputs = {}
 
     # Return all outputs
     # Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
