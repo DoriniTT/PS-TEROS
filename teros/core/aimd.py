@@ -151,6 +151,7 @@ def aimd_sequential_slab(
     return all_outputs
 
 
+@task.graph
 def aimd_slabs_scatter(
     slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
     aimd_sequence: list,
