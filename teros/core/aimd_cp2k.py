@@ -20,7 +20,7 @@ def aimd_single_stage_scatter_cp2k(
     aimd_parameters: dict,
     basis_file: orm.SinglefileData,
     pseudo_file: orm.SinglefileData,
-    options: dict,
+    options: t.Annotated[dict, namespace()],
     clean_workdir: bool,
     restart_folders: t.Annotated[dict[str, orm.RemoteData], dynamic(orm.RemoteData)] = {},
     fixed_atoms_lists: dict = None,

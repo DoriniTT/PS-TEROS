@@ -514,6 +514,7 @@ def build_core_workgraph(
     bulk_name: str,
     code_label: str = 'VASP-VTST-6.4.3@bohr',
     calculator: str = 'vasp',  # NEW: 'vasp' or 'cp2k'
+    aimd_code_label: str = None,  # NEW: Optional separate code for AIMD
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
     kpoints_spacing: float = 0.4,
@@ -1333,8 +1334,10 @@ def build_core_workgraph(
 
         from aiida.orm import Code, load_code
 
-        # Load code
-        code = load_code(code_label)
+        # Load code - use aimd_code_label if provided, otherwise use code_label
+        aimd_code_to_use = aimd_code_label if aimd_code_label is not None else code_label
+        code = load_code(aimd_code_to_use)
+        print(f"     Using code: {aimd_code_to_use}")
 
         # Get parameters - use AIMD-specific or fall back to slab/bulk parameters
         slab_params = slab_parameters if slab_parameters is not None else bulk_parameters

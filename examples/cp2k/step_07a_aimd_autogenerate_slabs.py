@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 STEP 7A: AIMD with CP2K - Auto-generate Slabs
 
@@ -114,8 +114,8 @@ def main():
 
     print("\n4. Building workgraph...")
     print("   Workflow: Bulk relaxation → Slab generation → AIMD")
-    print("   Bulk code: VASP")
-    print("   AIMD code: CP2K")
+    print("   Bulk code: VASP-VTST-6.4.3@bohr")
+    print("   AIMD code: CP2K-NEWCPU-2023@bohr")
     print("   Using preset: 'aimd_only'")
 
     # Build workgraph using preset with CP2K for AIMD
@@ -127,8 +127,11 @@ def main():
         structures_dir=structures_dir,
         bulk_name='ag2o.cif',
 
-        # Code for bulk (VASP)
+        # Code for bulk relaxation (VASP)
         code_label='VASP-VTST-6.4.3@bohr',
+        
+        # Code for AIMD (CP2K)
+        aimd_code_label='CP2K-NEWCPU-2023@bohr',
         potential_family='PBE',
         kpoints_spacing=0.4,
         clean_workdir=False,

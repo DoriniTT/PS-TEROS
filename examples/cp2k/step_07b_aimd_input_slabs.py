@@ -133,7 +133,7 @@ def main():
 
     print("\n6. Building workgraph...")
     print(f"  Workflow: AIMD only (no bulk, no slab generation)")
-    print(f"  AIMD code: CP2K")
+    print(f"  AIMD code: CP2K-NEWCPU-2023@bohr")
     print(f"  Fixed atoms: bottom 7Å")
 
     # Build workgraph
@@ -145,6 +145,9 @@ def main():
         structures_dir=structures_dir,
         bulk_name='ag2o.cif',
         code_label='VASP-VTST-6.4.3@bohr',
+        
+        # Code for AIMD (CP2K)
+        aimd_code_label='CP2K-NEWCPU-2023@bohr',
 
         # Input slabs directly
         input_slabs=input_slabs,
