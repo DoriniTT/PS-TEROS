@@ -329,8 +329,8 @@ def core_workgraph(
         )
     else:
         # Bulk-only mode or no bulk: Create dummy outputs with proper types
-        if bulk_vasp:
-            # Use bulk structure as placeholder for reference structures
+        if structures_dir and bulk_name:
+            # We have bulk - use bulk structure as placeholder for reference structures
             metal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
             metal_energy = type('obj', (object,), {'result': bulk_energy.result})()
             nonmetal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
@@ -358,7 +358,7 @@ def core_workgraph(
         # User will provide pre-generated slabs after building
         # Skip slab generation entirely
         slab_namespace = None  # Will be set post-build
-    elif miller_indices is None or bulk_vasp is None:
+    elif miller_indices is None or not (structures_dir and bulk_name):
         # No miller_indices provided, no input_slabs, or no bulk - skip slab generation
         slab_namespace = None
     else:
@@ -430,7 +430,7 @@ def core_workgraph(
 
     # ===== THERMODYNAMICS CALCULATION (OPTIONAL) =====
     surface_energies_output = {}
-    if compute_thermodynamics and relax_slabs and slab_namespace is not None and bulk_vasp is not None:
+    if compute_thermodynamics and relax_slabs and slab_namespace is not None and (structures_dir and bulk_name):
         # Identify oxide type (binary or ternary)
         oxide_type_result = identify_oxide_type(bulk_structure=bulk_vasp.structure)
 
@@ -451,7 +451,7 @@ def core_workgraph(
 
     # ===== CLEAVAGE ENERGY CALCULATION (OPTIONAL) =====
     cleavage_energies_output = {}
-    if compute_cleavage and relax_slabs and not use_input_slabs and bulk_vasp is not None:
+    if compute_cleavage and relax_slabs and not use_input_slabs and (structures_dir and bulk_name):
         # Only compute cleavage inside core_workgraph if slabs were generated/relaxed here
         # When use_input_slabs=True, cleavage will be added in build_core_workgraph
         cleavage_outputs = compute_cleavage_energies_scatter(
@@ -516,16 +516,19 @@ def core_workgraph(
     dummy_float = create_dummy_float(0.0)
     dummy_struct = create_dummy_structure()
     
+    # Determine if we have bulk based on input parameters (not future values)
+    has_bulk = structures_dir and bulk_name
+    
     return {
-        'bulk_energy': bulk_energy.result if bulk_energy else dummy_float,
-        'bulk_structure': bulk_vasp.structure if bulk_vasp else dummy_struct,
-        'metal_energy': metal_energy.result if metal_energy else dummy_float,
-        'metal_structure': metal_vasp.structure if metal_vasp else dummy_struct,
-        'nonmetal_energy': nonmetal_energy.result if nonmetal_energy else dummy_float,
-        'nonmetal_structure': nonmetal_vasp.structure if nonmetal_vasp else dummy_struct,
-        'oxygen_energy': oxygen_energy.result if oxygen_energy else dummy_float,
-        'oxygen_structure': oxygen_vasp.structure if oxygen_vasp else dummy_struct,
-        'formation_enthalpy': formation_hf.result if formation_hf else dummy_float,
+        'bulk_energy': bulk_energy.result if has_bulk else dummy_float,
+        'bulk_structure': bulk_vasp.structure if has_bulk else dummy_struct,
+        'metal_energy': metal_energy.result if compute_formation_enthalpy else dummy_float,
+        'metal_structure': metal_vasp.structure if compute_formation_enthalpy else dummy_struct,
+        'nonmetal_energy': nonmetal_energy.result if compute_formation_enthalpy else dummy_float,
+        'nonmetal_structure': nonmetal_vasp.structure if compute_formation_enthalpy else dummy_struct,
+        'oxygen_energy': oxygen_energy.result if compute_formation_enthalpy else dummy_float,
+        'oxygen_structure': oxygen_vasp.structure if compute_formation_enthalpy else dummy_struct,
+        'formation_enthalpy': formation_hf.result if compute_formation_enthalpy else dummy_float,
         'slab_structures': slab_namespace if slab_namespace is not None else {},
         'relaxed_slabs': relaxed_slabs_output,
         'slab_energies': slab_energies_output,

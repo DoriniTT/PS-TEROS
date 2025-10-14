@@ -31,7 +31,7 @@ def main():
 
     # Load AiiDA profile
     print("\n1. Loading AiiDA profile...")
-    load_profile(profile='psteros')
+    load_profile(profile='presto')
     print("   ✓ Profile loaded")
 
     # Setup paths
@@ -107,9 +107,9 @@ def main():
     aimd_options = {
         'resources': {
             'num_machines': 1,
-            'num_cores_per_machine': 40,
+            'num_cores_per_machine': 48,
         },
-        'queue_name': 'par40',
+        'queue_name': 'parexp',
     }
 
     print("\n4. Building workgraph...")
@@ -131,7 +131,7 @@ def main():
         code_label='VASP-VTST-6.4.3@bohr',
         
         # Code for AIMD (CP2K)
-        aimd_code_label='CP2K-NEWCPU-2023@bohr',
+        aimd_code_label='CP2K-CPU-2025@lovelace-parexp',
         potential_family='PBE',
         kpoints_spacing=0.4,
         clean_workdir=False,
@@ -142,11 +142,11 @@ def main():
         bulk_options=bulk_options,
 
         # Slab generation (REQUIRED for auto-generation)
-        miller_indices=[1, 1, 1],
+        miller_indices=[1, 0, 0],
         min_slab_thickness=15.0,
         min_vacuum_thickness=15.0,
         lll_reduce=True,
-        center_slab=True,
+        center_slab=False,
         symmetrize=True,
         primitive=True,
 

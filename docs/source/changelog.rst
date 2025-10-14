@@ -10,6 +10,24 @@ Recent Updates
 Unreleased Features
 -------------------
 
+**CP2K Calculator Support for AIMD**
+
+* CP2K integration for ab initio molecular dynamics simulations
+* Efficient Born-Oppenheimer MD with GPW/GAPW methods
+* Automatic BASIS_MOLOPT and GTH_POTENTIALS file generation
+* Seamless workflow: VASP for bulk/slab → CP2K for AIMD
+* Sequential stage support with restart chaining
+* See :doc:`/workflows/aimd-molecular-dynamics` for usage
+
+**Fixed Atoms Constraints**
+
+* Atomic constraint support for both VASP and CP2K calculators
+* Flexible constraint specification: bottom, top, or center regions
+* Element-specific and component-specific fixing (XYZ, XY, Z)
+* Automatic constraint calculation for auto-generated slabs
+* Manual control for advanced use cases
+* See :doc:`/api/fixed_atoms` for API details
+
 **Electronic Properties Module (DOS & Band Structure)**
 
 * Comprehensive electronic structure calculations for bulk and slabs

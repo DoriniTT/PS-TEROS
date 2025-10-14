@@ -16,17 +16,25 @@ This workflow demonstrates ab initio molecular dynamics (AIMD) on slab structure
 * Complete :doc:`beginner workflow <beginner-surface-energy>` to get relaxed slabs
 * Understanding of molecular dynamics concepts
 * Sufficient computational resources (~10-20 hours per MD stage)
+* VASP or CP2K code configured in AiiDA
 
 **What You'll Learn**:
 
 * Sequential AIMD staging (equilibration → production)
 * Automatic restart chaining between stages
 * Temperature control and ramping protocols
+* Using VASP or CP2K calculators for AIMD
+* Applying atomic constraints (fixed atoms)
 * Trajectory analysis and visualization
 
 **Materials**: Ag₂O or Ag₃PO₄ slabs from previous workflows
 
 **Runtime**: Variable (depends on MD length, typically 10-50 hours)
+
+**Supported Calculators**:
+
+* **VASP**: Full support (recommended for most users)
+* **CP2K**: AIMD support only (slab relaxation still uses VASP)
 
 When to Use AIMD
 ================
@@ -302,6 +310,424 @@ To gradually heat/cool the system:
         # Update for next iteration (after stage completes)
         # current_slabs = stage.outputs.structures
         # current_folders = stage.outputs.remote_folders
+
+Using CP2K for AIMD
+===================
+
+PS-TEROS supports CP2K as an alternative calculator for AIMD simulations. CP2K is particularly well-suited for large systems and offers efficient Born-Oppenheimer molecular dynamics.
+
+.. note::
+   **Current CP2K Support**: AIMD calculations only. Slab relaxation, surface energies, and other features still use VASP.
+
+When to Use CP2K
+----------------
+
+**Use CP2K for AIMD when:**
+
+* Working with large systems (>200 atoms)
+* Need GPW/GAPW methods for efficient basis sets
+* Require advanced metadynamics or path sampling
+* Want tight-binding DFT (DFTB) for exploratory runs
+* Need specific CP2K features (QMMM, excited states)
+
+**Use VASP when:**
+
+* Standard oxide surface calculations
+* Need PAW accuracy
+* Want consistent parameters with relaxation
+* Familiar with VASP INCAR parameters
+
+CP2K AIMD Workflow
+------------------
+
+1. Setup CP2K Parameters
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    from teros.core.workgraph import build_core_workgraph
+    from teros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
+
+    # Get default CP2K AIMD parameters
+    aimd_params = get_aimd_defaults_cp2k(
+        cutoff=400,           # Plane wave cutoff (Ry)
+        rel_cutoff=60,        # Relative cutoff (Ry)
+        timestep=1.0,         # MD timestep (fs)
+        eps_scf=1e-6,         # SCF convergence
+        max_scf=40,           # Max SCF iterations
+        thermostat='NOSE',    # Thermostat type
+    )
+
+    # Add KIND section for your system
+    aimd_params['FORCE_EVAL']['SUBSYS']['KIND'] = [
+        {
+            "_": "Ag",
+            "BASIS_SET": "DZVP-MOLOPT-PBE-GTH-q11",
+            "POTENTIAL": "GTH-PBE-q11",
+        },
+        {
+            "_": "O",
+            "BASIS_SET": "DZVP-MOLOPT-PBE-GTH-q6",
+            "POTENTIAL": "GTH-PBE-q6",
+        }
+    ]
+
+    # Scheduler options
+    aimd_options = {
+        'resources': {
+            'num_machines': 1,
+            'num_cores_per_machine': 48,
+        },
+        'queue_name': 'normal',
+    }
+
+.. tip::
+   **CP2K Cutoff Values**: 400 Ry cutoff with 60 Ry relative cutoff provides good accuracy for most oxides. Increase for heavier elements or tighter convergence.
+
+2. Build Workflow with CP2K
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    # Define AIMD sequence
+    aimd_sequence = [
+        {'temperature': 300, 'steps': 50},   # Equilibration
+        {'temperature': 300, 'steps': 100},  # Production
+    ]
+
+    # Build workflow using 'aimd_only' preset
+    wg = build_core_workgraph(
+        workflow_preset='aimd_only',
+        calculator='cp2k',  # Use CP2K for AIMD
+
+        # Structure inputs
+        structures_dir='/path/to/structures',
+        bulk_name='ag2o.cif',
+
+        # VASP for bulk/slab generation
+        code_label='VASP@computer',
+        bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
+        bulk_parameters=bulk_params,
+        bulk_options=bulk_options,
+
+        # Slab generation parameters
+        miller_indices=[1, 1, 1],
+        min_slab_thickness=15.0,
+        min_vacuum_thickness=15.0,
+
+        # CP2K for AIMD
+        aimd_code_label='CP2K@computer',
+        aimd_sequence=aimd_sequence,
+        aimd_parameters=aimd_params,
+        aimd_options=aimd_options,
+
+        name='AIMD_CP2K_Workflow',
+    )
+
+    wg.submit(wait=False)
+    print(f"Submitted: {wg.pk}")
+
+**Workflow stages:**
+
+1. Bulk relaxation with VASP
+2. Slab generation from relaxed bulk
+3. AIMD on slabs with CP2K (sequential stages)
+
+3. Using Pre-existing Slabs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For AIMD-only workflows with manual slab structures:
+
+.. code-block:: python
+
+    from aiida import orm
+
+    # Load pre-existing slabs
+    input_slabs = {
+        'slab_001': orm.load_node(<STRUCTURE_PK_1>),
+        'slab_010': orm.load_node(<STRUCTURE_PK_2>),
+    }
+
+    # Build AIMD-only workflow (no bulk relaxation/slab generation)
+    wg = build_core_workgraph(
+        workflow_preset='aimd_only',
+        calculator='cp2k',
+
+        # Input slabs directly (no bulk needed!)
+        input_slabs=input_slabs,
+
+        # CP2K AIMD
+        aimd_code_label='CP2K@computer',
+        aimd_sequence=aimd_sequence,
+        aimd_parameters=aimd_params,
+        aimd_options=aimd_options,
+
+        name='AIMD_CP2K_InputSlabs',
+    )
+
+    wg.submit(wait=False)
+
+.. note::
+   When using ``input_slabs``, bulk structure parameters are not required.
+
+CP2K-Specific Parameters
+-------------------------
+
+Key CP2K AIMD parameters (in ``aimd_parameters``):
+
+**Electronic Structure:**
+
+.. code-block:: python
+
+    'FORCE_EVAL': {
+        'METHOD': 'QS',
+        'DFT': {
+            'BASIS_SET_FILE_NAME': 'BASIS_MOLOPT',  # Auto-provided
+            'POTENTIAL_FILE_NAME': 'GTH_POTENTIALS',  # Auto-provided
+            'MGRID': {
+                'CUTOFF': 400,       # Plane wave cutoff (Ry)
+                'REL_CUTOFF': 60,    # Relative cutoff (Ry)
+                'NGRIDS': 4,         # Multi-grid levels
+            },
+            'SCF': {
+                'EPS_SCF': 1e-6,     # Convergence threshold
+                'MAX_SCF': 40,       # Max iterations
+                'SCF_GUESS': 'ATOMIC',
+                'OT': {              # Orbital transformation
+                    'MINIMIZER': 'DIIS',
+                    'PRECONDITIONER': 'FULL_SINGLE_INVERSE',
+                },
+            },
+            'XC': {
+                'XC_FUNCTIONAL': {'_': 'PBE'},  # Exchange-correlation
+                'VDW_POTENTIAL': {               # Dispersion corrections
+                    'POTENTIAL_TYPE': 'PAIR_POTENTIAL',
+                    'PAIR_POTENTIAL': {
+                        'TYPE': 'DFTD3',
+                        'PARAMETER_FILE_NAME': 'dftd3.dat',
+                        'REFERENCE_FUNCTIONAL': 'PBE',
+                    },
+                },
+            },
+        },
+    }
+
+**Molecular Dynamics:**
+
+.. code-block:: python
+
+    'MOTION': {
+        'MD': {
+            'ENSEMBLE': 'NVT',        # Canonical ensemble
+            'TIMESTEP': 1.0,          # fs
+            'TEMPERATURE': 300.0,      # Set automatically per stage
+            'STEPS': 100,              # Set automatically per stage
+            'THERMOSTAT': {
+                'TYPE': 'NOSE',        # Nosé-Hoover thermostat
+                'REGION': 'GLOBAL',    # Apply to all atoms
+            },
+        },
+    }
+
+.. warning::
+   Do not manually set ``TEMPERATURE`` or ``STEPS`` in ``aimd_parameters``. These are automatically set by PS-TEROS based on ``aimd_sequence``.
+
+Restart Between Stages
+-----------------------
+
+CP2K restart works similarly to VASP:
+
+.. code-block:: python
+
+    # Stage 1 output provides restart for Stage 2
+    stage1_outputs = wg.tasks['aimd_stage_00_300K'].outputs
+
+    # Access outputs
+    final_structures = stage1_outputs.structures
+    remote_folders = stage1_outputs.remote_folders  # Contains .restart files
+    parameters = stage1_outputs.parameters           # Output parameters
+    trajectories = stage1_outputs.trajectories       # MD trajectory
+
+**Restart files used:**
+
+* ``aiida-1.restart``: Wave functions and coordinates
+* ``WAVECAR`` equivalent in CP2K format
+
+Fixed Atoms Constraints
+========================
+
+PS-TEROS supports fixing atoms during AIMD (both VASP and CP2K) to simulate realistic surface conditions where bottom layers remain fixed.
+
+When to Use Fixed Atoms
+------------------------
+
+**Use fixed atoms for:**
+
+* Surface slab calculations (fix bottom to represent bulk)
+* Preventing artificial drift of entire slab
+* Mimicking experimental substrate constraints
+* Studying adsorbate dynamics on rigid surfaces
+
+**Typical setup:**
+
+* Fix bottom 2-3 layers (~7-10 Å)
+* Let top surface layers relax freely
+* Maintain bulk-like structure at bottom
+
+Fixed Atoms Implementation
+---------------------------
+
+1. Fixed Atoms with Auto-Generated Slabs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    wg = build_core_workgraph(
+        workflow_preset='aimd_only',
+        calculator='cp2k',  # or 'vasp'
+
+        # Structure and workflow setup
+        structures_dir='/path/to/structures',
+        bulk_name='ag2o.cif',
+        miller_indices=[1, 1, 1],
+        min_slab_thickness=15.0,
+        min_vacuum_thickness=15.0,
+
+        # AIMD configuration
+        aimd_code_label='CP2K@computer',
+        aimd_sequence=aimd_sequence,
+        aimd_parameters=aimd_params,
+        aimd_options=aimd_options,
+
+        # Fixed atoms configuration
+        fix_atoms=True,           # Enable fixed atoms
+        fix_type='bottom',        # Fix bottom layers
+        fix_thickness=7.0,        # Fix bottom 7 Å
+        fix_elements=None,        # Fix all elements (or ['Ag', 'O'])
+        fix_components='XYZ',     # Fix all components (fully rigid)
+
+        name='AIMD_Fixed_Bottom',
+    )
+
+2. Fixed Atoms with Input Slabs
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    # Load pre-existing slabs
+    input_slabs = {
+        'slab_111': orm.load_node(<STRUCTURE_PK>),
+    }
+
+    wg = build_core_workgraph(
+        workflow_preset='aimd_only',
+        calculator='cp2k',
+
+        # Use input slabs
+        input_slabs=input_slabs,
+
+        # AIMD configuration
+        aimd_code_label='CP2K@computer',
+        aimd_sequence=aimd_sequence,
+        aimd_parameters=aimd_params,
+        aimd_options=aimd_options,
+
+        # Fixed atoms
+        fix_atoms=True,
+        fix_type='bottom',
+        fix_thickness=7.0,
+        fix_elements=None,
+        fix_components='XYZ',
+
+        name='AIMD_InputSlabs_Fixed',
+    )
+
+Fixed Atoms Parameters
+----------------------
+
+**fix_type**: Where to fix atoms
+
+* ``'bottom'``: Fix atoms from bottom up to ``fix_thickness`` Å
+* ``'top'``: Fix atoms from top down to ``fix_thickness`` Å  
+* ``'center'``: Fix atoms within ``fix_thickness``/2 Å of slab center
+
+**fix_thickness**: Thickness of fixed region (Angstroms)
+
+* Typical: 7-10 Å for oxide surfaces
+* Rule of thumb: 2-3 atomic layers
+* Check slab structure to determine appropriate value
+
+**fix_elements**: Which elements to fix (optional)
+
+* ``None``: Fix all elements in the region (default)
+* ``['Ag']``: Fix only Ag atoms
+* ``['Ag', 'O']``: Fix both Ag and O atoms
+
+**fix_components**: Which Cartesian components to constrain
+
+* ``'XYZ'``: Fully rigid (default)
+* ``'XY'``: Fix in-plane only, allow perpendicular movement
+* ``'Z'``: Fix perpendicular only, allow in-plane movement
+
+Example: Partial Constraints
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+    # Fix oxygen atoms in bottom 5 Å, allow XY movement but not Z
+    wg = build_core_workgraph(
+        workflow_preset='aimd_only',
+        calculator='cp2k',
+
+        # ... other parameters ...
+
+        fix_atoms=True,
+        fix_type='bottom',
+        fix_thickness=5.0,
+        fix_elements=['O'],     # Only oxygen
+        fix_components='Z',     # Only perpendicular direction
+
+        name='AIMD_Partial_Fix',
+    )
+
+Verification: Checking Fixed Atoms
+-----------------------------------
+
+For **CP2K**, check the input file:
+
+.. code-block:: bash
+
+    verdi calcjob inputcat <CP2K_CALC_PK> aiida.inp | grep -A 10 CONSTRAINT
+
+Output should show:
+
+.. code-block:: text
+
+    &CONSTRAINT
+      &FIXED_ATOMS
+        COMPONENTS_TO_FIX XYZ
+        LIST 1 2 3 4 5 6 7 8 21 22 23 24 26
+      &END FIXED_ATOMS
+    &END CONSTRAINT
+
+For **VASP**, check POSCAR:
+
+.. code-block:: bash
+
+    verdi calcjob inputcat <VASP_CALC_PK> POSCAR
+
+Selective dynamics section should show::
+
+    Selective dynamics
+    Cartesian
+    0.0 0.0 0.0  F F F  # Fixed atom
+    1.0 0.0 0.0  T T T  # Free atom
+
+**Legend:**
+
+* ``F F F``: Fixed in X, Y, Z
+* ``T T T``: Free in X, Y, Z  
+* ``T T F``: Free in XY, fixed in Z
 
 Accessing AIMD Outputs
 =======================

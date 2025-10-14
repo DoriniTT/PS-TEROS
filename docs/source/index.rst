@@ -11,7 +11,9 @@ Key Features
 
 * **Automated workflows**: End-to-end calculations from structure input to surface thermodynamics
 * **Comprehensive analysis**: Surface energies, cleavage energies, formation enthalpies, DOS, band structures
-* **AIMD support**: Ab initio molecular dynamics on slab structures with sequential staging
+* **AIMD support**: Ab initio molecular dynamics on slab structures with sequential staging (VASP or CP2K)
+* **Atomic constraints**: Fixed atoms support for realistic surface modeling
+* **Dual calculator support**: VASP for comprehensive features, CP2K for AIMD
 * **Material-agnostic**: Works for binary, ternary oxides, and more complex systems
 * **AiiDA integration**: Full provenance tracking, workflow management, and restart capabilities
 * **Parallel execution**: Scatter-gather patterns for efficient computation
