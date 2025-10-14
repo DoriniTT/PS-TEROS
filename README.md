@@ -474,8 +474,18 @@ Contributions are welcome! Please:
 ## Citation
 
 If you use PS-TEROS in your research, please cite:
-```
-[Citation information to be added]
+
+**Dorini, T.T., & San-Miguel, M.A.** Accelerating rational design of oxide surfaces: The PS-TEROS workflow for automated surface stability analysis. *Applied Surface Science*, 164350, 2025.
+
+```bibtex
+@article{dorini2025accelerating,
+  title={Accelerating rational design of oxide surfaces: The PS-TEROS workflow for automated surface stability analysis},
+  author={Dorini, TT and San-Miguel, MA},
+  journal={Applied Surface Science},
+  pages={164350},
+  year={2025},
+  publisher={Elsevier}
+}
 ```
 
 ## License
