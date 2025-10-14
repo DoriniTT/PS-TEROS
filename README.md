@@ -488,6 +488,11 @@ If you use PS-TEROS in your research, please cite:
 }
 ```
 
+This work is based on the AiiDA infrastructure, so please consider citing the following publications as well:
+
+- S. P. Huber et al., AiiDA 1.0, a scalable computational infrastructure for automated reproducible workflows and data provenance, Scientific Data 7, 300 (2020); DOI: 10.1038/s41597-020-00638-4
+- M. Uhrin et al., Workflows in AiiDA: Engineering a high-throughput, event-based engine for robust and modular computational workflows, Computational Materials Science 187, 110086 (2021); DOI: 10.1016/j.commatsci.2020.110086
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
@@ -500,6 +505,14 @@ For questions and issues:
 - Examples: See `examples/` directory
 
 ## Acknowledgments
+
+We gratefully acknowledge the financial support from the Fundação
+de Amparo à Pesquisa do Estado de São Paulo (FAPESP) under project
+CDMF/CEPID (2013/07296-2), 2017/26105-4, and 2023/03447-8.
+This work utilized computational resources provided by the Centro
+Nacional de Processamento de Alto Desempenho em São Paulo (CE-
+NAPAD) and the Centro de Computação John David Rogers (CCJDR-
+UNICAMP).
 
 PS-TEROS is built on the AiiDA and AiiDA-WorkGraph frameworks. For more information:
 - AiiDA: https://www.aiida.net
