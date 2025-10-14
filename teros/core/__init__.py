@@ -20,6 +20,13 @@ from .cleavage import (
     calculate_cleavage_energy,
     compute_cleavage_energies_scatter,
 )
+from .workflow_presets import (
+    list_workflow_presets,
+    get_preset_config,
+    get_preset_summary,
+    WORKFLOW_PRESETS,
+    DEFAULT_PRESET,
+)
 
 __all__ = [
     'get_structure_from_file',
@@ -34,4 +41,9 @@ __all__ = [
     'compute_surface_energies_scatter',
     'calculate_cleavage_energy',
     'compute_cleavage_energies_scatter',
+    'list_workflow_presets',
+    'get_preset_config',
+    'get_preset_summary',
+    'WORKFLOW_PRESETS',
+    'DEFAULT_PRESET',
 ]

@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'AiiDA-TEROS'
+project = 'PS-TEROS'
 copyright = '2025, Thiago T. Dorini'
 author = 'Thiago T. Dorini'
 release = '0.1.0'
@@ -68,3 +68,10 @@ intersphinx_mapping = {
 # https://www.sphinx-doc.org/en/master/usage/extensions/todo.html#configuration
 
 todo_include_todos = True
+
+# -- RST substitutions -------------------------------------------------------
+# Define common substitutions for use across documentation
+
+rst_prolog = """
+.. |E_relax| replace:: E\ :sub:`relax`
+"""

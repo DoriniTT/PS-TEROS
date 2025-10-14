@@ -67,8 +67,8 @@ def calculate_surface_energy_ternary(
     
     This calcfunction computes surface energy as a function of chemical potential
     deviations (Δμ) for a ternary oxide system M-N-O, where:
-    - M: first metal (independent variable)
-    - N: second metal (reference)
+    - M: first metal (element A, independent variable)
+    - N: second metal (element B, reference)
     - O: oxygen
     
     The surface energy γ is calculated using:
@@ -78,6 +78,9 @@ def calculate_surface_energy_ternary(
     - φ: reference surface energy at bulk equilibrium
     - Γ_M, Γ_O: surface excess of M and O relative to N
     - Δμ_M, Δμ_O: chemical potential deviations from reference state
+    
+    This function also computes the alternative formulation with B as independent
+    variable and returns both results in the output dictionary.
     
     Args:
         bulk_structure: Bulk structure containing M, N, O
@@ -89,7 +92,7 @@ def calculate_surface_energy_ternary(
         sampling: Number of grid points for Δμ sampling
         
     Returns:
-        Dictionary containing surface energy data
+        Dictionary containing surface energy data for both A-based and B-based formulations
     """
     grid_points = sampling.value
     if grid_points <= 0:
@@ -191,47 +194,142 @@ def calculate_surface_energy_ternary(
         gamma = phi - gamma_M * float(delta_mu_M)
         gamma_at_muO_zero.append(float(gamma))
     
+    # ========================================================================
+    # ALTERNATIVE FORMULATION: B as independent variable (N becomes reference)
+    # ========================================================================
+    # In the standard formulation above, we have:
+    #   - M (element A) as independent variable
+    #   - N (element B) as reference (eliminated via bulk equilibrium)
+    #
+    # Now we compute the alternative formulation with:
+    #   - N (element B) as independent variable
+    #   - M (element A) as reference (eliminated via bulk equilibrium)
+    #
+    # Following the derivation: γ(Δμ_B, Δμ_O) = φ_B - Γ_B·Δμ_B - Γ_O·Δμ_O
+    
+    # Calculate stoichiometric reference for B-based formulation
+    # Number of N (B) atoms needed to maintain bulk stoichiometry with N_M (A) atoms:
+    # N_M / x_M = N_N_stoich / y_N  =>  N_N_stoich = N_M * y_N / x_M
+    N_N_stoich = (N_M_slab * y_N) / x_M
+    N_O_stoich_B = (N_M_slab * z_O) / x_M
+    
+    # Surface excesses for B-based formulation (per unit area)
+    gamma_N = (N_N_stoich - N_N_slab) / (2 * area)  # Γ_B
+    gamma_O_B = (N_O_stoich_B - N_O_slab) / (2 * area)  # Γ_O (with respect to A as reference)
+    
+    # Reference surface energy for B-based formulation (at Δμ_B=0, Δμ_O=0)
+    # φ_B = [E_slab - N_M·E_A - N_N·E_B - N_O·(E_O2/2) - (N_M/x_M)·ΔH_f] / (2A)
+    phi_B = (
+        slab_energy.value 
+        - N_M_slab * ref_energies[element_M]
+        - N_N_slab * ref_energies[element_N_ref]
+        - N_O_slab * ref_energies['O']
+        - (N_M_slab / x_M) * delta_h
+    ) / (2 * area)
+    
+    # Chemical potential ranges for B (element N)
+    # Maximum: Δμ_N = 0 (N-rich limit)
+    delta_mu_N_max = 0.0
+    
+    # Minimum: from bulk stability constraint (prevent A precipitation)
+    # Using: x_M·Δμ_M + y_N·Δμ_N + z_O·Δμ_O >= ΔH_f
+    # When we eliminate μ_M: μ_M <= E_M => 
+    # (E_bulk - y_N·μ_N - z_O·μ_O)/x_M <= E_M
+    # => y_N·Δμ_N + z_O·Δμ_O >= ΔH_f
+    # At O-poor (Δμ_O at its minimum from A-based calc = -ΔH_f/z_O), the minimum Δμ_N is:
+    # But since we're using O range from [-ΔH_f/z_O, 0], we use the same O range
+    # At Δμ_O = -ΔH_f/z_O (O-poor), minimum Δμ_N from constraint:
+    # y_N·Δμ_N >= ΔH_f - z_O·(-ΔH_f/z_O) = ΔH_f + ΔH_f = 2·ΔH_f
+    # This gives Δμ_N >= 2·ΔH_f/y_N, but this is positive for negative ΔH_f!
+    # Actually, at O-poor limit, the constraint is:
+    delta_mu_N_min = (delta_h - z_O * delta_mu_O_range[0]) / y_N
+    
+    # Range for N
+    delta_mu_N_range = np.linspace(delta_mu_N_min, delta_mu_N_max, grid_points)
+    
+    # Compute 2D surface energy grid: γ(Δμ_N, Δμ_O)
+    gamma_grid_2d_B = []
+    for delta_mu_N in delta_mu_N_range:
+        gamma_row_B = []
+        for delta_mu_O in delta_mu_O_range:
+            gamma_B = phi_B - gamma_N * float(delta_mu_N) - gamma_O_B * float(delta_mu_O)
+            gamma_row_B.append(float(gamma_B))
+        gamma_grid_2d_B.append(gamma_row_B)
+    
+    # Compute γ with Δμ_N = 0 (1D slice for N-rich conditions)
+    gamma_at_muN_zero = []
+    for delta_mu_O in delta_mu_O_range:
+        gamma_B = phi_B - gamma_O_B * float(delta_mu_O)
+        gamma_at_muN_zero.append(float(gamma_B))
+    
+    # Compute γ with Δμ_O = 0 (1D slice for O-rich conditions)
+    gamma_at_muO_zero_B = []
+    for delta_mu_N in delta_mu_N_range:
+        gamma_B = phi_B - gamma_N * float(delta_mu_N)
+        gamma_at_muO_zero_B.append(float(gamma_B))
+    
     return orm.Dict(
         dict={
-            'phi': float(phi),
-            'Gamma_M_vs_Nref': float(gamma_M),
-            'Gamma_O_vs_Nref': float(gamma_O),
+            # ===== A-based formulation (original) =====
+            'A_based': {
+                'phi': float(phi),
+                'Gamma_A': float(gamma_M),
+                'Gamma_O': float(gamma_O),
+                'delta_mu_A_range': [float(x) for x in delta_mu_M_range],
+                'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
+                'gamma_grid': gamma_grid_2d,
+                'gamma_at_muA_zero': gamma_at_muM_zero,
+                'gamma_at_muO_zero': gamma_at_muO_zero,
+                'gamma_at_reference': float(phi),
+                'element_A_independent': element_M,
+                'element_B_reference': element_N_ref,
+            },
             
-            # Chemical potential ranges (for axis labels in plots)
-            'delta_mu_M_range': [float(x) for x in delta_mu_M_range],
-            'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
+            # ===== B-based formulation (new) =====
+            'B_based': {
+                'phi': float(phi_B),
+                'Gamma_B': float(gamma_N),
+                'Gamma_O': float(gamma_O_B),
+                'delta_mu_B_range': [float(x) for x in delta_mu_N_range],
+                'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
+                'gamma_grid': gamma_grid_2d_B,
+                'gamma_at_muB_zero': gamma_at_muN_zero,
+                'gamma_at_muO_zero': gamma_at_muO_zero_B,
+                'gamma_at_reference': float(phi_B),
+                'element_B_independent': element_N_ref,
+                'element_A_reference': element_M,
+            },
             
-            # Surface energy grid: gamma_grid[i][j] = γ(delta_mu_M[i], delta_mu_O[j])
-            # Easy to convert to numpy: gamma_array = np.array(data['gamma_grid'])
-            # For plotting: plt.contourf(delta_mu_O, delta_mu_M, gamma_array)
-            'gamma_grid': gamma_grid_2d,
-            
-            # 1D slices for special conditions (easier to find min/max)
-            'gamma_at_muM_zero': gamma_at_muM_zero,  # γ vs Δμ_O at Δμ_M=0
-            'gamma_at_muO_zero': gamma_at_muO_zero,  # γ vs Δμ_M at Δμ_O=0
-            
-            # Reference value (at equilibrium conditions)
-            'gamma_at_reference': float(phi),
-            
-            # System information
+            # ===== Common system information =====
             'oxide_type': 'ternary',
             'area_A2': float(area),
-            'element_M_independent': element_M,
-            'element_N_reference': element_N_ref,
-            'bulk_stoichiometry_MxNyOz': {
+            'bulk_stoichiometry_AxByOz': {
                 f'x_{element_M}': int(x_M),
-                f'x_{element_N_ref}': int(y_N),
-                f'x_{element_O}': int(z_O),
+                f'y_{element_N_ref}': int(y_N),
+                f'z_O': int(z_O),
             },
             'slab_atom_counts': {
                 f'N_{element_M}': int(N_M_slab),
                 f'N_{element_N_ref}': int(N_N_slab),
-                f'N_{element_O}': int(N_O_slab),
+                f'N_O': int(N_O_slab),
             },
             'reference_energies_per_atom': {k: float(v) for k, v in ref_energies.items()},
             'E_slab_eV': float(slab_energy.value),
             'E_bulk_fu_eV': float(bulk_energy_per_fu),
             'formation_enthalpy_eV': float(delta_h),
+            
+            # ===== Legacy keys for backward compatibility =====
+            #'phi': float(phi),
+            #'Gamma_M_vs_Nref': float(gamma_M),
+            #'Gamma_O_vs_Nref': float(gamma_O),
+            #'delta_mu_M_range': [float(x) for x in delta_mu_M_range],
+            #'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
+            #'gamma_grid': gamma_grid_2d,
+            #'gamma_at_muM_zero': gamma_at_muM_zero,
+            #'gamma_at_muO_zero': gamma_at_muO_zero,
+            #'gamma_at_reference': float(phi),
+            #'element_M_independent': element_M,
+            #'element_N_reference': element_N_ref,
         }
     )
 

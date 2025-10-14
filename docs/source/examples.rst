@@ -7,7 +7,7 @@ Examples
 This section provides examples of how to use TEROS with different DFT codes and for different materials.
 
 VASP Example
------------
+------------
 
 .. code-block:: python
 
@@ -63,7 +63,7 @@ VASP Example
     node = submit(wg)
 
 Quantum ESPRESSO Example
-----------------------
+-------------------------
 
 .. code-block:: python
 
@@ -114,7 +114,7 @@ Quantum ESPRESSO Example
     node = submit(wg)
 
 CP2K Example
------------
+------------
 
 .. code-block:: python
 

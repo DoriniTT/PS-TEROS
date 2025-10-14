@@ -5,12 +5,12 @@ Tutorial
 ========
 
 Basic Usage
-----------
+-----------
 
 This tutorial will guide you through setting up and running a basic TEROS workflow.
 
 Setting up AiiDA
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
 
 Before using TEROS, make sure you have AiiDA properly set up. 
 AiiDA's `verdi presto` command is recommended for quickly setting up a new profile with necessary services.
@@ -32,7 +32,7 @@ AiiDA's `verdi presto` command is recommended for quickly setting up a new profi
        verdi code create
 
 Running a Simple Workflow
-~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Here's a simple example of how to set up and run a TEROS workflow with VASP:
 
@@ -82,7 +82,7 @@ Here's a simple example of how to set up and run a TEROS workflow with VASP:
     print(f"Submitted workgraph with pk: {node.pk}")
 
 Analyzing Results
-~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 Once your workflow has completed, you can analyze the results:
 
@@ -103,7 +103,7 @@ Once your workflow has completed, you can analyze the results:
         print(f"Surface: {surface}, Energy: {energy} J/m²")
 
 Visualization
-~~~~~~~~~~~~
+~~~~~~~~~~~~~
 
 Utilities for visualizing results, such as plotting surface energy diagrams, are currently under development and will be available in an upcoming release. These tools will help in analyzing the output of TEROS workflows.
 

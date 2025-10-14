@@ -9,6 +9,7 @@ import typing as t
 from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, WorkGraph, dynamic, namespace
+from aiida.engine import submit
 from ase.io import read
 from teros.core.hf import calculate_formation_enthalpy
 from teros.core.slabs import (
@@ -24,6 +25,12 @@ from teros.core.thermodynamics import (
     compute_surface_energies_scatter,
 )
 from teros.core.cleavage import compute_cleavage_energies_scatter
+from teros.core.workflow_presets import (
+    resolve_preset,
+    validate_preset_inputs,
+    validate_flag_dependencies,
+    check_old_style_api,
+)
 
 def load_structure_from_file(filepath: str) -> orm.StructureData:
     """
@@ -37,6 +44,20 @@ def load_structure_from_file(filepath: str) -> orm.StructureData:
     """
     atoms = read(filepath)
     return orm.StructureData(ase=atoms)
+
+
+@task.calcfunction()
+def create_dummy_float(value: float = 0.0) -> orm.Float:
+    """Create a dummy Float node for workflows that don't need certain outputs."""
+    return orm.Float(value)
+
+
+@task.calcfunction()
+def create_dummy_structure() -> orm.StructureData:
+    """Create a dummy StructureData node for workflows that don't need certain outputs."""
+    from ase import Atoms
+    dummy = Atoms()
+    return orm.StructureData(ase=dummy)
 
 
 def get_settings():
@@ -61,18 +82,23 @@ def get_settings():
     'formation_enthalpy', 'slab_structures', 'relaxed_slabs', 'slab_energies',
     'unrelaxed_slab_energies', 'relaxation_energies',
     'surface_energies', 'cleavage_energies',
-    'surface_energies', 'slab_remote', 'unrelaxed_slab_remote',
+    'slab_remote', 'unrelaxed_slab_remote',
+    # Electronic properties outputs
+    'bulk_bands', 'bulk_dos', 'bulk_primitive_structure', 'bulk_seekpath_parameters',
+    'aimd_results',
+    # Slab electronic properties outputs
+    'slab_bands', 'slab_dos', 'slab_primitive_structures', 'slab_seekpath_parameters',
 ])
 def core_workgraph(
-    structures_dir: str,
-    bulk_name: str,
-    code_label: str,
-    potential_family: str,
-    bulk_potential_mapping: dict,
-    kpoints_spacing: float,
-    bulk_parameters: dict,
-    bulk_options: dict,
-    clean_workdir: bool,
+    structures_dir: str = None,
+    bulk_name: str = None,
+    code_label: str = None,
+    potential_family: str = None,
+    bulk_potential_mapping: dict = None,
+    kpoints_spacing: float = 0.4,
+    bulk_parameters: dict = None,
+    bulk_options: dict = None,
+    clean_workdir: bool = False,
     metal_name: str = None,
     oxygen_name: str = None,
     metal_potential_mapping: dict = None,
@@ -105,6 +131,18 @@ def core_workgraph(
     input_slabs: dict = None,
     use_input_slabs: bool = False,  # Signal to skip slab generation
     compute_cleavage: bool = True,
+    run_aimd: bool = False,
+    aimd_sequence: list = None,
+    aimd_parameters: dict = None,
+    aimd_options: dict = None,
+    aimd_potential_mapping: dict = None,
+    aimd_kpoints_spacing: float = None,
+    compute_electronic_properties_slabs: bool = False,  # NEW
+    slab_electronic_properties: dict = None,  # NEW
+    slab_bands_parameters: dict = None,  # NEW
+    slab_bands_options: dict = None,  # NEW
+    slab_band_settings: dict = None,  # NEW
+    # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
     Core WorkGraph for formation enthalpy calculations of binary and ternary oxides with optional slab calculations.
@@ -122,6 +160,8 @@ def core_workgraph(
         - compute_cleavage: Calculate cleavage energies for complementary slab pairs
         - compute_thermodynamics: Calculate surface energies with chemical potential sampling
           (requires metal_name and oxygen_name to be provided)
+
+    Note: Electronic properties (DOS/bands) are handled in build_core_workgraph, not here
 
     Args:
         structures_dir: Directory containing all structure files
@@ -180,6 +220,9 @@ def core_workgraph(
             - unrelaxed_slab_remote: Dynamic namespace with RemoteData nodes for each SCF calculation (if relax_slabs=True)
             - surface_energies: Dynamic namespace with surface energy data (if compute_thermodynamics=True)
             - cleavage_energies: Dynamic namespace with cleavage energy data (if compute_cleavage=True)
+
+    Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
+          are added in build_core_workgraph when compute_electronic_properties_bulk=True
     """
     # Load the code
     code = orm.load_code(code_label)
@@ -192,22 +235,28 @@ def core_workgraph(
     # (requires both metal_name and oxygen_name)
     compute_formation_enthalpy = (metal_name is not None and oxygen_name is not None)
 
-    # ===== BULK RELAXATION =====
-    bulk_struct = load_structure_from_file(f"{structures_dir}/{bulk_name}")
+    # ===== BULK RELAXATION (CONDITIONAL) =====
+    # Only load and relax bulk if needed
+    if structures_dir and bulk_name:
+        bulk_struct = load_structure_from_file(f"{structures_dir}/{bulk_name}")
 
-    bulk_vasp = VaspTask(
-        structure=bulk_struct,
-        code=code,
-        parameters={'incar': bulk_parameters},
-        options=bulk_options,
-        kpoints_spacing=kpoints_spacing,
-        potential_family=potential_family,
-        potential_mapping=bulk_potential_mapping,
-        clean_workdir=clean_workdir,
-        settings=orm.Dict(dict=get_settings()),
-    )
+        bulk_vasp = VaspTask(
+            structure=bulk_struct,
+            code=code,
+            parameters={'incar': bulk_parameters},
+            options=bulk_options,
+            kpoints_spacing=kpoints_spacing,
+            potential_family=potential_family,
+            potential_mapping=bulk_potential_mapping,
+            clean_workdir=clean_workdir,
+            settings=orm.Dict(dict=get_settings()),
+        )
 
-    bulk_energy = extract_total_energy(energies=bulk_vasp.misc)
+        bulk_energy = extract_total_energy(energies=bulk_vasp.misc)
+    else:
+        # No bulk structure provided - set to None
+        bulk_vasp = None
+        bulk_energy = None
 
     # ===== REFERENCE RELAXATIONS AND FORMATION ENTHALPY (CONDITIONAL) =====
     if compute_formation_enthalpy:
@@ -279,15 +328,29 @@ def core_workgraph(
             oxygen_energy=oxygen_energy.result,
         )
     else:
-        # Bulk-only mode: Create dummy outputs with proper types
-        # Use bulk structure as placeholder for reference structures
-        metal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
-        metal_energy = type('obj', (object,), {'result': bulk_energy.result})()
-        nonmetal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
-        nonmetal_energy = type('obj', (object,), {'result': bulk_energy.result})()
-        oxygen_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
-        oxygen_energy = type('obj', (object,), {'result': bulk_energy.result})()
-        formation_hf = type('obj', (object,), {'result': bulk_energy.result})()  # Placeholder
+        # Bulk-only mode or no bulk: Create dummy outputs with proper types
+        if structures_dir and bulk_name:
+            # We have bulk - use bulk structure as placeholder for reference structures
+            metal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
+            metal_energy = type('obj', (object,), {'result': bulk_energy.result})()
+            nonmetal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
+            nonmetal_energy = type('obj', (object,), {'result': bulk_energy.result})()
+            oxygen_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
+            oxygen_energy = type('obj', (object,), {'result': bulk_energy.result})()
+            formation_hf = type('obj', (object,), {'result': bulk_energy.result})()  # Placeholder
+        else:
+            # No bulk at all - set everything to None
+            metal_vasp = None
+            metal_energy = None
+            nonmetal_vasp = None
+            nonmetal_energy = None
+            oxygen_vasp = None
+            oxygen_energy = None
+            formation_hf = None
+
+    # ===== ELECTRONIC PROPERTIES CALCULATION (OPTIONAL) =====
+    # Note: Electronic properties are added in build_core_workgraph, not here
+    # This keeps core_workgraph focused on base calculations
 
     # ===== SLAB GENERATION =====
     # Use input slabs if provided, otherwise generate them
@@ -295,8 +358,8 @@ def core_workgraph(
         # User will provide pre-generated slabs after building
         # Skip slab generation entirely
         slab_namespace = None  # Will be set post-build
-    elif miller_indices is None:
-        # No miller_indices provided and no input_slabs - skip slab generation
+    elif miller_indices is None or not (structures_dir and bulk_name):
+        # No miller_indices provided, no input_slabs, or no bulk - skip slab generation
         slab_namespace = None
     else:
         # Generate slabs using the pythonic scatter-gather pattern
@@ -367,7 +430,7 @@ def core_workgraph(
 
     # ===== THERMODYNAMICS CALCULATION (OPTIONAL) =====
     surface_energies_output = {}
-    if compute_thermodynamics and relax_slabs and slab_namespace is not None:
+    if compute_thermodynamics and relax_slabs and slab_namespace is not None and (structures_dir and bulk_name):
         # Identify oxide type (binary or ternary)
         oxide_type_result = identify_oxide_type(bulk_structure=bulk_vasp.structure)
 
@@ -388,7 +451,7 @@ def core_workgraph(
 
     # ===== CLEAVAGE ENERGY CALCULATION (OPTIONAL) =====
     cleavage_energies_output = {}
-    if compute_cleavage and relax_slabs and not use_input_slabs:
+    if compute_cleavage and relax_slabs and not use_input_slabs and (structures_dir and bulk_name):
         # Only compute cleavage inside core_workgraph if slabs were generated/relaxed here
         # When use_input_slabs=True, cleavage will be added in build_core_workgraph
         cleavage_outputs = compute_cleavage_energies_scatter(
@@ -400,17 +463,72 @@ def core_workgraph(
 
         cleavage_energies_output = cleavage_outputs.cleavage_energies
 
+    # ===== AIMD CALCULATION (OPTIONAL) =====
+    # Note: AIMD tasks are added manually in build_core_workgraph using wg.add_task()
+    # Sequential dependencies cannot be created inside @task.graph
+    aimd_outputs = {}
+    # ===== SLAB ELECTRONIC PROPERTIES CALCULATION (OPTIONAL) =====
+    # Initialize output dictionaries for slab electronic properties
+    slab_bands_output = {}
+    slab_dos_output = {}
+    slab_primitive_structures_output = {}
+    slab_seekpath_parameters_output = {}
+    
+    # Add electronic properties for auto-generated slabs (same pattern as cleavage)
+    if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties and not use_input_slabs:
+        from teros.core.slabs import calculate_electronic_properties_slabs_scatter
+        from aiida.orm import load_code
+        
+        # Get code
+        code = load_code(code_label)
+        
+        # Get default parameters
+        default_params = slab_bands_parameters if slab_bands_parameters else {}
+        default_opts = slab_bands_options if slab_bands_options else bulk_options
+        default_settings = slab_band_settings if slab_band_settings else {}
+        
+        # Get slab parameters
+        slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
+        
+        # Calculate electronic properties for selected slabs
+        slab_elec_outputs = calculate_electronic_properties_slabs_scatter(
+            slabs=relaxed_slabs_output,
+            slab_electronic_properties=slab_electronic_properties,
+            code=code,
+            potential_family=potential_family,
+            potential_mapping=slab_pot_map,
+            clean_workdir=clean_workdir,
+            default_bands_parameters=default_params,
+            default_bands_options=default_opts,
+            default_band_settings=default_settings,
+        )
+        
+        # Collect outputs
+        slab_bands_output = slab_elec_outputs.slab_bands
+        slab_dos_output = slab_elec_outputs.slab_dos
+        slab_primitive_structures_output = slab_elec_outputs.slab_primitive_structures
+        slab_seekpath_parameters_output = slab_elec_outputs.slab_seekpath_parameters
+
     # Return all outputs
+    # Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
+    # are added dynamically in build_core_workgraph, not returned here
+    # For workflows without bulk, return dummy nodes to satisfy @task.graph output types
+    dummy_float = create_dummy_float(0.0)
+    dummy_struct = create_dummy_structure()
+    
+    # Determine if we have bulk based on input parameters (not future values)
+    has_bulk = structures_dir and bulk_name
+    
     return {
-        'bulk_energy': bulk_energy.result,
-        'bulk_structure': bulk_vasp.structure,
-        'metal_energy': metal_energy.result,
-        'metal_structure': metal_vasp.structure,
-        'nonmetal_energy': nonmetal_energy.result,
-        'nonmetal_structure': nonmetal_vasp.structure,
-        'oxygen_energy': oxygen_energy.result,
-        'oxygen_structure': oxygen_vasp.structure,
-        'formation_enthalpy': formation_hf.result,
+        'bulk_energy': bulk_energy.result if has_bulk else dummy_float,
+        'bulk_structure': bulk_vasp.structure if has_bulk else dummy_struct,
+        'metal_energy': metal_energy.result if compute_formation_enthalpy else dummy_float,
+        'metal_structure': metal_vasp.structure if compute_formation_enthalpy else dummy_struct,
+        'nonmetal_energy': nonmetal_energy.result if compute_formation_enthalpy else dummy_float,
+        'nonmetal_structure': nonmetal_vasp.structure if compute_formation_enthalpy else dummy_struct,
+        'oxygen_energy': oxygen_energy.result if compute_formation_enthalpy else dummy_float,
+        'oxygen_structure': oxygen_vasp.structure if compute_formation_enthalpy else dummy_struct,
+        'formation_enthalpy': formation_hf.result if compute_formation_enthalpy else dummy_float,
         'slab_structures': slab_namespace if slab_namespace is not None else {},
         'relaxed_slabs': relaxed_slabs_output,
         'slab_energies': slab_energies_output,
@@ -420,13 +538,20 @@ def core_workgraph(
         'cleavage_energies': cleavage_energies_output,
         'slab_remote': slab_remote_output,
         'unrelaxed_slab_remote': unrelaxed_slab_remote_output,
+        'aimd_results': aimd_outputs,
+        'slab_bands': slab_bands_output,
+        'slab_dos': slab_dos_output,
+        'slab_primitive_structures': slab_primitive_structures_output,
+        'slab_seekpath_parameters': slab_seekpath_parameters_output,
     }
 
 
 def build_core_workgraph(
-    structures_dir: str,
-    bulk_name: str,
+    structures_dir: str = None,
+    bulk_name: str = None,
     code_label: str = 'VASP-VTST-6.4.3@bohr',
+    calculator: str = 'vasp',  # NEW: 'vasp' or 'cp2k'
+    aimd_code_label: str = None,  # NEW: Optional separate code for AIMD
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
     kpoints_spacing: float = 0.4,
@@ -458,13 +583,39 @@ def build_core_workgraph(
     primitive: bool = True,
     in_unit_planes: bool = False,
     max_normal_search: int = None,
-    relax_slabs: bool = True,
-    compute_thermodynamics: bool = True,
+    workflow_preset: str = None,  # NEW: Workflow preset name
+    relax_slabs: bool = None,  # CHANGED: Now defaults to None (preset controls)
+    compute_thermodynamics: bool = None,  # CHANGED: Now defaults to None
     thermodynamics_sampling: int = 100,
-    compute_relaxation_energy: bool = True,  # Calculate relaxation energy by default
+    compute_relaxation_energy: bool = None,  # CHANGED: Now defaults to None
     input_slabs: dict = None,
-    compute_cleavage: bool = True,
+    compute_cleavage: bool = None,  # CHANGED: Now defaults to None
     restart_from_node: int = None,  # PK of previous workgraph to restart from
+    compute_electronic_properties_bulk: bool = None,  # CHANGED: Now defaults to None
+    bands_parameters: dict = None,  # NEW: INCAR parameters
+    bands_options: dict = None,  # NEW: Scheduler options
+    band_settings: dict = None,  # NEW: Band workflow settings
+    run_aimd: bool = None,  # CHANGED: Now defaults to None
+    aimd_sequence: list = None,
+    aimd_parameters: dict = None,
+    aimd_options: dict = None,
+    aimd_potential_mapping: dict = None,
+    aimd_kpoints_spacing: float = None,
+    # CP2K-specific parameters (NEW):
+    basis_content: str = None,
+    pseudo_content: str = None,
+    cp2k_kind_section: list = None,
+    # Fixed atoms configuration (NEW):
+    fix_atoms: bool = False,
+    fix_type: str = None,
+    fix_thickness: float = 0.0,
+    fix_elements: list = None,
+    fix_components: str = "XYZ",
+    compute_electronic_properties_slabs: bool = None,  # CHANGED: Now defaults to None
+    slab_electronic_properties: dict = None,  # NEW: Per-slab parameter overrides
+    slab_bands_parameters: dict = None,  # NEW: Default slab parameters
+    slab_bands_options: dict = None,  # NEW: Default slab scheduler options
+    slab_band_settings: dict = None,  # NEW: Default slab band settings
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -475,11 +626,40 @@ def build_core_workgraph(
     - Reference structure relaxation (if metal_name and oxygen_name provided)
     - Formation enthalpy calculation (if references provided)
     - Slab generation and relaxation (if miller_indices or input_slabs provided)
-    - Relaxation energy calculation (controlled by compute_relaxation_energy flag, default: True)
-    - Cleavage energy calculation (controlled by compute_cleavage flag, default: True)
-    - Surface thermodynamics (controlled by compute_thermodynamics flag, default: True, requires references)
+    - Relaxation energy calculation (controlled by workflow preset or compute_relaxation_energy flag)
+    - Cleavage energy calculation (controlled by workflow preset or compute_cleavage flag)
+    - Surface thermodynamics (controlled by workflow preset or compute_thermodynamics flag, requires references)
+    - Electronic properties calculation (controlled by workflow preset or compute_electronic_properties_bulk flag)
+    - AIMD simulations (controlled by workflow preset or run_aimd flag)
+
+    **NEW: Workflow Preset System**
+    
+    Instead of manually setting 7+ boolean flags, you can use workflow presets for common use cases:
+    
+    - 'surface_thermodynamics' (default): Complete surface thermodynamics workflow
+    - 'surface_thermodynamics_unrelaxed': Quick unrelaxed surface energy screening
+    - 'cleavage_only': Cleavage energy calculations only
+    - 'relaxation_energy_only': Relaxation energy calculations only
+    - 'bulk_only': Bulk relaxation only (no surfaces)
+    - 'formation_enthalpy_only': Formation enthalpy without surfaces
+    - 'electronic_structure_bulk_only': Electronic properties (DOS/bands) for bulk
+    - 'aimd_only': AIMD simulation on slabs
+    - 'comprehensive': Complete analysis (all features enabled)
+    
+    Use list_workflow_presets() to see all available presets with descriptions.
+    
+    Presets can be overridden by explicitly setting individual flags:
+        wg = build_core_workgraph(
+            workflow_preset='surface_thermodynamics',
+            compute_cleavage=False,  # Override preset default
+            ...
+        )
 
     Args:
+        workflow_preset: Name of workflow preset to use. If None, defaults to 'surface_thermodynamics'.
+                        Use list_workflow_presets() to see available presets.
+        workflow_preset: Name of workflow preset to use. If None, defaults to 'surface_thermodynamics'.
+                        Use list_workflow_presets() to see available presets.
         structures_dir: Directory containing structure files
         bulk_name: Filename of bulk structure (e.g., 'ag3po4.cif')
         code_label: VASP code label in AiiDA. Default: 'VASP-VTST-6.4.3@bohr'
@@ -511,19 +691,61 @@ def build_core_workgraph(
         slab_potential_mapping: Potential mapping for slabs. Default: None (uses bulk_potential_mapping)
         slab_kpoints_spacing: K-points spacing for slabs. Default: None (uses kpoints_spacing)
 
-        relax_slabs: Relax generated slabs. Default: False
-        compute_thermodynamics: Compute surface energies (requires metal_name and oxygen_name). Default: True
+        relax_slabs: Relax generated slabs. Default: None (controlled by preset)
+        compute_thermodynamics: Compute surface energies (requires metal_name and oxygen_name). Default: None (controlled by preset)
         thermodynamics_sampling: Grid resolution for chemical potential sampling. Default: 100
-        compute_relaxation_energy: Compute relaxation energies (E_relaxed - E_unrelaxed). Default: True
-        compute_cleavage: Compute cleavage energies. Default: True
+        compute_relaxation_energy: Compute relaxation energies (E_relaxed - E_unrelaxed). Default: None (controlled by preset)
+        compute_cleavage: Compute cleavage energies. Default: None (controlled by preset)
         input_slabs: Pre-generated slab structures dict. Skips slab generation if provided. Default: None
         restart_from_node: PK of previous workgraph to restart from (extracts slabs and RemoteData). Default: None
+        compute_electronic_properties_bulk: Compute DOS and bands for relaxed bulk. Default: None (controlled by preset)
+        bands_parameters: Dict with 'scf', 'bands', 'dos' keys containing INCAR dicts, plus
+                          optional 'scf_kpoints_distance'. Use get_electronic_properties_defaults().
+                          Default: None
+        bands_options: Scheduler options for bands calculation. Default: None (uses bulk_options)
+        band_settings: Dict with band workflow settings. Use get_electronic_properties_defaults()
+                       ['band_settings']. Default: None
+        run_aimd: Run AIMD on generated/input slabs. Default: None (controlled by preset)
+        aimd_sequence: List of AIMD stages [{'temperature': K, 'steps': N}, ...]. Default: None
+        aimd_parameters: AIMD INCAR parameters (use get_aimd_defaults()). Default: None
+        aimd_options: Scheduler options for AIMD. Default: None (uses slab_options)
+        aimd_potential_mapping: Potential mapping for AIMD. Default: None (uses slab_potential_mapping)
+        aimd_kpoints_spacing: K-points spacing for AIMD. Default: None (uses slab_kpoints_spacing)
+        compute_electronic_properties_slabs: Compute DOS and bands for selected slabs. Default: None (controlled by preset)
+        slab_electronic_properties: Dict mapping slab labels to parameter overrides.
+                                    Format: {'term_0': {'bands_parameters': ..., 'bands_options': ..., 'band_settings': ...}}
+                                    If a parameter key is missing, falls back to slab_bands_* defaults.
+                                    Default: None
+        slab_bands_parameters: Default parameters for all slabs. Use get_slab_electronic_properties_defaults().
+                               Default: None
+        slab_bands_options: Default scheduler options for slab electronic properties. Default: None (uses bulk_options)
+        slab_band_settings: Default band settings for slabs. Use get_slab_electronic_properties_defaults()
+                           ['band_settings']. Default: None
         name: WorkGraph name. Default: 'FormationEnthalpy'
 
     Returns:
         WorkGraph instance ready to be submitted
 
     Examples:
+        Using workflow preset (recommended):
+        >>> wg = build_core_workgraph(
+        ...     workflow_preset='surface_thermodynamics',
+        ...     structures_dir='structures',
+        ...     bulk_name='ag3po4.cif',
+        ...     metal_name='Ag.cif',
+        ...     oxygen_name='O2.cif',
+        ...     bulk_potential_mapping={'Ag': 'Ag', 'P': 'P', 'O': 'O'},
+        ...     bulk_parameters={...},
+        ...     bulk_options={...},
+        ... )
+        
+        Overriding preset defaults:
+        >>> wg = build_core_workgraph(
+        ...     workflow_preset='surface_thermodynamics',
+        ...     compute_cleavage=False,  # Override
+        ...     ...
+        ... )
+        
         Bulk-only relaxation:
         >>> wg = build_core_workgraph(
         ...     structures_dir='structures',
@@ -550,6 +772,127 @@ def build_core_workgraph(
         ...     nonmetal_parameters={...},
         ... )
     """
+    # ========================================================================
+    # WORKFLOW PRESET RESOLUTION
+    # ========================================================================
+    
+    # Check for deprecated old-style API usage
+    check_old_style_api(
+        workflow_preset,
+        relax_slabs,
+        compute_thermodynamics,
+        compute_cleavage,
+        compute_relaxation_energy,
+        compute_electronic_properties_bulk,
+        compute_electronic_properties_slabs,
+        run_aimd,
+    )
+    
+    # Resolve preset and apply user overrides
+    resolved_preset_name, resolved_flags = resolve_preset(
+        workflow_preset,
+        relax_slabs,
+        compute_thermodynamics,
+        compute_cleavage,
+        compute_relaxation_energy,
+        compute_electronic_properties_bulk,
+        compute_electronic_properties_slabs,
+        run_aimd,
+    )
+    
+    # Extract resolved flags
+    relax_slabs = resolved_flags['relax_slabs']
+    compute_thermodynamics = resolved_flags['compute_thermodynamics']
+    compute_cleavage = resolved_flags['compute_cleavage']
+    compute_relaxation_energy = resolved_flags['compute_relaxation_energy']
+    compute_electronic_properties_bulk = resolved_flags['compute_electronic_properties_bulk']
+    compute_electronic_properties_slabs = resolved_flags['compute_electronic_properties_slabs']
+    run_aimd = resolved_flags['run_aimd']
+    
+    # Validate preset requirements
+    validation_errors = validate_preset_inputs(
+        resolved_preset_name,
+        metal_name=metal_name,
+        oxygen_name=oxygen_name,
+        nonmetal_name=nonmetal_name,
+        miller_indices=miller_indices,
+        bands_parameters=bands_parameters,
+        bands_options=bands_options,
+        band_settings=band_settings,
+        aimd_sequence=aimd_sequence,
+        aimd_parameters=aimd_parameters,
+        aimd_options=aimd_options,
+        aimd_potential_mapping=aimd_potential_mapping,
+        aimd_kpoints_spacing=aimd_kpoints_spacing,
+        slab_bands_parameters=slab_bands_parameters,
+        slab_bands_options=slab_bands_options,
+        slab_band_settings=slab_band_settings,
+        slab_electronic_properties=slab_electronic_properties,
+    )
+    
+    if validation_errors:
+        error_msg = "\n".join(validation_errors)
+        raise ValueError(f"Preset validation failed:\n{error_msg}")
+    
+    # Check flag dependencies and emit warnings
+    dependency_warnings = validate_flag_dependencies(
+        resolved_flags,
+        metal_name=metal_name,
+        oxygen_name=oxygen_name,
+        miller_indices=miller_indices,
+        input_slabs=input_slabs,
+        bands_parameters=bands_parameters,
+        slab_bands_parameters=slab_bands_parameters,
+        aimd_sequence=aimd_sequence,
+        aimd_parameters=aimd_parameters,
+    )
+    
+    for warning in dependency_warnings:
+        if warning.startswith("ERROR:"):
+            raise ValueError(warning)
+        print(f"\n⚠️  {warning}\n")
+    
+    # ========================================================================
+    # VALIDATE REQUIRED INPUTS
+    # ========================================================================
+    
+    # Determine if bulk structure is needed
+    compute_formation_enthalpy = (metal_name is not None and oxygen_name is not None)
+    needs_bulk = (
+        compute_formation_enthalpy or 
+        compute_thermodynamics or 
+        compute_electronic_properties_bulk or
+        (miller_indices is not None and input_slabs is None)  # Need bulk for slab generation
+    )
+    
+    # Only require structures_dir and bulk_name if we actually need the bulk structure
+    if needs_bulk:
+        if structures_dir is None or bulk_name is None:
+            raise ValueError(
+                "structures_dir and bulk_name are required for workflows that need bulk structure.\n"
+                f"Current preset '{resolved_preset_name}' requires bulk structure for:\n"
+                + (f"  - Formation enthalpy calculation\n" if compute_formation_enthalpy else "")
+                + (f"  - Surface thermodynamics\n" if compute_thermodynamics else "")
+                + (f"  - Electronic properties (bulk)\n" if compute_electronic_properties_bulk else "")
+                + (f"  - Slab generation (miller_indices provided)\n" if (miller_indices and not input_slabs) else "")
+                + "\nEither provide structures_dir and bulk_name, or use input_slabs with aimd_only preset."
+            )
+    
+    # Print workflow configuration
+    print(f"\n{'='*70}")
+    print(f"WORKFLOW CONFIGURATION")
+    print(f"{'='*70}")
+    print(f"Preset: {resolved_preset_name}")
+    print(f"\nActive Components:")
+    for flag_name, flag_value in resolved_flags.items():
+        status = "✓" if flag_value else "✗"
+        print(f"  {status} {flag_name}: {flag_value}")
+    print(f"{'='*70}\n")
+    
+    # ========================================================================
+    # RESTART HANDLING
+    # ========================================================================
+    
     # Handle restart from previous workgraph
     restart_folders = None
     restart_slabs = None
@@ -591,6 +934,35 @@ def build_core_workgraph(
 
     # Special handling for input_slabs: stored nodes can't be passed through @task.graph
     use_input_slabs = input_slabs is not None and len(input_slabs) > 0
+
+    # ========================================================================
+    # CP2K-SPECIFIC SETUP
+    # ========================================================================
+
+    basis_file = None
+    pseudo_file = None
+    if calculator == 'cp2k':
+        import io
+        from teros.core.builders.aimd_builder_cp2k import (
+            get_basis_molopt_content,
+            get_gth_potentials_content,
+        )
+
+        # Use provided content or defaults
+        basis_str = basis_content if basis_content else get_basis_molopt_content()
+        pseudo_str = pseudo_content if pseudo_content else get_gth_potentials_content()
+
+        # Create SinglefileData nodes
+        basis_file = orm.SinglefileData(
+            io.BytesIO(basis_str.encode('utf-8')),
+            filename='BASIS_MOLOPT'
+        )
+        pseudo_file = orm.SinglefileData(
+            io.BytesIO(pseudo_str.encode('utf-8')),
+            filename='GTH_POTENTIALS'
+        )
+
+        print(f"\n  ✓ Created CP2K basis and pseudopotential files")
 
     # Automatically disable cleavage calculation when using manual slabs
     if use_input_slabs and compute_cleavage:
@@ -643,10 +1015,22 @@ def build_core_workgraph(
         relax_slabs=relax_slabs,
         compute_thermodynamics=compute_thermodynamics,
         thermodynamics_sampling=thermodynamics_sampling,
-        compute_relaxation_energy=compute_relaxation_energy,  # NEW parameter
+        compute_relaxation_energy=compute_relaxation_energy,
         input_slabs=None,  # Always pass None to avoid serialization
         use_input_slabs=use_input_slabs,  # Pass the flag
         compute_cleavage=compute_cleavage,
+        run_aimd=run_aimd,
+        aimd_sequence=aimd_sequence,
+        aimd_parameters=aimd_parameters,
+        aimd_options=aimd_options,
+        aimd_potential_mapping=aimd_potential_mapping,
+        aimd_kpoints_spacing=aimd_kpoints_spacing,
+        compute_electronic_properties_slabs=compute_electronic_properties_slabs,  # NEW
+        slab_electronic_properties=slab_electronic_properties,  # NEW
+        slab_bands_parameters=slab_bands_parameters,  # NEW
+        slab_bands_options=slab_bands_options,  # NEW
+        slab_band_settings=slab_band_settings,  # NEW
+        # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
     # If user provided slabs, manually add the relax_slabs_scatter task
@@ -859,6 +1243,282 @@ def build_core_workgraph(
             wg.outputs.cleavage_energies = cleavage_task.outputs.cleavage_energies
             print(f"  ✓ Cleavage energies calculation enabled")
 
+    # NEW: Add slab electronic properties calculation if requested
+    # Currently only supported for input_slabs mode (including restart)
+    if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties and use_input_slabs:
+        from teros.core.slabs import calculate_electronic_properties_slabs_scatter
+
+        # Get default parameters (per-slab overrides handled in scatter function)
+        default_params = slab_bands_parameters if slab_bands_parameters else {}
+        default_opts = slab_bands_options if slab_bands_options else bulk_options
+        default_settings = slab_band_settings if slab_band_settings else {}
+
+        # Get code
+        code = load_code(code_label)
+
+        # Get slab parameters
+        slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
+        slab_opts = slab_options if slab_options is not None else bulk_options
+        slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
+
+        # Determine which slabs output to use
+        if restart_folders is not None:
+            # Restart mode: use collector outputs
+            relaxed_slabs_source = collector.outputs.structures
+        else:
+            # Non-restart input_slabs: use scatter task outputs
+            relaxed_slabs_source = scatter_task.outputs.relaxed_structures
+
+        # Add electronic properties task
+        slab_elec_task = wg.add_task(
+            calculate_electronic_properties_slabs_scatter,
+            name='calculate_electronic_properties_slabs',
+            slabs=relaxed_slabs_source,
+            slab_electronic_properties=slab_electronic_properties,
+            code=code,
+            potential_family=potential_family,
+            potential_mapping=slab_pot_map,
+            clean_workdir=clean_workdir,
+            default_bands_parameters=default_params,
+            default_bands_options=default_opts,
+            default_band_settings=default_settings,
+        )
+
+        # Connect outputs
+        wg.outputs.slab_bands = slab_elec_task.outputs.slab_bands
+        wg.outputs.slab_dos = slab_elec_task.outputs.slab_dos
+        wg.outputs.slab_primitive_structures = slab_elec_task.outputs.slab_primitive_structures
+        wg.outputs.slab_seekpath_parameters = slab_elec_task.outputs.slab_seekpath_parameters
+
+        print(f"  ✓ Slab electronic properties calculation enabled for {len(slab_electronic_properties)} slabs")
+
+    # Add electronic properties calculation if requested
+    if compute_electronic_properties_bulk:
+        from aiida.plugins import WorkflowFactory
+        from aiida.orm import load_code
+
+        # Get BandsWorkChain and wrap it as a task (same pattern as VaspWorkChain)
+        BandsWorkChain = WorkflowFactory('vasp.v2.bands')
+        BandsTask = task(BandsWorkChain)
+
+        # Get bulk task from workgraph
+        bulk_vasp_task = wg.tasks['VaspWorkChain']
+
+        # Get code
+        code = load_code(code_label)
+
+        # Use bands-specific options or fall back to bulk options
+        bands_opts = bands_options if bands_options is not None else bulk_options
+
+        # Build inputs dictionary
+        # BandsWorkChain expects inputs in namespaces: scf, bands, dos
+        bands_inputs = {
+            'structure': bulk_vasp_task.outputs.structure,  # Socket from bulk task
+            'metadata': {
+                'label': 'Bulk_Electronic_Properties',
+                'description': 'DOS and bands calculation for relaxed bulk structure',
+            }
+        }
+
+        # Add band_settings if provided
+        if band_settings:
+            bands_inputs['band_settings'] = band_settings
+
+        # Build SCF namespace inputs (required)
+        scf_inputs = {
+            'code': code,
+            'potential_family': potential_family,
+            'potential_mapping': bulk_potential_mapping,
+            'options': bands_opts,
+            'clean_workdir': clean_workdir,
+        }
+        if bands_parameters and 'scf' in bands_parameters:
+            scf_inputs['parameters'] = {'incar': bands_parameters['scf']}
+        if bands_parameters and 'scf_kpoints_distance' in bands_parameters:
+            scf_inputs['kpoints_spacing'] = bands_parameters['scf_kpoints_distance']
+        
+        bands_inputs['scf'] = scf_inputs
+
+        # Build Bands namespace inputs (optional)
+        if bands_parameters and 'bands' in bands_parameters:
+            bands_inputs['bands'] = {
+                'code': code,
+                'potential_family': potential_family,
+                'potential_mapping': bulk_potential_mapping,
+                'options': bands_opts,
+                'clean_workdir': clean_workdir,
+                'parameters': {'incar': bands_parameters['bands']},
+            }
+
+        # Build DOS namespace inputs (optional)
+        if bands_parameters and 'dos' in bands_parameters:
+            bands_inputs['dos'] = {
+                'code': code,
+                'potential_family': potential_family,
+                'potential_mapping': bulk_potential_mapping,
+                'options': bands_opts,
+                'clean_workdir': clean_workdir,
+                'parameters': {'incar': bands_parameters['dos']},
+            }
+
+        # Add the bands task to the workgraph
+        bands_task = wg.add_task(
+            BandsTask,
+            name='BandsWorkChain_bulk',
+            **bands_inputs
+        )
+
+        # Connect all outputs from BandsWorkChain
+        wg.outputs.bulk_bands = bands_task.outputs.band_structure
+        wg.outputs.bulk_dos = bands_task.outputs.dos
+        wg.outputs.bulk_primitive_structure = bands_task.outputs.primitive_structure
+        wg.outputs.bulk_seekpath_parameters = bands_task.outputs.seekpath_parameters
+
+        print(f"  ✓ Electronic properties calculation enabled (DOS and bands)")
+
+    # ===== AIMD CALCULATION (OPTIONAL) =====
+    # Check if AIMD should be added
+    should_add_aimd = run_aimd and aimd_sequence is not None and (input_slabs is not None or miller_indices is not None)
+
+    if should_add_aimd:
+        print("\n  → Adding AIMD stages to workflow")
+        print(f"     Calculator: {calculator}")
+        print(f"     Number of stages: {len(aimd_sequence)}")
+
+        # Import appropriate scatter function based on calculator
+        if calculator == 'vasp':
+            from teros.core.aimd import aimd_single_stage_scatter
+            aimd_scatter_func = aimd_single_stage_scatter
+        elif calculator == 'cp2k':
+            from teros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k
+            aimd_scatter_func = aimd_single_stage_scatter_cp2k
+        else:
+            raise ValueError(f"Unknown calculator: {calculator}")
+
+        from aiida.orm import Code, load_code
+
+        # Load code - use aimd_code_label if provided, otherwise use code_label
+        aimd_code_to_use = aimd_code_label if aimd_code_label is not None else code_label
+        code = load_code(aimd_code_to_use)
+        print(f"     Using code: {aimd_code_to_use}")
+
+        # Get parameters - use AIMD-specific or fall back to slab/bulk parameters
+        slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
+        slab_opts = slab_options if slab_options is not None else bulk_options
+        slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
+        slab_kpts = slab_kpoints_spacing if slab_kpoints_spacing is not None else kpoints_spacing
+
+        aimd_params = aimd_parameters if aimd_parameters is not None else slab_params
+        aimd_opts = aimd_options if aimd_options is not None else slab_opts
+        aimd_pot_map = aimd_potential_mapping if aimd_potential_mapping is not None else slab_pot_map
+        aimd_kpts = aimd_kpoints_spacing if aimd_kpoints_spacing is not None else slab_kpts
+
+        # Handle fixed atoms if requested
+        fixed_atoms_lists = {}
+
+        if fix_atoms and fix_type is not None:
+            print(f"\n  → Preparing fixed atoms constraints")
+            print(f"     Type: {fix_type}")
+            print(f"     Thickness: {fix_thickness} Å")
+            print(f"     Elements: {fix_elements if fix_elements else 'all'}")
+
+            from teros.core.fixed_atoms import get_fixed_atoms_list
+
+            # For input_slabs, calculate fixed atoms now
+            if input_slabs is not None:
+                for label, slab_struct in input_slabs.items():
+                    fixed_list = get_fixed_atoms_list(
+                        slab_struct,
+                        fix_type=fix_type,
+                        fix_thickness=fix_thickness,
+                        fix_elements=fix_elements,
+                    )
+                    fixed_atoms_lists[label] = fixed_list
+                    print(f"     {label}: {len(fixed_list)} atoms fixed")
+
+        # Determine which slabs to use as initial structures
+        if relax_slabs and 'relax_slabs_scatter' in wg.tasks:
+            relax_task = wg.tasks['relax_slabs_scatter']
+            initial_slabs_source = relax_task.outputs.relaxed_structures
+            print(f"     Using relaxed slabs from relax_slabs_scatter task")
+        elif relax_slabs and 'collect_slab_outputs_restart' in wg.tasks:
+            collector_task = wg.tasks['collect_slab_outputs_restart']
+            initial_slabs_source = collector_task.outputs.structures
+            print(f"     Using relaxed slabs from restart collector")
+        elif input_slabs is not None:
+            initial_slabs_source = input_slabs
+            print(f"     Using unrelaxed input slabs as initial structures")
+        else:
+            gen_task = wg.tasks['generate_slab_structures']
+            initial_slabs_source = gen_task.outputs.slabs
+            print(f"     Using unrelaxed generated slabs as initial structures")
+
+        # Sequential AIMD stages
+        current_structures = initial_slabs_source
+        current_remotes = {}
+        stage_tasks = []
+
+        for stage_idx, stage_config in enumerate(aimd_sequence):
+            stage_name = f"aimd_stage_{stage_idx:02d}_{stage_config['temperature']}K"
+            print(f"     Stage {stage_idx}: {stage_config['temperature']}K × {stage_config['steps']} steps")
+
+            # Build stage inputs based on calculator
+            if calculator == 'vasp':
+                stage_inputs = {
+                    'slabs': current_structures,
+                    'temperature': stage_config['temperature'],
+                    'steps': stage_config['steps'],
+                    'code': code,
+                    'aimd_parameters': aimd_params,
+                    'potential_family': potential_family,
+                    'potential_mapping': aimd_pot_map,
+                    'options': aimd_opts,
+                    'kpoints_spacing': aimd_kpts,
+                    'clean_workdir': clean_workdir,
+                    'restart_folders': current_remotes,
+                }
+            elif calculator == 'cp2k':
+                stage_inputs = {
+                    'slabs': current_structures,
+                    'temperature': stage_config['temperature'],
+                    'steps': stage_config['steps'],
+                    'code': code,
+                    'aimd_parameters': aimd_params,
+                    'basis_file': basis_file,
+                    'pseudo_file': pseudo_file,
+                    'options': aimd_opts,  # Pass scheduler options directly
+                    'clean_workdir': clean_workdir,
+                    'restart_folders': current_remotes,
+                }
+
+                # Add fixed atoms for CP2K
+                if fixed_atoms_lists:
+                    # Pre-computed fixed atoms (for input_slabs)
+                    stage_inputs['fixed_atoms_lists'] = fixed_atoms_lists
+                    stage_inputs['fix_components'] = fix_components
+                elif fix_atoms and fix_type is not None:
+                    # Dynamic fixed atoms calculation (for auto-generated slabs)
+                    stage_inputs['fix_type'] = fix_type
+                    stage_inputs['fix_thickness'] = fix_thickness if fix_thickness else 0.0
+                    stage_inputs['fix_elements'] = fix_elements
+                    stage_inputs['fix_components'] = fix_components
+
+            # Add task
+            stage_task = wg.add_task(
+                aimd_scatter_func,
+                name=stage_name,
+                **stage_inputs
+            )
+
+            stage_tasks.append(stage_task)
+
+            # Wire outputs to next stage inputs
+            current_structures = stage_task.outputs.structures
+            current_remotes = stage_task.outputs.remote_folders
+
+        print(f"  ✓ AIMD calculation enabled ({len(aimd_sequence)} sequential stages)")
+        print(f"     Access AIMD outputs via: wg.tasks['aimd_stage_XX_XXXK'].outputs")
+
     # Set the name
     wg.name = name
 
@@ -905,6 +1565,15 @@ def build_core_workgraph_with_map(
     thermodynamics_sampling: int = 100,
     input_slabs: dict = None,
     compute_cleavage: bool = True,
+    compute_electronic_properties_bulk: bool = False,  # NEW
+    bands_parameters: dict = None,  # NEW
+    bands_options: dict = None,  # NEW
+    band_settings: dict = None,  # NEW
+    compute_electronic_properties_slabs: bool = False,  # NEW
+    slab_electronic_properties: dict = None,  # NEW
+    slab_bands_parameters: dict = None,  # NEW
+    slab_bands_options: dict = None,  # NEW
+    slab_band_settings: dict = None,  # NEW
     name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
@@ -968,6 +1637,15 @@ def build_core_workgraph_with_map(
         thermodynamics_sampling=thermodynamics_sampling,
         input_slabs=input_slabs,
         compute_cleavage=compute_cleavage,
+        compute_electronic_properties_bulk=compute_electronic_properties_bulk,  # NEW
+        bands_parameters=bands_parameters,  # NEW
+        bands_options=bands_options,  # NEW
+        band_settings=band_settings,  # NEW
+        compute_electronic_properties_slabs=compute_electronic_properties_slabs,  # NEW
+        slab_electronic_properties=slab_electronic_properties,  # NEW
+        slab_bands_parameters=slab_bands_parameters,  # NEW
+        slab_bands_options=slab_bands_options,  # NEW
+        slab_band_settings=slab_band_settings,  # NEW
         name=name,
     )
 

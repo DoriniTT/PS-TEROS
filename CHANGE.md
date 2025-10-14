@@ -1,5 +1,53 @@
 # Changelog
 
+## [Unreleased] - Workflow Preset System Updates
+
+### Updated: Workflow Presets (October 2025)
+
+**Summary:** Improved workflow preset system with optional components and new electronic structure presets.
+
+**Modified Presets:**
+
+1. **`surface_thermodynamics` preset:**
+   - Cleavage energies now **optional** (disabled by default)
+   - Relaxation energies now **optional** (disabled by default)
+   - **Migration:** Add `compute_cleavage=True` and/or `compute_relaxation_energy=True` if you need these features
+
+2. **`aimd_only` preset:**
+   - Slab relaxation now **disabled** by default
+   - AIMD runs on unrelaxed slabs (generated from bulk)
+   - **Migration:** Add `relax_slabs=True` if you need slabs relaxed before AIMD
+
+**New Presets:**
+
+3. **`electronic_structure_slabs_only`:**
+   - Electronic properties (DOS and band structure) for slabs only
+   - Requires: `slab_bands_parameters`, `slab_band_settings`
+
+4. **`electronic_structure_bulk_and_slabs`:**
+   - Electronic properties for both bulk and slabs
+   - Requires: `bands_parameters`, `band_settings`, `slab_bands_parameters`, `slab_band_settings`
+
+**New Documentation:**
+
+- `docs/WORKFLOW_SYSTEM_EXPLAINED.md` - Comprehensive three-tier system guide
+- `docs/WORKFLOW_MIGRATION_GUIDE.md` - Migration guide for existing scripts
+- Updated `docs/WORKFLOW_PRESETS_GUIDE.md` with accurate preset definitions
+- Updated `docs/WORKFLOW_PRESETS_EXAMPLES.md` with new examples
+
+**Backward Compatibility:**
+
+✅ **Fully backward compatible**
+- All existing presets still work
+- Old scripts will run unchanged (may need explicit flags for optional features)
+- No breaking changes to API
+
+**See also:**
+- [Workflow Updates Summary](examples/step_by_step/WORKFLOW_UPDATES_SUMMARY.md)
+- [Migration Guide](docs/WORKFLOW_MIGRATION_GUIDE.md)
+
+---
+
 ## [Unreleased] - Relaxation Energy Module
 
 ### New Feature: Relaxation Energy Calculation
@@ -79,6 +127,374 @@ wg = build_core_workgraph(
 - Default `compute_relaxation_energy=False` preserves existing behavior
 - No changes required to existing scripts
 - SCF calculations only performed when explicitly requested
+
+---
+
+## [Unreleased] - Electronic Properties Module (DOS & Band Structure)
+
+### New Feature: Electronic Structure Calculations
+
+**Overview**: Added comprehensive electronic properties calculations for both bulk and slab structures, enabling density of states (DOS) and band structure analysis using the vasp.v2.bands workchain with seekpath integration.
+
+**Capabilities**:
+- **Bulk electronic properties**: DOS and band structure for relaxed bulk structures
+- **Slab electronic properties**: DOS and band structure for selected slab terminations
+- **Automatic high-symmetry path generation**: Using seekpath-aiida or pymatgen
+- **Three-stage workflow**: SCF → Band structure → DOS
+- **Material-agnostic**: Works for any system (binary, ternary, metals, semiconductors, insulators)
+- **Configurable k-point sampling**: Independent control for SCF, bands, and DOS meshes
+
+### Implementation
+
+**Core Module**:
+- `teros/core/builders/electronic_properties_builder.py`:
+  - `get_electronic_properties_defaults()`: Builder for bulk structures
+  - `get_slab_electronic_properties_defaults()`: Builder for slab structures (denser k-point sampling)
+  - Returns complete parameter sets for vasp.v2.bands workchain
+
+**Calculation Stages**:
+1. **SCF stage**: Self-consistent calculation with LWAVE=True, LCHARG=True
+2. **Band structure stage**: Non-self-consistent (ICHARG=11) along high-symmetry paths
+3. **DOS stage**: Non-self-consistent with dense k-point mesh
+
+### API Changes
+
+**New Parameters for Bulk Electronic Properties**:
+```python
+build_core_workgraph(
+    # ... existing parameters ...
+    compute_electronic_properties_bulk=False,  # Enable bulk DOS/bands
+    bands_parameters=None,                     # INCAR parameters (from builder)
+    band_settings=None,                        # Band workflow settings
+    bands_options=None,                        # Scheduler options
+)
+```
+
+**New Parameters for Slab Electronic Properties**:
+```python
+build_core_workgraph(
+    # ... existing parameters ...
+    compute_electronic_properties_slabs=False,      # Enable slab DOS/bands
+    slab_electronic_properties=None,                # Per-slab configuration dict
+    slab_bands_parameters=None,                     # Default INCAR parameters
+    slab_band_settings=None,                        # Default band settings
+    slab_bands_options=None,                        # Default scheduler options
+)
+```
+
+**New Outputs**:
+
+For bulk (when `compute_electronic_properties_bulk=True`):
+- `bulk_bands`: Band structure along high-symmetry paths
+- `bulk_dos`: Density of states
+- `bulk_primitive_structure`: Primitive cell used for band calculation
+- `bulk_seekpath_parameters`: Seekpath symmetry information and k-point paths
+
+For slabs (when `compute_electronic_properties_slabs=True`):
+- `slab_bands`: Dictionary of band structures (one per selected slab)
+- `slab_dos`: Dictionary of DOS data (one per selected slab)
+- `slab_primitive_structures`: Dictionary of primitive cells
+- `slab_seekpath_parameters`: Dictionary of seekpath info
+
+### Configuration Examples
+
+**Bulk Electronic Properties**:
+```python
+from teros.core.builders import get_electronic_properties_defaults
+
+# Get default configuration
+ep_defaults = get_electronic_properties_defaults(
+    energy_cutoff=520,
+    electronic_convergence=1e-5,
+    ncore=4,
+    ispin=2,  # Spin-polarized
+    kpoints_mesh_density=0.3,     # SCF mesh
+    band_kpoints_distance=0.2,    # Band path density
+    dos_kpoints_distance=0.2,     # DOS mesh density
+    line_density=0.2,             # Points along paths
+    nedos=2000,                   # DOS grid points
+    band_mode="seekpath-aiida",   # Auto high-symmetry paths
+)
+
+wg = build_core_workgraph(
+    compute_electronic_properties_bulk=True,
+    bands_parameters=ep_defaults,
+    band_settings=ep_defaults['band_settings'],
+    bands_options=bulk_options,
+    # ... other parameters ...
+)
+```
+
+**Slab Electronic Properties**:
+```python
+from teros.core.builders import get_slab_electronic_properties_defaults
+
+# Get slab-tuned configuration (denser k-points for 2D systems)
+slab_ep_defaults = get_slab_electronic_properties_defaults(
+    energy_cutoff=520,
+    kpoints_mesh_density=0.25,    # Denser than bulk
+    band_kpoints_distance=0.15,   # Denser path sampling
+    line_density=0.15,            # More points along paths
+)
+
+# Define which slabs to calculate
+slab_electronic_properties = {
+    'term_0': {
+        'bands_parameters': slab_ep_defaults,
+        'bands_options': slab_options,
+        'band_settings': slab_ep_defaults['band_settings'],
+    },
+    'term_1': {
+        'bands_parameters': slab_ep_defaults,
+        'bands_options': slab_options,
+        'band_settings': slab_ep_defaults['band_settings'],
+    },
+}
+
+wg = build_core_workgraph(
+    compute_electronic_properties_slabs=True,
+    slab_electronic_properties=slab_electronic_properties,
+    slab_bands_parameters=slab_ep_defaults,
+    slab_band_settings=slab_ep_defaults['band_settings'],
+    slab_bands_options=slab_options,
+    # ... other parameters ...
+)
+```
+
+### Modified Files
+
+**Core Implementation**:
+- `teros/core/workgraph.py`:
+  - Added electronic properties integration for both bulk and slabs
+  - Added conditional logic to create vasp.v2.bands workgraphs
+  - Updated `build_core_workgraph()` with new parameters
+
+### New Files
+
+**Core Modules**:
+- `teros/core/builders/electronic_properties_builder.py`: Material-agnostic parameter builders
+
+**Examples**:
+- `examples/electronic_properties/bulk_dos_bands_ag2o.py`: Bulk DOS/bands example
+- `examples/electronic_properties/slab_electronic_properties_example.py`: Slab DOS/bands example
+- `examples/complete/complete_ag2o_example.py`: Updated with electronic properties
+- `examples/complete/complete_ag3po4_example.py`: Updated with both bulk and slab electronic properties
+
+### Key Features
+
+**Flexibility**:
+- Independent control over SCF, band, and DOS k-point densities
+- Per-slab configuration for heterogeneous terminations
+- Material-agnostic builders work for any system
+
+**Integration**:
+- Seamless integration with vasp.v2.bands workchain
+- Automatic primitive cell detection and standardization
+- Seekpath integration for high-symmetry paths
+
+**Performance**:
+- Three-stage workflow with WAVECAR/CHGCAR reuse
+- Parallel calculation across multiple slabs
+- Configurable computational resources per stage
+
+### Backward Compatibility
+
+✅ **Fully backward compatible**
+- Default `compute_electronic_properties_bulk=False` and `compute_electronic_properties_slabs=False`
+- No changes required to existing scripts
+- Electronic properties calculations only performed when explicitly requested
+
+---
+
+## [Unreleased] - AIMD Module (Ab Initio Molecular Dynamics)
+
+### New Feature: AIMD on Slab Structures
+
+**Overview**: Added comprehensive ab initio molecular dynamics (AIMD) module for running sequential MD simulations on slab structures with automatic restart chaining between stages.
+
+**Capabilities**:
+- **Parallel AIMD**: Run AIMD on multiple slab terminations simultaneously
+- **Sequential stages**: Chain multiple AIMD stages (equilibration → production)
+- **Automatic restart**: Each stage uses output of previous stage as restart point
+- **Isothermal runs**: TEBEG=TEEND for constant temperature MD
+- **Flexible staging**: Independent control of temperature and timesteps per stage
+- **Trajectory output**: Full MD trajectory and energies from each stage
+
+### Implementation
+
+**Core Module**:
+- `teros/core/aimd.py`:
+  - `aimd_single_stage_scatter()`: Run single AIMD stage on all slabs in parallel
+  - `prepare_aimd_parameters()`: Helper to inject stage-specific parameters (temperature, NSW)
+  - `get_settings()`: Parser settings for trajectory and structure output
+
+**Workflow Pattern**:
+```
+Stage 1: Equilibration (300K, 100 steps) on all slabs in parallel
+    ↓ (automatic restart via remote_folders)
+Stage 2: Production (300K, 500 steps) on all slabs in parallel
+    ↓
+Final: Trajectories, structures, energies for all slabs
+```
+
+### API
+
+**Function Signature**:
+```python
+aimd_single_stage_scatter(
+    slabs: dict[str, StructureData],          # Slabs to run AIMD on
+    temperature: float,                        # Target temperature (K)
+    steps: int,                                # Number of MD steps (NSW)
+    code: Code,                                # VASP code
+    aimd_parameters: dict,                     # Base AIMD INCAR (IBRION=0, MDALGO, etc.)
+    potential_family: str,                     # Potential family
+    potential_mapping: dict,                   # Element mapping
+    options: dict,                             # Scheduler options
+    kpoints_spacing: float,                    # K-point spacing
+    clean_workdir: bool,                       # Clean work directory
+    restart_folders: dict[str, RemoteData] = {},  # Optional restart from previous stage
+) -> dict
+```
+
+**Returns**:
+```python
+{
+    'structures': {slab_label: StructureData},    # Final structures
+    'remote_folders': {slab_label: RemoteData},   # For next stage restart
+    'energies': {slab_label: Float},              # Total energies
+}
+```
+
+### Usage Example
+
+**Single-Stage AIMD**:
+```python
+from teros.core.aimd import aimd_single_stage_scatter
+
+# Base AIMD parameters (constant for all stages)
+aimd_parameters = {
+    'IBRION': 0,       # Molecular dynamics
+    'MDALGO': 2,       # Nosé-Hoover thermostat
+    'POTIM': 2.0,      # Timestep (fs)
+    'SMASS': 3.0,      # Nosé mass
+    'PREC': 'Normal',
+    'ENCUT': 400,
+    'ISMEAR': 0,
+    'SIGMA': 0.1,
+    'LWAVE': True,
+    'LCHARG': True,
+}
+
+# Run AIMD stage
+stage1 = aimd_single_stage_scatter(
+    slabs=relaxed_slabs,         # From slab relaxation
+    temperature=300,              # 300 K
+    steps=100,                    # 100 MD steps
+    code=code,
+    aimd_parameters=aimd_parameters,
+    potential_family='PBE',
+    potential_mapping={'Ag': 'Ag', 'O': 'O'},
+    options=options,
+    kpoints_spacing=0.5,
+    clean_workdir=False,
+)
+```
+
+**Multi-Stage Sequential AIMD**:
+```python
+# Stage 1: Equilibration
+stage1 = aimd_single_stage_scatter(
+    slabs=relaxed_slabs,
+    temperature=300,
+    steps=100,                   # Equilibration: 100 steps
+    # ... other parameters ...
+)
+
+# Stage 2: Production (automatic restart from Stage 1)
+stage2 = aimd_single_stage_scatter(
+    slabs=stage1['structures'],          # Use output structures
+    temperature=300,
+    steps=500,                           # Production: 500 steps
+    restart_folders=stage1['remote_folders'],  # Restart from Stage 1 WAVECAR
+    # ... other parameters ...
+)
+
+# Stage 3: Extended production (restart from Stage 2)
+stage3 = aimd_single_stage_scatter(
+    slabs=stage2['structures'],
+    temperature=300,
+    steps=1000,
+    restart_folders=stage2['remote_folders'],
+    # ... other parameters ...
+)
+```
+
+**Temperature Ramping**:
+```python
+# Ramp from 100K to 300K
+temps = [100, 150, 200, 250, 300]
+stages = []
+current_slabs = initial_slabs
+current_folders = {}
+
+for temp in temps:
+    stage = aimd_single_stage_scatter(
+        slabs=current_slabs,
+        temperature=temp,
+        steps=50,                        # Short equilibration at each temp
+        restart_folders=current_folders,
+        # ... other parameters ...
+    )
+    current_slabs = stage['structures']
+    current_folders = stage['remote_folders']
+    stages.append(stage)
+```
+
+### Modified Files
+
+**Core Implementation**:
+- `teros/core/aimd.py`: New module with AIMD functionality
+
+### New Files
+
+**Examples**:
+- `examples/complete/complete_ag2o_aimd_example.py`: AIMD workflow for Ag₂O slabs
+- `examples/complete/complete_ag3po4_aimd_example.py`: AIMD workflow for Ag₃PO₄ slabs
+
+### Key Features
+
+**Parallel Execution**:
+- Scatter-gather pattern runs AIMD on all slabs simultaneously
+- Each slab runs independently with identical MD parameters
+
+**Restart Chaining**:
+- Automatic restart via `restart_folders` parameter
+- VASP reads WAVECAR, CHGCAR from previous stage
+- Seamless multi-stage workflows
+
+**Flexibility**:
+- Independent control of temperature and steps per stage
+- Easy temperature ramping and multi-phase protocols
+- Compatible with any MDALGO (Nosé-Hoover, Langevin, etc.)
+
+**Output**:
+- Full MD trajectory for each slab (via parser_settings)
+- Final structures for analysis or further stages
+- Total energies for convergence monitoring
+
+### Typical Workflow
+
+1. **Slab relaxation** → Get equilibrium structures
+2. **AIMD equilibration** → 100-200 steps at target temperature
+3. **AIMD production** → 500-1000+ steps with restart from equilibration
+4. **Analysis** → Extract trajectory, compute RDF, MSD, etc.
+
+### Backward Compatibility
+
+✅ **Fully backward compatible**
+- AIMD is a separate module, does not affect existing workflows
+- No changes to `build_core_workgraph()` required
+- Users explicitly call `aimd_single_stage_scatter()` when needed
 
 ---
 
