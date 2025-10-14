@@ -1,5 +1,53 @@
 # Changelog
 
+## [Unreleased] - Workflow Preset System Updates
+
+### Updated: Workflow Presets (October 2025)
+
+**Summary:** Improved workflow preset system with optional components and new electronic structure presets.
+
+**Modified Presets:**
+
+1. **`surface_thermodynamics` preset:**
+   - Cleavage energies now **optional** (disabled by default)
+   - Relaxation energies now **optional** (disabled by default)
+   - **Migration:** Add `compute_cleavage=True` and/or `compute_relaxation_energy=True` if you need these features
+
+2. **`aimd_only` preset:**
+   - Slab relaxation now **disabled** by default
+   - AIMD runs on unrelaxed slabs (generated from bulk)
+   - **Migration:** Add `relax_slabs=True` if you need slabs relaxed before AIMD
+
+**New Presets:**
+
+3. **`electronic_structure_slabs_only`:**
+   - Electronic properties (DOS and band structure) for slabs only
+   - Requires: `slab_bands_parameters`, `slab_band_settings`
+
+4. **`electronic_structure_bulk_and_slabs`:**
+   - Electronic properties for both bulk and slabs
+   - Requires: `bands_parameters`, `band_settings`, `slab_bands_parameters`, `slab_band_settings`
+
+**New Documentation:**
+
+- `docs/WORKFLOW_SYSTEM_EXPLAINED.md` - Comprehensive three-tier system guide
+- `docs/WORKFLOW_MIGRATION_GUIDE.md` - Migration guide for existing scripts
+- Updated `docs/WORKFLOW_PRESETS_GUIDE.md` with accurate preset definitions
+- Updated `docs/WORKFLOW_PRESETS_EXAMPLES.md` with new examples
+
+**Backward Compatibility:**
+
+✅ **Fully backward compatible**
+- All existing presets still work
+- Old scripts will run unchanged (may need explicit flags for optional features)
+- No breaking changes to API
+
+**See also:**
+- [Workflow Updates Summary](examples/step_by_step/WORKFLOW_UPDATES_SUMMARY.md)
+- [Migration Guide](docs/WORKFLOW_MIGRATION_GUIDE.md)
+
+---
+
 ## [Unreleased] - Relaxation Energy Module
 
 ### New Feature: Relaxation Energy Calculation

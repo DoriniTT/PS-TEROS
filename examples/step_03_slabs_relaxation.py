@@ -1,35 +1,33 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-STEP 7: AIMD Simulation
+STEP 3: Slab Generation and Relaxation
 
 This script tests:
 - Bulk relaxation
-- Slab generation (no relaxation)
-- AIMD (Ab Initio Molecular Dynamics) simulation on slabs
+- Slab generation from bulk
+- Slab relaxation
+- Relaxation energy calculation (E_relaxed - E_unrelaxed)
 
-This demonstrates dynamic properties at finite temperature.
-NOTE: With 'aimd_only' preset, slabs are NOT relaxed before AIMD.
+This demonstrates the slab workflow without surface thermodynamics.
 
 Material: Ag2O
-Surface: (111)
-AIMD: 2-stage sequence (equilibration + production)
+Surface: (111) - multiple terminations
 
 Usage:
     source ~/envs/psteros/bin/activate
-    python step_07_aimd_simulation.py
+    python step_03_slabs_relaxation.py
 """
 
 import sys
 import os
 from aiida import load_profile
 from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_aimd_defaults
 
 def main():
-    """Step 7: Test AIMD simulation."""
+    """Step 3: Test slab generation and relaxation."""
     
     print("\n" + "="*70)
-    print("STEP 7: AIMD SIMULATION")
+    print("STEP 3: SLAB GENERATION AND RELAXATION")
     print("="*70)
     
     # Load AiiDA profile
@@ -39,10 +37,11 @@ def main():
     
     # Setup paths
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    structures_dir = os.path.join(script_dir, '../complete/structures')
+    structures_dir = os.path.join(script_dir, 'structures')
     
     print(f"\n2. Structure:")
     print(f"   Bulk: {structures_dir}/ag2o.cif")
+    print(f"   Will generate (111) slabs automatically")
     
     # Code configuration
     code_label = 'VASP-VTST-6.4.3@bohr'
@@ -65,8 +64,9 @@ def main():
         'LCHARG': False,
     }
     
+    # Slab relaxation parameters (relax atoms only, not cell)
     slab_params = bulk_params.copy()
-    slab_params['ISIF'] = 2
+    slab_params['ISIF'] = 2  # Relax atoms only
     
     common_options = {
         'resources': {
@@ -76,26 +76,18 @@ def main():
         'queue_name': 'par40',
     }
     
-    # AIMD configuration
-    print("\n3. AIMD configuration:")
-    aimd_sequence = [
-        {'temperature': 300, 'steps': 50}, 
-        {'temperature': 300, 'steps': 100}, 
-    ]
-    
-    for i, stage in enumerate(aimd_sequence):
-        print(f"   Stage {i+1}: {stage['temperature']} K, {stage['steps']} steps")
-    
-    aimd_params = get_aimd_defaults()
-    
-    print("\n4. Building workgraph...")
-    print("   Using preset: 'aimd_only'")
-    print("   AIMD will run on ALL generated slabs (WITHOUT prior relaxation)")
-    print("   Note: Slabs are generated but NOT relaxed before AIMD")
+    print("\n3. Building workgraph...")
+    print("   Using preset: 'relaxation_energy_only'")
+    print("   This will:")
+    print("     - Relax bulk Ag2O")
+    print("     - Generate (111) slabs")
+    print("     - Run SCF on unrelaxed slabs")
+    print("     - Relax slabs")
+    print("     - Calculate ΔE_relax = E_relaxed - E_unrelaxed")
     
     # Build workgraph using preset
     wg = build_core_workgraph(
-        workflow_preset='aimd_only',
+        workflow_preset='relaxation_energy_only',
         
         # Structures
         structures_dir=structures_dir,
@@ -113,8 +105,8 @@ def main():
         bulk_options=common_options,
         
         # Slab generation
-        miller_indices=[1, 1, 1],
-        min_slab_thickness=15.0,  # Smaller for AIMD
+        miller_indices=[1, 0, 0],
+        min_slab_thickness=18.0,
         min_vacuum_thickness=15.0,
         lll_reduce=True,
         center_slab=True,
@@ -126,42 +118,30 @@ def main():
         slab_options=common_options,
         slab_kpoints_spacing=0.4,
         
-        # AIMD
-        aimd_sequence=aimd_sequence,
-        aimd_parameters=aimd_params,
-        aimd_options=common_options,
-        aimd_potential_mapping={'Ag': 'Ag', 'O': 'O'},
-        aimd_kpoints_spacing=0.5,  # Coarser for AIMD
-        
-        name='Step07_AIMD_Ag2O_111',
+        name='Step03_SlabRelaxation_Ag2O_100',
     )
     
     print("   ✓ WorkGraph built successfully")
     
     # Submit
-    print("\n5. Submitting to AiiDA daemon...")
+    print("\n4. Submitting to AiiDA daemon...")
     wg.submit(wait=False)
     
     print(f"\n{'='*70}")
-    print("STEP 7 SUBMITTED SUCCESSFULLY")
+    print("STEP 3 SUBMITTED SUCCESSFULLY")
     print(f"{'='*70}")
     print(f"\nWorkGraph PK: {wg.pk}")
-    print(f"\n⚠️  WARNING: AIMD is EXPENSIVE and will take many hours!")
     print(f"\nMonitor with:")
     print(f"  verdi process status {wg.pk}")
     print(f"  verdi process show {wg.pk}")
     print(f"\nExpected outputs:")
-    print(f"  - bulk_energy, bulk_structure")
-    print(f"  - slab_structures")
-    print(f"  - aimd_results: Nested namespace with AIMD data")
-    print(f"    - For each slab and stage:")
-    print(f"      - trajectory, structure, energy, remote, retrieved")
-    print(f"\nNOTE: Slabs are NOT relaxed in 'aimd_only' preset")
-    print(f"      AIMD runs directly on generated slab structures")
-    print(f"\nAIMD trajectories can be analyzed for:")
-    print(f"  - Temperature evolution")
-    print(f"  - Atomic diffusion")
-    print(f"  - Structural stability")
+    print(f"  - bulk_energy: E(bulk Ag2O)")
+    print(f"  - bulk_structure: Relaxed bulk")
+    print(f"  - slab_structures: Generated (111) terminations")
+    print(f"  - unrelaxed_slab_energies: SCF energies")
+    print(f"  - slab_energies: Relaxed energies")
+    print(f"  - relaxation_energies: ΔE = E_relaxed - E_unrelaxed")
+    print(f"\nNote: Number of terminations depends on symmetry")
     print(f"{'='*70}\n")
     
     return wg

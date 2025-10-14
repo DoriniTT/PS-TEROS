@@ -50,40 +50,67 @@ verdi daemon restart
 
 ## Quick Start
 
-### Basic Workflow with Default Builders
+### Basic Workflow with Presets (Recommended)
 
-The simplest way to run PS-TEROS is using default builders:
+The simplest way to run PS-TEROS is using workflow presets:
 
 ```python
-from teros.core.builders import get_ag3po4_defaults
-from teros.core.workgraph import build_core_workgraph_with_map
+from teros.core.workgraph import build_core_workgraph
 from aiida.engine import submit
 
-# Get default parameters for Ag3PO4 system
-defaults = get_ag3po4_defaults(
-    structures_dir="/path/to/structures",
-    code_label="vasp@localhost",
-    potential_family="PBE.54",
-)
+# Create workgraph using preset
+wg = build_core_workgraph(
+    workflow_preset='surface_thermodynamics',  # One line activates full workflow!
 
-# Create and submit workgraph
-wg = build_core_workgraph_with_map(
-    **defaults,
-    bulk_name="ag3po4.cif",
+    # Structure files
+    structures_dir="/path/to/structures",
+    bulk_name="ag2o.cif",
     metal_name="Ag.cif",
-    nonmetal_name="P.cif",
     oxygen_name="O2.cif",
+
+    # Code configuration
+    code_label="vasp@localhost",
+    potential_family="PBE",
+    kpoints_spacing=0.4,
+
+    # Potential mappings
+    bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
+    metal_potential_mapping={'Ag': 'Ag'},
+    oxygen_potential_mapping={'O': 'O'},
+
+    # VASP parameters (simplified)
+    bulk_parameters={'PREC': 'Accurate', 'ENCUT': 520},
+    metal_parameters={'PREC': 'Accurate', 'ENCUT': 520},
+    oxygen_parameters={'PREC': 'Accurate', 'ENCUT': 520},
+
+    # Computational resources
+    bulk_options={'resources': {'num_machines': 1}},
+    metal_options={'resources': {'num_machines': 1}},
+    oxygen_options={'resources': {'num_machines': 1}},
+
+    # Slab generation
     miller_indices=[1, 0, 0],
     min_slab_thickness=10.0,
     min_vacuum_thickness=15.0,
-    relax_slabs=True,
-    compute_thermodynamics=True,
-    name="Ag3PO4_100_surface"
+
+    name="Ag2O_100_surface"
 )
 
 # Submit to AiiDA
 node = submit(wg)
 print(f"Submitted PS-TEROS workflow: PK={node.pk}")
+```
+
+**What this does:**
+- Relaxes bulk and reference structures
+- Calculates formation enthalpy
+- Generates and relaxes (100) surface slabs
+- Calculates surface energies vs. chemical potential
+
+**Optional features** (disabled by default, add these flags to enable):
+```python
+compute_cleavage=True,              # Enable cleavage energy calculations
+compute_relaxation_energy=True,      # Enable relaxation energy calculations
 ```
 
 ### Workflow with Manual Terminations
@@ -162,6 +189,75 @@ results = load_node(node.pk).outputs
 cleavage_energies = results.cleavage_energies
 ```
 
+## Three-Tier Workflow System
+
+PS-TEROS uses a powerful three-tier configuration system that balances simplicity with flexibility:
+
+### Tier 1: Named Workflow Presets (Recommended)
+
+Use a single parameter to activate complete workflows:
+
+```python
+workflow_preset='surface_thermodynamics'  # Activates full thermodynamics workflow
+```
+
+**Available presets:**
+- `surface_thermodynamics` (default) - Complete surface energy calculations
+- `surface_thermodynamics_unrelaxed` - Quick screening with unrelaxed slabs
+- `cleavage_only` - Cleavage energy calculations
+- `relaxation_energy_only` - Surface reconstruction analysis
+- `bulk_only` - Bulk optimization only
+- `formation_enthalpy_only` - Formation enthalpy without surfaces
+- `electronic_structure_bulk_only` - DOS/bands for bulk
+- `electronic_structure_slabs_only` - DOS/bands for slabs
+- `electronic_structure_bulk_and_slabs` - DOS/bands for both
+- `aimd_only` - Molecular dynamics simulations
+- `comprehensive` - Everything enabled
+
+**List available presets:**
+```python
+from teros.core import list_workflow_presets
+list_workflow_presets()
+```
+
+### Tier 2: Individual Component Flags (Fine-Grained Control)
+
+Override preset defaults with specific flags:
+
+```python
+workflow_preset='surface_thermodynamics',
+compute_cleavage=True,              # Add cleavage energies
+compute_relaxation_energy=False,    # Skip relaxation energies
+```
+
+**Available flags:**
+- `relax_slabs` - Enable/disable slab relaxation
+- `compute_thermodynamics` - Enable/disable surface energy calculations
+- `compute_cleavage` - Enable/disable cleavage energy calculations
+- `compute_relaxation_energy` - Enable/disable relaxation energy calculations
+- `compute_electronic_properties_bulk` - Enable/disable bulk DOS/bands
+- `compute_electronic_properties_slabs` - Enable/disable slab DOS/bands
+- `run_aimd` - Enable/disable AIMD simulations
+
+### Tier 3: Automatic Dependency Resolution
+
+The system automatically validates your configuration and warns about conflicts:
+
+```python
+# This will warn you:
+workflow_preset='surface_thermodynamics',
+relax_slabs=False,  # Breaks dependency!
+compute_cleavage=True,  # Needs relaxed slabs
+```
+
+**For detailed documentation, see:**
+- [Workflow System Explained](docs/WORKFLOW_SYSTEM_EXPLAINED.md) - Understanding the three tiers
+- [Workflow Presets Guide](docs/WORKFLOW_PRESETS_GUIDE.md) - Complete preset reference
+- [Workflow Presets Examples](docs/WORKFLOW_PRESETS_EXAMPLES.md) - Runnable examples
+- [Migration Guide](docs/WORKFLOW_MIGRATION_GUIDE.md) - Updating existing scripts
+
+---
+
 ## Workflow Architecture
 
 PS-TEROS workflows follow this execution pattern:
@@ -233,10 +329,17 @@ Default parameter sets:
 - `input_slabs`: Dictionary of pre-generated slabs (optional)
 
 ### Calculation Control
-- `relax_slabs`: Enable/disable slab relaxation (default: False)
-- `compute_thermodynamics`: Enable surface energy calculations (default: False)
-- `compute_cleavage`: Enable cleavage energy calculations (default: False)
+- `workflow_preset`: Named workflow preset (e.g., 'surface_thermodynamics') - **Recommended**
+- `relax_slabs`: Enable/disable slab relaxation
+- `compute_thermodynamics`: Enable/disable surface energy calculations
+- `compute_cleavage`: Enable/disable cleavage energy calculations (optional in most presets)
+- `compute_relaxation_energy`: Enable/disable relaxation energy calculations (optional in most presets)
+- `compute_electronic_properties_bulk`: Enable/disable bulk DOS/bands
+- `compute_electronic_properties_slabs`: Enable/disable slab DOS/bands
+- `run_aimd`: Enable/disable AIMD simulations
 - `restart_from_node`: PK of previous calculation for restart (optional)
+
+**Note:** When using `workflow_preset`, most flags are set automatically. Use individual flags only to override preset defaults.
 
 ### DFT Parameters
 - `code_label`: AiiDA code label (e.g., "vasp@cluster")

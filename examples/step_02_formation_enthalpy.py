@@ -1,31 +1,32 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-STEP 6: Electronic Properties (DOS and Band Structure)
+STEP 2: Formation Enthalpy Calculation
 
 This script tests:
-- Bulk relaxation
-- Electronic structure calculation (DOS and bands)
+- Bulk relaxation (Ag2O)
+- Reference relaxations (Ag, O2)
+- Formation enthalpy calculation
 
-This demonstrates the electronic properties workflow for bulk materials.
+This is step 2 in understanding the PS-TEROS workflow chain.
 
 Material: Ag2O
+References: Ag (metal), O2 (oxygen)
 
 Usage:
     source ~/envs/psteros/bin/activate
-    python step_06_electronic_properties.py
+    python step_02_formation_enthalpy.py
 """
 
 import sys
 import os
 from aiida import load_profile
 from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_electronic_properties_defaults
 
 def main():
-    """Step 6: Test electronic properties calculation."""
+    """Step 2: Test formation enthalpy calculation."""
     
     print("\n" + "="*70)
-    print("STEP 6: ELECTRONIC PROPERTIES (DOS AND BANDS)")
+    print("STEP 2: FORMATION ENTHALPY CALCULATION")
     print("="*70)
     
     # Load AiiDA profile
@@ -35,17 +36,19 @@ def main():
     
     # Setup paths
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    structures_dir = os.path.join(script_dir, '../complete/structures')
+    structures_dir = os.path.join(script_dir, 'structures')
     
-    print(f"\n2. Structure:")
-    print(f"   Bulk: {structures_dir}/ag2o.cif")
+    print(f"\n2. Structures:")
+    print(f"   Bulk:   {structures_dir}/ag2o.cif")
+    print(f"   Metal:  {structures_dir}/Ag.cif")
+    print(f"   Oxygen: {structures_dir}/O2.cif")
     
     # Code configuration
     code_label = 'VASP-VTST-6.4.3@bohr'
     potential_family = 'PBE'
     
-    # Bulk parameters
-    bulk_params = {
+    # Common VASP parameters
+    vasp_params = {
         'PREC': 'Accurate',
         'ENCUT': 520,
         'EDIFF': 1e-6,
@@ -54,7 +57,24 @@ def main():
         'IBRION': 2,
         'ISIF': 3,
         'NSW': 100,
-        'EDIFFG': -0.01,
+        'EDIFFG': -0.05,
+        'ALGO': 'Normal',
+        'LREAL': 'Auto',
+        'LWAVE': False,
+        'LCHARG': False,
+    }
+
+    # Common VASP parameters
+    vasp_params_o2 = {
+        'PREC': 'Accurate',
+        'ENCUT': 520,
+        'EDIFF': 1e-6,
+        'ISMEAR': 0,
+        'SIGMA': 0.05,
+        'IBRION': 2,
+        'ISIF': 2,
+        'NSW': 100,
+        'EDIFFG': -0.05,
         'ALGO': 'Normal',
         'LREAL': 'Auto',
         'LWAVE': False,
@@ -69,23 +89,18 @@ def main():
         'queue_name': 'par40',
     }
     
-    # Get electronic properties defaults
-    print("\n3. Setting up electronic properties parameters...")
-    elec_defaults = get_electronic_properties_defaults()
-    
-    print("   Band structure will be calculated along high-symmetry paths")
-    print("   DOS will include total and projected components")
-    
-    print("\n4. Building workgraph...")
-    print("   Using preset: 'electronic_structure_bulk_only'")
+    print("\n3. Building workgraph...")
+    print("   Using preset: 'formation_enthalpy_only'")
     
     # Build workgraph using preset
     wg = build_core_workgraph(
-        workflow_preset='electronic_structure_bulk_only',
+        workflow_preset='formation_enthalpy_only',
         
         # Structures
         structures_dir=structures_dir,
         bulk_name='ag2o.cif',
+        metal_name='Ag.cif',
+        oxygen_name='O2.cif',
         
         # Code
         code_label=code_label,
@@ -93,41 +108,43 @@ def main():
         kpoints_spacing=0.4,
         clean_workdir=False,
         
-        # Bulk
+        # Bulk (Ag2O)
         bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
-        bulk_parameters=bulk_params,
+        bulk_parameters=vasp_params.copy(),
         bulk_options=common_options,
         
-        # Electronic properties
-        bands_parameters=elec_defaults,
-        bands_options=common_options,
-        band_settings=elec_defaults['band_settings'],
+        # Metal (Ag)
+        metal_potential_mapping={'Ag': 'Ag'},
+        metal_parameters=vasp_params.copy(),
+        metal_options=common_options,
         
-        name='Step06_ElectronicProperties_Ag2O',
+        # Oxygen (O2)
+        oxygen_potential_mapping={'O': 'O'},
+        oxygen_parameters=vasp_params_o2.copy(),
+        oxygen_options=common_options,
+        
+        name='Step02_FormationEnthalpy_Ag2O',
     )
     
     print("   ✓ WorkGraph built successfully")
     
     # Submit
-    print("\n5. Submitting to AiiDA daemon...")
+    print("\n4. Submitting to AiiDA daemon...")
     wg.submit(wait=False)
     
     print(f"\n{'='*70}")
-    print("STEP 6 SUBMITTED SUCCESSFULLY")
+    print("STEP 2 SUBMITTED SUCCESSFULLY")
     print(f"{'='*70}")
     print(f"\nWorkGraph PK: {wg.pk}")
     print(f"\nMonitor with:")
     print(f"  verdi process status {wg.pk}")
     print(f"  verdi process show {wg.pk}")
     print(f"\nExpected outputs:")
-    print(f"  - bulk_energy: E(bulk)")
-    print(f"  - bulk_structure: Relaxed structure")
-    print(f"  - bulk_bands: Band structure data")
-    print(f"  - bulk_dos: Density of states")
-    print(f"  - bulk_primitive_structure: Primitive cell used")
-    print(f"  - bulk_seekpath_parameters: Symmetry info")
-    print(f"\nUse AiiDA tools to visualize:")
-    print(f"  verdi data bands show <PK>")
+    print(f"  - bulk_energy: E(Ag2O)")
+    print(f"  - metal_energy: E(Ag)")
+    print(f"  - oxygen_energy: E(O2)")
+    print(f"  - formation_enthalpy: ΔHf = E(Ag2O) - 2*E(Ag) - 0.5*E(O2)")
+    print(f"\nFormation enthalpy is reported in eV/formula unit")
     print(f"{'='*70}\n")
     
     return wg

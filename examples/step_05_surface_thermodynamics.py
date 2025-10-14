@@ -41,7 +41,7 @@ def main():
     
     # Setup paths
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    structures_dir = os.path.join(script_dir, '../complete/structures')
+    structures_dir = os.path.join(script_dir, 'structures')
     
     print(f"\n2. Structures:")
     print(f"   Bulk:   {structures_dir}/ag2o.cif")

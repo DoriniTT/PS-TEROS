@@ -1,33 +1,34 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-STEP 3: Slab Generation and Relaxation
+STEP 9: Electronic Structure for Both Bulk and Slabs
 
 This script tests:
 - Bulk relaxation
-- Slab generation from bulk
-- Slab relaxation
-- Relaxation energy calculation (E_relaxed - E_unrelaxed)
+- Electronic structure calculation (DOS and bands) for bulk
+- Slab generation and relaxation
+- Electronic structure calculation (DOS and bands) for slabs
 
-This demonstrates the slab workflow without surface thermodynamics.
+This demonstrates comprehensive electronic properties workflow.
 
 Material: Ag2O
-Surface: (111) - multiple terminations
+Surface: (111)
 
 Usage:
     source ~/envs/psteros/bin/activate
-    python step_03_slabs_relaxation.py
+    python step_09_electronic_structure_bulk_and_slabs.py
 """
 
 import sys
 import os
 from aiida import load_profile
 from teros.core.workgraph import build_core_workgraph
+from teros.core.builders import get_electronic_properties_defaults, get_slab_electronic_properties_defaults
 
 def main():
-    """Step 3: Test slab generation and relaxation."""
+    """Step 9: Test electronic properties calculation for both bulk and slabs."""
     
     print("\n" + "="*70)
-    print("STEP 3: SLAB GENERATION AND RELAXATION")
+    print("STEP 9: ELECTRONIC STRUCTURE FOR BULK AND SLABS")
     print("="*70)
     
     # Load AiiDA profile
@@ -37,17 +38,16 @@ def main():
     
     # Setup paths
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    structures_dir = os.path.join(script_dir, '../complete/structures')
+    structures_dir = os.path.join(script_dir, 'structures')
     
     print(f"\n2. Structure:")
     print(f"   Bulk: {structures_dir}/ag2o.cif")
-    print(f"   Will generate (111) slabs automatically")
     
     # Code configuration
     code_label = 'VASP-VTST-6.4.3@bohr'
     potential_family = 'PBE'
     
-    # VASP parameters
+    # Bulk parameters
     bulk_params = {
         'PREC': 'Accurate',
         'ENCUT': 520,
@@ -64,9 +64,9 @@ def main():
         'LCHARG': False,
     }
     
-    # Slab relaxation parameters (relax atoms only, not cell)
+    # Slab parameters
     slab_params = bulk_params.copy()
-    slab_params['ISIF'] = 2  # Relax atoms only
+    slab_params['ISIF'] = 2
     
     common_options = {
         'resources': {
@@ -76,18 +76,20 @@ def main():
         'queue_name': 'par40',
     }
     
-    print("\n3. Building workgraph...")
-    print("   Using preset: 'relaxation_energy_only'")
-    print("   This will:")
-    print("     - Relax bulk Ag2O")
-    print("     - Generate (111) slabs")
-    print("     - Run SCF on unrelaxed slabs")
-    print("     - Relax slabs")
-    print("     - Calculate ΔE_relax = E_relaxed - E_unrelaxed")
+    # Get electronic properties defaults
+    print("\n3. Setting up electronic properties parameters...")
+    bulk_elec_defaults = get_electronic_properties_defaults()
+    slab_elec_defaults = get_slab_electronic_properties_defaults()
+    
+    print("   Band structure will be calculated for both bulk and slabs")
+    print("   DOS will include total and projected components")
+    
+    print("\n4. Building workgraph...")
+    print("   Using preset: 'electronic_structure_bulk_and_slabs'")
     
     # Build workgraph using preset
     wg = build_core_workgraph(
-        workflow_preset='relaxation_energy_only',
+        workflow_preset='electronic_structure_bulk_and_slabs',
         
         # Structures
         structures_dir=structures_dir,
@@ -105,7 +107,7 @@ def main():
         bulk_options=common_options,
         
         # Slab generation
-        miller_indices=[1, 0, 0],
+        miller_indices=[1, 1, 1],
         min_slab_thickness=18.0,
         min_vacuum_thickness=15.0,
         lll_reduce=True,
@@ -118,30 +120,48 @@ def main():
         slab_options=common_options,
         slab_kpoints_spacing=0.4,
         
-        name='Step03_SlabRelaxation_Ag2O_100',
+        # Bulk electronic properties
+        bands_parameters=bulk_elec_defaults,
+        bands_options=common_options,
+        band_settings=bulk_elec_defaults['band_settings'],
+        
+        # Slab electronic properties
+        slab_bands_parameters=slab_elec_defaults,
+        slab_bands_options=common_options,
+        slab_band_settings=slab_elec_defaults['band_settings'],
+        
+        name='Step09_ElectronicStructure_BulkAndSlabs_Ag2O_111',
     )
     
     print("   ✓ WorkGraph built successfully")
     
     # Submit
-    print("\n4. Submitting to AiiDA daemon...")
+    print("\n5. Submitting to AiiDA daemon...")
     wg.submit(wait=False)
     
     print(f"\n{'='*70}")
-    print("STEP 3 SUBMITTED SUCCESSFULLY")
+    print("STEP 9 SUBMITTED SUCCESSFULLY")
     print(f"{'='*70}")
     print(f"\nWorkGraph PK: {wg.pk}")
     print(f"\nMonitor with:")
     print(f"  verdi process status {wg.pk}")
     print(f"  verdi process show {wg.pk}")
     print(f"\nExpected outputs:")
-    print(f"  - bulk_energy: E(bulk Ag2O)")
-    print(f"  - bulk_structure: Relaxed bulk")
-    print(f"  - slab_structures: Generated (111) terminations")
-    print(f"  - unrelaxed_slab_energies: SCF energies")
-    print(f"  - slab_energies: Relaxed energies")
-    print(f"  - relaxation_energies: ΔE = E_relaxed - E_unrelaxed")
-    print(f"\nNote: Number of terminations depends on symmetry")
+    print(f"  BULK:")
+    print(f"    - bulk_energy, bulk_structure")
+    print(f"    - bulk_bands: Band structure")
+    print(f"    - bulk_dos: Density of states")
+    print(f"    - bulk_primitive_structure: Primitive cell")
+    print(f"    - bulk_seekpath_parameters: Symmetry info")
+    print(f"  SLABS:")
+    print(f"    - slab_structures: All terminations")
+    print(f"    - slab_energies: Relaxed slab energies")
+    print(f"    - slab_bands: Band structure for each slab")
+    print(f"    - slab_dos: Density of states for each slab")
+    print(f"    - slab_primitive_structures: Primitive cells")
+    print(f"    - slab_seekpath_parameters: Symmetry info")
+    print(f"\nUse AiiDA tools to visualize:")
+    print(f"  verdi data bands show <PK>")
     print(f"{'='*70}\n")
     
     return wg

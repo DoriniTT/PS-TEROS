@@ -68,8 +68,8 @@ Complete surface thermodynamics workflow with relaxed slabs.
 - ✓ Formation enthalpy calculation
 - ✓ Slab generation and relaxation
 - ✓ Surface energy calculations with chemical potential sampling
-- ✓ Cleavage energy calculations
-- ✓ Relaxation energy calculations
+- ○ Cleavage energy calculations (OPTIONAL - disabled by default, add `compute_cleavage=True` to enable)
+- ○ Relaxation energy calculations (OPTIONAL - disabled by default, add `compute_relaxation_energy=True` to enable)
 
 **Requirements:**
 - `metal_name` (e.g., 'Ag.cif')
@@ -80,6 +80,8 @@ Complete surface thermodynamics workflow with relaxed slabs.
 - Surface energy calculations
 - Pourbaix-like stability analysis
 - Complete thermodynamic characterization
+
+**Note:** Cleavage and relaxation energies are optional features that can be enabled by setting their respective flags to `True`.
 
 ---
 
@@ -202,14 +204,71 @@ Electronic properties (DOS/bands) for bulk structure.
 
 ---
 
-### 8. `aimd_only`
+### 8. `electronic_structure_slabs_only`
+
+Electronic properties (DOS/bands) for slabs only.
+
+**Activates:**
+- ✓ Bulk relaxation
+- ✓ Slab generation and relaxation
+- ✓ Electronic structure calculation for slabs (DOS and bands)
+
+**Deactivates:**
+- ✗ Bulk electronic properties
+- ✗ Thermodynamics
+- ✗ Cleavage/relaxation energies
+
+**Requirements:**
+- `slab_bands_parameters` - Dict with 'scf', 'bands', 'dos' INCAR parameters for slabs
+- `slab_band_settings` - Band workflow settings for slabs
+- `miller_indices` or `input_slabs`
+
+**Use Cases:**
+- Slab band structure calculation
+- Slab density of states (DOS)
+- Surface electronic property analysis
+
+---
+
+### 9. `electronic_structure_bulk_and_slabs`
+
+Electronic properties (DOS/bands) for both bulk and slabs.
+
+**Activates:**
+- ✓ Bulk relaxation
+- ✓ Slab generation and relaxation
+- ✓ Electronic structure calculation for bulk (DOS and bands)
+- ✓ Electronic structure calculation for slabs (DOS and bands)
+
+**Deactivates:**
+- ✗ Thermodynamics
+- ✗ Cleavage/relaxation energies
+
+**Requirements:**
+- `bands_parameters` - Dict with 'scf', 'bands', 'dos' INCAR parameters for bulk
+- `band_settings` - Band workflow settings for bulk
+- `slab_bands_parameters` - Dict with 'scf', 'bands', 'dos' INCAR parameters for slabs
+- `slab_band_settings` - Band workflow settings for slabs
+- `miller_indices` or `input_slabs`
+
+**Use Cases:**
+- Complete electronic structure analysis
+- Bulk vs surface electronic comparison
+- Comprehensive band structure study
+
+---
+
+### 10. `aimd_only`
 
 AIMD (Ab Initio Molecular Dynamics) simulation on slabs.
 
 **Activates:**
 - ✓ Bulk relaxation
-- ✓ Slab generation and relaxation
+- ✓ Slab generation (NO relaxation by default)
 - ✓ AIMD simulation
+
+**Deactivates:**
+- ✗ Slab relaxation (add `relax_slabs=True` if you need slabs relaxed before AIMD)
 
 **Requirements:**
 - `aimd_sequence` - List of AIMD stages: `[{'temperature': K, 'steps': N}, ...]`
@@ -220,9 +279,11 @@ AIMD (Ab Initio Molecular Dynamics) simulation on slabs.
 - Temperature effects
 - Dynamic property analysis
 
+**Note:** By default, AIMD runs on unrelaxed slabs (generated from bulk). If you need relaxed slabs before AIMD, set `relax_slabs=True`.
+
 ---
 
-### 9. `comprehensive`
+### 11. `comprehensive`
 
 Complete analysis with all features enabled.
 
@@ -295,17 +356,19 @@ print(f"Flags: {flags}")
 
 ## Parameter Requirements by Preset
 
-| Preset | metal_name | oxygen_name | nonmetal_name | miller_indices | bands_params | aimd_params |
-|--------|------------|-------------|---------------|----------------|--------------|-------------|
-| `surface_thermodynamics` | ✓ | ✓ | ○ | ○ | ✗ | ✗ |
-| `surface_thermodynamics_unrelaxed` | ✓ | ✓ | ○ | ○ | ✗ | ✗ |
-| `cleavage_only` | ✗ | ✗ | ✗ | ○ | ✗ | ✗ |
-| `relaxation_energy_only` | ✗ | ✗ | ✗ | ○ | ✗ | ✗ |
-| `bulk_only` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| `formation_enthalpy_only` | ✓ | ✓ | ○ | ✗ | ✗ | ✗ |
-| `electronic_structure_bulk_only` | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ |
-| `aimd_only` | ✗ | ✗ | ✗ | ○ | ✗ | ✓ |
-| `comprehensive` | ✓ | ✓ | ○ | ○ | ✓ | ✓ |
+| Preset | metal_name | oxygen_name | nonmetal_name | miller_indices | bands_params | slab_bands_params | aimd_params |
+|--------|------------|-------------|---------------|----------------|--------------|-------------------|-------------|
+| `surface_thermodynamics` | ✓ | ✓ | ○ | ○ | ✗ | ✗ | ✗ |
+| `surface_thermodynamics_unrelaxed` | ✓ | ✓ | ○ | ○ | ✗ | ✗ | ✗ |
+| `cleavage_only` | ✗ | ✗ | ✗ | ○ | ✗ | ✗ | ✗ |
+| `relaxation_energy_only` | ✗ | ✗ | ✗ | ○ | ✗ | ✗ | ✗ |
+| `bulk_only` | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| `formation_enthalpy_only` | ✓ | ✓ | ○ | ✗ | ✗ | ✗ | ✗ |
+| `electronic_structure_bulk_only` | ✗ | ✗ | ✗ | ✗ | ✓ | ✗ | ✗ |
+| `electronic_structure_slabs_only` | ✗ | ✗ | ✗ | ○ | ✗ | ✓ | ✗ |
+| `electronic_structure_bulk_and_slabs` | ✗ | ✗ | ✗ | ○ | ✓ | ✓ | ✗ |
+| `aimd_only` | ✗ | ✗ | ✗ | ○ | ✗ | ✗ | ✓ |
+| `comprehensive` | ✓ | ✓ | ○ | ○ | ✓ | ✓ | ✓ |
 
 **Legend:**
 - ✓ = Required

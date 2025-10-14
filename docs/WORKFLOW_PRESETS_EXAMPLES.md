@@ -14,9 +14,11 @@ This document provides complete, runnable examples for each workflow preset.
 6. [Example 5: Bulk Only](#example-5-bulk-only)
 7. [Example 6: Formation Enthalpy Only](#example-6-formation-enthalpy-only)
 8. [Example 7: Electronic Structure (Bulk)](#example-7-electronic-structure)
-9. [Example 8: AIMD Simulation](#example-8-aimd-simulation)
-10. [Example 9: Comprehensive Analysis](#example-9-comprehensive-analysis)
-11. [Example 10: Overriding Preset Defaults](#example-10-overriding-defaults)
+9. [Example 8: Electronic Structure (Slabs Only)](#example-8-electronic-structure-slabs-only)
+10. [Example 9: Electronic Structure (Bulk and Slabs)](#example-9-electronic-structure-bulk-and-slabs)
+11. [Example 10: AIMD Simulation](#example-10-aimd-simulation)
+12. [Example 11: Comprehensive Analysis](#example-11-comprehensive-analysis)
+13. [Example 12: Overriding Preset Defaults](#example-12-overriding-defaults)
 
 ---
 
@@ -128,8 +130,12 @@ print(f"Submitted WorkGraph: {result.pk}")
 4. Generates (100) slabs
 5. Relaxes all slab terminations
 6. Calculates surface energies with chemical potential sampling
-7. Calculates cleavage energies
-8. Calculates relaxation energies
+
+**Note:** Cleavage and relaxation energies are NOT computed by default. To include them, add:
+```python
+compute_cleavage=True,
+compute_relaxation_energy=True,
+```
 
 ---
 
@@ -406,7 +412,127 @@ print(f"Submitted electronic structure workflow: {result.pk}")
 
 ---
 
-## Example 8: AIMD Simulation
+## Example 8: Electronic Structure (Slabs Only)
+
+Calculate electronic properties for slabs only.
+
+```python
+"""
+Example: Electronic structure for Ag3PO4 (100) slabs
+DOS and band structure for surface terminations
+"""
+
+from teros.core.builders import get_slab_electronic_properties_defaults
+
+# Get default slab electronic properties parameters (denser k-points for 2D)
+slab_elec_defaults = get_slab_electronic_properties_defaults()
+
+wg = build_core_workgraph(
+    workflow_preset='electronic_structure_slabs_only',
+
+    structures_dir=STRUCTURES_DIR,
+    bulk_name='ag3po4.cif',
+
+    code_label=CODE_LABEL,
+    potential_family=POTENTIAL_FAMILY,
+
+    bulk_potential_mapping={'Ag': 'Ag', 'P': 'P', 'O': 'O'},
+    bulk_parameters=BULK_PARAMS,
+    bulk_options=BULK_OPTIONS,
+
+    # Slab configuration
+    miller_indices=[1, 0, 0],
+    min_slab_thickness=18.0,
+    min_vacuum_thickness=15.0,
+    slab_parameters=BULK_PARAMS.copy(),
+    slab_options=BULK_OPTIONS,
+
+    # Slab electronic properties parameters
+    slab_bands_parameters=slab_elec_defaults['bands_parameters'],
+    slab_bands_options=BULK_OPTIONS,
+    slab_band_settings=slab_elec_defaults['band_settings'],
+
+    name='Ag3PO4_100_Slab_Electronic'
+)
+
+result = submit(wg)
+print(f"Submitted slab electronic structure workflow: {result.pk}")
+```
+
+**What this calculates:**
+- Band structure for each slab termination
+- Total and projected density of states for each slab
+- Band gap for each termination (if semiconductor/insulator)
+
+**Use case:** Comparing electronic properties of different surface terminations.
+
+---
+
+## Example 9: Electronic Structure (Bulk and Slabs)
+
+Calculate electronic properties for both bulk and slabs.
+
+```python
+"""
+Example: Complete electronic structure analysis
+DOS and bands for both bulk and slabs
+"""
+
+from teros.core.builders import (
+    get_electronic_properties_defaults,
+    get_slab_electronic_properties_defaults
+)
+
+# Electronic properties for bulk and slabs
+elec_defaults = get_electronic_properties_defaults()
+slab_elec_defaults = get_slab_electronic_properties_defaults()
+
+wg = build_core_workgraph(
+    workflow_preset='electronic_structure_bulk_and_slabs',
+
+    structures_dir=STRUCTURES_DIR,
+    bulk_name='ag3po4.cif',
+
+    code_label=CODE_LABEL,
+    potential_family=POTENTIAL_FAMILY,
+
+    bulk_potential_mapping={'Ag': 'Ag', 'P': 'P', 'O': 'O'},
+    bulk_parameters=BULK_PARAMS,
+    bulk_options=BULK_OPTIONS,
+
+    # Slab configuration
+    miller_indices=[1, 0, 0],
+    min_slab_thickness=18.0,
+    min_vacuum_thickness=15.0,
+    slab_parameters=BULK_PARAMS.copy(),
+    slab_options=BULK_OPTIONS,
+
+    # Bulk electronic properties
+    bands_parameters=elec_defaults['bands_parameters'],
+    bands_options=BULK_OPTIONS,
+    band_settings=elec_defaults['band_settings'],
+
+    # Slab electronic properties
+    slab_bands_parameters=slab_elec_defaults['bands_parameters'],
+    slab_bands_options=BULK_OPTIONS,
+    slab_band_settings=slab_elec_defaults['band_settings'],
+
+    name='Ag3PO4_100_Complete_Electronic'
+)
+
+result = submit(wg)
+print(f"Submitted complete electronic structure workflow: {result.pk}")
+```
+
+**What this calculates:**
+- All bulk electronic properties (from Example 7)
+- All slab electronic properties (from Example 8)
+
+**Use case:** Comprehensive electronic structure comparison between bulk and surfaces.
+
+---
+
+## Example 10: AIMD Simulation
 
 Run Ab Initio Molecular Dynamics on slabs.
 
@@ -429,30 +555,28 @@ aimd_params = get_aimd_defaults()
 
 wg = build_core_workgraph(
     workflow_preset='aimd_only',
-    
+
     structures_dir=STRUCTURES_DIR,
     bulk_name='ag3po4.cif',
-    
+
     code_label=CODE_LABEL,
     potential_family=POTENTIAL_FAMILY,
-    
+
     bulk_potential_mapping={'Ag': 'Ag', 'P': 'P', 'O': 'O'},
     bulk_parameters=BULK_PARAMS,
     bulk_options=BULK_OPTIONS,
-    
+
     # Slab configuration
     miller_indices=[1, 0, 0],
     min_slab_thickness=15.0,
     min_vacuum_thickness=15.0,
-    slab_parameters=BULK_PARAMS.copy(),
-    slab_options=BULK_OPTIONS,
-    
+
     # AIMD configuration
     aimd_sequence=aimd_sequence,
     aimd_parameters=aimd_params,
     aimd_options=BULK_OPTIONS,
     aimd_kpoints_spacing=0.5,  # Coarser for AIMD
-    
+
     name='Ag3PO4_100_AIMD'
 )
 
@@ -460,9 +584,16 @@ result = submit(wg)
 print(f"Submitted AIMD workflow: {result.pk}")
 ```
 
+**Note:** By default, `aimd_only` runs AIMD on **unrelaxed slabs** (generated from bulk). If you need relaxed slabs before AIMD, add:
+```python
+relax_slabs=True,
+slab_parameters=BULK_PARAMS.copy(),
+slab_options=BULK_OPTIONS,
+```
+
 ---
 
-## Example 9: Comprehensive Analysis
+## Example 11: Comprehensive Analysis
 
 Complete analysis with all features enabled.
 
@@ -556,7 +687,7 @@ print(f"Submitted comprehensive workflow: {result.pk}")
 
 ---
 
-## Example 10: Overriding Defaults
+## Example 12: Overriding Defaults
 
 Override specific features from a preset.
 
