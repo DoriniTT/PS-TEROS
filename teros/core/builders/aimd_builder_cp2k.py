@@ -94,9 +94,9 @@ def get_aimd_defaults_cp2k(
                     "PERIODIC": 'XYZ',
                     "PSOLVER": "PERIODIC",
                 },
-                "SURFACE_DIPOLE_CORRECTION": True,
+                "SURFACE_DIPOLE_CORRECTION": ".TRUE.",
                 "SCF": {
-                    "IGNORE_CONVERGENCE_FAILURE": True,
+                    "IGNORE_CONVERGENCE_FAILURE": ".TRUE.",
                     "SCF_GUESS": "ATOMIC",
                     "EPS_SCF": eps_scf,
                     "MAX_SCF": max_scf,
