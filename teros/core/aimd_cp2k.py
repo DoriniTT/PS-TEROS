@@ -117,8 +117,8 @@ def aimd_single_stage_scatter_cp2k(
         # Create CP2K task
         aimd_task = Cp2kTask(
             cp2k=cp2k_inputs,
-            max_iterations=orm.Int(3),
-            clean_workdir=orm.Bool(clean_workdir),
+            max_iterations=3,  # plain int, not orm.Int
+            clean_workdir=clean_workdir,  # plain bool, not orm.Bool
         )
 
         # Store CP2K outputs (note: different from VASP!)
