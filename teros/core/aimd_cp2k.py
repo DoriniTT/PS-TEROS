@@ -10,6 +10,9 @@ from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, dynamic, namespace
 
+# Get CP2K workchain for type annotation
+Cp2kBaseWorkChain = WorkflowFactory('cp2k.base')
+
 
 @task.graph
 def aimd_single_stage_scatter_cp2k(
@@ -20,7 +23,7 @@ def aimd_single_stage_scatter_cp2k(
     aimd_parameters: dict,
     basis_file: orm.SinglefileData,
     pseudo_file: orm.SinglefileData,
-    options: dict,
+    options: t.Annotated[dict, Cp2kBaseWorkChain.spec().inputs['metadata']],
     clean_workdir: bool,
     restart_folders: t.Annotated[dict[str, orm.RemoteData], dynamic(orm.RemoteData)] = {},
     fixed_atoms_lists: dict = None,
@@ -91,7 +94,6 @@ def aimd_single_stage_scatter_cp2k(
             'structure': slab_structure,
             'parameters': orm.Dict(dict=stage_params),
             'code': code,
-            'metadata': dict(options),  # metadata goes inside cp2k inputs
             'file': {
                 'basis': basis_file,
                 'pseudo': pseudo_file,
@@ -109,9 +111,10 @@ def aimd_single_stage_scatter_cp2k(
         if restart_folders and slab_label in restart_folders:
             cp2k_inputs['parent_calc_folder'] = restart_folders[slab_label]
 
-        # Create CP2K task
+        # Create CP2K task - pass metadata and cp2k separately
         aimd_task = Cp2kTask(
             cp2k=cp2k_inputs,
+            metadata=dict(options),  # top-level metadata for the workchain
             max_iterations=orm.Int(3),
             clean_workdir=orm.Bool(clean_workdir),
         )
