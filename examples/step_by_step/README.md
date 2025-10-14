@@ -132,18 +132,21 @@ verdi process status <PK>
 **Preset:** `surface_thermodynamics` (default)
 
 **What it tests:**
-- **EVERYTHING combined:**
+- **Core workflow:**
   - Bulk and reference relaxations
   - Formation enthalpy
   - Slab generation and relaxation
   - Surface energies with chemical potential sampling
-  - Cleavage energies
-  - Relaxation energies
+- **Optional (not included by default):**
+  - Cleavage energies (add: `compute_cleavage=True`)
+  - Relaxation energies (add: `compute_relaxation_energy=True`)
 
-**Runtime:** ~4-6 hours
+**Runtime:** ~3-4 hours
 
 **Expected outputs:**
-- All of the above
+- `bulk_energy`, `metal_energy`, `oxygen_energy`
+- `formation_enthalpy`
+- `slab_structures`, `slab_energies`
 - `surface_energies`: γ(μ_O) for each termination
 
 **Why this step:**
@@ -156,13 +159,13 @@ verdi process status <PK>
 
 ---
 
-### Step 6: Electronic Properties
+### Step 6: Electronic Properties (Bulk)
 **File:** `step_06_electronic_properties.py`  
 **Preset:** `electronic_structure_bulk_only`
 
 **What it tests:**
 - Bulk relaxation
-- Electronic structure (DOS and band structure)
+- Electronic structure (DOS and band structure) for bulk
 
 **Runtime:** ~1-2 hours
 
@@ -186,7 +189,8 @@ verdi process status <PK>
 **Preset:** `aimd_only`
 
 **What it tests:**
-- Bulk and slab relaxations
+- Bulk relaxation
+- Slab generation (no relaxation)
 - AIMD (Ab Initio Molecular Dynamics) simulation
 
 **Runtime:** ~8-24 hours (VERY EXPENSIVE!)
@@ -198,9 +202,100 @@ verdi process status <PK>
 Tests AIMD workflow. Only run if you need molecular dynamics.
 
 **⚠️ WARNING:** AIMD is computationally expensive. Make sure you have sufficient resources.
+**⚠️ NOTE:** Slabs are NOT relaxed before AIMD in the `aimd_only` preset.
 
 ```bash
 python step_07_aimd_simulation.py
+verdi process status <PK>
+```
+
+---
+
+### Step 8: Electronic Properties (Slabs Only)
+**File:** `step_08_electronic_structure_slabs.py`  
+**Preset:** `electronic_structure_slabs_only`
+
+**What it tests:**
+- Bulk relaxation
+- Slab generation and relaxation
+- Electronic structure (DOS and bands) for slabs
+
+**Runtime:** ~3-5 hours
+
+**Expected outputs:**
+- `slab_bands`: Band structure for each slab
+- `slab_dos`: Density of states for each slab
+- `slab_primitive_structures`, `slab_seekpath_parameters`
+
+**Why this step:**
+Tests slab electronic properties workflow.
+
+```bash
+python step_08_electronic_structure_slabs.py
+verdi process status <PK>
+```
+
+---
+
+### Step 9: Electronic Properties (Bulk and Slabs)
+**File:** `step_09_electronic_structure_bulk_and_slabs.py`  
+**Preset:** `electronic_structure_bulk_and_slabs`
+
+**What it tests:**
+- Complete electronic structure analysis for both bulk and slabs
+- Comprehensive DOS and band structure calculations
+
+**Runtime:** ~4-6 hours
+
+**Expected outputs:**
+- All bulk electronic properties (from Step 6)
+- All slab electronic properties (from Step 8)
+
+**Why this step:**
+Tests complete electronic structure workflow for comparison studies.
+
+```bash
+python step_09_electronic_structure_bulk_and_slabs.py
+verdi process status <PK>
+```
+
+---
+
+### Step 10: Custom Workflow
+**File:** `step_10_custom_workflow.py`  
+**Preset:** None (custom flags)
+
+**What it tests:**
+- Building workflows with individual flag configuration
+- Custom combinations of workflow components
+
+**Example:** Surface thermodynamics + cleavage, but no relaxation energies
+
+**Why this step:**
+Demonstrates maximum flexibility for custom workflows.
+
+```bash
+python step_10_custom_workflow.py
+verdi process status <PK>
+```
+
+---
+
+### Step 11: Preset with Overrides
+**File:** `step_11_preset_with_overrides.py`  
+**Preset:** `surface_thermodynamics` + overrides
+
+**What it tests:**
+- Starting with a preset and adding optional components
+- Combining preset convenience with custom control
+
+**Example:** Start with `surface_thermodynamics`, add cleavage and relaxation energies
+
+**Why this step:**
+Shows how to customize presets without building from scratch.
+
+```bash
+python step_11_preset_with_overrides.py
 verdi process status <PK>
 ```
 
@@ -230,22 +325,37 @@ Step 4: Cleavage Energy
    ├─> Generate + relax slabs
    └─> E_cleave
 
-Step 5: Surface Thermodynamics (COMPLETE)
+Step 5: Surface Thermodynamics
    ├─> Ag2O, Ag, O2 relaxations
    ├─> ΔHf calculation
    ├─> Generate + relax slabs
-   ├─> ΔE_relax
-   ├─> E_cleave
    └─> γ(μ_O)
+   (Optional: E_cleave, ΔE_relax)
 
-Step 6: Electronic Properties
+Step 6: Electronic Properties (Bulk)
    ├─> Ag2O relaxation
    └─> DOS + Bands
 
 Step 7: AIMD
    ├─> Ag2O relaxation
-   ├─> Generate + relax slabs
+   ├─> Generate slabs (no relax)
    └─> AIMD simulation
+
+Step 8: Electronic Properties (Slabs)
+   ├─> Ag2O relaxation
+   ├─> Generate + relax slabs
+   └─> DOS + Bands (slabs)
+
+Step 9: Electronic Properties (Bulk + Slabs)
+   ├─> Ag2O relaxation
+   ├─> Generate + relax slabs
+   └─> DOS + Bands (both)
+
+Step 10: Custom Workflow
+   └─> User-defined component combination
+
+Step 11: Preset with Overrides
+   └─> Preset + custom additions
 ```
 
 ---
@@ -354,8 +464,14 @@ After completing these step-by-step examples:
 ## Questions?
 
 - See main documentation: `../../docs/`
-- Workflow preset guide: `../../docs/WORKFLOW_PRESETS_GUIDE.md`
-- Examples: `../../docs/WORKFLOW_PRESETS_EXAMPLES.md`
+- **Workflow system guide**: `README_WORKFLOWS.md` (NEW!)
+- Workflow preset details: Check the presets in the code
+
+For detailed workflow configuration options, see `README_WORKFLOWS.md` which explains:
+- All available workflow presets
+- How to use custom workflows
+- How to override preset defaults
+- Examples for each use case
 
 ---
 

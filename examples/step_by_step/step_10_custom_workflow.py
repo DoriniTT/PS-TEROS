@@ -1,25 +1,19 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-STEP 5: Surface Thermodynamics (Complete Workflow)
+STEP 10: Custom Workflow Configuration
 
-This script tests the surface thermodynamics workflow:
-- Bulk and reference relaxations
-- Formation enthalpy
-- Slab generation and relaxation
-- Surface energies with chemical potential sampling
+This script demonstrates how to build a custom workflow by setting individual flags
+instead of using predefined presets. This gives maximum flexibility for combining
+different workflow components.
 
-NOTE: Cleavage and relaxation energies are now OPTIONAL in this preset.
-      To include them, add: compute_cleavage=True, compute_relaxation_energy=True
-
-This is the default workflow preset 'surface_thermodynamics'.
+Example: Compute surface thermodynamics + cleavage energies, but skip relaxation energies
 
 Material: Ag2O
-Surface: (111)
-References: Ag, O2
+Surface: (100)
 
 Usage:
     source ~/envs/psteros/bin/activate
-    python step_05_surface_thermodynamics.py
+    python step_10_custom_workflow.py
 """
 
 import sys
@@ -28,10 +22,10 @@ from aiida import load_profile
 from teros.core.workgraph import build_core_workgraph
 
 def main():
-    """Step 5: Test complete surface thermodynamics workflow."""
+    """Step 10: Test custom workflow configuration."""
     
     print("\n" + "="*70)
-    print("STEP 5: SURFACE THERMODYNAMICS (COMPLETE WORKFLOW)")
+    print("STEP 10: CUSTOM WORKFLOW CONFIGURATION")
     print("="*70)
     
     # Load AiiDA profile
@@ -81,18 +75,27 @@ def main():
         'queue_name': 'par40',
     }
     
-    print("\n3. Building workgraph...")
-    print("   Using preset: 'surface_thermodynamics' (default)")
-    print("   This calculates:")
-    print("     - Formation enthalpy")
-    print("     - Surface energies: γ(μ_O)")
-    print("   Optional (not included by default):")
-    print("     - Cleavage energies (add: compute_cleavage=True)")
-    print("     - Relaxation energies (add: compute_relaxation_energy=True)")
+    print("\n3. Building custom workflow...")
+    print("   Custom configuration:")
+    print("     ✓ relax_slabs: True")
+    print("     ✓ compute_thermodynamics: True")
+    print("     ✓ compute_cleavage: True")
+    print("     ✗ compute_relaxation_energy: False")
+    print("     ✗ compute_electronic_properties_bulk: False")
+    print("     ✗ compute_electronic_properties_slabs: False")
+    print("     ✗ run_aimd: False")
     
-    # Build workgraph using default preset
+    # Build workgraph with custom flags (no preset, set flags individually)
     wg = build_core_workgraph(
-        workflow_preset='surface_thermodynamics',
+        # NO workflow_preset - this triggers custom workflow mode
+        # Individual flags set explicitly
+        relax_slabs=True,
+        compute_thermodynamics=True,
+        compute_cleavage=True,
+        compute_relaxation_energy=False,  # Skip relaxation energies
+        compute_electronic_properties_bulk=False,
+        compute_electronic_properties_slabs=False,
+        run_aimd=False,
         
         # Structures
         structures_dir=structures_dir,
@@ -122,7 +125,7 @@ def main():
         oxygen_options=common_options,
         
         # Slab generation
-        miller_indices=[1, 0, 0],
+        miller_indices=[1, 0, 0],  # (100) surface
         min_slab_thickness=18.0,
         min_vacuum_thickness=15.0,
         lll_reduce=True,
@@ -138,7 +141,7 @@ def main():
         # Thermodynamics sampling
         thermodynamics_sampling=100,
         
-        name='Step05_SurfaceThermodynamics_Ag2O_111',
+        name='Step10_CustomWorkflow_Ag2O_100',
     )
     
     print("   ✓ WorkGraph built successfully")
@@ -148,7 +151,7 @@ def main():
     wg.submit(wait=False)
     
     print(f"\n{'='*70}")
-    print("STEP 5 SUBMITTED SUCCESSFULLY")
+    print("STEP 10 SUBMITTED SUCCESSFULLY")
     print(f"{'='*70}")
     print(f"\nWorkGraph PK: {wg.pk}")
     print(f"\nMonitor with:")
@@ -162,13 +165,11 @@ def main():
     print(f"  3. Slab structures:")
     print(f"     - slab_structures (all terminations)")
     print(f"  4. Slab energies:")
-    print(f"     - unrelaxed_slab_energies")
     print(f"     - slab_energies (relaxed)")
     print(f"  5. Surface properties:")
+    print(f"     - cleavage_energies")
     print(f"     - surface_energies: γ(μ_O)")
-    print(f"\nNOTE: Cleavage and relaxation energies are NOT computed by default")
-    print(f"      To include them, override with compute_cleavage=True, compute_relaxation_energy=True")
-    print(f"\nSurface energies show stability as function of chemical potential")
+    print(f"\nNOTE: Relaxation energies are NOT computed (custom choice)")
     print(f"{'='*70}\n")
     
     return wg

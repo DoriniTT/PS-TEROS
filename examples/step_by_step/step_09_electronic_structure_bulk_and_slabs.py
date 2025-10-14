@@ -1,35 +1,34 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-STEP 7: AIMD Simulation
+STEP 9: Electronic Structure for Both Bulk and Slabs
 
 This script tests:
 - Bulk relaxation
-- Slab generation (no relaxation)
-- AIMD (Ab Initio Molecular Dynamics) simulation on slabs
+- Electronic structure calculation (DOS and bands) for bulk
+- Slab generation and relaxation
+- Electronic structure calculation (DOS and bands) for slabs
 
-This demonstrates dynamic properties at finite temperature.
-NOTE: With 'aimd_only' preset, slabs are NOT relaxed before AIMD.
+This demonstrates comprehensive electronic properties workflow.
 
 Material: Ag2O
 Surface: (111)
-AIMD: 2-stage sequence (equilibration + production)
 
 Usage:
     source ~/envs/psteros/bin/activate
-    python step_07_aimd_simulation.py
+    python step_09_electronic_structure_bulk_and_slabs.py
 """
 
 import sys
 import os
 from aiida import load_profile
 from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_aimd_defaults
+from teros.core.builders import get_electronic_properties_defaults, get_slab_electronic_properties_defaults
 
 def main():
-    """Step 7: Test AIMD simulation."""
+    """Step 9: Test electronic properties calculation for both bulk and slabs."""
     
     print("\n" + "="*70)
-    print("STEP 7: AIMD SIMULATION")
+    print("STEP 9: ELECTRONIC STRUCTURE FOR BULK AND SLABS")
     print("="*70)
     
     # Load AiiDA profile
@@ -48,7 +47,7 @@ def main():
     code_label = 'VASP-VTST-6.4.3@bohr'
     potential_family = 'PBE'
     
-    # VASP parameters
+    # Bulk parameters
     bulk_params = {
         'PREC': 'Accurate',
         'ENCUT': 520,
@@ -65,6 +64,7 @@ def main():
         'LCHARG': False,
     }
     
+    # Slab parameters
     slab_params = bulk_params.copy()
     slab_params['ISIF'] = 2
     
@@ -76,26 +76,20 @@ def main():
         'queue_name': 'par40',
     }
     
-    # AIMD configuration
-    print("\n3. AIMD configuration:")
-    aimd_sequence = [
-        {'temperature': 300, 'steps': 50}, 
-        {'temperature': 300, 'steps': 100}, 
-    ]
+    # Get electronic properties defaults
+    print("\n3. Setting up electronic properties parameters...")
+    bulk_elec_defaults = get_electronic_properties_defaults()
+    slab_elec_defaults = get_slab_electronic_properties_defaults()
     
-    for i, stage in enumerate(aimd_sequence):
-        print(f"   Stage {i+1}: {stage['temperature']} K, {stage['steps']} steps")
-    
-    aimd_params = get_aimd_defaults()
+    print("   Band structure will be calculated for both bulk and slabs")
+    print("   DOS will include total and projected components")
     
     print("\n4. Building workgraph...")
-    print("   Using preset: 'aimd_only'")
-    print("   AIMD will run on ALL generated slabs (WITHOUT prior relaxation)")
-    print("   Note: Slabs are generated but NOT relaxed before AIMD")
+    print("   Using preset: 'electronic_structure_bulk_and_slabs'")
     
     # Build workgraph using preset
     wg = build_core_workgraph(
-        workflow_preset='aimd_only',
+        workflow_preset='electronic_structure_bulk_and_slabs',
         
         # Structures
         structures_dir=structures_dir,
@@ -114,7 +108,7 @@ def main():
         
         # Slab generation
         miller_indices=[1, 1, 1],
-        min_slab_thickness=15.0,  # Smaller for AIMD
+        min_slab_thickness=18.0,
         min_vacuum_thickness=15.0,
         lll_reduce=True,
         center_slab=True,
@@ -126,14 +120,17 @@ def main():
         slab_options=common_options,
         slab_kpoints_spacing=0.4,
         
-        # AIMD
-        aimd_sequence=aimd_sequence,
-        aimd_parameters=aimd_params,
-        aimd_options=common_options,
-        aimd_potential_mapping={'Ag': 'Ag', 'O': 'O'},
-        aimd_kpoints_spacing=0.5,  # Coarser for AIMD
+        # Bulk electronic properties
+        bands_parameters=bulk_elec_defaults,
+        bands_options=common_options,
+        band_settings=bulk_elec_defaults['band_settings'],
         
-        name='Step07_AIMD_Ag2O_111',
+        # Slab electronic properties
+        slab_bands_parameters=slab_elec_defaults,
+        slab_bands_options=common_options,
+        slab_band_settings=slab_elec_defaults['band_settings'],
+        
+        name='Step09_ElectronicStructure_BulkAndSlabs_Ag2O_111',
     )
     
     print("   ✓ WorkGraph built successfully")
@@ -143,25 +140,28 @@ def main():
     wg.submit(wait=False)
     
     print(f"\n{'='*70}")
-    print("STEP 7 SUBMITTED SUCCESSFULLY")
+    print("STEP 9 SUBMITTED SUCCESSFULLY")
     print(f"{'='*70}")
     print(f"\nWorkGraph PK: {wg.pk}")
-    print(f"\n⚠️  WARNING: AIMD is EXPENSIVE and will take many hours!")
     print(f"\nMonitor with:")
     print(f"  verdi process status {wg.pk}")
     print(f"  verdi process show {wg.pk}")
     print(f"\nExpected outputs:")
-    print(f"  - bulk_energy, bulk_structure")
-    print(f"  - slab_structures")
-    print(f"  - aimd_results: Nested namespace with AIMD data")
-    print(f"    - For each slab and stage:")
-    print(f"      - trajectory, structure, energy, remote, retrieved")
-    print(f"\nNOTE: Slabs are NOT relaxed in 'aimd_only' preset")
-    print(f"      AIMD runs directly on generated slab structures")
-    print(f"\nAIMD trajectories can be analyzed for:")
-    print(f"  - Temperature evolution")
-    print(f"  - Atomic diffusion")
-    print(f"  - Structural stability")
+    print(f"  BULK:")
+    print(f"    - bulk_energy, bulk_structure")
+    print(f"    - bulk_bands: Band structure")
+    print(f"    - bulk_dos: Density of states")
+    print(f"    - bulk_primitive_structure: Primitive cell")
+    print(f"    - bulk_seekpath_parameters: Symmetry info")
+    print(f"  SLABS:")
+    print(f"    - slab_structures: All terminations")
+    print(f"    - slab_energies: Relaxed slab energies")
+    print(f"    - slab_bands: Band structure for each slab")
+    print(f"    - slab_dos: Density of states for each slab")
+    print(f"    - slab_primitive_structures: Primitive cells")
+    print(f"    - slab_seekpath_parameters: Symmetry info")
+    print(f"\nUse AiiDA tools to visualize:")
+    print(f"  verdi data bands show <PK>")
     print(f"{'='*70}\n")
     
     return wg

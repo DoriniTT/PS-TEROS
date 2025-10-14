@@ -21,12 +21,12 @@ from typing import Dict, List, Optional, Set, Tuple
 WORKFLOW_PRESETS = {
     'surface_thermodynamics': {
         'name': 'surface_thermodynamics',
-        'description': 'Complete surface thermodynamics workflow with relaxation',
+        'description': 'Complete surface thermodynamics workflow with relaxation (cleavage/relaxation optional)',
         'flags': {
             'relax_slabs': True,
             'compute_thermodynamics': True,
-            'compute_cleavage': True,
-            'compute_relaxation_energy': True,
+            'compute_cleavage': False,  # CHANGED: Now optional
+            'compute_relaxation_energy': False,  # CHANGED: Now optional
             'compute_electronic_properties_bulk': False,
             'compute_electronic_properties_slabs': False,
             'run_aimd': False,
@@ -187,11 +187,59 @@ WORKFLOW_PRESETS = {
         ],
     },
     
-    'aimd_only': {
-        'name': 'aimd_only',
-        'description': 'AIMD simulation on slabs only',
+    'electronic_structure_slabs_only': {
+        'name': 'electronic_structure_slabs_only',
+        'description': 'Electronic properties (DOS and bands) for slabs only',
         'flags': {
             'relax_slabs': True,
+            'compute_thermodynamics': False,
+            'compute_cleavage': False,
+            'compute_relaxation_energy': False,
+            'compute_electronic_properties_bulk': False,
+            'compute_electronic_properties_slabs': True,
+            'run_aimd': False,
+        },
+        'requires': {
+            'parameters': ['slab_bands_parameters', 'slab_band_settings'],
+            'optional': ['slab_bands_options', 'slab_electronic_properties', 'miller_indices'],
+        },
+        'dependencies': ['bulk', 'slabs'],
+        'use_cases': [
+            'Slab band structure calculation',
+            'Slab density of states (DOS)',
+            'Surface electronic property analysis',
+        ],
+    },
+    
+    'electronic_structure_bulk_and_slabs': {
+        'name': 'electronic_structure_bulk_and_slabs',
+        'description': 'Electronic properties (DOS and bands) for both bulk and slabs',
+        'flags': {
+            'relax_slabs': True,
+            'compute_thermodynamics': False,
+            'compute_cleavage': False,
+            'compute_relaxation_energy': False,
+            'compute_electronic_properties_bulk': True,
+            'compute_electronic_properties_slabs': True,
+            'run_aimd': False,
+        },
+        'requires': {
+            'parameters': ['bands_parameters', 'band_settings', 'slab_bands_parameters', 'slab_band_settings'],
+            'optional': ['bands_options', 'slab_bands_options', 'slab_electronic_properties', 'miller_indices'],
+        },
+        'dependencies': ['bulk', 'slabs'],
+        'use_cases': [
+            'Complete electronic structure analysis',
+            'Bulk vs surface electronic comparison',
+            'Comprehensive band structure study',
+        ],
+    },
+    
+    'aimd_only': {
+        'name': 'aimd_only',
+        'description': 'AIMD simulation on slabs only (no relax_slabs)',
+        'flags': {
+            'relax_slabs': False,  # CHANGED: Don't relax slabs, just run AIMD
             'compute_thermodynamics': False,
             'compute_cleavage': False,
             'compute_relaxation_energy': False,

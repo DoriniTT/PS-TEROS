@@ -1,25 +1,18 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-STEP 5: Surface Thermodynamics (Complete Workflow)
+STEP 11: Using Preset with Custom Overrides
 
-This script tests the surface thermodynamics workflow:
-- Bulk and reference relaxations
-- Formation enthalpy
-- Slab generation and relaxation
-- Surface energies with chemical potential sampling
+This script demonstrates how to use a predefined workflow preset and override
+specific components. This combines the convenience of presets with custom control.
 
-NOTE: Cleavage and relaxation energies are now OPTIONAL in this preset.
-      To include them, add: compute_cleavage=True, compute_relaxation_energy=True
-
-This is the default workflow preset 'surface_thermodynamics'.
+Example: Start with 'surface_thermodynamics' but add cleavage and relaxation energies
 
 Material: Ag2O
 Surface: (111)
-References: Ag, O2
 
 Usage:
     source ~/envs/psteros/bin/activate
-    python step_05_surface_thermodynamics.py
+    python step_11_preset_with_overrides.py
 """
 
 import sys
@@ -28,10 +21,10 @@ from aiida import load_profile
 from teros.core.workgraph import build_core_workgraph
 
 def main():
-    """Step 5: Test complete surface thermodynamics workflow."""
+    """Step 11: Test preset with custom overrides."""
     
     print("\n" + "="*70)
-    print("STEP 5: SURFACE THERMODYNAMICS (COMPLETE WORKFLOW)")
+    print("STEP 11: PRESET WITH CUSTOM OVERRIDES")
     print("="*70)
     
     # Load AiiDA profile
@@ -81,18 +74,25 @@ def main():
         'queue_name': 'par40',
     }
     
-    print("\n3. Building workgraph...")
-    print("   Using preset: 'surface_thermodynamics' (default)")
-    print("   This calculates:")
-    print("     - Formation enthalpy")
-    print("     - Surface energies: γ(μ_O)")
-    print("   Optional (not included by default):")
-    print("     - Cleavage energies (add: compute_cleavage=True)")
-    print("     - Relaxation energies (add: compute_relaxation_energy=True)")
+    print("\n3. Building workflow with preset + overrides...")
+    print("   Base preset: 'surface_thermodynamics'")
+    print("   Default flags from preset:")
+    print("     ✓ relax_slabs: True")
+    print("     ✓ compute_thermodynamics: True")
+    print("     ✗ compute_cleavage: False (default)")
+    print("     ✗ compute_relaxation_energy: False (default)")
+    print("\n   Custom overrides:")
+    print("     ✓ compute_cleavage: True (OVERRIDE)")
+    print("     ✓ compute_relaxation_energy: True (OVERRIDE)")
     
-    # Build workgraph using default preset
+    # Build workgraph starting with preset but adding optional components
     wg = build_core_workgraph(
+        # Start with surface_thermodynamics preset
         workflow_preset='surface_thermodynamics',
+        
+        # Override preset defaults to add optional features
+        compute_cleavage=True,  # Add cleavage energy calculation
+        compute_relaxation_energy=True,  # Add relaxation energy calculation
         
         # Structures
         structures_dir=structures_dir,
@@ -122,7 +122,7 @@ def main():
         oxygen_options=common_options,
         
         # Slab generation
-        miller_indices=[1, 0, 0],
+        miller_indices=[1, 1, 1],
         min_slab_thickness=18.0,
         min_vacuum_thickness=15.0,
         lll_reduce=True,
@@ -138,7 +138,7 @@ def main():
         # Thermodynamics sampling
         thermodynamics_sampling=100,
         
-        name='Step05_SurfaceThermodynamics_Ag2O_111',
+        name='Step11_PresetWithOverrides_Ag2O_111',
     )
     
     print("   ✓ WorkGraph built successfully")
@@ -148,7 +148,7 @@ def main():
     wg.submit(wait=False)
     
     print(f"\n{'='*70}")
-    print("STEP 5 SUBMITTED SUCCESSFULLY")
+    print("STEP 11 SUBMITTED SUCCESSFULLY")
     print(f"{'='*70}")
     print(f"\nWorkGraph PK: {wg.pk}")
     print(f"\nMonitor with:")
@@ -164,11 +164,11 @@ def main():
     print(f"  4. Slab energies:")
     print(f"     - unrelaxed_slab_energies")
     print(f"     - slab_energies (relaxed)")
+    print(f"     - relaxation_energies (ADDED via override)")
     print(f"  5. Surface properties:")
+    print(f"     - cleavage_energies (ADDED via override)")
     print(f"     - surface_energies: γ(μ_O)")
-    print(f"\nNOTE: Cleavage and relaxation energies are NOT computed by default")
-    print(f"      To include them, override with compute_cleavage=True, compute_relaxation_energy=True")
-    print(f"\nSurface energies show stability as function of chemical potential")
+    print(f"\nThis workflow combines preset convenience with custom additions!")
     print(f"{'='*70}\n")
     
     return wg
