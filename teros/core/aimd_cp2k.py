@@ -23,7 +23,7 @@ def aimd_single_stage_scatter_cp2k(
     aimd_parameters: dict,
     basis_file: orm.SinglefileData,
     pseudo_file: orm.SinglefileData,
-    options: t.Annotated[dict, Cp2kBaseWorkChain.spec().inputs['metadata']],
+    options: dict,  # Scheduler options - plain dict, wrapped with dict() when used
     clean_workdir: bool,
     restart_folders: t.Annotated[dict[str, orm.RemoteData], dynamic(orm.RemoteData)] = {},
     fixed_atoms_lists: dict = None,
@@ -78,14 +78,14 @@ def aimd_single_stage_scatter_cp2k(
 
     # Scatter: create AIMD task for each slab (runs in parallel)
     for slab_label, slab_structure in slabs.items():
-        # Prepare parameters for this stage
-        stage_params = prepare_aimd_parameters_cp2k(aimd_parameters, temperature, steps)
+        # Prepare parameters for this stage (unwrap TaggedValues with dict/float/int)
+        stage_params = prepare_aimd_parameters_cp2k(dict(aimd_parameters), float(temperature), int(steps))
 
         # Add fixed atoms if provided for this slab
         if fixed_atoms_lists and slab_label in fixed_atoms_lists:
             stage_params = add_fixed_atoms_to_cp2k_parameters(
                 stage_params,
-                fixed_atoms_lists[slab_label],
+                list(fixed_atoms_lists[slab_label]),  # Ensure list, not TaggedValue
                 fix_components,
             )
 
@@ -94,9 +94,7 @@ def aimd_single_stage_scatter_cp2k(
             'structure': slab_structure,
             'parameters': orm.Dict(dict=stage_params),
             'code': code,
-            'metadata': {
-                'options': dict(options),  # scheduler options go in cp2k.metadata.options
-            },
+            'metadata': {'options': dict(options)},  # Wrap scheduler options (dict() unwraps TaggedValue)
             'file': {
                 'basis': basis_file,
                 'pseudo': pseudo_file,
@@ -118,7 +116,7 @@ def aimd_single_stage_scatter_cp2k(
         aimd_task = Cp2kTask(
             cp2k=cp2k_inputs,
             max_iterations=orm.Int(3),
-            clean_workdir=orm.Bool(clean_workdir),
+            clean_workdir=orm.Bool(bool(clean_workdir)),  # Unwrap TaggedValue
         )
 
         # Store CP2K outputs (note: different from VASP!)

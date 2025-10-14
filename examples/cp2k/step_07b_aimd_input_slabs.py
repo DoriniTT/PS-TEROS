@@ -44,7 +44,7 @@ def main():
 
     # Setup paths
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    structures_dir = os.path.join(script_dir, '../structures')
+    structures_dir = os.path.join(script_dir, 'input_structures')
 
     # Load pre-existing slab structures
     print("\n2. Loading input slab structures...")
@@ -67,10 +67,11 @@ def main():
             print(f"      Creating dummy structure for demonstration...")
             # Create dummy slab for demonstration
             from ase.build import bulk, surface
-            ag2o_bulk = bulk('Ag2O', 'cubic', a=4.7)
-            slab = surface(ag2o_bulk, (1,1,1), 4, vacuum=15.0)
+            # Create simple cubic Ag lattice as base (Ag2O has complex structure)
+            ag_bulk = bulk('Ag', 'fcc', a=4.09)
+            slab = surface(ag_bulk, (1,1,1), 4, vacuum=15.0)
             input_slabs[label] = orm.StructureData(ase=slab)
-            print(f"   ✓ Created dummy slab: {label}")
+            print(f"   ✓ Created dummy Ag(111) slab: {label}")
 
     # Alternative: Load from previous calculation
     # prev_wg = orm.load_node(12345)  # PK of previous workgraph
@@ -113,15 +114,14 @@ def main():
 
     aimd_params['FORCE_EVAL']['SUBSYS']['KIND'] = [
         {"_": "Ag", "BASIS_SET": "DZVP-MOLOPT-PBE-GTH-q11", "POTENTIAL": "GTH-PBE-q11"},
-        {"_": "O", "BASIS_SET": "DZVP-MOLOPT-PBE-GTH-q6", "POTENTIAL": "GTH-PBE-q6"}
     ]
 
     aimd_options = {
         'resources': {
-            'num_machines': 2,
-            'num_cores_per_machine': 128,
+            'num_machines': 1,
+            'num_cores_per_machine': 40,
         },
-        'queue_name': 'paralela',
+        'queue_name': 'par40',
     }
 
     # Fixed atoms configuration

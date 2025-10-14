@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 STEP 7A: AIMD with CP2K - Auto-generate Slabs
 
@@ -106,10 +106,10 @@ def main():
 
     aimd_options = {
         'resources': {
-            'num_machines': 2,
-            'num_cores_per_machine': 128,
+            'num_machines': 1,
+            'num_cores_per_machine': 40,
         },
-        'queue_name': 'paralela',
+        'queue_name': 'par40',
     }
 
     print("\n4. Building workgraph...")
@@ -154,6 +154,13 @@ def main():
         aimd_sequence=aimd_sequence,
         aimd_parameters=aimd_params,
         aimd_options=aimd_options,
+
+        # Fixed atoms (NEW)
+        fix_atoms=True,
+        fix_type='bottom',
+        fix_thickness=7.0,
+        fix_elements=None,  # All elements
+        fix_components='XYZ',
 
         name='Step07A_AIMD_CP2K_AutoGen',
     )

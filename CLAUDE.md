@@ -178,13 +178,13 @@ Folders:
 * **Python binary**
 
   ```bash
-  source ~/envs/psteros/bin/activate && /home/thiagotd/envs/psteros/bin/python
+  source ~/envs/aiida/bin/activate && /home/thiagotd/envs/aiida/bin/python
   ```
 
 * **Launch workflow**
 
   ```bash
-  source ~/envs/psteros/bin/activate && /home/thiagotd/envs/psteros/bin/python /home/thiagotd/git/PS-TEROS/examples/vasp/update_psteros/psteros_vasp.py
+  source ~/envs/aiida/bin/activate && /home/thiagotd/envs/aiida/bin/python /home/thiagotd/git/PS-TEROS/examples/vasp/update_psteros/psteros_vasp.py
   ```
 
 * **Wait for results**: Use `sleep 15` (or more) before analyzing nodes

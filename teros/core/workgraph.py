@@ -1423,7 +1423,7 @@ def build_core_workgraph(
                     'aimd_parameters': aimd_params,
                     'basis_file': basis_file,
                     'pseudo_file': pseudo_file,
-                    'options': aimd_opts,
+                    'options': aimd_opts,  # Pass scheduler options directly
                     'clean_workdir': clean_workdir,
                     'restart_folders': current_remotes,
                 }
