@@ -91,7 +91,6 @@ def aimd_single_stage_scatter_cp2k(
             'structure': slab_structure,
             'parameters': orm.Dict(dict=stage_params),
             'code': code,
-            'metadata': options,
             'file': {
                 'basis': basis_file,
                 'pseudo': pseudo_file,
@@ -109,9 +108,10 @@ def aimd_single_stage_scatter_cp2k(
         if restart_folders and slab_label in restart_folders:
             cp2k_inputs['parent_calc_folder'] = restart_folders[slab_label]
 
-        # Create CP2K task
+        # Create CP2K task - metadata passed separately
         aimd_task = Cp2kTask(
             cp2k=cp2k_inputs,
+            metadata=options,
             max_iterations=orm.Int(3),
             clean_workdir=orm.Bool(clean_workdir),
         )
