@@ -20,7 +20,7 @@ def aimd_single_stage_scatter_cp2k(
     aimd_parameters: dict,
     basis_file: orm.SinglefileData,
     pseudo_file: orm.SinglefileData,
-    options: t.Annotated[dict, namespace(dynamic=True)],
+    options: dict,
     clean_workdir: bool,
     restart_folders: t.Annotated[dict[str, orm.RemoteData], dynamic(orm.RemoteData)] = {},
     fixed_atoms_lists: dict = None,
@@ -108,13 +108,18 @@ def aimd_single_stage_scatter_cp2k(
         if restart_folders and slab_label in restart_folders:
             cp2k_inputs['parent_calc_folder'] = restart_folders[slab_label]
 
-        # Create CP2K task - metadata passed separately
-        aimd_task = Cp2kTask(
-            cp2k=cp2k_inputs,
-            metadata=options,
-            max_iterations=orm.Int(3),
-            clean_workdir=orm.Bool(clean_workdir),
-        )
+        # Create CP2K task - construct call with proper metadata namespace expansion
+        task_kwargs = {
+            'cp2k': cp2k_inputs,
+            'max_iterations': orm.Int(3),
+            'clean_workdir': orm.Bool(clean_workdir),
+        }
+        
+        # Add metadata fields individually (namespace expansion)
+        for key, value in options.items():
+            task_kwargs[f'metadata__{key}'] = value
+        
+        aimd_task = Cp2kTask(**task_kwargs)
 
         # Store CP2K outputs (note: different from VASP!)
         structures_out[slab_label] = aimd_task.output_structure
