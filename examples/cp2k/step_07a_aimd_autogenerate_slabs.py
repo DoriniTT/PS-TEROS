@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/home/thiagotd/envs/psteros/bin/python
 """
 STEP 7A: AIMD with CP2K - Auto-generate Slabs
 
