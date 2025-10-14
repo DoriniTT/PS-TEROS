@@ -52,8 +52,8 @@ def main():
     # Example: Load slabs from files
     # NOTE: You need to create these files or use previous calculation outputs
     slab_files = {
-        'slab_111_term0': os.path.join(structures_dir, 'ag2o_111_term0.vasp'),
-        'slab_111_term1': os.path.join(structures_dir, 'ag2o_111_term1.vasp'),
+        'slab_111_term1': os.path.join(structures_dir, 'term1.cif'),
+        'slab_111_term2': os.path.join(structures_dir, 'term2.cif'),
     }
 
     input_slabs = {}
@@ -141,18 +141,11 @@ def main():
         workflow_preset='aimd_only',
         calculator='cp2k',
 
-        # Minimal bulk parameters (not used, but required by internal logic)
-        structures_dir=structures_dir,
-        bulk_name='ag2o.cif',
-        code_label='VASP-VTST-6.4.3@bohr',
-        
-        # Code for AIMD (CP2K)
-        aimd_code_label='CP2K-NEWCPU-2023@bohr',
-
-        # Input slabs directly
+        # Input slabs directly (no bulk structure needed!)
         input_slabs=input_slabs,
 
         # AIMD (CP2K)
+        aimd_code_label='CP2K-NEWCPU-2023@bohr',
         aimd_sequence=aimd_sequence,
         aimd_parameters=aimd_params,
         aimd_options=aimd_options,

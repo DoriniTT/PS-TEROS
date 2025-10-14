@@ -46,6 +46,20 @@ def load_structure_from_file(filepath: str) -> orm.StructureData:
     return orm.StructureData(ase=atoms)
 
 
+@task.calcfunction()
+def create_dummy_float(value: float = 0.0) -> orm.Float:
+    """Create a dummy Float node for workflows that don't need certain outputs."""
+    return orm.Float(value)
+
+
+@task.calcfunction()
+def create_dummy_structure() -> orm.StructureData:
+    """Create a dummy StructureData node for workflows that don't need certain outputs."""
+    from ase import Atoms
+    dummy = Atoms()
+    return orm.StructureData(ase=dummy)
+
+
 def get_settings():
     """
     Parser settings for aiida-vasp.
@@ -76,15 +90,15 @@ def get_settings():
     'slab_bands', 'slab_dos', 'slab_primitive_structures', 'slab_seekpath_parameters',
 ])
 def core_workgraph(
-    structures_dir: str,
-    bulk_name: str,
-    code_label: str,
-    potential_family: str,
-    bulk_potential_mapping: dict,
-    kpoints_spacing: float,
-    bulk_parameters: dict,
-    bulk_options: dict,
-    clean_workdir: bool,
+    structures_dir: str = None,
+    bulk_name: str = None,
+    code_label: str = None,
+    potential_family: str = None,
+    bulk_potential_mapping: dict = None,
+    kpoints_spacing: float = 0.4,
+    bulk_parameters: dict = None,
+    bulk_options: dict = None,
+    clean_workdir: bool = False,
     metal_name: str = None,
     oxygen_name: str = None,
     metal_potential_mapping: dict = None,
@@ -221,22 +235,28 @@ def core_workgraph(
     # (requires both metal_name and oxygen_name)
     compute_formation_enthalpy = (metal_name is not None and oxygen_name is not None)
 
-    # ===== BULK RELAXATION =====
-    bulk_struct = load_structure_from_file(f"{structures_dir}/{bulk_name}")
+    # ===== BULK RELAXATION (CONDITIONAL) =====
+    # Only load and relax bulk if needed
+    if structures_dir and bulk_name:
+        bulk_struct = load_structure_from_file(f"{structures_dir}/{bulk_name}")
 
-    bulk_vasp = VaspTask(
-        structure=bulk_struct,
-        code=code,
-        parameters={'incar': bulk_parameters},
-        options=bulk_options,
-        kpoints_spacing=kpoints_spacing,
-        potential_family=potential_family,
-        potential_mapping=bulk_potential_mapping,
-        clean_workdir=clean_workdir,
-        settings=orm.Dict(dict=get_settings()),
-    )
+        bulk_vasp = VaspTask(
+            structure=bulk_struct,
+            code=code,
+            parameters={'incar': bulk_parameters},
+            options=bulk_options,
+            kpoints_spacing=kpoints_spacing,
+            potential_family=potential_family,
+            potential_mapping=bulk_potential_mapping,
+            clean_workdir=clean_workdir,
+            settings=orm.Dict(dict=get_settings()),
+        )
 
-    bulk_energy = extract_total_energy(energies=bulk_vasp.misc)
+        bulk_energy = extract_total_energy(energies=bulk_vasp.misc)
+    else:
+        # No bulk structure provided - set to None
+        bulk_vasp = None
+        bulk_energy = None
 
     # ===== REFERENCE RELAXATIONS AND FORMATION ENTHALPY (CONDITIONAL) =====
     if compute_formation_enthalpy:
@@ -308,15 +328,25 @@ def core_workgraph(
             oxygen_energy=oxygen_energy.result,
         )
     else:
-        # Bulk-only mode: Create dummy outputs with proper types
-        # Use bulk structure as placeholder for reference structures
-        metal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
-        metal_energy = type('obj', (object,), {'result': bulk_energy.result})()
-        nonmetal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
-        nonmetal_energy = type('obj', (object,), {'result': bulk_energy.result})()
-        oxygen_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
-        oxygen_energy = type('obj', (object,), {'result': bulk_energy.result})()
-        formation_hf = type('obj', (object,), {'result': bulk_energy.result})()  # Placeholder
+        # Bulk-only mode or no bulk: Create dummy outputs with proper types
+        if bulk_vasp:
+            # Use bulk structure as placeholder for reference structures
+            metal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
+            metal_energy = type('obj', (object,), {'result': bulk_energy.result})()
+            nonmetal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
+            nonmetal_energy = type('obj', (object,), {'result': bulk_energy.result})()
+            oxygen_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
+            oxygen_energy = type('obj', (object,), {'result': bulk_energy.result})()
+            formation_hf = type('obj', (object,), {'result': bulk_energy.result})()  # Placeholder
+        else:
+            # No bulk at all - set everything to None
+            metal_vasp = None
+            metal_energy = None
+            nonmetal_vasp = None
+            nonmetal_energy = None
+            oxygen_vasp = None
+            oxygen_energy = None
+            formation_hf = None
 
     # ===== ELECTRONIC PROPERTIES CALCULATION (OPTIONAL) =====
     # Note: Electronic properties are added in build_core_workgraph, not here
@@ -328,8 +358,8 @@ def core_workgraph(
         # User will provide pre-generated slabs after building
         # Skip slab generation entirely
         slab_namespace = None  # Will be set post-build
-    elif miller_indices is None:
-        # No miller_indices provided and no input_slabs - skip slab generation
+    elif miller_indices is None or bulk_vasp is None:
+        # No miller_indices provided, no input_slabs, or no bulk - skip slab generation
         slab_namespace = None
     else:
         # Generate slabs using the pythonic scatter-gather pattern
@@ -400,7 +430,7 @@ def core_workgraph(
 
     # ===== THERMODYNAMICS CALCULATION (OPTIONAL) =====
     surface_energies_output = {}
-    if compute_thermodynamics and relax_slabs and slab_namespace is not None:
+    if compute_thermodynamics and relax_slabs and slab_namespace is not None and bulk_vasp is not None:
         # Identify oxide type (binary or ternary)
         oxide_type_result = identify_oxide_type(bulk_structure=bulk_vasp.structure)
 
@@ -421,7 +451,7 @@ def core_workgraph(
 
     # ===== CLEAVAGE ENERGY CALCULATION (OPTIONAL) =====
     cleavage_energies_output = {}
-    if compute_cleavage and relax_slabs and not use_input_slabs:
+    if compute_cleavage and relax_slabs and not use_input_slabs and bulk_vasp is not None:
         # Only compute cleavage inside core_workgraph if slabs were generated/relaxed here
         # When use_input_slabs=True, cleavage will be added in build_core_workgraph
         cleavage_outputs = compute_cleavage_energies_scatter(
@@ -482,16 +512,20 @@ def core_workgraph(
     # Return all outputs
     # Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
     # are added dynamically in build_core_workgraph, not returned here
+    # For workflows without bulk, return dummy nodes to satisfy @task.graph output types
+    dummy_float = create_dummy_float(0.0)
+    dummy_struct = create_dummy_structure()
+    
     return {
-        'bulk_energy': bulk_energy.result,
-        'bulk_structure': bulk_vasp.structure,
-        'metal_energy': metal_energy.result,
-        'metal_structure': metal_vasp.structure,
-        'nonmetal_energy': nonmetal_energy.result,
-        'nonmetal_structure': nonmetal_vasp.structure,
-        'oxygen_energy': oxygen_energy.result,
-        'oxygen_structure': oxygen_vasp.structure,
-        'formation_enthalpy': formation_hf.result,
+        'bulk_energy': bulk_energy.result if bulk_energy else dummy_float,
+        'bulk_structure': bulk_vasp.structure if bulk_vasp else dummy_struct,
+        'metal_energy': metal_energy.result if metal_energy else dummy_float,
+        'metal_structure': metal_vasp.structure if metal_vasp else dummy_struct,
+        'nonmetal_energy': nonmetal_energy.result if nonmetal_energy else dummy_float,
+        'nonmetal_structure': nonmetal_vasp.structure if nonmetal_vasp else dummy_struct,
+        'oxygen_energy': oxygen_energy.result if oxygen_energy else dummy_float,
+        'oxygen_structure': oxygen_vasp.structure if oxygen_vasp else dummy_struct,
+        'formation_enthalpy': formation_hf.result if formation_hf else dummy_float,
         'slab_structures': slab_namespace if slab_namespace is not None else {},
         'relaxed_slabs': relaxed_slabs_output,
         'slab_energies': slab_energies_output,
@@ -510,8 +544,8 @@ def core_workgraph(
 
 
 def build_core_workgraph(
-    structures_dir: str,
-    bulk_name: str,
+    structures_dir: str = None,
+    bulk_name: str = None,
     code_label: str = 'VASP-VTST-6.4.3@bohr',
     calculator: str = 'vasp',  # NEW: 'vasp' or 'cp2k'
     aimd_code_label: str = None,  # NEW: Optional separate code for AIMD
@@ -814,6 +848,32 @@ def build_core_workgraph(
         if warning.startswith("ERROR:"):
             raise ValueError(warning)
         print(f"\n⚠️  {warning}\n")
+    
+    # ========================================================================
+    # VALIDATE REQUIRED INPUTS
+    # ========================================================================
+    
+    # Determine if bulk structure is needed
+    compute_formation_enthalpy = (metal_name is not None and oxygen_name is not None)
+    needs_bulk = (
+        compute_formation_enthalpy or 
+        compute_thermodynamics or 
+        compute_electronic_properties_bulk or
+        (miller_indices is not None and input_slabs is None)  # Need bulk for slab generation
+    )
+    
+    # Only require structures_dir and bulk_name if we actually need the bulk structure
+    if needs_bulk:
+        if structures_dir is None or bulk_name is None:
+            raise ValueError(
+                "structures_dir and bulk_name are required for workflows that need bulk structure.\n"
+                f"Current preset '{resolved_preset_name}' requires bulk structure for:\n"
+                + (f"  - Formation enthalpy calculation\n" if compute_formation_enthalpy else "")
+                + (f"  - Surface thermodynamics\n" if compute_thermodynamics else "")
+                + (f"  - Electronic properties (bulk)\n" if compute_electronic_properties_bulk else "")
+                + (f"  - Slab generation (miller_indices provided)\n" if (miller_indices and not input_slabs) else "")
+                + "\nEither provide structures_dir and bulk_name, or use input_slabs with aimd_only preset."
+            )
     
     # Print workflow configuration
     print(f"\n{'='*70}")
@@ -1430,7 +1490,14 @@ def build_core_workgraph(
 
                 # Add fixed atoms for CP2K
                 if fixed_atoms_lists:
+                    # Pre-computed fixed atoms (for input_slabs)
                     stage_inputs['fixed_atoms_lists'] = fixed_atoms_lists
+                    stage_inputs['fix_components'] = fix_components
+                elif fix_atoms and fix_type is not None:
+                    # Dynamic fixed atoms calculation (for auto-generated slabs)
+                    stage_inputs['fix_type'] = fix_type
+                    stage_inputs['fix_thickness'] = fix_thickness if fix_thickness else 0.0
+                    stage_inputs['fix_elements'] = fix_elements
                     stage_inputs['fix_components'] = fix_components
 
             # Add task
