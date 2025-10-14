@@ -14,7 +14,7 @@ Types of Contributions
 Report Bugs
 ~~~~~~~~~~~
 
-Report bugs at https://github.com/DoriniTT/aiida-teros/issues.
+Report bugs at https://github.com/DoriniTT/PS-TEROS/issues.
 
 If you are reporting a bug, please include:
 
@@ -35,12 +35,12 @@ Look through the GitHub issues for features. Anything tagged with "enhancement" 
 Write Documentation
 ~~~~~~~~~~~~~~~~~~~
 
-AiiDA-TEROS could always use more documentation, whether as part of the official AiiDA-TEROS docs, in docstrings, or even on the web in blog posts, articles, and such.
+PS-TEROS could always use more documentation, whether as part of the official PS-TEROS docs, in docstrings, or even on the web in blog posts, articles, and such.
 
 Submit Feedback
 ~~~~~~~~~~~~~~~
 
-The best way to send feedback is to file an issue at https://github.com/DoriniTT/aiida-teros/issues.
+The best way to send feedback is to file an issue at https://github.com/DoriniTT/PS-TEROS/issues.
 
 If you are proposing a feature:
 
@@ -51,7 +51,7 @@ If you are proposing a feature:
 Development Guidelines
 ----------------------
 
-Here are a few guidelines to follow when developing for AiiDA-TEROS:
+Here are a few guidelines to follow when developing for PS-TEROS:
 
 1. Use `black` for code formatting
 2. Follow the AiiDA coding style

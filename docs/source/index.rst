@@ -1,10 +1,10 @@
 .. PS-TEROS documentation master file
 
 ===============================================
-PS-TEROS: Thermodynamics of Oxide Surfaces
+PS-TEROS: Predicting Stability of TERminations of Oxide Surfaces
 ===============================================
 
-PS-TEROS (Predictive Simulations - Thermodynamics of Oxide Surfaces) is a Python package for calculating surface energies and electronic properties of oxide materials using ab initio atomistic thermodynamics with the AiiDA-WorkGraph framework.
+PS-TEROS (Predicting Stability of TERminations of Oxide Surfaces) is a Python package for calculating surface energies and electronic properties of oxide materials using ab initio atomistic thermodynamics with the AiiDA-WorkGraph framework.
 
 Key Features
 ============
@@ -15,6 +15,9 @@ Key Features
 * **Material-agnostic**: Works for binary, ternary oxides, and more complex systems
 * **AiiDA integration**: Full provenance tracking, workflow management, and restart capabilities
 * **Parallel execution**: Scatter-gather patterns for efficient computation
+
+.. important::
+   **DFT Code Support**: The current version only supports VASP. CP2K and Quantum ESPRESSO are planned as future updates. If you need PS-TEROS code for these versions, please use the legacy version in the ``legacy/`` directory.
 
 Quick Links
 ===========

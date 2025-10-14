@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'AiiDA-TEROS'
+project = 'PS-TEROS'
 copyright = '2025, Thiago T. Dorini'
 author = 'Thiago T. Dorini'
 release = '0.1.0'

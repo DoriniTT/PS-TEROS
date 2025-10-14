@@ -5,13 +5,15 @@ PS-TEROS is a Python package for calculating surface Gibbs free energy using ab 
 ## Features
 
 - **Automated Surface Energy Calculations**: Complete workflow for surface Gibbs free energy calculations using ab initio atomistic thermodynamics
-- **Multiple DFT Code Support**: Compatible with VASP, Quantum ESPRESSO, and CP2K via AiiDA plugins
+- **DFT Code Support**: Currently supports VASP via AiiDA plugins (CP2K and Quantum ESPRESSO support planned for future releases)
 - **Flexible Slab Generation**: Automatic generation or manual input of surface terminations
 - **Cleavage Energy Calculations**: Built-in module for computing cleavage energies of complementary surface pairs
 - **Restart Capability**: Resume incomplete calculations from previous runs using remote data
 - **Default Builders**: Pre-configured parameter sets for rapid workflow setup
 - **Full Provenance Tracking**: Complete data provenance via AiiDA infrastructure
 - **Parallel Execution**: Efficient parallel processing of multiple terminations and references
+
+> **Note**: The current version only supports VASP. CP2K and Quantum ESPRESSO are planned as future updates. If you need PS-TEROS code for these versions, please use the [legacy version](legacy/).
 
 ## Installation
 
@@ -23,7 +25,7 @@ PS-TEROS is a Python package for calculating surface Gibbs free energy using ab 
 - pymatgen
 - numpy
 - ase
-- A supported DFT code (VASP, Quantum ESPRESSO, or CP2K) with corresponding AiiDA plugin
+- VASP with the AiiDA-VASP plugin (currently the only supported DFT code)
 
 ### Setup
 

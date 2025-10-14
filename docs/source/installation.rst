@@ -17,8 +17,11 @@ TEROS requires:
 
 For running actual calculations, you will also need:
 
-* A supported DFT code (VASP, Quantum ESPRESSO, or CP2K)
-* Appropriate AiiDA plugins for these codes
+* VASP (currently the only supported DFT code)
+* AiiDA-VASP plugin
+
+.. note::
+   **Current DFT Code Support**: The current version only supports VASP. CP2K and Quantum ESPRESSO are planned as future updates. If you need PS-TEROS code for these versions, please use the legacy version in the ``legacy/`` directory.
 
 AiiDA Installation
 ------------------
@@ -40,14 +43,14 @@ This typically involves:
 From Source
 -----------
 
-The sources for AiiDA-TEROS can be downloaded from the `Github repo`_.
+The sources for PS-TEROS can be downloaded from the `Github repo`_.
 
 .. code-block:: console
 
-    $ git clone git@github.com:DoriniTT/aiida-teros.git
-    $ cd aiida-teros
+    $ git clone git@github.com:DoriniTT/PS-TEROS.git
+    $ cd PS-TEROS
     $ pip install -e .
 
 This will install the package in development mode, allowing you to modify the code and have changes immediately available.
 
-.. _Github repo: https://github.com/DoriniTT/aiida-teros
+.. _Github repo: https://github.com/DoriniTT/PS-TEROS
