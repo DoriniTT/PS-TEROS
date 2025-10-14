@@ -513,6 +513,7 @@ def build_core_workgraph(
     structures_dir: str,
     bulk_name: str,
     code_label: str = 'VASP-VTST-6.4.3@bohr',
+    calculator: str = 'vasp',  # NEW: 'vasp' or 'cp2k'
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
     kpoints_spacing: float = 0.4,
@@ -562,6 +563,16 @@ def build_core_workgraph(
     aimd_options: dict = None,
     aimd_potential_mapping: dict = None,
     aimd_kpoints_spacing: float = None,
+    # CP2K-specific parameters (NEW):
+    basis_content: str = None,
+    pseudo_content: str = None,
+    cp2k_kind_section: list = None,
+    # Fixed atoms configuration (NEW):
+    fix_atoms: bool = False,
+    fix_type: str = None,
+    fix_thickness: float = 0.0,
+    fix_elements: list = None,
+    fix_components: str = "XYZ",
     compute_electronic_properties_slabs: bool = None,  # CHANGED: Now defaults to None
     slab_electronic_properties: dict = None,  # NEW: Per-slab parameter overrides
     slab_bands_parameters: dict = None,  # NEW: Default slab parameters
@@ -859,6 +870,35 @@ def build_core_workgraph(
 
     # Special handling for input_slabs: stored nodes can't be passed through @task.graph
     use_input_slabs = input_slabs is not None and len(input_slabs) > 0
+
+    # ========================================================================
+    # CP2K-SPECIFIC SETUP
+    # ========================================================================
+
+    basis_file = None
+    pseudo_file = None
+    if calculator == 'cp2k':
+        import io
+        from teros.core.builders.aimd_builder_cp2k import (
+            get_basis_molopt_content,
+            get_gth_potentials_content,
+        )
+
+        # Use provided content or defaults
+        basis_str = basis_content if basis_content else get_basis_molopt_content()
+        pseudo_str = pseudo_content if pseudo_content else get_gth_potentials_content()
+
+        # Create SinglefileData nodes
+        basis_file = orm.SinglefileData(
+            io.BytesIO(basis_str.encode('utf-8')),
+            filename='BASIS_MOLOPT'
+        )
+        pseudo_file = orm.SinglefileData(
+            io.BytesIO(pseudo_str.encode('utf-8')),
+            filename='GTH_POTENTIALS'
+        )
+
+        print(f"\n  ✓ Created CP2K basis and pseudopotential files")
 
     # Automatically disable cleavage calculation when using manual slabs
     if use_input_slabs and compute_cleavage:
@@ -1273,89 +1313,136 @@ def build_core_workgraph(
         print(f"  ✓ Electronic properties calculation enabled (DOS and bands)")
 
     # ===== AIMD CALCULATION (OPTIONAL) =====
-    # Check if AIMD should be added: need run_aimd=True, aimd_sequence, and either input_slabs or generated slabs
+    # Check if AIMD should be added
     should_add_aimd = run_aimd and aimd_sequence is not None and (input_slabs is not None or miller_indices is not None)
-    
+
     if should_add_aimd:
         print("\n  → Adding AIMD stages to workflow")
+        print(f"     Calculator: {calculator}")
         print(f"     Number of stages: {len(aimd_sequence)}")
-        
-        from teros.core.aimd import aimd_single_stage_scatter
+
+        # Import appropriate scatter function based on calculator
+        if calculator == 'vasp':
+            from teros.core.aimd import aimd_single_stage_scatter
+            aimd_scatter_func = aimd_single_stage_scatter
+        elif calculator == 'cp2k':
+            from teros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k
+            aimd_scatter_func = aimd_single_stage_scatter_cp2k
+        else:
+            raise ValueError(f"Unknown calculator: {calculator}")
+
         from aiida.orm import Code, load_code
-        
+
         # Load code
         code = load_code(code_label)
-        
+
         # Get parameters - use AIMD-specific or fall back to slab/bulk parameters
         slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
         slab_opts = slab_options if slab_options is not None else bulk_options
         slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
         slab_kpts = slab_kpoints_spacing if slab_kpoints_spacing is not None else kpoints_spacing
-        
+
         aimd_params = aimd_parameters if aimd_parameters is not None else slab_params
         aimd_opts = aimd_options if aimd_options is not None else slab_opts
         aimd_pot_map = aimd_potential_mapping if aimd_potential_mapping is not None else slab_pot_map
         aimd_kpts = aimd_kpoints_spacing if aimd_kpoints_spacing is not None else slab_kpts
-        
+
+        # Handle fixed atoms if requested
+        fixed_atoms_lists = {}
+
+        if fix_atoms and fix_type is not None:
+            print(f"\n  → Preparing fixed atoms constraints")
+            print(f"     Type: {fix_type}")
+            print(f"     Thickness: {fix_thickness} Å")
+            print(f"     Elements: {fix_elements if fix_elements else 'all'}")
+
+            from teros.core.fixed_atoms import get_fixed_atoms_list
+
+            # For input_slabs, calculate fixed atoms now
+            if input_slabs is not None:
+                for label, slab_struct in input_slabs.items():
+                    fixed_list = get_fixed_atoms_list(
+                        slab_struct,
+                        fix_type=fix_type,
+                        fix_thickness=fix_thickness,
+                        fix_elements=fix_elements,
+                    )
+                    fixed_atoms_lists[label] = fixed_list
+                    print(f"     {label}: {len(fixed_list)} atoms fixed")
+
         # Determine which slabs to use as initial structures
-        # Get the actual task that produces relaxed slabs, not the WorkGraph output
         if relax_slabs and 'relax_slabs_scatter' in wg.tasks:
-            # Use relaxed slabs from the relax_slabs_scatter task
             relax_task = wg.tasks['relax_slabs_scatter']
             initial_slabs_source = relax_task.outputs.relaxed_structures
             print(f"     Using relaxed slabs from relax_slabs_scatter task")
         elif relax_slabs and 'collect_slab_outputs_restart' in wg.tasks:
-            # Use relaxed slabs from restart collector
             collector_task = wg.tasks['collect_slab_outputs_restart']
             initial_slabs_source = collector_task.outputs.structures
             print(f"     Using relaxed slabs from restart collector")
         elif input_slabs is not None:
-            # input_slabs without relaxation
             initial_slabs_source = input_slabs
             print(f"     Using unrelaxed input slabs as initial structures")
         else:
-            # Generated but unrelaxed slabs - get from generate_slab_structures task
             gen_task = wg.tasks['generate_slab_structures']
             initial_slabs_source = gen_task.outputs.slabs
             print(f"     Using unrelaxed generated slabs as initial structures")
-        
-        # Sequential AIMD stages: add tasks manually with explicit wiring
+
+        # Sequential AIMD stages
         current_structures = initial_slabs_source
-        current_remotes = {}  # Empty dict for first stage (no restart), will be populated by previous stage outputs
+        current_remotes = {}
         stage_tasks = []
-        
+
         for stage_idx, stage_config in enumerate(aimd_sequence):
             stage_name = f"aimd_stage_{stage_idx:02d}_{stage_config['temperature']}K"
             print(f"     Stage {stage_idx}: {stage_config['temperature']}K × {stage_config['steps']} steps")
-            
-            # Add AIMD task for this stage
-            # Note: restart_folders should be {} for first stage (default), socket output for subsequent stages
+
+            # Build stage inputs based on calculator
+            if calculator == 'vasp':
+                stage_inputs = {
+                    'slabs': current_structures,
+                    'temperature': stage_config['temperature'],
+                    'steps': stage_config['steps'],
+                    'code': code,
+                    'aimd_parameters': aimd_params,
+                    'potential_family': potential_family,
+                    'potential_mapping': aimd_pot_map,
+                    'options': aimd_opts,
+                    'kpoints_spacing': aimd_kpts,
+                    'clean_workdir': clean_workdir,
+                    'restart_folders': current_remotes,
+                }
+            elif calculator == 'cp2k':
+                stage_inputs = {
+                    'slabs': current_structures,
+                    'temperature': stage_config['temperature'],
+                    'steps': stage_config['steps'],
+                    'code': code,
+                    'aimd_parameters': aimd_params,
+                    'basis_file': basis_file,
+                    'pseudo_file': pseudo_file,
+                    'options': aimd_opts,
+                    'clean_workdir': clean_workdir,
+                    'restart_folders': current_remotes,
+                }
+
+                # Add fixed atoms for CP2K
+                if fixed_atoms_lists:
+                    stage_inputs['fixed_atoms_lists'] = fixed_atoms_lists
+                    stage_inputs['fix_components'] = fix_components
+
+            # Add task
             stage_task = wg.add_task(
-                aimd_single_stage_scatter,
+                aimd_scatter_func,
                 name=stage_name,
-                slabs=current_structures,
-                temperature=stage_config['temperature'],
-                steps=stage_config['steps'],
-                code=code,
-                aimd_parameters=aimd_params,
-                potential_family=potential_family,
-                potential_mapping=aimd_pot_map,
-                options=aimd_opts,
-                kpoints_spacing=aimd_kpts,
-                clean_workdir=clean_workdir,
-                restart_folders=current_remotes,
+                **stage_inputs
             )
-            
+
             stage_tasks.append(stage_task)
-            
-            # Wire outputs of this stage to inputs of next stage
+
+            # Wire outputs to next stage inputs
             current_structures = stage_task.outputs.structures
             current_remotes = stage_task.outputs.remote_folders
-        
-        # Note: AIMD outputs are stored in the individual stage tasks
-        # Users can access them via: wg.tasks['aimd_stage_00_300K'].outputs.structures, etc.
-        # To access final outputs: wg.tasks['aimd_stage_XX_XXXK'].outputs where XX is the last stage
-        
+
         print(f"  ✓ AIMD calculation enabled ({len(aimd_sequence)} sequential stages)")
         print(f"     Access AIMD outputs via: wg.tasks['aimd_stage_XX_XXXK'].outputs")
 
