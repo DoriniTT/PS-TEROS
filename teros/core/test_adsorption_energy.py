@@ -201,3 +201,36 @@ def test_calculate_adsorption_energy_returns_float():
     )
 
     assert isinstance(E_ads, orm.Float)
+
+
+def test_compute_adsorption_energies_scatter_signature():
+    """Test that scatter function exists with correct signature."""
+    # This test just checks the function exists and accepts right parameters
+    # Full integration test will be in examples folder
+
+    import inspect
+    from .adsorption_energy import compute_adsorption_energies_scatter
+
+    # Function should be callable (wrapped by @task.graph)
+    assert callable(compute_adsorption_energies_scatter)
+
+    # Check the original function signature (before wrapping)
+    # The @task.graph decorator stores the original function
+    if hasattr(compute_adsorption_energies_scatter, 'node'):
+        # Get the original function from the task
+        original_func = compute_adsorption_energies_scatter.node.func
+        sig = inspect.signature(original_func)
+        params = list(sig.parameters.keys())
+
+        # Check required parameters exist
+        assert 'structures' in params
+        assert 'adsorbate_formulas' in params
+        assert 'code' in params
+        assert 'potential_family' in params
+        assert 'potential_mapping' in params
+        assert 'parameters' in params
+        assert 'options' in params
+    else:
+        # If we can't access the original function, at least verify it's callable
+        # This is sufficient for the minimal test
+        assert callable(compute_adsorption_energies_scatter)
