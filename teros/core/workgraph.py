@@ -88,6 +88,9 @@ def get_settings():
     'aimd_results',
     # Slab electronic properties outputs
     'slab_bands', 'slab_dos', 'slab_primitive_structures', 'slab_seekpath_parameters',
+    # Adsorption energy outputs
+    'separated_structures', 'substrate_energies', 'molecule_energies',
+    'complete_energies', 'adsorption_energies',
 ])
 def core_workgraph(
     structures_dir: str = None,
@@ -142,6 +145,13 @@ def core_workgraph(
     slab_bands_parameters: dict = None,  # NEW
     slab_bands_options: dict = None,  # NEW
     slab_band_settings: dict = None,  # NEW
+    run_adsorption_energy: bool = False,  # NEW
+    adsorption_structures: list = None,  # NEW
+    adsorption_formulas: list = None,  # NEW
+    adsorption_parameters: dict = None,  # NEW
+    adsorption_options: dict = None,  # NEW
+    adsorption_potential_mapping: dict = None,  # NEW
+    adsorption_kpoints_spacing: float = None,  # NEW
     # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
@@ -616,6 +626,13 @@ def build_core_workgraph(
     slab_bands_parameters: dict = None,  # NEW: Default slab parameters
     slab_bands_options: dict = None,  # NEW: Default slab scheduler options
     slab_band_settings: dict = None,  # NEW: Default slab band settings
+    run_adsorption_energy: bool = None,  # CHANGED: Now defaults to None
+    adsorption_structures: list = None,  # List of StructureData with substrate+adsorbate
+    adsorption_formulas: list = None,  # List of adsorbate formulas (e.g., ["OH", "OOH"])
+    adsorption_parameters: dict = None,  # VASP parameters for adsorption calculations
+    adsorption_options: dict = None,  # Scheduler options for adsorption calculations
+    adsorption_potential_mapping: dict = None,  # Element to potential mapping
+    adsorption_kpoints_spacing: float = None,  # K-points spacing for adsorption
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -786,8 +803,9 @@ def build_core_workgraph(
         compute_electronic_properties_bulk,
         compute_electronic_properties_slabs,
         run_aimd,
+        run_adsorption_energy,
     )
-    
+
     # Resolve preset and apply user overrides
     resolved_preset_name, resolved_flags = resolve_preset(
         workflow_preset,
@@ -798,6 +816,7 @@ def build_core_workgraph(
         compute_electronic_properties_bulk,
         compute_electronic_properties_slabs,
         run_aimd,
+        run_adsorption_energy,
     )
     
     # Extract resolved flags
@@ -808,6 +827,7 @@ def build_core_workgraph(
     compute_electronic_properties_bulk = resolved_flags['compute_electronic_properties_bulk']
     compute_electronic_properties_slabs = resolved_flags['compute_electronic_properties_slabs']
     run_aimd = resolved_flags['run_aimd']
+    run_adsorption_energy = resolved_flags['run_adsorption_energy']
     
     # Validate preset requirements
     validation_errors = validate_preset_inputs(
@@ -828,6 +848,8 @@ def build_core_workgraph(
         slab_bands_options=slab_bands_options,
         slab_band_settings=slab_band_settings,
         slab_electronic_properties=slab_electronic_properties,
+        adsorption_structures=adsorption_structures,
+        adsorption_formulas=adsorption_formulas,
     )
     
     if validation_errors:
@@ -845,6 +867,8 @@ def build_core_workgraph(
         slab_bands_parameters=slab_bands_parameters,
         aimd_sequence=aimd_sequence,
         aimd_parameters=aimd_parameters,
+        adsorption_structures=adsorption_structures,
+        adsorption_formulas=adsorption_formulas,
     )
     
     for warning in dependency_warnings:
