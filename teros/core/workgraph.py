@@ -25,6 +25,7 @@ from teros.core.thermodynamics import (
     compute_surface_energies_scatter,
 )
 from teros.core.cleavage import compute_cleavage_energies_scatter
+from teros.core.adsorption_energy import compute_adsorption_energies_scatter
 from teros.core.workflow_presets import (
     resolve_preset,
     validate_preset_inputs,
@@ -1054,6 +1055,13 @@ def build_core_workgraph(
         slab_bands_parameters=slab_bands_parameters,  # NEW
         slab_bands_options=slab_bands_options,  # NEW
         slab_band_settings=slab_band_settings,  # NEW
+        run_adsorption_energy=run_adsorption_energy,  # NEW
+        adsorption_structures=adsorption_structures,  # NEW
+        adsorption_formulas=adsorption_formulas,  # NEW
+        adsorption_parameters=adsorption_parameters,  # NEW
+        adsorption_options=adsorption_options,  # NEW
+        adsorption_potential_mapping=adsorption_potential_mapping,  # NEW
+        adsorption_kpoints_spacing=adsorption_kpoints_spacing,  # NEW
         # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
@@ -1542,6 +1550,56 @@ def build_core_workgraph(
 
         print(f"  ✓ AIMD calculation enabled ({len(aimd_sequence)} sequential stages)")
         print(f"     Access AIMD outputs via: wg.tasks['aimd_stage_XX_XXXK'].outputs")
+
+    # ===== ADSORPTION ENERGY CALCULATION (OPTIONAL) =====
+    # Check if adsorption energy should be computed
+    should_add_adsorption = run_adsorption_energy and adsorption_structures is not None and adsorption_formulas is not None
+
+    if should_add_adsorption:
+        print("\n  → Adding adsorption energy calculation")
+        print(f"     Number of structures: {len(adsorption_structures)}")
+        print(f"     Adsorbate formulas: {adsorption_formulas}")
+
+        from aiida.orm import Code, load_code
+
+        # Load code
+        code = load_code(code_label)
+
+        # Get parameters - use adsorption-specific or fall back to slab/bulk parameters
+        slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
+        slab_opts = slab_options if slab_options is not None else bulk_options
+        slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
+        slab_kpts = slab_kpoints_spacing if slab_kpoints_spacing is not None else kpoints_spacing
+
+        ads_params = adsorption_parameters if adsorption_parameters is not None else slab_params
+        ads_opts = adsorption_options if adsorption_options is not None else slab_opts
+        ads_pot_map = adsorption_potential_mapping if adsorption_potential_mapping is not None else slab_pot_map
+        ads_kpts = adsorption_kpoints_spacing if adsorption_kpoints_spacing is not None else slab_kpts
+
+        # Add adsorption energy scatter task
+        adsorption_task = wg.add_task(
+            compute_adsorption_energies_scatter,
+            name='compute_adsorption_energies_scatter',
+            structures=adsorption_structures,
+            adsorbate_formulas=adsorption_formulas,
+            code=code,
+            parameters=ads_params,
+            potential_family=potential_family,
+            potential_mapping=ads_pot_map,
+            options=ads_opts,
+            kpoints_spacing=ads_kpts,
+            clean_workdir=clean_workdir,
+        )
+
+        # Connect outputs
+        wg.outputs.separated_structures = adsorption_task.outputs.separated_structures
+        wg.outputs.substrate_energies = adsorption_task.outputs.substrate_energies
+        wg.outputs.molecule_energies = adsorption_task.outputs.molecule_energies
+        wg.outputs.complete_energies = adsorption_task.outputs.complete_energies
+        wg.outputs.adsorption_energies = adsorption_task.outputs.adsorption_energies
+
+        print(f"  ✓ Adsorption energy calculation enabled")
+        print(f"     Access outputs via: wg.outputs.adsorption_energies")
 
     # Set the name
     wg.name = name

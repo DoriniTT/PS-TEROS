@@ -22,10 +22,8 @@ Usage:
 
 import sys
 import os
-from pathlib import Path
 from aiida import load_profile, orm
-from aiida_workgraph import WorkGraph
-from teros.core import compute_adsorption_energies_scatter
+from teros.core.workgraph import build_core_workgraph
 
 
 def create_ag_oh_structure():
@@ -87,13 +85,8 @@ def main():
 
     complete_structure = create_ag_oh_structure()
 
-    structures = {
-        'oh_site1': complete_structure,
-    }
-
-    adsorbate_formulas = {
-        'oh_site1': 'OH',  # Chemical formula for automatic identification
-    }
+    adsorption_structures = [complete_structure]
+    adsorption_formulas = ['OH']
 
     print("   ✓ Structure created")
     print(f"   Total atoms: {len(complete_structure.get_ase())}")
@@ -108,7 +101,7 @@ def main():
     print(f"   Potential family: {potential_family}")
 
     # VASP parameters (production-quality for Ag + OH)
-    parameters = {
+    adsorption_parameters = {
         'PREC': 'Accurate',
         'ENCUT': 400,          # Adequate for Ag and light elements
         'EDIFF': 1e-5,
@@ -126,23 +119,23 @@ def main():
     }
 
     # Scheduler options
-    options = {
+    adsorption_options = {
         'resources': {
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
         'queue_name': 'par40',
-        'max_wallclock_seconds': 3600 * 4,  # 4 hours per calculation
     }
 
     # Potential mapping
-    potential_mapping = {
+    adsorption_potential_mapping = {
         'Ag': 'Ag',
         'O': 'O',
         'H': 'H',
     }
 
     print("\n4. Building WorkGraph...")
+    print("   Using preset: 'adsorption_energy'")
     print("   This will create 3 VASP calculations:")
     print("     1. Complete system (Ag slab + OH)")
     print("     2. Bare substrate (Ag slab only)")
@@ -152,22 +145,24 @@ def main():
     print("   Negative E_ads = favorable (exothermic) adsorption")
     print("   Positive E_ads = unfavorable (endothermic) adsorption")
 
-    # Create WorkGraph
-    wg = WorkGraph(name='Step12_AdsorptionEnergy_Ag_OH')
+    # Build workgraph using adsorption_energy preset
+    wg = build_core_workgraph(
+        workflow_preset='adsorption_energy',
 
-    # Add adsorption energy calculation task
-    ads_task = wg.add_task(
-        compute_adsorption_energies_scatter,
-        name='compute_adsorption_energies',
-        structures=structures,
-        adsorbate_formulas=adsorbate_formulas,
-        code=orm.load_code(code_label),
+        # Code
+        code_label=code_label,
         potential_family=potential_family,
-        potential_mapping=potential_mapping,
-        parameters=parameters,
-        options=options,
-        kpoints_spacing=0.3,   # ~3x3x1 k-point grid
-        clean_workdir=False,    # Keep files for inspection
+        clean_workdir=False,
+
+        # Adsorption energy specific
+        adsorption_structures=adsorption_structures,
+        adsorption_formulas=adsorption_formulas,
+        adsorption_parameters=adsorption_parameters,
+        adsorption_options=adsorption_options,
+        adsorption_potential_mapping=adsorption_potential_mapping,
+        adsorption_kpoints_spacing=0.3,
+
+        name='Step12_AdsorptionEnergy_Ag_OH',
     )
 
     print("   ✓ WorkGraph built successfully")
@@ -185,18 +180,18 @@ def main():
     print(f"  verdi process show {wg.pk}")
     print(f"\nExpected outputs:")
     print(f"  1. Separated structures:")
-    print(f"     - separated_structures['oh_site1']")
+    print(f"     - separated_structures (list with 1 dict)")
     print(f"       * substrate: Ag slab (4 atoms)")
     print(f"       * molecule: OH (2 atoms)")
     print(f"       * complete: Ag + OH (6 atoms)")
     print(f"  ")
     print(f"  2. Individual energies:")
-    print(f"     - substrate_energies['oh_site1']: E(Ag slab)")
-    print(f"     - molecule_energies['oh_site1']: E(OH)")
-    print(f"     - complete_energies['oh_site1']: E(Ag+OH)")
+    print(f"     - substrate_energies (list): E(Ag slab)")
+    print(f"     - molecule_energies (list): E(OH)")
+    print(f"     - complete_energies (list): E(Ag+OH)")
     print(f"  ")
     print(f"  3. Adsorption energy:")
-    print(f"     - adsorption_energies['oh_site1']: E_ads (eV)")
+    print(f"     - adsorption_energies (list): E_ads (eV)")
     print(f"  ")
     print(f"Expected E_ads for OH/Ag(111):")
     print(f"  Literature range: -2.0 to -2.5 eV (DFT-PBE)")
