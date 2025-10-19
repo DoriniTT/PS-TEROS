@@ -1,8 +1,8 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-STEP 12: Adsorption Energy Calculation
+STEP 12: Adsorption Energy Calculation (Multi-Site Test)
 
-This script tests the adsorption energy workflow:
+This script tests the adsorption energy workflow with multiple structures:
 - Structure separation (substrate + molecule identification)
 - Substrate relaxation
 - Molecule relaxation
@@ -12,8 +12,12 @@ This script tests the adsorption energy workflow:
 The module uses connectivity analysis (pymatgen StructureGraph with CrystalNN)
 to automatically identify and separate the adsorbate from the substrate.
 
-Material: Ag(111) surface with OH adsorbate
-Adsorbate: OH radical
+Test case: OH radical on Ag(111) at two different adsorption sites
+- Site 1: OH on hollow site (3-fold coordination)
+- Site 2: OH on top site (1-fold coordination, bonded to Ag)
+
+This tests the scatter functionality with 6 parallel VASP calculations:
+  2 sites × 3 calculations each (substrate, molecule, complete)
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -26,8 +30,11 @@ from aiida import load_profile, orm
 from teros.core.workgraph import build_core_workgraph
 
 
-def create_ag_oh_structure():
+def create_ag_oh_structure(site_type='hollow'):
     """Create Ag(111) slab with OH adsorbate for testing.
+
+    Args:
+        site_type: Type of adsorption site ('hollow' or 'top')
 
     Returns:
         orm.StructureData: Structure with Ag slab + OH
@@ -48,11 +55,21 @@ def create_ag_oh_structure():
         [2.9, 2.9, 10.0],
     ]
 
-    # OH adsorbate on top (bonded O-H cluster above surface)
-    oh_positions = [
-        [1.45, 1.45, 12.0],  # O atom on hollow site
-        [1.45, 1.45, 13.0],  # H atom above O
-    ]
+    # OH adsorbate position depends on site type
+    if site_type == 'hollow':
+        # OH on hollow site (3-fold coordination)
+        oh_positions = [
+            [1.45, 1.45, 12.0],  # O atom on hollow site
+            [1.45, 1.45, 13.0],  # H atom above O
+        ]
+    elif site_type == 'top':
+        # OH on top site (directly above Ag atom, 1-fold coordination)
+        oh_positions = [
+            [0.0, 0.0, 12.0],    # O atom directly above Ag
+            [0.0, 0.0, 13.0],    # H atom above O
+        ]
+    else:
+        raise ValueError(f"Unknown site_type: {site_type}")
 
     species = ['Ag'] * 4 + ['O', 'H']
     positions = ag_positions + oh_positions
@@ -77,20 +94,30 @@ def main():
     load_profile(profile='psteros')
     print("   ✓ Profile loaded")
 
-    # Create test structure
-    print("\n2. Creating test structure...")
+    # Create test structures
+    print("\n2. Creating test structures...")
     print("   System: Ag(111) + OH")
     print("   Adsorbate: OH radical")
     print("   Method: Connectivity analysis (pymatgen StructureGraph)")
 
-    complete_structure = create_ag_oh_structure()
+    # Create two structures with OH at different adsorption sites
+    structure_hollow = create_ag_oh_structure(site_type='hollow')
+    structure_top = create_ag_oh_structure(site_type='top')
 
-    adsorption_structures = [complete_structure]
-    adsorption_formulas = ['OH']
+    # Adsorption structures and formulas must be dicts with matching keys
+    adsorption_structures = {
+        'oh_hollow': structure_hollow,
+        'oh_top': structure_top,
+    }
+    adsorption_formulas = {
+        'oh_hollow': 'OH',
+        'oh_top': 'OH',
+    }
 
-    print("   ✓ Structure created")
-    print(f"   Total atoms: {len(complete_structure.get_ase())}")
-    print(f"   Composition: Ag4OH")
+    print("   ✓ Structures created")
+    print(f"   Site 1: OH on hollow site ({len(structure_hollow.get_ase())} atoms)")
+    print(f"   Site 2: OH on top site ({len(structure_top.get_ase())} atoms)")
+    print(f"   Composition: Ag4OH (each)")
 
     # Code configuration
     code_label = 'VASP-VTST-6.4.3@bohr'
@@ -136,14 +163,18 @@ def main():
 
     print("\n4. Building WorkGraph...")
     print("   Using preset: 'adsorption_energy'")
-    print("   This will create 3 VASP calculations:")
-    print("     1. Complete system (Ag slab + OH)")
-    print("     2. Bare substrate (Ag slab only)")
-    print("     3. Isolated molecule (OH in same cell)")
+    print("   This will create 6 VASP calculations (3 per structure):")
+    print("     For each site (hollow and top):")
+    print("       1. Complete system (Ag slab + OH)")
+    print("       2. Bare substrate (Ag slab only)")
+    print("       3. Isolated molecule (OH in same cell)")
     print("   ")
     print("   Formula: E_ads = E_complete - E_substrate - E_molecule")
     print("   Negative E_ads = favorable (exothermic) adsorption")
     print("   Positive E_ads = unfavorable (endothermic) adsorption")
+    print("   ")
+    print("   Expected: E_ads(hollow) < E_ads(top)")
+    print("   (Hollow sites typically more favorable than top sites)")
 
     # Build workgraph using adsorption_energy preset
     wg = build_core_workgraph(
@@ -180,25 +211,29 @@ def main():
     print(f"  verdi process show {wg.pk}")
     print(f"\nExpected outputs:")
     print(f"  1. Separated structures:")
-    print(f"     - separated_structures (list with 1 dict)")
-    print(f"       * substrate: Ag slab (4 atoms)")
-    print(f"       * molecule: OH (2 atoms)")
-    print(f"       * complete: Ag + OH (6 atoms)")
+    print(f"     - separated_structures (dict with 2 entries)")
+    print(f"       * oh_hollow: {{substrate, molecule, complete}}")
+    print(f"       * oh_top: {{substrate, molecule, complete}}")
+    print(f"     Each contains: Ag slab (4 atoms), OH (2 atoms), complete (6 atoms)")
     print(f"  ")
-    print(f"  2. Individual energies:")
-    print(f"     - substrate_energies (list): E(Ag slab)")
-    print(f"     - molecule_energies (list): E(OH)")
-    print(f"     - complete_energies (list): E(Ag+OH)")
+    print(f"  2. Individual energies (dict with 2 entries each):")
+    print(f"     - substrate_energies: {{oh_hollow: E(Ag), oh_top: E(Ag)}}")
+    print(f"     - molecule_energies: {{oh_hollow: E(OH), oh_top: E(OH)}}")
+    print(f"     - complete_energies: {{oh_hollow: E(Ag+OH), oh_top: E(Ag+OH)}}")
     print(f"  ")
-    print(f"  3. Adsorption energy:")
-    print(f"     - adsorption_energies (list): E_ads (eV)")
+    print(f"  3. Adsorption energies (dict with 2 entries):")
+    print(f"     - adsorption_energies: {{oh_hollow: E_ads, oh_top: E_ads}}")
     print(f"  ")
     print(f"Expected E_ads for OH/Ag(111):")
-    print(f"  Literature range: -2.0 to -2.5 eV (DFT-PBE)")
+    print(f"  Hollow site: -2.0 to -2.5 eV (DFT-PBE, more favorable)")
+    print(f"  Top site:    -1.5 to -2.0 eV (DFT-PBE, less favorable)")
     print(f"  (Negative = favorable adsorption)")
     print(f"\nCell handling:")
-    print(f"  All three systems use the SAME simulation cell")
+    print(f"  All systems use the SAME simulation cell (per structure)")
     print(f"  This eliminates basis set superposition error (BSSE)")
+    print(f"\nParallel execution:")
+    print(f"  6 VASP calculations will run in parallel")
+    print(f"  Total: 2 sites × 3 calculations each")
     print(f"{'='*70}\n")
 
     return wg

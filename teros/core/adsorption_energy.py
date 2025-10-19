@@ -84,19 +84,47 @@ def _separate_adsorbate_structure_impl(
             f"cannot contain adsorbate {formula_str} ({total_target_atoms} atoms)"
         )
 
-    # Build connectivity graph using CrystalNN
-    # CrystalNN works for both crystals and molecules
+    # Strategy: Find adsorbate by building subgraph of candidate atoms only
+    # This works even if adsorbate is bonded to substrate
+
+    # Step 1: Find all atoms matching elements in adsorbate formula
+    target_elements = set(target_composition.keys())
+    candidate_indices = []
+    for i, site in enumerate(pmg_structure):
+        if str(site.specie) in target_elements:
+            candidate_indices.append(i)
+
+    if len(candidate_indices) < total_target_atoms:
+        raise ValueError(
+            f"Not enough atoms to form adsorbate {formula_str}. "
+            f"Need {total_target_atoms} atoms from {target_elements}, "
+            f"but structure only has {len(candidate_indices)} matching atoms."
+        )
+
+    # Step 2: Build connectivity graph for ALL atoms using CrystalNN
     sg = StructureGraph.from_local_env_strategy(pmg_structure, CrystalNN())
 
-    # Get connected components (bonded clusters) using networkx
-    # This preserves the original atom indices
+    # Step 3: Build subgraph containing only edges between candidate atoms
+    # This allows us to find adsorbate clusters even if bonded to substrate
     import networkx as nx
-    components = list(nx.connected_components(sg.graph.to_undirected()))
+    candidate_graph = nx.Graph()
+    candidate_graph.add_nodes_from(candidate_indices)
 
-    # Find cluster matching adsorbate formula
+    for i in candidate_indices:
+        # Get all bonded neighbors from full graph
+        neighbors = sg.get_connected_sites(i)
+        for neighbor_info in neighbors:
+            j = neighbor_info.index
+            # Only add edge if both atoms are candidates (adsorbate elements)
+            if j in candidate_indices and i < j:  # avoid duplicate edges
+                candidate_graph.add_edge(i, j)
+
+    # Step 4: Find connected components in candidate subgraph
+    components = list(nx.connected_components(candidate_graph))
+
+    # Step 5: Find cluster matching adsorbate formula
     matching_clusters = []
     for component in components:
-        # Get indices in this component
         node_indices = sorted(list(component))
 
         # Get composition of this cluster
@@ -121,8 +149,9 @@ def _separate_adsorbate_structure_impl(
             available_formulas.append(formula)
 
         raise ValueError(
-            f"Could not find adsorbate '{formula_str}' in structure. "
-            f"Found connected clusters with formulas: {available_formulas}"
+            f"Could not find adsorbate '{formula_str}' among candidate atom clusters. "
+            f"Found clusters with formulas: {available_formulas}. "
+            f"Note: Only considering bonds between atoms matching {target_elements}."
         )
 
     if len(matching_clusters) > 1:
