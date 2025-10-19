@@ -6,7 +6,7 @@ from pymatgen.core import Structure, Lattice
 from ase import Atoms
 from pymatgen.io.ase import AseAtomsAdaptor
 
-from .adsorption_energy import _separate_adsorbate_structure_impl
+from .adsorption_energy import _separate_adsorbate_structure_impl, _calculate_adsorption_energy_impl
 
 
 @pytest.fixture(scope='module', autouse=True)
@@ -150,3 +150,54 @@ def test_separate_adsorbate_no_match():
             structure=complete,
             adsorbate_formula=adsorbate_formula
         )
+
+
+def test_calculate_adsorption_energy_correct_formula():
+    """Test that adsorption energy uses correct formula."""
+    # E_ads = E_complete - E_substrate - E_molecule
+
+    E_complete = orm.Float(-100.0)
+    E_substrate = orm.Float(-80.0)
+    E_molecule = orm.Float(-15.0)
+
+    E_ads = _calculate_adsorption_energy_impl(
+        E_complete=E_complete,
+        E_substrate=E_substrate,
+        E_molecule=E_molecule
+    )
+
+    # E_ads = -100 - (-80) - (-15) = -100 + 80 + 15 = -5.0
+    expected = -5.0
+    assert abs(E_ads.value - expected) < 1e-9
+
+
+def test_calculate_adsorption_energy_positive():
+    """Test case where adsorption is endothermic (positive E_ads)."""
+    E_complete = orm.Float(-50.0)
+    E_substrate = orm.Float(-40.0)
+    E_molecule = orm.Float(-15.0)
+
+    E_ads = _calculate_adsorption_energy_impl(
+        E_complete=E_complete,
+        E_substrate=E_substrate,
+        E_molecule=E_molecule
+    )
+
+    # E_ads = -50 - (-40) - (-15) = -50 + 40 + 15 = 5.0 (endothermic)
+    expected = 5.0
+    assert abs(E_ads.value - expected) < 1e-9
+
+
+def test_calculate_adsorption_energy_returns_float():
+    """Test that result is Float node."""
+    E_complete = orm.Float(-100.0)
+    E_substrate = orm.Float(-80.0)
+    E_molecule = orm.Float(-15.0)
+
+    E_ads = _calculate_adsorption_energy_impl(
+        E_complete=E_complete,
+        E_substrate=E_substrate,
+        E_molecule=E_molecule
+    )
+
+    assert isinstance(E_ads, orm.Float)

@@ -198,3 +198,49 @@ def separate_adsorbate_structure(
         ValueError: If formula is invalid, adsorbate not found, or multiple matches
     """
     return _separate_adsorbate_structure_impl(structure, adsorbate_formula)
+
+
+def _calculate_adsorption_energy_impl(
+    E_complete: orm.Float,
+    E_substrate: orm.Float,
+    E_molecule: orm.Float,
+) -> orm.Float:
+    """
+    Internal implementation for calculating adsorption energy.
+
+    Args:
+        E_complete: Total energy of substrate+adsorbate system (eV)
+        E_substrate: Total energy of bare substrate (eV)
+        E_molecule: Total energy of isolated adsorbate molecule (eV)
+
+    Returns:
+        Adsorption energy in eV
+    """
+    E_ads = E_complete.value - E_substrate.value - E_molecule.value
+    return orm.Float(E_ads)
+
+
+@task.calcfunction
+def calculate_adsorption_energy(
+    E_complete: orm.Float,
+    E_substrate: orm.Float,
+    E_molecule: orm.Float,
+) -> orm.Float:
+    """
+    Calculate adsorption energy from component energies.
+
+    Uses the formula:
+        E_ads = E_complete - E_substrate - E_molecule
+
+    A negative adsorption energy indicates exothermic (favorable) adsorption.
+    A positive adsorption energy indicates endothermic (unfavorable) adsorption.
+
+    Args:
+        E_complete: Total energy of substrate+adsorbate system (eV)
+        E_substrate: Total energy of bare substrate (eV)
+        E_molecule: Total energy of isolated adsorbate molecule (eV)
+
+    Returns:
+        Adsorption energy in eV
+    """
+    return _calculate_adsorption_energy_impl(E_complete, E_substrate, E_molecule)
