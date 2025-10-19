@@ -320,9 +320,13 @@ def compute_adsorption_energies_scatter(
         separated = separate_adsorbate_structure(
             structure=structure,
             adsorbate_formula=orm.Str(adsorbate_str)
-        ).result
+        )
 
-        separated_dict[key] = separated
+        separated_dict[key] = {
+            'substrate': separated.substrate,
+            'molecule': separated.molecule,
+            'complete': separated.complete,
+        }
 
     # Phase 2: VASP relaxations (parallel, 3N jobs)
     for key, separated in separated_dict.items():

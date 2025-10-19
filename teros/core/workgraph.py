@@ -147,8 +147,8 @@ def core_workgraph(
     slab_bands_options: dict = None,  # NEW
     slab_band_settings: dict = None,  # NEW
     run_adsorption_energy: bool = False,  # NEW
-    adsorption_structures: list = None,  # NEW
-    adsorption_formulas: list = None,  # NEW
+    adsorption_structures: t.Annotated[dict, dynamic(orm.StructureData)] = None,  # NEW - Dynamic namespace of StructureData
+    adsorption_formulas: t.Annotated[dict, dict] = None,  # NEW - Dict of {label: formula_string}
     adsorption_parameters: dict = None,  # NEW
     adsorption_options: dict = None,  # NEW
     adsorption_potential_mapping: dict = None,  # NEW
@@ -628,8 +628,8 @@ def build_core_workgraph(
     slab_bands_options: dict = None,  # NEW: Default slab scheduler options
     slab_band_settings: dict = None,  # NEW: Default slab band settings
     run_adsorption_energy: bool = None,  # CHANGED: Now defaults to None
-    adsorption_structures: list = None,  # List of StructureData with substrate+adsorbate
-    adsorption_formulas: list = None,  # List of adsorbate formulas (e.g., ["OH", "OOH"])
+    adsorption_structures: dict = None,  # Dict of {label: StructureData} with substrate+adsorbate
+    adsorption_formulas: dict = None,  # Dict of {label: formula_string} for adsorbates (e.g., {"site1": "OH"})
     adsorption_parameters: dict = None,  # VASP parameters for adsorption calculations
     adsorption_options: dict = None,  # Scheduler options for adsorption calculations
     adsorption_potential_mapping: dict = None,  # Element to potential mapping
@@ -1558,6 +1558,7 @@ def build_core_workgraph(
     if should_add_adsorption:
         print("\n  → Adding adsorption energy calculation")
         print(f"     Number of structures: {len(adsorption_structures)}")
+        print(f"     Structure keys: {list(adsorption_structures.keys())}")
         print(f"     Adsorbate formulas: {adsorption_formulas}")
 
         from aiida.orm import Code, load_code
