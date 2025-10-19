@@ -1,0 +1,484 @@
+# Adsorption Energy Module
+
+## Overview
+
+The adsorption energy module (`teros.core.adsorption_energy`) provides tools to calculate adsorption energies from substrate+adsorbate structures using AiiDA-WorkGraph and VASP. The module uses connectivity analysis to automatically separate structures and performs parallel DFT calculations to obtain adsorption energies.
+
+## Theory
+
+The adsorption energy is calculated using the standard formula:
+
+```
+E_ads = E_complete - E_substrate - E_molecule
+```
+
+Where:
+- `E_complete`: Total energy of the substrate+adsorbate system (eV)
+- `E_substrate`: Total energy of the bare substrate (eV)
+- `E_molecule`: Total energy of the isolated adsorbate molecule (eV)
+
+**Interpretation:**
+- **Negative E_ads**: Exothermic adsorption (favorable, stable)
+- **Positive E_ads**: Endothermic adsorption (unfavorable, unstable)
+
+## Key Features
+
+- **Automatic structure separation** using connectivity analysis (pymatgen StructureGraph)
+- **Parallel VASP calculations** for substrate, molecule, and complete system
+- **Consistent cell handling** - all three systems use the same cell to avoid basis set superposition error
+- **Integration with existing PSTEROS modules** - follows same patterns as thermodynamics/cleavage
+- **Robust adsorbate identification** - no geometric assumptions needed
+
+## Core Functions
+
+### `separate_adsorbate_structure()`
+
+Separates substrate+adsorbate into three components using connectivity analysis.
+
+**Purpose:** Identifies and extracts the adsorbate from a complete structure by analyzing chemical bonds.
+
+**Parameters:**
+- `structure` (StructureData): Complete substrate+adsorbate structure
+- `adsorbate_formula` (Str): Chemical formula of adsorbate (e.g., "OOH", "OH")
+
+**Returns:**
+Dictionary with three StructureData nodes:
+- `substrate`: Structure with adsorbate removed, original cell preserved
+- `molecule`: Adsorbate in original cell at original position
+- `complete`: Original structure (for provenance)
+
+**Raises:**
+- `ValueError`: If formula is invalid, adsorbate not found, or multiple matches
+
+**Example:**
+```python
+from teros.core import separate_adsorbate_structure
+from aiida import orm
+
+result = separate_adsorbate_structure(
+    structure=complete_structure,
+    adsorbate_formula=orm.Str('OH')
+)
+
+substrate = result['substrate']  # Bare surface
+molecule = result['molecule']    # Isolated OH
+complete = result['complete']    # Original structure
+```
+
+### `calculate_adsorption_energy()`
+
+Calculates adsorption energy from component energies.
+
+**Purpose:** Applies the adsorption energy formula to get E_ads from relaxed energies.
+
+**Formula:** E_ads = E_complete - E_substrate - E_molecule
+
+**Parameters:**
+- `E_complete` (Float): Energy of substrate+adsorbate system (eV)
+- `E_substrate` (Float): Energy of bare substrate (eV)
+- `E_molecule` (Float): Energy of isolated molecule (eV)
+
+**Returns:**
+- Float: Adsorption energy in eV (negative = favorable)
+
+**Example:**
+```python
+from teros.core import calculate_adsorption_energy
+from aiida import orm
+
+E_ads = calculate_adsorption_energy(
+    E_complete=orm.Float(-100.0),
+    E_substrate=orm.Float(-80.0),
+    E_molecule=orm.Float(-15.0)
+)
+print(f"Adsorption energy: {E_ads.value:.3f} eV")  # Output: -5.000 eV
+```
+
+### `compute_adsorption_energies_scatter()`
+
+Complete scatter-gather workflow: separation + VASP relaxations + energy calculation.
+
+**Purpose:** Automates the entire workflow for multiple adsorption sites in parallel.
+
+**Workflow:**
+1. Separates all substrate+adsorbate structures in parallel
+2. Relaxes all systems (3N VASP jobs) in parallel
+3. Calculates adsorption energies for each system
+
+**Parameters:**
+- `structures` (dict): Dictionary of complete StructureData nodes
+- `adsorbate_formulas` (dict): Dictionary mapping structure keys to adsorbate formulas
+  - Example: `{'site1': 'OOH', 'site2': 'OH'}`
+- `code` (Code): AiiDA code for VASP
+- `potential_family` (str): Pseudopotential family name
+- `potential_mapping` (dict): Element to potential mapping
+  - Example: `{'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'}`
+- `parameters` (dict): VASP INCAR parameters
+- `options` (dict): Scheduler options for VASP calculations
+- `kpoints_spacing` (float, optional): K-points spacing in Angstrom^-1
+- `clean_workdir` (bool, optional): Whether to clean remote working directories (default: True)
+
+**Returns:**
+Dictionary with namespaces:
+- `separated_structures`: Dict of separated systems for each input
+- `substrate_energies`: Energies of bare substrates (eV)
+- `molecule_energies`: Energies of isolated molecules (eV)
+- `complete_energies`: Energies of complete systems (eV)
+- `adsorption_energies`: Final E_ads values (eV)
+
+**Example:**
+```python
+from teros.core import compute_adsorption_energies_scatter
+from aiida import orm
+
+# Define structures and adsorbates
+structures = {
+    'site1': structure1,  # LaMnO3 + OOH
+    'site2': structure2,  # LaMnO3 + OH
+}
+
+adsorbate_formulas = {
+    'site1': 'OOH',
+    'site2': 'OH',
+}
+
+# VASP parameters
+parameters = {
+    'ENCUT': 520,
+    'EDIFF': 1e-6,
+    'ISMEAR': 0,
+    'SIGMA': 0.05,
+    'IBRION': 2,
+    'NSW': 100,
+    'ISIF': 2,  # Relax ions only, keep cell fixed
+    'LWAVE': False,
+    'LCHARG': False,
+}
+
+# Scheduler options
+options = {
+    'resources': {
+        'num_machines': 1,
+        'num_mpiprocs_per_machine': 16,
+    },
+    'max_wallclock_seconds': 3600 * 12,
+    'queue_name': 'regular',
+}
+
+# Run workflow
+results = compute_adsorption_energies_scatter(
+    structures=structures,
+    adsorbate_formulas=adsorbate_formulas,
+    code=vasp_code,
+    potential_family='PBE',
+    potential_mapping={'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'},
+    parameters=parameters,
+    options=options,
+    kpoints_spacing=0.25,
+)
+
+# Access results
+for key, E_ads in results['adsorption_energies'].items():
+    print(f"{key}: {E_ads.value:.3f} eV")
+```
+
+## Adsorbate Identification Method
+
+The module uses **connectivity analysis** to identify adsorbates robustly:
+
+### Algorithm
+
+1. **Build bonding graph** using pymatgen's StructureGraph with CrystalNN
+2. **Find connected clusters** - groups of atoms bonded to each other
+3. **Match cluster composition** to adsorbate formula
+4. **Extract adsorbate atoms** while preserving substrate
+
+### Advantages
+
+- **Robust to different geometries** - no distance thresholds needed
+- **No geometric assumptions** - works for any adsorbate orientation
+- **Handles complex adsorbates** - multi-atom molecules like OOH, COOH
+- **Works with periodic boundaries** - correct handling of surface slabs
+
+### Requirements
+
+- Adsorbate must be a **single bonded cluster** (all atoms connected)
+- Adsorbate formula must be **unique in structure** (no duplicate adsorbates)
+- **No covalent bonds** between adsorbate and substrate
+  - Coordination bonds (like O-Mn) are fine, but adsorbate must be removable as a unit
+
+### Supported Adsorbates
+
+Examples of adsorbates that work well:
+- **Simple radicals**: OH, O, H, OOH
+- **Molecules**: H2O, CO, CO2, N2
+- **Complex radicals**: COOH, CHO, CH3
+
+## Cell Handling
+
+All three structures (substrate, molecule, complete) use **the same simulation cell**:
+
+### Why Same Cell?
+
+1. **Consistency**: Ensures DFT calculations use identical basis sets
+2. **Avoids BSSE**: Minimizes basis set superposition error
+3. **Proper comparison**: Energy differences are meaningful
+4. **No re-centering**: Molecule stays at original position relative to substrate
+
+### Implications
+
+- Molecule energy includes some vacuum penalty (acceptable for E_ads calculation)
+- All three VASP calculations use identical k-point grids
+- Results are directly comparable
+
+## Best Practices
+
+### 1. Structure Preparation
+
+**Substrate:**
+- Use sufficient vacuum (>10 Angstrom) to prevent periodic interactions
+- Pre-relax substrate to minimize reconstruction
+- Ensure slab thickness is converged
+
+**Adsorbate:**
+- Place adsorbate at desired adsorption site
+- Ensure reasonable geometry (bond lengths ~1 Angstrom)
+- Adsorbate should be distinguishable from substrate by composition
+
+**Validation:**
+- Check that adsorbate is identified correctly using connectivity
+- Verify no spurious bonds between adsorbate and substrate atoms
+
+### 2. VASP Parameters
+
+**Convergence:**
+- Use **consistent INCAR settings** for all three calculations
+- Converge k-points with respect to adsorption energy
+- Converge ENCUT (typically 1.3x ENMAX)
+- Test vacuum thickness convergence
+
+**Relaxation:**
+- `ISIF=2`: Relax ions only, keep cell fixed (required)
+- `IBRION=2`: Conjugate gradient (recommended)
+- `NSW`: Sufficient steps for convergence (50-100)
+- `EDIFF`: 1e-6 or tighter
+
+**Electronic structure:**
+- `ISMEAR=0` (Gaussian) for molecules and insulators
+- `ISMEAR=1` (Methfessel-Paxton) for metals
+- `SIGMA=0.05`: Small smearing
+- Spin polarization if needed (`ISPIN=2`, `MAGMOM`)
+
+**Performance:**
+- `LWAVE=False`: Don't write wavefunctions (saves space)
+- `LCHARG=False`: Don't write charge density (saves space)
+- `NCORE`: Set to number of cores per node for speed
+
+### 3. Validation
+
+**Energy checks:**
+- Verify all three calculations converged (check OUTCAR for NSW reached)
+- Check that E_ads is reasonable (compare with literature)
+- Test sensitivity to vacuum thickness
+- Verify k-point convergence
+
+**Structure checks:**
+- Ensure substrate doesn't reconstruct significantly
+- Check molecule geometry after relaxation
+- Verify adsorbate position is reasonable
+
+**Comparison:**
+- Compare with experimental values if available
+- Test against literature DFT values
+- Cross-check with different functionals (PBE, PBE+U, hybrid)
+
+### 4. Common Issues
+
+**Problem: "Could not find adsorbate"**
+- Solution: Check adsorbate formula matches structure composition
+- Solution: Verify adsorbate atoms are bonded to each other
+
+**Problem: "Found multiple clusters matching"**
+- Solution: Ensure only one adsorbate per structure
+- Solution: Use different adsorbate formulas for each site
+
+**Problem: E_ads is very positive (unfavorable)**
+- Check substrate relaxation - may need more NSW steps
+- Verify k-points are converged
+- Check spin polarization settings
+- Consider using DFT+U for correlated systems
+
+## Integration with Experimental Tools
+
+The module can use structures generated by experimental tools:
+
+```python
+# Example: Use experimental surface builder to create substrate+adsorbate
+from teros.experimental.adsorption_energy.lamno3.add_ooh_to_surface import main as add_ooh
+
+# Generate structure with OOH
+output_cif = "lamno3_001_ooh.cif"
+add_ooh("lamno3_001_slab.cif", output_cif)
+
+# Load structure
+from teros.core import get_structure_from_file
+complete_structure = get_structure_from_file(filepath=output_cif)
+
+# Calculate adsorption energy
+results = compute_adsorption_energies_scatter(
+    structures={'ooh_site': complete_structure},
+    adsorbate_formulas={'ooh_site': 'OOH'},
+    code=vasp_code,
+    potential_family='PBE',
+    potential_mapping={'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'},
+    parameters=parameters,
+    options=options,
+)
+```
+
+## Usage in WorkGraph
+
+### Complete Example
+
+```python
+from aiida import orm, load_profile
+from aiida_workgraph import WorkGraph
+from teros.core import compute_adsorption_energies_scatter, get_structure_from_file
+
+load_profile()
+
+# Load structures
+structures = {
+    'site1': get_structure_from_file(filepath='lamno3_ooh.cif'),
+    'site2': get_structure_from_file(filepath='lamno3_oh.cif'),
+}
+
+# Define adsorbates
+adsorbate_formulas = {
+    'site1': 'OOH',
+    'site2': 'OH',
+}
+
+# Load VASP code
+code = orm.load_code('vasp@localhost')
+
+# Create WorkGraph
+wg = WorkGraph('adsorption_energies')
+
+# Add task
+ads_task = wg.add_task(
+    compute_adsorption_energies_scatter,
+    name='compute_adsorption_energies',
+    structures=structures,
+    adsorbate_formulas=adsorbate_formulas,
+    code=code,
+    potential_family='PBE',
+    potential_mapping={'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'},
+    parameters={
+        'ENCUT': 520,
+        'EDIFF': 1e-6,
+        'ISMEAR': 0,
+        'SIGMA': 0.05,
+        'IBRION': 2,
+        'NSW': 100,
+        'ISIF': 2,
+    },
+    options={
+        'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 16},
+        'max_wallclock_seconds': 3600 * 12,
+    },
+    kpoints_spacing=0.25,
+)
+
+# Submit
+wg.submit(wait=False)
+print(f"WorkGraph submitted: {wg.pk}")
+```
+
+### Access Results
+
+```python
+from aiida import load_node
+
+# Load completed WorkGraph
+wg = load_node(PK)
+
+# Get adsorption energies
+ads_energies = wg.outputs.compute_adsorption_energies.adsorption_energies
+
+for key, E_ads in ads_energies.items():
+    print(f"{key}: {E_ads.value:.3f} eV")
+
+# Get individual energies
+substrate_energies = wg.outputs.compute_adsorption_energies.substrate_energies
+molecule_energies = wg.outputs.compute_adsorption_energies.molecule_energies
+complete_energies = wg.outputs.compute_adsorption_energies.complete_energies
+
+# Get separated structures
+separated = wg.outputs.compute_adsorption_energies.separated_structures
+substrate_struct = separated['site1']['substrate']
+molecule_struct = separated['site1']['molecule']
+```
+
+## Output Data Structure
+
+### Per-site Results
+
+For each input structure, the workflow returns:
+
+**Separated structures:**
+- `substrate`: Bare surface (StructureData)
+- `molecule`: Isolated adsorbate (StructureData)
+- `complete`: Original structure (StructureData)
+
+**Energies:**
+- `substrate_energies[key]`: E_substrate in eV (Float)
+- `molecule_energies[key]`: E_molecule in eV (Float)
+- `complete_energies[key]`: E_complete in eV (Float)
+- `adsorption_energies[key]`: E_ads in eV (Float)
+
+## Example
+
+See `examples/adsorption_energy/test_oh_ag111/` for a complete working example with OH on Ag(111).
+
+The example demonstrates:
+- Structure setup (Ag slab with OH adsorbate)
+- VASP parameter configuration
+- WorkGraph setup and submission
+- Result extraction and analysis
+
+## Comparison with Other Modules
+
+### Similar to Cleavage Energy Module
+
+Both modules follow the same design pattern:
+- Scatter-gather workflow for parallel processing
+- Separate calcfunctions for component calculations
+- Integration with VASP via aiida-vasp
+- Provenance tracking via AiiDA
+
+### Differences
+
+| Feature | Adsorption Energy | Cleavage Energy |
+|---------|------------------|-----------------|
+| Input | Single structure | Complementary slab pairs |
+| Separation | Connectivity analysis | Index-based splitting |
+| Systems | 3 per input | 2 per pair |
+| Formula | E_complete - E_sub - E_mol | (E_i + E_j - n*E_bulk)/(2A) |
+| Units | eV | eV/A^2 and J/m^2 |
+
+## See Also
+
+- **Example**: `examples/adsorption_energy/test_oh_ag111/`
+- **Related modules**: `teros.core.thermodynamics`, `teros.core.cleavage`
+- **Experimental tools**: `teros.experimental.adsorption_energy/`
+- **Tests**: `teros/core/test_adsorption_energy.py`
+
+## References
+
+Standard adsorption energy formula:
+```
+E_ads = E_complete - E_substrate - E_molecule
+```
+
+This formula is widely used in computational catalysis and surface science literature.
