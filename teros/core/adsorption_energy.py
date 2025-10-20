@@ -388,11 +388,21 @@ def compute_adsorption_energies_scatter(
     code: orm.Code,
     potential_family: str,
     potential_mapping: t.Mapping[str, str],
-    parameters: t.Mapping[str, t.Any],
-    options: t.Mapping[str, t.Any],
+
+    # NEW: Relaxation control
+    relax_before_adsorption: bool = False,
+    relax_builder_inputs: dict | None = None,
+
+    # NEW: SCF control
+    scf_builder_inputs: dict | None = None,
+
+    # DEPRECATED (kept for backward compatibility)
+    parameters: t.Mapping[str, t.Any] | None = None,
+    options: t.Mapping[str, t.Any] | None = None,
     kpoints_spacing: float | None = None,
     clean_workdir: bool = True,
 ) -> t.Annotated[dict, namespace(
+    relaxed_complete_structures=dynamic(orm.StructureData),  # NEW
     separated_structures=dynamic(dict),
     substrate_energies=dynamic(orm.Float),
     molecule_energies=dynamic(orm.Float),
@@ -402,30 +412,76 @@ def compute_adsorption_energies_scatter(
     """
     Scatter-gather workflow for calculating adsorption energies.
 
-    This workflow:
-    1. Separates all substrate+adsorbate structures in parallel
-    2. Relaxes all systems (3N VASP jobs) in parallel
-    3. Calculates adsorption energies for each system
+    This workflow supports two modes:
+    1. Direct SCF: separate → SCF (3N jobs)
+    2. Relax + SCF: relax → separate → SCF (N+3N jobs)
+
+    Workflow phases:
+    - Phase 1 (optional): Relax complete structures using vasp.v2.relax
+    - Phase 2: Separate relaxed (or original) structures into substrate/molecule/complete
+    - Phase 3: SCF calculations using vasp.v2.vasp for all three components
 
     Args:
-        structures: Dynamic namespace of complete structures
+        structures: Dynamic namespace of complete structures (substrate + adsorbate)
         adsorbate_formulas: Dictionary mapping structure keys to adsorbate formulas
                            Example: {'system1': 'OOH', 'system2': 'OH'}
         code: AiiDA code for VASP
         potential_family: Pseudopotential family name
         potential_mapping: Element to potential mapping
-        parameters: VASP INCAR parameters
-        options: Scheduler options for VASP calculations
-        kpoints_spacing: K-points spacing in Angstrom^-1 (optional)
+
+        relax_before_adsorption: If True, relax complete structures before separation
+        relax_builder_inputs: Full builder dict for vasp.v2.relax (NSW, IBRION, ISIF)
+        scf_builder_inputs: Full builder dict for vasp.v2.vasp (NSW=0 enforced)
+
+        parameters: [DEPRECATED] Old-style INCAR parameters dict (for backward compat)
+        options: [DEPRECATED] Old-style scheduler options dict
+        kpoints_spacing: [DEPRECATED] K-points spacing in Angstrom^-1
         clean_workdir: Whether to clean remote working directories
 
     Returns:
         Dictionary with namespaces:
+        - relaxed_complete_structures: Relaxed structures (empty if relax=False)
         - separated_structures: Dict of separated systems for each input
         - substrate_energies: Energies of bare substrates
         - molecule_energies: Energies of isolated molecules
         - complete_energies: Energies of complete systems
-        - adsorption_energies: Final adsorption energies
+        - adsorption_energies: Final adsorption energies (E_ads = E_complete - E_substrate - E_molecule)
+
+    Example (new API):
+        >>> relax_inputs = {
+        ...     'parameters': {'incar': {'NSW': 100, 'IBRION': 2, 'ENCUT': 520}},
+        ...     'options': {'resources': {'num_machines': 1}},
+        ...     'potential_family': 'PBE',
+        ...     'potential_mapping': {'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'},
+        ... }
+        >>> scf_inputs = {
+        ...     'parameters': {'incar': {'ENCUT': 520}},  # NSW=0 added automatically
+        ...     'options': {'resources': {'num_machines': 1}},
+        ...     'potential_family': 'PBE',
+        ...     'potential_mapping': {'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'},
+        ... }
+        >>> results = compute_adsorption_energies_scatter(
+        ...     structures={'oh_lamno3': structure},
+        ...     adsorbate_formulas={'oh_lamno3': 'OH'},
+        ...     code=code,
+        ...     potential_family='PBE',
+        ...     potential_mapping={...},
+        ...     relax_before_adsorption=True,
+        ...     relax_builder_inputs=relax_inputs,
+        ...     scf_builder_inputs=scf_inputs,
+        ... )
+
+    Example (old API, backward compatible):
+        >>> results = compute_adsorption_energies_scatter(
+        ...     structures={'oh_ag': structure},
+        ...     adsorbate_formulas={'oh_ag': 'OH'},
+        ...     code=code,
+        ...     potential_family='PBE',
+        ...     potential_mapping={'Ag': 'Ag', 'O': 'O', 'H': 'H'},
+        ...     parameters={'PREC': 'Accurate', 'ENCUT': 520},
+        ...     options={'resources': {'num_machines': 1}},
+        ...     kpoints_spacing=0.3,
+        ... )
     """
     # Validate inputs
     if structures.keys() != adsorbate_formulas.keys():
