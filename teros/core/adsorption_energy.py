@@ -41,6 +41,20 @@ def _build_vasp_inputs(
     1. New-style: builder_inputs dict (full control, recommended)
     2. Old-style: parameters/options/etc dicts (automatic conversion)
 
+    **Priority Behavior:**
+    If both builder_inputs and parameters are provided, builder_inputs takes priority
+    and parameters is ignored. This allows explicit control over the input construction.
+
+    Example showing priority:
+        >>> # If both are provided, builder_inputs is used
+        >>> inputs = _build_vasp_inputs(
+        ...     structure=struct,
+        ...     code=code,
+        ...     builder_inputs={'parameters': {'incar': {'ENCUT': 600}}},
+        ...     parameters={'ENCUT': 400},  # This is ignored
+        ... )
+        >>> inputs['parameters']['incar']['ENCUT']  # Returns 600
+
     Args:
         structure: Structure to calculate
         code: AiiDA code for VASP

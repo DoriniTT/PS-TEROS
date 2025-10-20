@@ -11,14 +11,19 @@ def load_aiida_profile():
     load_profile('psteros')
 
 
-def test_build_vasp_inputs_from_builder_dict():
-    """Test building inputs from new-style builder_inputs dict."""
-    # Create mock structure and code
+@pytest.fixture
+def create_test_structure_and_code():
+    """Create reusable H2 structure and VASP code for tests."""
     from ase import Atoms
     ase_struct = Atoms('H2', positions=[[0, 0, 0], [0, 0, 0.74]])
     structure = orm.StructureData(ase=ase_struct)
-    code = orm.Code.get_from_string('VASP-VTST-6.4.3@bohr')
+    code = orm.load_code('VASP-VTST-6.4.3@bohr')
+    return structure, code
 
+
+def test_build_vasp_inputs_from_builder_dict(create_test_structure_and_code):
+    """Test building inputs from new-style builder_inputs dict."""
+    structure, code = create_test_structure_and_code
     # Builder inputs
     builder_inputs = {
         'parameters': {'incar': {'PREC': 'Accurate', 'ENCUT': 520}},
@@ -48,12 +53,9 @@ def test_build_vasp_inputs_from_builder_dict():
     assert result['kpoints_spacing'] == 0.3
 
 
-def test_build_vasp_inputs_from_parameters_dict():
+def test_build_vasp_inputs_from_parameters_dict(create_test_structure_and_code):
     """Test building inputs from old-style parameters dict (backward compat)."""
-    from ase import Atoms
-    ase_struct = Atoms('H2', positions=[[0, 0, 0], [0, 0, 0.74]])
-    structure = orm.StructureData(ase=ase_struct)
-    code = orm.Code.get_from_string('VASP-VTST-6.4.3@bohr')
+    structure, code = create_test_structure_and_code
 
     # Old-style parameters
     parameters = {'PREC': 'Accurate', 'ENCUT': 520, 'NSW': 100}
@@ -97,12 +99,9 @@ def test_build_vasp_inputs_from_parameters_dict():
     assert isinstance(result['settings'], orm.Dict)
 
 
-def test_build_vasp_inputs_force_scf():
+def test_build_vasp_inputs_force_scf(create_test_structure_and_code):
     """Test that force_scf=True enforces NSW=0 and IBRION=-1."""
-    from ase import Atoms
-    ase_struct = Atoms('H2', positions=[[0, 0, 0], [0, 0, 0.74]])
-    structure = orm.StructureData(ase=ase_struct)
-    code = orm.Code.get_from_string('VASP-VTST-6.4.3@bohr')
+    structure, code = create_test_structure_and_code
 
     # Builder inputs with relaxation settings
     builder_inputs = {
@@ -126,3 +125,23 @@ def test_build_vasp_inputs_force_scf():
 
     # Verify other parameters are preserved
     assert result['parameters']['incar']['ENCUT'] == 520
+
+
+def test_build_vasp_inputs_raises_on_missing_inputs(create_test_structure_and_code):
+    """Test that ValueError is raised when neither builder_inputs nor parameters are provided."""
+    structure, code = create_test_structure_and_code
+
+    # Call without builder_inputs or parameters
+    with pytest.raises(ValueError) as exc_info:
+        _build_vasp_inputs(
+            structure=structure,
+            code=code,
+            builder_inputs=None,
+            parameters=None,
+        )
+
+    # Verify error message is helpful
+    error_message = str(exc_info.value)
+    assert "Must provide either 'builder_inputs' or 'parameters'" in error_message
+    assert "builder_inputs for full control" in error_message
+    assert "backward compatibility" in error_message
