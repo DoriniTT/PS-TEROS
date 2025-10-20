@@ -491,9 +491,42 @@ def compute_adsorption_energies_scatter(
             f"Formulas: {list(adsorbate_formulas.keys())}"
         )
 
-    # Get VASP workflow
-    vasp_wc = WorkflowFactory('vasp.v2.vasp')
-    vasp_task_cls = task(vasp_wc)
+    # Get workflow plugins
+    vasp_relax = WorkflowFactory('vasp.v2.relax')
+    vasp_scf = WorkflowFactory('vasp.v2.vasp')
+    relax_task_cls = task(vasp_relax)
+    scf_task_cls = task(vasp_scf)
+
+    # ===== PHASE 1: OPTIONAL RELAXATION =====
+    # Relax complete structures before separation if requested
+    if relax_before_adsorption:
+        relaxed_structures: dict[str, orm.StructureData] = {}
+
+        for key, structure in structures.items():
+            # Build relaxation inputs
+            relax_inputs = _build_vasp_inputs(
+                structure=structure,
+                code=code,
+                builder_inputs=relax_builder_inputs,
+                parameters=parameters,
+                options=options,
+                potential_family=potential_family,
+                potential_mapping=potential_mapping,
+                kpoints_spacing=kpoints_spacing,
+                clean_workdir=clean_workdir,
+                force_scf=False,  # Allow relaxation (NSW > 0)
+            )
+
+            # Run relaxation
+            relax_task = relax_task_cls(**relax_inputs)
+            relaxed_structures[key] = relax_task.outputs.structure
+
+        # Use relaxed structures for separation
+        structures_to_separate = relaxed_structures
+    else:
+        # No relaxation: use original structures
+        relaxed_structures = {}
+        structures_to_separate = structures
 
     # Output dictionaries
     separated_dict: dict[str, dict] = {}
@@ -502,8 +535,9 @@ def compute_adsorption_energies_scatter(
     complete_energies: dict[str, orm.Float] = {}
     adsorption_energies: dict[str, orm.Float] = {}
 
-    # Phase 1: Separate structures (parallel)
-    for key, structure in structures.items():
+    # ===== PHASE 2: STRUCTURE SEPARATION =====
+    # Separate relaxed (if Phase 1 ran) or original structures
+    for key, structure in structures_to_separate.items():
         adsorbate_str = adsorbate_formulas[key]
 
         separated = separate_adsorbate_structure(
@@ -517,43 +551,38 @@ def compute_adsorption_energies_scatter(
             'complete': separated.complete,
         }
 
-    # Phase 2: VASP relaxations (parallel, 3N jobs)
+    # ===== PHASE 3: SCF CALCULATIONS =====
+    # Single-point calculations for substrate, molecule, and complete systems
     for key, separated in separated_dict.items():
-        # Helper function to create VASP inputs
-        def create_vasp_inputs(struct: orm.StructureData) -> dict:
-            inputs: dict[str, t.Any] = {
-                'structure': struct,
-                'code': code,
-                'parameters': {'incar': dict(parameters)},
-                'options': dict(options),
-                'potential_family': potential_family,
-                'potential_mapping': dict(potential_mapping),
-                'clean_workdir': clean_workdir,
-                'settings': orm.Dict(dict={
-                    'parser_settings': {
-                        'add_trajectory': True,
-                        'add_structure': True,
-                        'add_kpoints': True,
-                    }
-                }),
-            }
-            if kpoints_spacing is not None:
-                inputs['kpoints_spacing'] = kpoints_spacing
-            return inputs
+        # Helper function to create SCF inputs for each structure
+        def create_scf_inputs(struct: orm.StructureData) -> dict:
+            return _build_vasp_inputs(
+                structure=struct,
+                code=code,
+                builder_inputs=scf_builder_inputs,
+                parameters=parameters,
+                options=options,
+                potential_family=potential_family,
+                potential_mapping=potential_mapping,
+                kpoints_spacing=kpoints_spacing,
+                clean_workdir=clean_workdir,
+                force_scf=True,  # Enforce NSW=0, IBRION=-1
+            )
 
-        # Substrate relaxation
-        substrate_calc = vasp_task_cls(**create_vasp_inputs(separated['substrate']))
+        # Substrate SCF
+        substrate_calc = scf_task_cls(**create_scf_inputs(separated['substrate']))
         substrate_energies[key] = extract_total_energy(energies=substrate_calc.misc).result
 
-        # Molecule relaxation
-        molecule_calc = vasp_task_cls(**create_vasp_inputs(separated['molecule']))
+        # Molecule SCF
+        molecule_calc = scf_task_cls(**create_scf_inputs(separated['molecule']))
         molecule_energies[key] = extract_total_energy(energies=molecule_calc.misc).result
 
-        # Complete system relaxation
-        complete_calc = vasp_task_cls(**create_vasp_inputs(separated['complete']))
+        # Complete system SCF
+        complete_calc = scf_task_cls(**create_scf_inputs(separated['complete']))
         complete_energies[key] = extract_total_energy(energies=complete_calc.misc).result
 
-    # Phase 3: Calculate adsorption energies (parallel)
+    # ===== PHASE 4: ADSORPTION ENERGY CALCULATION =====
+    # Calculate E_ads = E_complete - E_substrate - E_molecule
     for key in structures.keys():
         E_ads = calculate_adsorption_energy(
             E_complete=complete_energies[key],
@@ -565,6 +594,7 @@ def compute_adsorption_energies_scatter(
 
     # Return all results
     return {
+        'relaxed_complete_structures': relaxed_structures,  # NEW: Empty dict if relax=False
         'separated_structures': separated_dict,
         'substrate_energies': substrate_energies,
         'molecule_energies': molecule_energies,
