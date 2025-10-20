@@ -301,41 +301,64 @@ verdi process status <PK>
 
 ---
 
-### Step 12: Adsorption Energy
+### Step 12: Adsorption Energy (Multi-Site Test)
 **File:** `step_12_adsorption_energy.py`
-**Preset:** None (uses `compute_adsorption_energies_scatter` directly)
+**Preset:** `adsorption_energy`
 
 **What it tests:**
 - Automatic structure separation (substrate + adsorbate identification)
-- Connectivity analysis using pymatgen StructureGraph
-- Three parallel VASP calculations:
+- Advanced connectivity analysis using pymatgen StructureGraph + CrystalNN
+- **Handles bonded adsorbates** - Works even when adsorbate bonds to surface
+- Scatter-gather parallelization for multiple structures
+- Six parallel VASP calculations (2 sites × 3 calculations each):
   1. Complete system (substrate + adsorbate)
   2. Bare substrate only
   3. Isolated molecule in same cell
 - Adsorption energy calculation: E_ads = E_complete - E_substrate - E_molecule
 
-**Runtime:** ~4 hours (3 VASP calculations in parallel)
+**Test case:**
+- OH radical on Ag(111) at two different adsorption sites:
+  - **Hollow site:** 3-fold coordination (weakly bonded)
+  - **Top site:** 1-fold coordination (strongly bonded to Ag)
+
+**Runtime:** ~8 hours (6 VASP calculations in parallel)
 
 **Expected outputs:**
-- `separated_structures`: Dict with substrate, molecule, and complete structures
+- `separated_structures`: Dict with substrate, molecule, and complete structures for each site
 - `substrate_energies`: E(substrate) for each site
 - `molecule_energies`: E(molecule) for each site
 - `complete_energies`: E(substrate+molecule) for each site
 - `adsorption_energies`: E_ads for each site (eV)
 
 **Why this step:**
-Tests the adsorption energy module with automatic adsorbate identification via connectivity analysis. Negative E_ads indicates favorable (exothermic) adsorption.
+Tests the adsorption energy module with automatic adsorbate identification via connectivity analysis. The algorithm builds a subgraph considering only bonds between adsorbate atoms, allowing it to work with both bonded and non-bonded configurations.
 
-**Example system:** Ag(111) + OH
+**Algorithm highlights:**
+1. Identifies all atoms matching adsorbate elements (O, H for OH)
+2. Builds connectivity graph for entire structure
+3. Creates subgraph with edges **only between adsorbate-type atoms**
+4. Ignores bonds to substrate atoms
+5. Finds connected component matching adsorbate formula
 
-**Key feature:** All three systems use the SAME simulation cell to eliminate basis set superposition error (BSSE).
+**Key features:**
+- **Works with bonded adsorbates** - Even strong surface bonds don't prevent separation
+- **BSSE elimination** - All three systems use the SAME simulation cell
+- **Parallel execution** - Multiple sites calculated simultaneously
+- **Negative E_ads** = favorable (exothermic) adsorption
+- **Positive E_ads** = unfavorable (endothermic) adsorption
 
 ```bash
 python step_12_adsorption_energy.py
 verdi process status <PK>
+verdi process show <PK>
 ```
 
-**Expected E_ads for OH/Ag(111):** -2.0 to -2.5 eV (DFT-PBE literature range)
+**Expected E_ads for OH/Ag(111):**
+- Hollow site: -2.0 to -2.5 eV (DFT-PBE, more favorable)
+- Top site: -1.5 to -2.0 eV (DFT-PBE, less favorable)
+
+**Supported adsorbates:**
+OH, OOH, O, H, CO, CO2, H2O, and any formula where atoms form connected cluster
 
 ---
 

@@ -2,7 +2,18 @@
 
 ## Overview
 
-The adsorption energy module (`teros.core.adsorption_energy`) provides tools to calculate adsorption energies from substrate+adsorbate structures using AiiDA-WorkGraph and VASP. The module uses connectivity analysis to automatically separate structures and performs parallel DFT calculations to obtain adsorption energies.
+The adsorption energy module (`teros.core.adsorption_energy`) provides tools to calculate adsorption energies from substrate+adsorbate structures using AiiDA-WorkGraph and VASP. The module uses advanced connectivity analysis to automatically separate structures and performs parallel DFT calculations to obtain adsorption energies.
+
+## ✅ Key Improvement: Handles Bonded Adsorbates
+
+**New subgraph algorithm** allows automatic structure separation even when adsorbates are **bonded to the surface**:
+
+- ✅ **Works with chemisorbed species** (strong covalent bonds to surface)
+- ✅ **Works with physisorbed species** (weak van der Waals interactions)
+- ✅ **No geometric assumptions** needed about bonding configuration
+- ✅ **Tested with OH on Ag(111)** - both hollow (weak) and top (strong) sites
+
+**How:** Builds connectivity subgraph with edges **only between adsorbate atoms**, ignoring bonds to substrate. This allows identification of bonded clusters like OH, OOH, COOH regardless of surface attachment.
 
 ## Theory
 
@@ -23,11 +34,13 @@ Where:
 
 ## Key Features
 
-- **Automatic structure separation** using connectivity analysis (pymatgen StructureGraph)
-- **Parallel VASP calculations** for substrate, molecule, and complete system
+- **✅ Automatic structure separation** using advanced connectivity analysis (pymatgen StructureGraph)
+- **✅ Handles bonded adsorbates** - Works with both chemisorbed and physisorbed species
+- **Parallel VASP calculations** for substrate, molecule, and complete system via scatter-gather
 - **Consistent cell handling** - all three systems use the same cell to avoid basis set superposition error
 - **Integration with existing PSTEROS modules** - follows same patterns as thermodynamics/cleavage
-- **Robust adsorbate identification** - no geometric assumptions needed
+- **Robust adsorbate identification** - no geometric assumptions or distance thresholds needed
+- **Workflow preset integration** - Use `workflow_preset='adsorption_energy'` in `build_core_workgraph`
 
 ## Core Functions
 
@@ -184,14 +197,16 @@ for key, E_ads in results['adsorption_energies'].items():
 
 ## Adsorbate Identification Method
 
-The module uses **connectivity analysis** to identify adsorbates robustly:
+The module uses **advanced connectivity analysis** to identify adsorbates robustly:
 
 ### Algorithm
 
-1. **Build bonding graph** using pymatgen's StructureGraph with CrystalNN
-2. **Find connected clusters** - groups of atoms bonded to each other
-3. **Match cluster composition** to adsorbate formula
-4. **Extract adsorbate atoms** while preserving substrate
+1. **Identify candidate atoms** - Find all atoms matching elements in adsorbate formula
+2. **Build bonding graph** using pymatgen's StructureGraph with CrystalNN for entire structure
+3. **Create adsorbate subgraph** - Extract edges **only between candidate atoms**, ignoring bonds to substrate
+4. **Find connected clusters** in subgraph - groups of candidate atoms bonded to each other
+5. **Match cluster composition** to adsorbate formula
+6. **Extract adsorbate atoms** while preserving substrate
 
 ### Advantages
 
@@ -199,13 +214,34 @@ The module uses **connectivity analysis** to identify adsorbates robustly:
 - **No geometric assumptions** - works for any adsorbate orientation
 - **Handles complex adsorbates** - multi-atom molecules like OOH, COOH
 - **Works with periodic boundaries** - correct handling of surface slabs
+- **✅ Works with bonded adsorbates** - Handles both weakly and strongly bonded species
+
+### How It Handles Bonded Adsorbates
+
+The key innovation is the **subgraph approach**:
+
+1. **Traditional approach fails**: When OH bonds to Ag, the entire system (Ag + OH) becomes one connected cluster
+2. **Subgraph solution**: Build a graph with edges **only between O and H atoms** (adsorbate elements)
+3. **Result**: OH forms a separate connected component, even when bonded to surface
+
+**Example:**
+```
+Structure: Ag₄ + OH (with O bonded to Ag)
+
+Traditional connectivity:
+  ├─ Cluster 1: Ag₄-O-H (all connected) ❌
+
+Subgraph approach (edges only between O-H):
+  ├─ Cluster 1: Ag₄ (no edges in subgraph)
+  └─ Cluster 2: O-H (bonded together) ✅
+```
 
 ### Requirements
 
-- Adsorbate must be a **single bonded cluster** (all atoms connected)
+- Adsorbate atoms must form a **single bonded cluster** (all adsorbate atoms connected to each other)
 - Adsorbate formula must be **unique in structure** (no duplicate adsorbates)
-- **No covalent bonds** between adsorbate and substrate
-  - Coordination bonds (like O-Mn) are fine, but adsorbate must be removable as a unit
+- ✅ **Bonds to substrate are fine** - Algorithm ignores substrate-adsorbate bonds
+- ✅ **Works for any bonding configuration** - From weak physisorption to strong chemisorption
 
 ### Supported Adsorbates
 
@@ -294,19 +330,28 @@ All three structures (substrate, molecule, complete) use **the same simulation c
 
 ### 4. Common Issues
 
-**Problem: "Could not find adsorbate"**
+**Problem: "Could not find adsorbate among candidate atom clusters"**
 - Solution: Check adsorbate formula matches structure composition
-- Solution: Verify adsorbate atoms are bonded to each other
+- Solution: Verify adsorbate atoms are bonded **to each other** (not just to substrate)
+- Solution: Ensure adsorbate elements are present in structure
+- Note: Bonds to substrate are OK! Algorithm ignores them.
 
 **Problem: "Found multiple clusters matching"**
 - Solution: Ensure only one adsorbate per structure
 - Solution: Use different adsorbate formulas for each site
+- Solution: If multiple identical adsorbates needed, submit as separate structures
 
 **Problem: E_ads is very positive (unfavorable)**
 - Check substrate relaxation - may need more NSW steps
 - Verify k-points are converged
 - Check spin polarization settings
 - Consider using DFT+U for correlated systems
+- Verify adsorbate is actually in contact with surface
+
+**Problem: "Not enough atoms to form adsorbate"**
+- Check structure has required elements (e.g., O and H for OH)
+- Verify formula string is correct (case-sensitive)
+- Check structure file loaded correctly
 
 ## Integration with Experimental Tools
 
