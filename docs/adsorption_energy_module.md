@@ -15,6 +15,146 @@ The adsorption energy module (`teros.core.adsorption_energy`) provides tools to 
 
 **How:** Builds connectivity subgraph with edges **only between adsorbate atoms**, ignoring bonds to substrate. This allows identification of bonded clusters like OH, OOH, COOH regardless of surface attachment.
 
+## Workflow Modes
+
+### Mode 1: Direct SCF (Default)
+
+**When to use:** Input structures are pre-relaxed or well-optimized
+
+**Workflow:**
+```
+Input structure → Separate → SCF (3 jobs) → E_ads
+```
+
+**Example:**
+```python
+wg = build_core_workgraph(
+    workflow_preset='adsorption_energy',
+    adsorption_structures={'system': structure},
+    adsorption_formulas={'system': 'OH'},
+    adsorption_parameters={'PREC': 'Accurate', 'ENCUT': 520},
+    adsorption_options={'resources': {'num_machines': 1}},
+)
+```
+
+**VASP jobs:** 3N (substrate SCF, molecule SCF, complete SCF for each structure)
+
+---
+
+### Mode 2: Relax + SCF (New)
+
+**When to use:** Input structures need geometry optimization before energy calculation
+
+**Workflow:**
+```
+Input structure → Relax → Separate relaxed → SCF (3 jobs) → E_ads
+```
+
+**Example:**
+```python
+relax_inputs = {
+    'parameters': {'incar': {'NSW': 100, 'IBRION': 2, 'ISIF': 2, ...}},
+    'options': {'resources': {'num_machines': 1}},
+    'potential_family': 'PBE',
+    'potential_mapping': {...},
+    'kpoints_spacing': 0.3,
+}
+
+scf_inputs = {
+    'parameters': {'incar': {'PREC': 'Accurate', 'ENCUT': 520, ...}},
+    # NSW=0, IBRION=-1 enforced automatically
+    'options': {'resources': {'num_machines': 1}},
+    'potential_family': 'PBE',
+    'potential_mapping': {...},
+    'kpoints_spacing': 0.3,
+}
+
+wg = build_core_workgraph(
+    workflow_preset='adsorption_energy',
+    adsorption_structures={'system': structure},
+    adsorption_formulas={'system': 'OH'},
+
+    relax_before_adsorption=True,
+    adsorption_relax_builder_inputs=relax_inputs,
+    adsorption_scf_builder_inputs=scf_inputs,
+)
+
+# Access relaxed structure
+relaxed = wg.outputs.relaxed_complete_structures['system']
+```
+
+**VASP jobs:** N + 3N (relax complete for each, then substrate/molecule/complete SCF)
+
+**Key advantages:**
+- Geometrically correct: Separates RELAXED structure, not input structure
+- Relaxes only complete system (efficient)
+- SCF is fast for all three components
+- Eliminates geometry-related errors in E_ads
+
+---
+
+## API Reference
+
+### New Parameters (build_core_workgraph)
+
+**`relax_before_adsorption`** (bool, default=False)
+- If True, relax complete structures before separation and SCF
+- Uses `vasp.v2.relax` plugin
+
+**`adsorption_relax_builder_inputs`** (dict, optional)
+- Full builder dictionary for relaxation calculations
+- Must include: parameters, options, potential_family, potential_mapping
+- Example: `{'parameters': {'incar': {'NSW': 100, ...}}, 'options': {...}, ...}`
+
+**`adsorption_scf_builder_inputs`** (dict, optional)
+- Full builder dictionary for SCF calculations
+- NSW=0 and IBRION=-1 enforced automatically
+- Example: `{'parameters': {'incar': {'ENCUT': 520, ...}}, 'options': {...}, ...}`
+
+### Backward Compatibility
+
+Old parameter style still works (no relaxation):
+
+```python
+wg = build_core_workgraph(
+    workflow_preset='adsorption_energy',
+    adsorption_structures={...},
+    adsorption_formulas={...},
+    adsorption_parameters={'PREC': 'Accurate', 'ENCUT': 520},  # Still works!
+    adsorption_options={...},
+    adsorption_potential_mapping={...},
+)
+```
+
+Migration is optional and gradual.
+
+---
+
+## Testing
+
+### Test Cases
+
+**Test 1: Backward compatibility**
+- File: `examples/vasp/step_12_adsorption_energy.py`
+- Tests: Old API still works, no relaxation
+
+**Test 2: Relaxation workflow**
+- File: `examples/adsorption_energy/test_relax_oh_ag111/run_relax_adsorption.py`
+- Tests: New API with relaxation enabled
+
+**Test 3: Production example**
+- File: `teros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py`
+- Tests: Perovskite oxide with relaxation (real-world case)
+
+### Validation Checklist
+
+- [ ] Old scripts run unchanged (backward compatibility)
+- [ ] Relaxation completes successfully
+- [ ] Separation works on relaxed structures
+- [ ] SCF calculations have NSW=0, IBRION=-1
+- [ ] E_ads values are physically reasonable
+- [ ] Relaxed structures show expected geometry changes
+
 ## Theory
 
 The adsorption energy is calculated using the standard formula:

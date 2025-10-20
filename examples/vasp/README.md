@@ -360,6 +360,73 @@ verdi process show <PK>
 **Supported adsorbates:**
 OH, OOH, O, H, CO, CO2, H2O, and any formula where atoms form connected cluster
 
+### New Feature: Relaxation + SCF Workflow
+
+**Optional relaxation before adsorption energy calculation:**
+
+The adsorption energy module now supports optional relaxation of the complete system before structure separation and SCF calculations.
+
+**Workflow comparison:**
+
+| Mode | Phases | VASP Jobs | When to Use |
+|------|--------|-----------|-------------|
+| **Direct SCF** | separate → SCF | 3N | Input geometries are pre-relaxed or well-optimized |
+| **Relax + SCF** | relax → separate → SCF | N + 3N | Input geometries need optimization before energy calculation |
+
+**Example with relaxation:**
+
+```python
+# Relaxation builder inputs
+relax_inputs = {
+    'parameters': {'incar': {
+        'PREC': 'Accurate',
+        'ENCUT': 520,
+        'NSW': 100,
+        'IBRION': 2,
+        'ISIF': 2,
+        # ... other INCAR tags
+    }},
+    'options': {'resources': {'num_machines': 1}},
+    'potential_family': 'PBE',
+    'potential_mapping': {'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'},
+    'kpoints_spacing': 0.3,
+}
+
+# SCF builder inputs (NSW=0 enforced automatically)
+scf_inputs = {
+    'parameters': {'incar': {
+        'PREC': 'Accurate',
+        'ENCUT': 520,
+        # ... other INCAR tags
+    }},
+    'options': {'resources': {'num_machines': 1}},
+    'potential_family': 'PBE',
+    'potential_mapping': {'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'},
+    'kpoints_spacing': 0.3,
+}
+
+wg = build_core_workgraph(
+    workflow_preset='adsorption_energy',
+    code_label='VASP-VTST-6.4.3@bohr',
+    potential_family='PBE',
+
+    adsorption_structures={'oh_lamno3': structure},
+    adsorption_formulas={'oh_lamno3': 'OH'},
+
+    # Enable relaxation
+    relax_before_adsorption=True,
+    adsorption_relax_builder_inputs=relax_inputs,
+    adsorption_scf_builder_inputs=scf_inputs,
+)
+
+# Access relaxed structure
+relaxed = wg.outputs.relaxed_complete_structures['oh_lamno3']
+```
+
+**Test examples:**
+- Without relaxation: `examples/vasp/step_12_adsorption_energy.py`
+- With relaxation: `examples/adsorption_energy/test_relax_oh_ag111/run_relax_adsorption.py`
+
 ---
 
 ## Workflow Diagram
