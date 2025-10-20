@@ -747,10 +747,79 @@ def build_core_workgraph(
         slab_bands_options: Default scheduler options for slab electronic properties. Default: None (uses bulk_options)
         slab_band_settings: Default band settings for slabs. Use get_slab_electronic_properties_defaults()
                            ['band_settings']. Default: None
+
+        basis_content: CP2K basis set content string. Required for CP2K calculations. Default: None
+        pseudo_content: CP2K pseudopotential content string. Required for CP2K calculations. Default: None
+        cp2k_kind_section: List of CP2K KIND section parameters. Default: None
+
+        fix_atoms: Enable fixed atom constraints. Default: False
+        fix_type: Type of constraint ('bottom', 'top', 'elements', 'manual'). Default: None
+        fix_thickness: Thickness in Angstroms for 'bottom'/'top' fixing. Default: 0.0
+        fix_elements: List of element symbols to fix (for 'elements' type). Default: None
+        fix_components: Cartesian components to constrain ('X', 'Y', 'Z', 'XY', 'XZ', 'YZ', 'XYZ'). Default: 'XYZ'
+
+        run_adsorption_energy: Enable adsorption energy calculations. Default: None (controlled by preset)
+        adsorption_structures: Dict mapping labels to StructureData objects containing substrate+adsorbate systems.
+                              Format: {'site1': structure1, 'site2': structure2, ...}
+                              Each structure should contain both the substrate (e.g., slab) and adsorbate.
+                              Default: None
+        adsorption_formulas: Dict mapping labels to adsorbate chemical formulas.
+                            Format: {'site1': 'OH', 'site2': 'OOH', ...}
+                            The formula is used to identify and separate the adsorbate from the substrate.
+                            Must match the actual adsorbate composition in adsorption_structures.
+                            Default: None
+        adsorption_parameters: VASP INCAR parameters for adsorption energy calculations.
+                              Applied to all three calculations (complete, substrate, molecule).
+                              Use get_adsorption_defaults() for recommended settings.
+                              Default: None
+        adsorption_options: Scheduler options for adsorption calculations (walltime, nodes, etc.).
+                           Applied to all three calculations (complete, substrate, molecule).
+                           Default: None
+        adsorption_potential_mapping: Element to potential mapping for adsorption calculations.
+                                     Format: {'O': 'O', 'H': 'H', ...}
+                                     Should include all elements in substrate and adsorbate.
+                                     Default: None (uses bulk_potential_mapping)
+        adsorption_kpoints_spacing: K-points spacing in A^-1 * 2pi for adsorption calculations.
+                                   Applies to all three calculations (complete, substrate, molecule).
+                                   Default: None (uses kpoints_spacing)
+        relax_before_adsorption: If True, relax the complete substrate+adsorbate structure before SCF calculation.
+                                When enabled, the adsorption energy workflow becomes:
+                                1. Relax complete system (if relax_before_adsorption=True)
+                                2. SCF on relaxed/unrelaxed complete system
+                                3. Separate and relax substrate
+                                4. Separate and relax molecule
+                                5. Calculate E_ads = E_complete - E_substrate - E_molecule
+                                Default: False
+        adsorption_relax_builder_inputs: Dict of builder parameters for relaxing the complete substrate+adsorbate.
+                                        Format: {'parameters': {...}, 'options': {...}, 'kpoints_spacing': 0.2, ...}
+                                        Only used if relax_before_adsorption=True.
+                                        If not provided, uses adsorption_parameters/options/kpoints_spacing.
+                                        Default: None
+        adsorption_scf_builder_inputs: Dict of builder parameters for SCF calculation on complete system.
+                                      Format: {'parameters': {...}, 'options': {...}, 'kpoints_spacing': 0.2, ...}
+                                      If not provided, uses adsorption_parameters/options/kpoints_spacing.
+                                      Default: None
+
         name: WorkGraph name. Default: 'FormationEnthalpy'
 
     Returns:
-        WorkGraph instance ready to be submitted
+        WorkGraph: Instance ready to be submitted. The workflow provides outputs including:
+            - relaxed_bulk: Relaxed bulk structure (StructureData)
+            - bulk_energy: Energy of relaxed bulk (Float)
+            - formation_enthalpy: Formation enthalpy if references provided (Float)
+            - slabs: Generated/input slab structures (dict)
+            - relaxed_slabs: Relaxed slab structures if relax_slabs=True (dict)
+            - surface_energies: Surface energies if compute_thermodynamics=True (dict)
+            - cleavage_energies: Cleavage energies if compute_cleavage=True (dict)
+            - relaxation_energies: Slab relaxation energies if compute_relaxation_energy=True (dict)
+            - dos, bands: Electronic properties if compute_electronic_properties_bulk=True
+            - relaxed_complete_structures: Relaxed substrate+adsorbate structures if run_adsorption_energy=True
+                                          and relax_before_adsorption=True (dict). Only populated when relaxation
+                                          is enabled for adsorption calculations.
+            - adsorption_energies: Adsorption energies if run_adsorption_energy=True (dict)
+            - substrate_energies: Substrate energies from adsorption calculations (dict)
+            - molecule_energies: Molecule energies from adsorption calculations (dict)
+            - complete_energies: Complete system energies from adsorption calculations (dict)
 
     Examples:
         Using workflow preset (recommended):
@@ -796,6 +865,69 @@ def build_core_workgraph(
         ...     metal_parameters={...},
         ...     oxygen_parameters={...},
         ...     nonmetal_parameters={...},
+        ... )
+
+        Adsorption energy with relaxation (recommended for accurate energies):
+        >>> from aiida.orm import load_node
+        >>> # Load pre-generated substrate+adsorbate structures
+        >>> oh_structure = load_node(12345).outputs.structure  # OH on Ag(111)
+        >>> ooh_structure = load_node(12346).outputs.structure  # OOH on Ag(111)
+        >>>
+        >>> wg = build_core_workgraph(
+        ...     structures_dir='structures',
+        ...     bulk_name='ag3po4.cif',
+        ...     bulk_potential_mapping={'Ag': 'Ag', 'P': 'P', 'O': 'O'},
+        ...     bulk_parameters={'PREC': 'Accurate', 'ENCUT': 520, 'EDIFF': 1e-6, ...},
+        ...     bulk_options={'resources': {'num_machines': 2}},
+        ...     # Enable adsorption energy calculations
+        ...     run_adsorption_energy=True,
+        ...     adsorption_structures={
+        ...         'oh_site': oh_structure,
+        ...         'ooh_site': ooh_structure,
+        ...     },
+        ...     adsorption_formulas={
+        ...         'oh_site': 'OH',
+        ...         'ooh_site': 'OOH',
+        ...     },
+        ...     # Relax substrate+adsorbate before calculating adsorption energy
+        ...     relax_before_adsorption=True,
+        ...     adsorption_relax_builder_inputs={
+        ...         'parameters': {'IBRION': 2, 'NSW': 100, 'EDIFF': 1e-6, 'EDIFFG': -0.02},
+        ...         'options': {'resources': {'num_machines': 2}, 'walltime': '24:00:00'},
+        ...         'kpoints_spacing': 0.2,
+        ...     },
+        ...     # SCF parameters for relaxed structure
+        ...     adsorption_scf_builder_inputs={
+        ...         'parameters': {'NSW': 0, 'EDIFF': 1e-7, 'PREC': 'Accurate'},
+        ...         'options': {'resources': {'num_machines': 1}, 'walltime': '6:00:00'},
+        ...         'kpoints_spacing': 0.15,
+        ...     },
+        ...     # Shared settings for substrate and molecule calculations
+        ...     adsorption_potential_mapping={'Ag': 'Ag', 'O': 'O', 'H': 'H'},
+        ... )
+        >>> # Access relaxed structures
+        >>> relaxed_oh = wg.outputs.relaxed_complete_structures['oh_site']
+        >>> relaxed_ooh = wg.outputs.relaxed_complete_structures['ooh_site']
+        >>> # Access adsorption energies
+        >>> e_ads_oh = wg.outputs.adsorption_energies['oh_site']
+        >>> e_ads_ooh = wg.outputs.adsorption_energies['ooh_site']
+
+        Adsorption energy without relaxation (faster, less accurate):
+        >>> wg = build_core_workgraph(
+        ...     structures_dir='structures',
+        ...     bulk_name='ag3po4.cif',
+        ...     bulk_potential_mapping={'Ag': 'Ag', 'P': 'P', 'O': 'O'},
+        ...     bulk_parameters={...},
+        ...     bulk_options={...},
+        ...     # Enable adsorption energy without relaxation
+        ...     run_adsorption_energy=True,
+        ...     adsorption_structures={'oh_site': oh_structure},
+        ...     adsorption_formulas={'oh_site': 'OH'},
+        ...     relax_before_adsorption=False,  # Skip relaxation (default)
+        ...     # Only SCF parameters needed
+        ...     adsorption_parameters={'NSW': 0, 'EDIFF': 1e-7, ...},
+        ...     adsorption_options={'resources': {'num_machines': 1}},
+        ...     adsorption_kpoints_spacing=0.15,
         ... )
     """
     # ========================================================================
