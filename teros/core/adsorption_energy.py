@@ -22,6 +22,96 @@ from pymatgen.core import Composition
 from .slabs import extract_total_energy
 
 
+def _build_vasp_inputs(
+    structure: orm.StructureData,
+    code: orm.Code,
+    builder_inputs: dict | None = None,
+    parameters: dict | None = None,
+    options: dict | None = None,
+    potential_family: str | None = None,
+    potential_mapping: dict | None = None,
+    kpoints_spacing: float | None = None,
+    clean_workdir: bool = True,
+    force_scf: bool = False,
+) -> dict:
+    """
+    Build VASP WorkChain inputs from either builder_inputs or old-style parameters.
+
+    This helper provides backward compatibility by accepting either:
+    1. New-style: builder_inputs dict (full control, recommended)
+    2. Old-style: parameters/options/etc dicts (automatic conversion)
+
+    Args:
+        structure: Structure to calculate
+        code: AiiDA code for VASP
+        builder_inputs: New-style builder dict (takes priority if provided)
+        parameters: Old-style INCAR dict (fallback)
+        options: Old-style scheduler dict (fallback)
+        potential_family: Pseudopotential family name
+        potential_mapping: Element → potential mapping
+        kpoints_spacing: K-points spacing in Angstrom^-1
+        clean_workdir: Whether to clean remote working directory
+        force_scf: If True, enforce NSW=0 and IBRION=-1 for single-point calculation
+
+    Returns:
+        Complete input dictionary for VASP WorkChain
+
+    Raises:
+        ValueError: If neither builder_inputs nor parameters is provided
+    """
+    if builder_inputs is not None:
+        # Use new-style builder inputs
+        # Make a deep copy to avoid modifying original
+        import copy
+        inputs = copy.deepcopy(builder_inputs)
+
+        # Override structure and code (always set by workflow)
+        inputs['structure'] = structure
+        inputs['code'] = code
+
+    elif parameters is not None:
+        # Construct from old-style parameters
+        inputs = {
+            'structure': structure,
+            'code': code,
+            'parameters': {'incar': dict(parameters)},
+            'options': dict(options) if options is not None else {},
+            'potential_family': potential_family,
+            'potential_mapping': dict(potential_mapping) if potential_mapping is not None else {},
+            'clean_workdir': clean_workdir,
+            'settings': orm.Dict(dict={
+                'parser_settings': {
+                    'add_trajectory': True,
+                    'add_structure': True,
+                    'add_kpoints': True,
+                }
+            }),
+        }
+
+        if kpoints_spacing is not None:
+            inputs['kpoints_spacing'] = kpoints_spacing
+
+    else:
+        raise ValueError(
+            "Must provide either 'builder_inputs' or 'parameters'. "
+            "Use builder_inputs for full control (recommended) or parameters for backward compatibility."
+        )
+
+    # Force SCF mode if requested
+    if force_scf:
+        # Ensure parameters dict exists and has 'incar' key
+        if 'parameters' not in inputs:
+            inputs['parameters'] = {'incar': {}}
+        if 'incar' not in inputs['parameters']:
+            inputs['parameters']['incar'] = {}
+
+        # Override NSW and IBRION for single-point calculation
+        inputs['parameters']['incar']['NSW'] = 0
+        inputs['parameters']['incar']['IBRION'] = -1
+
+    return inputs
+
+
 def parse_formula(formula_str: str) -> dict[str, int]:
     """
     Parse chemical formula string into element counts.
