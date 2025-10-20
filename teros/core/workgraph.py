@@ -90,7 +90,7 @@ def get_settings():
     # Slab electronic properties outputs
     'slab_bands', 'slab_dos', 'slab_primitive_structures', 'slab_seekpath_parameters',
     # Adsorption energy outputs
-    'separated_structures', 'substrate_energies', 'molecule_energies',
+    'relaxed_complete_structures', 'separated_structures', 'substrate_energies', 'molecule_energies',
     'complete_energies', 'adsorption_energies',
 ])
 def core_workgraph(
@@ -153,6 +153,10 @@ def core_workgraph(
     adsorption_options: dict = None,  # NEW
     adsorption_potential_mapping: dict = None,  # NEW
     adsorption_kpoints_spacing: float = None,  # NEW
+    # Adsorption energy: Relaxation control (NEW)
+    relax_before_adsorption: bool = False,
+    adsorption_relax_builder_inputs: dict = None,
+    adsorption_scf_builder_inputs: dict = None,
     # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
@@ -634,6 +638,10 @@ def build_core_workgraph(
     adsorption_options: dict = None,  # Scheduler options for adsorption calculations
     adsorption_potential_mapping: dict = None,  # Element to potential mapping
     adsorption_kpoints_spacing: float = None,  # K-points spacing for adsorption
+    # Adsorption energy: Relaxation control (NEW)
+    relax_before_adsorption: bool = False,
+    adsorption_relax_builder_inputs: dict = None,
+    adsorption_scf_builder_inputs: dict = None,
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -1062,6 +1070,9 @@ def build_core_workgraph(
         adsorption_options=adsorption_options,  # NEW
         adsorption_potential_mapping=adsorption_potential_mapping,  # NEW
         adsorption_kpoints_spacing=adsorption_kpoints_spacing,  # NEW
+        relax_before_adsorption=relax_before_adsorption,  # NEW
+        adsorption_relax_builder_inputs=adsorption_relax_builder_inputs,  # NEW
+        adsorption_scf_builder_inputs=adsorption_scf_builder_inputs,  # NEW
         # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
@@ -1560,6 +1571,10 @@ def build_core_workgraph(
         print(f"     Number of structures: {len(adsorption_structures)}")
         print(f"     Structure keys: {list(adsorption_structures.keys())}")
         print(f"     Adsorbate formulas: {adsorption_formulas}")
+        if relax_before_adsorption:
+            print(f"     Relaxation: ENABLED (relax → separate → SCF)")
+        else:
+            print(f"     Relaxation: DISABLED (separate → SCF)")
 
         from aiida.orm import Code, load_code
 
@@ -1577,6 +1592,27 @@ def build_core_workgraph(
         ads_pot_map = adsorption_potential_mapping if adsorption_potential_mapping is not None else slab_pot_map
         ads_kpts = adsorption_kpoints_spacing if adsorption_kpoints_spacing is not None else slab_kpts
 
+        # Backward compatibility: construct builder inputs from old-style if needed
+        scf_builder_inputs = adsorption_scf_builder_inputs
+        if scf_builder_inputs is None and ads_params is not None:
+            # Auto-construct from old-style parameters
+            scf_builder_inputs = {
+                'parameters': {'incar': dict(ads_params)},
+                'options': dict(ads_opts),
+                'potential_family': potential_family,
+                'potential_mapping': dict(ads_pot_map),
+                'clean_workdir': clean_workdir,
+                'settings': orm.Dict(dict={
+                    'parser_settings': {
+                        'add_trajectory': True,
+                        'add_structure': True,
+                        'add_kpoints': True,
+                    }
+                }),
+            }
+            if ads_kpts is not None:
+                scf_builder_inputs['kpoints_spacing'] = ads_kpts
+
         # Add adsorption energy scatter task
         adsorption_task = wg.add_task(
             compute_adsorption_energies_scatter,
@@ -1584,15 +1620,23 @@ def build_core_workgraph(
             structures=adsorption_structures,
             adsorbate_formulas=adsorption_formulas,
             code=code,
-            parameters=ads_params,
             potential_family=potential_family,
             potential_mapping=ads_pot_map,
+
+            # NEW: Relaxation parameters
+            relax_before_adsorption=relax_before_adsorption,
+            relax_builder_inputs=adsorption_relax_builder_inputs,
+            scf_builder_inputs=scf_builder_inputs,
+
+            # OLD: Backward compatibility fallback
+            parameters=ads_params,
             options=ads_opts,
             kpoints_spacing=ads_kpts,
             clean_workdir=clean_workdir,
         )
 
         # Connect outputs
+        wg.outputs.relaxed_complete_structures = adsorption_task.outputs.relaxed_complete_structures  # NEW
         wg.outputs.separated_structures = adsorption_task.outputs.separated_structures
         wg.outputs.substrate_energies = adsorption_task.outputs.substrate_energies
         wg.outputs.molecule_energies = adsorption_task.outputs.molecule_energies
@@ -1600,7 +1644,9 @@ def build_core_workgraph(
         wg.outputs.adsorption_energies = adsorption_task.outputs.adsorption_energies
 
         print(f"  ✓ Adsorption energy calculation enabled")
-        print(f"     Access outputs via: wg.outputs.adsorption_energies")
+        if relax_before_adsorption:
+            print(f"     Access relaxed structures via: wg.outputs.relaxed_complete_structures")
+        print(f"     Access adsorption energies via: wg.outputs.adsorption_energies")
 
     # Set the name
     wg.name = name
