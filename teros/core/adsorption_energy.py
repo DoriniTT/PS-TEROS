@@ -8,6 +8,7 @@ substrate+adsorbate structures using AiiDA-WorkGraph and VASP.
 
 from __future__ import annotations
 
+import copy
 import typing as t
 from collections import Counter
 
@@ -76,7 +77,6 @@ def _build_vasp_inputs(
     if builder_inputs is not None:
         # Use new-style builder inputs
         # Make a deep copy to avoid modifying original
-        import copy
         inputs = copy.deepcopy(builder_inputs)
 
         # Override structure and code (always set by workflow)
@@ -491,9 +491,16 @@ def compute_adsorption_energies_scatter(
             f"Formulas: {list(adsorbate_formulas.keys())}"
         )
 
-    # Get workflow plugins
-    vasp_relax = WorkflowFactory('vasp.v2.relax')
-    vasp_scf = WorkflowFactory('vasp.v2.vasp')
+    # Get workflow plugins with error handling
+    try:
+        vasp_relax = WorkflowFactory('vasp.v2.relax')
+        vasp_scf = WorkflowFactory('vasp.v2.vasp')
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to load VASP workflow plugins. "
+            f"Ensure aiida-vasp is installed and registered. Error: {e}"
+        ) from e
+
     relax_task_cls = task(vasp_relax)
     scf_task_cls = task(vasp_scf)
 
@@ -519,7 +526,23 @@ def compute_adsorption_energies_scatter(
 
             # Run relaxation
             relax_task = relax_task_cls(**relax_inputs)
+
+            # Validate that relaxation produces structure output
+            if not hasattr(relax_task.outputs, 'structure'):
+                raise RuntimeError(
+                    f"Relaxation workflow for '{key}' did not produce structure output. "
+                    f"Check that vasp.v2.relax is configured correctly."
+                )
+
             relaxed_structures[key] = relax_task.outputs.structure
+
+        # Validate we have relaxed structures for all inputs
+        if set(relaxed_structures.keys()) != set(structures.keys()):
+            missing = set(structures.keys()) - set(relaxed_structures.keys())
+            raise RuntimeError(
+                f"Relaxation failed to produce structures for: {missing}. "
+                f"Check workflow logs for details."
+            )
 
         # Use relaxed structures for separation
         structures_to_separate = relaxed_structures
@@ -529,7 +552,7 @@ def compute_adsorption_energies_scatter(
         structures_to_separate = structures
 
     # Output dictionaries
-    separated_dict: dict[str, dict] = {}
+    separated_structures_dict: dict[str, dict] = {}
     substrate_energies: dict[str, orm.Float] = {}
     molecule_energies: dict[str, orm.Float] = {}
     complete_energies: dict[str, orm.Float] = {}
@@ -545,7 +568,7 @@ def compute_adsorption_energies_scatter(
             adsorbate_formula=orm.Str(adsorbate_str)
         )
 
-        separated_dict[key] = {
+        separated_structures_dict[key] = {
             'substrate': separated.substrate,
             'molecule': separated.molecule,
             'complete': separated.complete,
@@ -553,7 +576,7 @@ def compute_adsorption_energies_scatter(
 
     # ===== PHASE 3: SCF CALCULATIONS =====
     # Single-point calculations for substrate, molecule, and complete systems
-    for key, separated in separated_dict.items():
+    for key, separated in separated_structures_dict.items():
         # Helper function to create SCF inputs for each structure
         def create_scf_inputs(struct: orm.StructureData) -> dict:
             return _build_vasp_inputs(
@@ -569,17 +592,16 @@ def compute_adsorption_energies_scatter(
                 force_scf=True,  # Enforce NSW=0, IBRION=-1
             )
 
-        # Substrate SCF
-        substrate_calc = scf_task_cls(**create_scf_inputs(separated['substrate']))
-        substrate_energies[key] = extract_total_energy(energies=substrate_calc.misc).result
+        # Run SCF calculations for all three components
+        scf_components = [
+            ('substrate', separated['substrate'], substrate_energies),
+            ('molecule', separated['molecule'], molecule_energies),
+            ('complete', separated['complete'], complete_energies),
+        ]
 
-        # Molecule SCF
-        molecule_calc = scf_task_cls(**create_scf_inputs(separated['molecule']))
-        molecule_energies[key] = extract_total_energy(energies=molecule_calc.misc).result
-
-        # Complete system SCF
-        complete_calc = scf_task_cls(**create_scf_inputs(separated['complete']))
-        complete_energies[key] = extract_total_energy(energies=complete_calc.misc).result
+        for component_name, structure, energy_dict in scf_components:
+            scf_calc = scf_task_cls(**create_scf_inputs(structure))
+            energy_dict[key] = extract_total_energy(energies=scf_calc.misc).result
 
     # ===== PHASE 4: ADSORPTION ENERGY CALCULATION =====
     # Calculate E_ads = E_complete - E_substrate - E_molecule
@@ -595,7 +617,7 @@ def compute_adsorption_energies_scatter(
     # Return all results
     return {
         'relaxed_complete_structures': relaxed_structures,  # NEW: Empty dict if relax=False
-        'separated_structures': separated_dict,
+        'separated_structures': separated_structures_dict,
         'substrate_energies': substrate_energies,
         'molecule_energies': molecule_energies,
         'complete_energies': complete_energies,
