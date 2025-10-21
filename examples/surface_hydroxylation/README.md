@@ -185,6 +185,110 @@ for result in results:
     relaxed = orm.load_node(structure_pk)
 ```
 
+### 3. Production Example
+
+**File:** `run_production.py`
+
+Production-ready example for real research calculations.
+
+**Features:**
+- Complete workflow with production VASP settings
+- Combined mode (vacancies + hydroxylation)
+- 10 coverage bins (~15-20 structures)
+- Parallel execution with controlled concurrency
+- Full provenance tracking
+
+**System Requirements:**
+- Realistic perovskite oxide surface (~100+ atoms)
+- Production VASP settings (converged ENCUT, k-points)
+- Cluster compute resources configured
+- VASP pseudopotentials installed
+
+**Setup:**
+1. Edit `run_production.py` and replace placeholders:
+   - Set structure PK from surface_thermodynamics output
+   - Update compute resources (account, queue, cores)
+   - Adjust VASP parameters for your system
+
+2. Review parameters:
+```python
+# Surface modification
+surface_params = {
+    'mode': 'combine',           # Both vacancies and hydroxylation
+    'coverage_bins': 10,         # Good coverage sampling
+    'deduplicate_by_coverage': True
+}
+
+# VASP settings
+builder_config = {
+    'ENCUT': 520,               # Converged cutoff
+    'EDIFFG': -0.02,            # Force convergence
+    'NSW': 200,                 # Max ionic steps
+    'kpoints_distance': 0.3     # Converged k-points
+}
+
+# Parallelization
+max_parallel_jobs = 5           # Adjust for cluster capacity
+```
+
+3. Submit:
+```bash
+/home/thiagotd/envs/aiida/bin/python run_production.py
+```
+
+**Expected Runtime:**
+- Structure generation: < 1 minute
+- VASP relaxations: Several hours (depends on system size)
+- Total: ~6-12 hours for typical perovskite surface
+
+**Monitoring:**
+```bash
+# Check overall workflow status
+verdi process show <WORKFLOW_PK>
+
+# Monitor running VASP jobs
+verdi process list -a -p 1  # Last 24 hours
+
+# Check specific relaxation
+verdi process report <RELAX_PK>
+```
+
+**Post-Processing:**
+```python
+from aiida import orm
+
+# Load completed workflow
+wf = orm.load_node(<WORKFLOW_PK>)
+
+# Get statistics
+stats = wf.outputs.statistics.get_dict()
+print(f"Generated {stats['total']} structures")
+print(f"Successfully relaxed {stats['succeeded']}")
+print(f"Failed {stats['failed']}")
+
+# Analyze successful relaxations
+results = wf.outputs.successful_relaxations.get_dict()['results']
+
+# Find lowest energy configuration
+results_sorted = sorted(results, key=lambda r: r['energy'])
+best = results_sorted[0]
+
+print(f"\nLowest energy configuration:")
+print(f"  Name: {best['name']}")
+print(f"  Coverage: {best['coverage']:.2f}")
+print(f"  Energy: {best['energy']:.6f} eV")
+print(f"  Structure PK: {best['structure_pk']}")
+
+# Load structure for further analysis
+best_structure = orm.load_node(best['structure_pk'])
+```
+
+**Important Notes:**
+- Review VASP settings for your specific system
+- Test with small system first (`test_full_workflow.py`)
+- Monitor disk space (VASP outputs can be large)
+- Plan for cluster downtime (workflows can be restarted)
+
 ## Module Architecture
 
 ### Workflow Structure
