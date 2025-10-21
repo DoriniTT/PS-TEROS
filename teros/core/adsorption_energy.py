@@ -21,6 +21,7 @@ from pymatgen.analysis.local_env import CrystalNN
 from pymatgen.core import Composition
 
 from .slabs import extract_total_energy
+from .fixed_atoms import get_fixed_atoms_list, add_fixed_atoms_to_vasp_parameters
 
 
 def _build_vasp_inputs(
@@ -34,6 +35,12 @@ def _build_vasp_inputs(
     kpoints_spacing: float | None = None,
     clean_workdir: bool = True,
     force_scf: bool = False,
+    workchain_type: str = 'vasp',
+    # Atom fixing parameters
+    fix_atoms: bool = False,
+    fix_type: str | None = None,
+    fix_thickness: float = 0.0,
+    fix_elements: list[str] | None = None,
 ) -> dict:
     """
     Build VASP WorkChain inputs from either builder_inputs or old-style parameters.
@@ -46,6 +53,17 @@ def _build_vasp_inputs(
     If both builder_inputs and parameters are provided, builder_inputs takes priority
     and parameters is ignored. This allows explicit control over the input construction.
 
+    **WorkChain Type:**
+    - 'vasp': vasp.v2.vasp plugin (flat structure, SCF calculations)
+    - 'relax': vasp.v2.relax plugin (nested structure with 'vasp' namespace and 'relax_settings')
+      * When using builder_inputs with 'relax', provide full structure:
+        {'relax_settings': orm.Dict(...), 'vasp': {...}}
+      * When using parameters with 'relax', relax_settings is auto-generated from INCAR
+
+    **Atom Fixing:**
+    Use fix_atoms=True with fix_type/fix_thickness to constrain atoms during relaxation.
+    This is useful for slab calculations where you want to fix bottom layers.
+
     Example showing priority:
         >>> # If both are provided, builder_inputs is used
         >>> inputs = _build_vasp_inputs(
@@ -55,6 +73,18 @@ def _build_vasp_inputs(
         ...     parameters={'ENCUT': 400},  # This is ignored
         ... )
         >>> inputs['parameters']['incar']['ENCUT']  # Returns 600
+
+    Example with atom fixing:
+        >>> # Fix bottom 7 Å of slab during relaxation
+        >>> inputs = _build_vasp_inputs(
+        ...     structure=slab,
+        ...     code=code,
+        ...     parameters={'NSW': 100, 'IBRION': 2},
+        ...     workchain_type='relax',
+        ...     fix_atoms=True,
+        ...     fix_type='bottom',
+        ...     fix_thickness=7.0,
+        ... )
 
     Args:
         structure: Structure to calculate
@@ -67,6 +97,11 @@ def _build_vasp_inputs(
         kpoints_spacing: K-points spacing in Angstrom^-1
         clean_workdir: Whether to clean remote working directory
         force_scf: If True, enforce NSW=0 and IBRION=-1 for single-point calculation
+        workchain_type: Type of workchain ('vasp' or 'relax')
+        fix_atoms: If True, apply atom fixing constraints
+        fix_type: Type of fixing ('bottom', 'top', 'center')
+        fix_thickness: Thickness in Angstrom for fixing region
+        fix_elements: Optional list of elements to fix (None = all elements)
 
     Returns:
         Complete input dictionary for VASP WorkChain
@@ -79,9 +114,16 @@ def _build_vasp_inputs(
         # Make a deep copy to avoid modifying original
         inputs = copy.deepcopy(builder_inputs)
 
-        # Override structure and code (always set by workflow)
+        # Override structure (always set by workflow)
         inputs['structure'] = structure
-        inputs['code'] = code
+
+        # Set code in appropriate location based on workchain type
+        if workchain_type == 'relax' and 'vasp' in inputs:
+            # For relax workchain with vasp namespace, code goes inside vasp
+            inputs['vasp']['code'] = code
+        else:
+            # For vasp workchain or when no vasp namespace, code goes at top level
+            inputs['code'] = code
 
     elif parameters is not None:
         # Construct from old-style parameters
@@ -111,17 +153,109 @@ def _build_vasp_inputs(
             "Use builder_inputs for full control (recommended) or parameters for backward compatibility."
         )
 
+    # Apply atom fixing constraints if requested (before restructuring for relax)
+    if fix_atoms and fix_type is not None and fix_thickness > 0.0:
+        # Get list of atoms to fix
+        fixed_atoms_list = get_fixed_atoms_list(
+            structure=structure,
+            fix_type=fix_type,
+            fix_thickness=fix_thickness,
+            fix_elements=fix_elements,
+        )
+
+        if fixed_atoms_list:
+            # Determine where parameters are located
+            # For relax with builder_inputs, params are in vasp namespace
+            if 'vasp' in inputs and 'parameters' in inputs['vasp']:
+                params_location = inputs['vasp']['parameters']
+            elif 'parameters' in inputs:
+                params_location = inputs['parameters']
+            else:
+                # Create at top level by default
+                inputs['parameters'] = {'incar': {}}
+                params_location = inputs['parameters']
+
+            # Ensure incar dict exists
+            if 'incar' not in params_location:
+                params_location['incar'] = {}
+
+            # Add constraints to structure and update parameters
+            params_location['incar'], constrained_structure = add_fixed_atoms_to_vasp_parameters(
+                base_parameters=params_location['incar'],
+                structure=inputs['structure'],
+                fixed_atoms_list=fixed_atoms_list,
+            )
+
+            # Replace structure with constrained version
+            inputs['structure'] = constrained_structure
+
     # Force SCF mode if requested
     if force_scf:
-        # Ensure parameters dict exists and has 'incar' key
-        if 'parameters' not in inputs:
+        # Determine where parameters are located
+        if 'vasp' in inputs and 'parameters' in inputs['vasp']:
+            params_location = inputs['vasp']['parameters']
+        elif 'parameters' in inputs:
+            params_location = inputs['parameters']
+        else:
             inputs['parameters'] = {'incar': {}}
-        if 'incar' not in inputs['parameters']:
-            inputs['parameters']['incar'] = {}
+            params_location = inputs['parameters']
+
+        # Ensure incar dict exists
+        if 'incar' not in params_location:
+            params_location['incar'] = {}
 
         # Override NSW and IBRION for single-point calculation
-        inputs['parameters']['incar']['NSW'] = 0
-        inputs['parameters']['incar']['IBRION'] = -1
+        params_location['incar']['NSW'] = 0
+        params_location['incar']['IBRION'] = -1
+
+    # Restructure for VaspRelaxWorkChain if needed
+    if workchain_type == 'relax':
+        # Check if user already provided relax_settings (full builder control)
+        if 'relax_settings' in inputs:
+            # User provided full builder structure
+            # Convert relax_settings to orm.Dict if it's a plain dict
+            if isinstance(inputs['relax_settings'], dict) and not isinstance(inputs['relax_settings'], orm.Dict):
+                inputs['relax_settings'] = orm.Dict(dict=inputs['relax_settings'])
+
+            # Ensure structure is at top level
+            if 'structure' not in inputs:
+                raise ValueError(
+                    "When providing relax_settings in builder_inputs, "
+                    "structure must be included at top level"
+                )
+            # Structure is already set correctly above
+        else:
+            # Auto-generate relax_settings from INCAR parameters (backward compatibility)
+            incar = inputs.get('parameters', {}).get('incar', {})
+
+            # Build relax_settings from INCAR parameters
+            relax_settings = {
+                'algo': 'cg',  # Default: conjugate gradient
+                'force_cutoff': abs(incar.get('EDIFFG', 0.01)),  # Default 0.01 eV/Å
+                'steps': incar.get('NSW', 100),  # Default 100 steps
+                'positions': True,  # Always relax positions
+                'shape': incar.get('ISIF', 2) in [3, 4, 5, 6, 7],  # ISIF 3-7 include shape
+                'volume': incar.get('ISIF', 2) in [3, 7],  # ISIF 3,7 include volume
+                'convergence_on': True,  # Enable convergence checks
+                'convergence_absolute': False,
+                'convergence_max_iterations': 5,
+                'convergence_positions': 0.01,  # 0.01 Å
+                'convergence_volume': 0.01,  # 0.01 Å³
+                'convergence_shape_lengths': 0.1,  # 0.1 Å
+                'convergence_shape_angles': 0.1,  # 0.1 degrees
+                'perform': True,  # Actually perform the relaxation
+            }
+
+            # Restructure: move everything except 'structure' into 'vasp' namespace
+            structure_to_use = inputs.pop('structure')
+            vasp_inputs = inputs  # All remaining keys go into vasp namespace
+
+            # Build final nested structure
+            inputs = {
+                'structure': structure_to_use,
+                'relax_settings': orm.Dict(dict=relax_settings),
+                'vasp': vasp_inputs,
+            }
 
     return inputs
 
@@ -396,6 +530,12 @@ def compute_adsorption_energies_scatter(
     # NEW: SCF control
     scf_builder_inputs: dict | None = None,
 
+    # NEW: Atom fixing control (for relaxation)
+    fix_atoms: bool = False,
+    fix_type: str | None = None,
+    fix_thickness: float = 0.0,
+    fix_elements: list[str] | None = None,
+
     # DEPRECATED (kept for backward compatibility)
     parameters: t.Mapping[str, t.Any] | None = None,
     options: t.Mapping[str, t.Any] | None = None,
@@ -432,6 +572,11 @@ def compute_adsorption_energies_scatter(
         relax_before_adsorption: If True, relax complete structures before separation
         relax_builder_inputs: Full builder dict for vasp.v2.relax (NSW, IBRION, ISIF)
         scf_builder_inputs: Full builder dict for vasp.v2.vasp (NSW=0 enforced)
+
+        fix_atoms: If True, apply atom fixing constraints during relaxation
+        fix_type: Type of fixing ('bottom', 'top', 'center')
+        fix_thickness: Thickness in Angstrom for fixing region
+        fix_elements: Optional list of elements to fix (None = all elements)
 
         parameters: [DEPRECATED] Old-style INCAR parameters dict (for backward compat)
         options: [DEPRECATED] Old-style scheduler options dict
@@ -522,27 +667,19 @@ def compute_adsorption_energies_scatter(
                 kpoints_spacing=kpoints_spacing,
                 clean_workdir=clean_workdir,
                 force_scf=False,  # Allow relaxation (NSW > 0)
+                workchain_type='relax',  # Use VaspRelaxWorkChain
+                # Atom fixing parameters
+                fix_atoms=fix_atoms,
+                fix_type=fix_type,
+                fix_thickness=fix_thickness,
+                fix_elements=fix_elements,
             )
 
             # Run relaxation
             relax_task = relax_task_cls(**relax_inputs)
 
-            # Validate that relaxation produces structure output
-            if not hasattr(relax_task.outputs, 'structure'):
-                raise RuntimeError(
-                    f"Relaxation workflow for '{key}' did not produce structure output. "
-                    f"Check that vasp.v2.relax is configured correctly."
-                )
-
-            relaxed_structures[key] = relax_task.outputs.structure
-
-        # Validate we have relaxed structures for all inputs
-        if set(relaxed_structures.keys()) != set(structures.keys()):
-            missing = set(structures.keys()) - set(relaxed_structures.keys())
-            raise RuntimeError(
-                f"Relaxation failed to produce structures for: {missing}. "
-                f"Check workflow logs for details."
-            )
+            # Connect relaxation output to relaxed structures dict
+            relaxed_structures[key] = relax_task.structure
 
         # Use relaxed structures for separation
         structures_to_separate = relaxed_structures
@@ -590,6 +727,7 @@ def compute_adsorption_energies_scatter(
                 kpoints_spacing=kpoints_spacing,
                 clean_workdir=clean_workdir,
                 force_scf=True,  # Enforce NSW=0, IBRION=-1
+                workchain_type='vasp',  # Use VaspWorkChain
             )
 
         # Run SCF calculations for all three components

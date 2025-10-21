@@ -157,6 +157,11 @@ def core_workgraph(
     relax_before_adsorption: bool = False,
     adsorption_relax_builder_inputs: dict = None,
     adsorption_scf_builder_inputs: dict = None,
+    # Adsorption energy: Atom fixing control (NEW)
+    adsorption_fix_atoms: bool = False,
+    adsorption_fix_type: str = None,
+    adsorption_fix_thickness: float = 0.0,
+    adsorption_fix_elements: list = None,
     # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
@@ -642,6 +647,11 @@ def build_core_workgraph(
     relax_before_adsorption: bool = False,
     adsorption_relax_builder_inputs: dict = None,
     adsorption_scf_builder_inputs: dict = None,
+    # Adsorption energy: Atom fixing control (NEW)
+    adsorption_fix_atoms: bool = False,
+    adsorption_fix_type: str = None,
+    adsorption_fix_thickness: float = 0.0,
+    adsorption_fix_elements: list = None,
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -1205,6 +1215,10 @@ def build_core_workgraph(
         relax_before_adsorption=relax_before_adsorption,  # NEW
         adsorption_relax_builder_inputs=adsorption_relax_builder_inputs,  # NEW
         adsorption_scf_builder_inputs=adsorption_scf_builder_inputs,  # NEW
+        adsorption_fix_atoms=adsorption_fix_atoms,  # NEW
+        adsorption_fix_type=adsorption_fix_type,  # NEW
+        adsorption_fix_thickness=adsorption_fix_thickness,  # NEW
+        adsorption_fix_elements=adsorption_fix_elements,  # NEW
         # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
@@ -1759,6 +1773,12 @@ def build_core_workgraph(
             relax_before_adsorption=relax_before_adsorption,
             relax_builder_inputs=adsorption_relax_builder_inputs,
             scf_builder_inputs=scf_builder_inputs,
+
+            # NEW: Atom fixing parameters
+            fix_atoms=adsorption_fix_atoms,
+            fix_type=adsorption_fix_type,
+            fix_thickness=adsorption_fix_thickness,
+            fix_elements=adsorption_fix_elements,
 
             # OLD: Backward compatibility fallback
             parameters=ads_params,

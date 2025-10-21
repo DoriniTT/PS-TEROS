@@ -149,9 +149,9 @@ def main():
     adsorption_options = {
         'resources': {
             'num_machines': 1,
-            'num_cores_per_machine': 40,
+            'num_cores_per_machine': 5,
         },
-        'queue_name': 'par40',
+        'queue_name': 'teste',
     }
 
     # Potential mapping

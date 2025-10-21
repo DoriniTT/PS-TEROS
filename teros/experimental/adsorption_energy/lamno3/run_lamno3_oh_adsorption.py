@@ -1,16 +1,20 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-LaMnO3 + OH Adsorption Energy Calculation with Relaxation
+LaMnO3 + OH Adsorption Energy Calculation with Relaxation and Atom Fixing
 
-This script demonstrates the new relaxation + SCF workflow for adsorption energy calculations.
+This script demonstrates the NEW features of the adsorption energy module:
+1. Full builder-based API for vasp.v2.relax (complete control)
+2. Atom fixing for slab relaxations (fix bottom layers)
 
 System:
 - Substrate: LaMnO3 (100) surface (2x2x1 supercell)
 - Adsorbate: OH radical
 - Structure: La32Mn28O89H (complete system)
 
-NEW Workflow (4 phases):
+Workflow (4 phases):
 1. Relax complete system (LaMnO3 + OH) using vasp.v2.relax
+   - NEW: Uses full builder inputs for relax_settings control
+   - NEW: Fixes bottom 7 Å of slab to simulate bulk
 2. Separate relaxed structure into substrate + adsorbate
 3. Run 3 SCF calculations in parallel using vasp.v2.vasp:
    - Complete system (from relaxed)
@@ -18,9 +22,11 @@ NEW Workflow (4 phases):
    - Isolated OH molecule (from relaxed)
 4. Calculate E_ads = E_complete - E_substrate - E_molecule
 
-NOTE: This demonstrates the new builder-based API for SCF calculations.
-Relaxation currently uses old-style parameters due to different input structure
-of vasp.v2.relax workchain. Full builder API for relaxation is a future enhancement.
+NEW Features Demonstrated:
+- relax_builder_inputs: Full control over vasp.v2.relax with relax_settings Dict
+- adsorption_fix_atoms: Fix bottom layers of slab during relaxation
+- adsorption_fix_type: 'bottom' (also supports 'top', 'center')
+- adsorption_fix_thickness: 7.0 Å thickness for fixed region
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -49,7 +55,7 @@ def main():
     # 2. Load structure
     print("\n2. Loading structure...")
     script_dir = Path(__file__).parent
-    structure_file = script_dir / "LaMnO3_100_A4_surface_2x2x1_OOH_relaxed.cif"
+    structure_file = script_dir / "LaMnO3_100_A4_surface_2x2x1_OOH.cif"
 
     if not structure_file.exists():
         raise FileNotFoundError(f"Structure file not found: {structure_file}")
@@ -68,7 +74,7 @@ def main():
 
     # 3. VASP Configuration
     print("\n3. VASP Configuration:")
-    code_label = 'VASP-6.5.0@lovelace-parexp'
+    code_label = 'VASPGAM-6.5.0@lovelace-parexp'
     potential_family = 'PBE'
 
     print(f"   Code: {code_label}")
@@ -86,64 +92,95 @@ def main():
     # Common settings
     common_potential_mapping = {
         'La': 'La',
-        'Mn': 'Mn_pv',  # Use _pv for transition metals
+        'Mn': 'Mn',  # Use _pv for transition metals
         'O': 'O',
         'H': 'H',
     }
 
     common_options = {
         'resources': {
-            'num_machines': 1,
-            'num_mpiprocs_per_machine': 48,
+            'num_machines': 4,
+            'num_cores_per_machine': 48,
         },
         'queue_name': 'parexp',
     }
 
-    kpoints_spacing = 0.3  # Angstrom^-1
+    kpoints_spacing = 0.6  # Angstrom^-1
 
     # Relaxation parameters (Phase 1: relax complete system)
-    # NOTE: Using old-style dict for now - vasp.v2.relax has different input structure than vasp.v2.vasp
-    # Builder-based API for relax will be added in future enhancement
-    relax_parameters = {
-        'PREC': 'Accurate',
-        'ENCUT': 500,           # Cutoff energy
-        'EDIFF': 1e-5,          # Electronic convergence
-        'ISMEAR': 0,            # Gaussian smearing
-        'SIGMA': 0.05,          # Small smearing width
-        'ISPIN': 2,             # Spin-polarized
-        'MAGMOM': '32*0.6 28*4.0 89*0.6 1*0.0',  # Initial magnetic moments (La, Mn, O, H)
-        'LORBIT': 11,           # DOSCAR and PROCAR
-        'IBRION': 2,            # Conjugate gradient relaxation
-        'NSW': 100,             # Max ionic steps
-        'ISIF': 2,              # Relax ions only (keep cell fixed)
-        'LWAVE': False,         # Don't write WAVECAR
-        'LCHARG': True,         # Write CHGCAR
-        'NCORE': 4,             # Parallelization
-        'LASPH': True,          # Non-spherical contributions
-        'IVDW': 12,             # DFT-D3 van der Waals
-        'IDIPOL': 3,            # Dipole correction for slab
-        'LDIPOL': True,         # Enable dipole correction
+    # Using NEW builder-based API for full control over vasp.v2.relax workchain
+    # This provides complete control over relax_settings and VASP parameters
+    # NOTE: Use plain Python dicts - they will be converted to orm.Dict internally
+    relax_builder_inputs = {
+        'relax_settings': {  # Plain dict - converted to orm.Dict internally
+            'algo': 'cg',  # Conjugate gradient
+            'force_cutoff': 0.1,  # 0.1 eV/Å force convergence
+            'steps': 500,  # Maximum ionic steps
+            'positions': True,  # Relax atomic positions
+            'shape': False,  # Don't relax cell shape
+            'volume': False,  # Don't relax cell volume
+            'convergence_on': True,  # Enable convergence checks
+            'convergence_absolute': False,
+            'convergence_max_iterations': 5,
+            'convergence_positions': 0.01,  # 0.01 Å convergence
+            'convergence_volume': 0.01,
+            'convergence_shape_lengths': 0.1,
+            'convergence_shape_angles': 0.1,
+            'perform': True,
+        },
+        'vasp': {
+            'parameters': {'incar': {
+                'PREC': 'Accurate',
+                'ALGO': 'All',
+                'LREAL': 'Auto',
+                'ENCUT': 400,           # Cutoff energy
+                'EDIFF': 1e-5,          # Electronic convergence
+                'NELM': 40,
+                'NELMIN': 6,            # Minimum electronic steps
+                'ISMEAR': 0,            # Gaussian smearing
+                'SIGMA': 0.05,          # Small smearing width
+                'ISPIN': 2,             # Spin-polarized
+                #'MAGMOM': '32*0.6 28*4.0 89*0.6 1*0.0',  # Initial magnetic moments
+                'LORBIT': 11,           # DOSCAR and PROCAR
+                'LWAVE': True,          # Write WAVECAR
+                'LCHARG': True,         # Write CHGCAR
+                'NCORE': 3,             # Parallelization
+                'KPAR': 4,              # k-point parallelization
+                'LASPH': True,          # Non-spherical contributions
+                'IVDW': 12,             # DFT-D3 van der Waals
+                #'IDIPOL': 3,           # Dipole correction for slab
+                #'LDIPOL': True,        # Enable dipole correction
+            }},
+            'options': common_options,
+            'potential_family': potential_family,
+            'potential_mapping': common_potential_mapping,
+            'kpoints_spacing': kpoints_spacing,
+            'clean_workdir': False,
+        }
     }
 
     # SCF inputs (Phase 3: single-point calculations)
     scf_builder_inputs = {
         'parameters': {'incar': {
             'PREC': 'Accurate',
-            'ENCUT': 500,           # Cutoff energy
+            'ALGO': 'Normal',
+            'ENCUT': 400,           # Cutoff energy
             'EDIFF': 1e-5,          # Electronic convergence
             'ISMEAR': 0,            # Gaussian smearing
+            'NELMIN': 6,          # Minimum electronic steps
             'SIGMA': 0.05,          # Small smearing width
             'ISPIN': 2,             # Spin-polarized
-            'MAGMOM': '32*0.6 28*4.0 89*0.6 1*0.0',  # Initial magnetic moments
+            #'MAGMOM': '32*0.6 28*4.0 89*0.6 1*0.0',  # Initial magnetic moments
             'LORBIT': 11,           # DOSCAR and PROCAR
             # NSW=0 and IBRION=-1 will be set automatically by workflow
-            'LWAVE': False,         # Don't write WAVECAR
+            'LWAVE': True,         # Don't write WAVECAR
             'LCHARG': True,         # Write CHGCAR
-            'NCORE': 4,             # Parallelization
+            'NCORE': 3,             # Parallelization
+            'KPAR': 4,             # k-point parallelization
             'LASPH': True,          # Non-spherical contributions
             'IVDW': 12,             # DFT-D3 van der Waals
-            'IDIPOL': 3,            # Dipole correction for slab
-            'LDIPOL': True,         # Enable dipole correction
+            #'IDIPOL': 3,            # Dipole correction for slab
+            #'LDIPOL': True,         # Enable dipole correction
         }},
         'options': common_options,
         'potential_family': potential_family,
@@ -151,10 +188,20 @@ def main():
         # Note: k-points spacing passed separately to workgraph
     }
 
+    # Atom fixing parameters (NEW feature)
+    # Fix bottom 7 Å of the slab to simulate bulk-like behavior
+    fix_atoms = True
+    fix_type = 'bottom'
+    fix_thickness = 7.0  # Angstrom
+    fix_elements = None  # None = fix all elements in the region
+
     print(f"   K-points spacing: {kpoints_spacing} Å⁻¹")
     print(f"   Spin-polarized: Yes")
     print(f"   Relaxation: ENABLED (relax → separate → SCF)")
-    print(f"   Relax max ionic steps: {relax_parameters['NSW']}")
+    print(f"   Relax max ionic steps: {relax_builder_inputs['relax_settings']['steps']}")
+    print(f"   Atom fixing: {'ENABLED' if fix_atoms else 'DISABLED'}")
+    if fix_atoms:
+        print(f"   Fix type: {fix_type}, thickness: {fix_thickness} Å")
 
     # 4. Build WorkGraph
     print("\n4. Building WorkGraph...")
@@ -184,15 +231,19 @@ def main():
         adsorption_structures=adsorption_structures,
         adsorption_formulas=adsorption_formulas,
         adsorption_potential_mapping=common_potential_mapping,
-        adsorption_parameters=relax_parameters,  # Used for relaxation (old-style, compatible with vasp.v2.relax)
-        adsorption_options=common_options,
-        adsorption_kpoints_spacing=kpoints_spacing,
 
-        # NEW: Enable relaxation and use builder inputs for SCF
+        # NEW: Full builder control for relaxation
         relax_before_adsorption=True,
+        adsorption_relax_builder_inputs=relax_builder_inputs,  # Full builder inputs for relax
         adsorption_scf_builder_inputs=scf_builder_inputs,  # Builder inputs for SCF phase
 
-        name='LaMnO3_OH_RelaxThenAdsorption',
+        # NEW: Atom fixing for slabs
+        adsorption_fix_atoms=fix_atoms,
+        adsorption_fix_type=fix_type,
+        adsorption_fix_thickness=fix_thickness,
+        adsorption_fix_elements=fix_elements,
+
+        name='LaMnO3_OH_RelaxThenAdsorption_WithFixing',
     )
 
     print("   ✓ WorkGraph built successfully")

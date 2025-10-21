@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/home/thiagotd/envs/aiida/bin/python
 """
 Example: Calculate adsorption energy of OH on Ag(111) surface.
 
@@ -23,7 +23,7 @@ from teros.core import (
 
 def main():
     """Run adsorption energy calculation workflow."""
-    load_profile()
+    load_profile(profile='presto')
 
     print("=" * 70)
     print("Adsorption Energy Calculation: OH on Ag(111)")
@@ -34,7 +34,7 @@ def main():
     base_path = Path(__file__).parent
 
     # Load VASP code (adjust for your setup)
-    code_label = 'vasp@localhost'  # Modify to match your VASP code
+    code_label = 'VASP-VTST-6.4.3@bohr'  # Modify to match your VASP code
     try:
         code = orm.load_code(code_label)
     except:
@@ -89,10 +89,9 @@ def main():
     options = {
         'resources': {
             'num_machines': 1,
-            'num_mpiprocs_per_machine': 4,
+            'num_cores_per_machine': 40,
         },
-        'max_wallclock_seconds': 3600,
-        'queue_name': 'debug',  # Adjust for your cluster
+        'queue_name': 'par40',  # Adjust for your cluster
     }
 
     # Potential mapping
