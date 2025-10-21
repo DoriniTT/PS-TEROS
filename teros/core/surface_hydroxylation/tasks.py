@@ -30,6 +30,24 @@ def extract_manifest(result: dict) -> Dict:
 
 
 @calcfunction
+def extract_successful_relaxations(result: dict) -> Dict:
+    """Extract successful_relaxations from collect_results result."""
+    return result['successful_relaxations']
+
+
+@calcfunction
+def extract_failed_relaxations(result: dict) -> Dict:
+    """Extract failed_relaxations from collect_results result."""
+    return result['failed_relaxations']
+
+
+@calcfunction
+def extract_statistics(result: dict) -> Dict:
+    """Extract statistics from collect_results result."""
+    return result['statistics']
+
+
+@calcfunction
 def generate_structures(structure: StructureData, params: Dict) -> dict:
     """
     Generate surface variants using surface_modes.py.

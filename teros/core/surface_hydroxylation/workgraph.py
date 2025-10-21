@@ -4,7 +4,14 @@ import typing as t
 from aiida import orm
 from aiida_workgraph import task, namespace, dynamic
 
-from .tasks import generate_structures, collect_results
+from .tasks import (
+    generate_structures,
+    collect_results,
+    extract_manifest,
+    extract_successful_relaxations,
+    extract_failed_relaxations,
+    extract_statistics,
+)
 from .relaxations import relax_slabs_with_semaphore
 
 
@@ -116,6 +123,9 @@ def SurfaceHydroxylationWorkGraph(
         params=surface_params,
     )
 
+    # Task 1b: Extract manifest from result dict
+    manifest_task = task(extract_manifest)(result=gen_task.result)
+
     # Task 2: Relax all generated structures in parallel
     # Pass the full result dict from gen_task
     # relax_slabs_with_semaphore will extract structure_* keys
@@ -128,17 +138,22 @@ def SurfaceHydroxylationWorkGraph(
     # Task 3: Collect and organize results
     # Wrap collect_results with task() to use it in the WorkGraph
     collect_task = task(collect_results)(
-        manifest=gen_task.manifest,
+        manifest=manifest_task.result,
         structures=relax_outputs.structures,
         energies=relax_outputs.energies,
         exit_statuses=relax_outputs.exit_statuses,
         errors=relax_outputs.errors,
     )
 
+    # Task 3b: Extract individual outputs from collect_results result
+    successful_task = task(extract_successful_relaxations)(result=collect_task.result)
+    failed_task = task(extract_failed_relaxations)(result=collect_task.result)
+    statistics_task = task(extract_statistics)(result=collect_task.result)
+
     # Return outputs
     return {
-        'manifest': gen_task.manifest,
-        'successful_relaxations': collect_task.successful_relaxations,
-        'failed_relaxations': collect_task.failed_relaxations,
-        'statistics': collect_task.statistics,
+        'manifest': manifest_task.result,
+        'successful_relaxations': successful_task.result,
+        'failed_relaxations': failed_task.result,
+        'statistics': statistics_task.result,
     }
