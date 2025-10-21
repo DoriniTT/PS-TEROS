@@ -54,7 +54,7 @@ def get_exit_info(exit_status: orm.Int, exit_message: orm.Str) -> dict:
 @task.graph
 def relax_slabs_with_semaphore(
     structures: dict[str, orm.StructureData],
-    code: orm.InstalledCode,
+    code_pk: orm.Int,
     vasp_config: orm.Dict,
     options: orm.Dict,
     max_parallel: int,
@@ -83,7 +83,7 @@ def relax_slabs_with_semaphore(
 
     Args:
         structures: Dict of structures to relax (e.g., {'structure_0': StructureData, ...})
-        code: AiiDA Code for VASP (InstalledCode)
+        code_pk: PK of AiiDA Code for VASP (as Int node)
         vasp_config: VASP configuration as AiiDA Dict containing:
             - relax: Dict with relaxation settings (positions, shape, volume, etc.)
             - base: Dict with base VASP settings (force_cutoff, etc.)
@@ -111,6 +111,9 @@ def relax_slabs_with_semaphore(
     # Get VASP relax workchain
     VaspRelaxWorkChain = WorkflowFactory('vasp.v2.relax')
     VaspTask = task(VaspRelaxWorkChain)
+
+    # Load code from PK
+    code = orm.load_node(code_pk.value)
 
     # Extract config from Dict nodes
     config = vasp_config.get_dict()

@@ -127,8 +127,9 @@ def SurfaceHydroxylationWorkGraph(
     manifest_task = task(extract_manifest)(result=gen_task.result)
 
     # Task 2: Prepare VASP configuration
-    # Extract code and convert other components to AiiDA Dict nodes
+    # Extract code PK and convert other components to AiiDA Dict nodes
     code = builder_config['code']
+    code_pk = orm.Int(code.pk)
     options = orm.Dict(dict=builder_config.get('options', {}))
 
     # VASP config without code and options
@@ -147,7 +148,7 @@ def SurfaceHydroxylationWorkGraph(
     # relax_slabs_with_semaphore will extract structure_* keys
     relax_outputs = relax_slabs_with_semaphore(
         structures=gen_task.result,
-        code=code,
+        code_pk=code_pk,
         vasp_config=vasp_config,
         options=options,
         max_parallel=max_parallel_jobs,
