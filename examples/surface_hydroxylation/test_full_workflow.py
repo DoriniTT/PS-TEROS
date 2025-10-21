@@ -160,27 +160,19 @@ def main():
     # Create and submit workflow
     print("\n6. Creating workflow...")
 
+    # Create a WorkGraph and add the task
     from aiida_workgraph import WorkGraph
+    wg = WorkGraph(name='test_surface_hydroxylation')
 
-    # The SurfaceHydroxylationWorkGraph is a @task.graph decorator
-    # We need to build it into a WorkGraph and submit
-    wg = WorkGraph('test_surface_hydroxylation')
-
-    # Add the main task
-    main_task = wg.add_task(
+    # Add the @task.graph function as a task
+    hydroxylation_task = wg.add_task(
         SurfaceHydroxylationWorkGraph,
-        name='hydroxylation',
+        name='hydroxylation_workflow',
         structure=structure,
         surface_params=surface_params,
         builder_config=builder_config,
         max_parallel_jobs=max_parallel,
     )
-
-    # Set outputs
-    wg.add_output('manifest', main_task.outputs.manifest)
-    wg.add_output('successful_relaxations', main_task.outputs.successful_relaxations)
-    wg.add_output('failed_relaxations', main_task.outputs.failed_relaxations)
-    wg.add_output('statistics', main_task.outputs.statistics)
 
     print("   ✓ Workflow created")
 

@@ -119,14 +119,19 @@ print(f"\nParallelization: Max {max_parallel.value} VASP jobs at once")
 # WORKFLOW SETUP AND SUBMISSION
 # ============================================================================
 print("\nCreating production workflow...")
-wg = SurfaceHydroxylationWorkGraph()
-wg.name = 'surface_hydroxylation_production'
 
-# Set inputs
-wg.inputs.structure = structure
-wg.inputs.surface_params = surface_params
-wg.inputs.builder_config = builder_config
-wg.inputs.max_parallel_jobs = max_parallel
+# Create WorkGraph and add the hydroxylation task
+from aiida_workgraph import WorkGraph
+wg = WorkGraph(name='surface_hydroxylation_production')
+
+wg.add_task(
+    SurfaceHydroxylationWorkGraph,
+    name='hydroxylation',
+    structure=structure,
+    surface_params=surface_params,
+    builder_config=builder_config,
+    max_parallel_jobs=max_parallel,
+)
 
 print("Submitting production workflow...")
 result = wg.submit()
