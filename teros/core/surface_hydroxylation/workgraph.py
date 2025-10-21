@@ -126,8 +126,9 @@ def SurfaceHydroxylationWorkGraph(
     )
 
     # Task 3: Collect and organize results
+    # Wrap collect_results with task() to use it in the WorkGraph
     # Pass namespace outputs directly - collect_results will extract data from nodes
-    collect_task = collect_results(
+    collect_task = task(collect_results)(
         manifest=gen_task.manifest,
         structures=relax_outputs.structures,
         energies=relax_outputs.energies,

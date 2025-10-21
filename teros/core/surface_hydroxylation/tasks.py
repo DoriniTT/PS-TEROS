@@ -6,6 +6,7 @@ from pathlib import Path
 from ase.io import read
 from aiida.engine import calcfunction
 from aiida.orm import StructureData, Dict
+from aiida_workgraph import task
 
 from .utils import aiida_to_ase, ase_to_aiida
 from .surface_modes import SurfaceModifier
@@ -102,7 +103,6 @@ def generate_structures(structure: StructureData, params: Dict) -> dict:
     return result
 
 
-@calcfunction
 def collect_results(
     manifest: Dict,
     structures: dict,
@@ -145,7 +145,10 @@ def collect_results(
 
     # Iterate through variants by index
     for idx, variant in enumerate(variants):
-        if idx not in exit_statuses:
+        # Convert idx to string for dict lookup (AiiDA Dict only supports string keys)
+        idx_key = str(idx)
+
+        if idx_key not in exit_statuses:
             # Relaxation not found (shouldn't happen in normal operation)
             failed.append({
                 'name': variant['name'],
@@ -155,12 +158,12 @@ def collect_results(
             continue
 
         # Extract values from AiiDA nodes
-        exit_status_node = exit_statuses[idx]
+        exit_status_node = exit_statuses[idx_key]
         exit_status_value = exit_status_node.value if isinstance(exit_status_node, Int) else int(exit_status_node)
 
         if exit_status_value == 0:
             # Success - extract structure and energy
-            if idx not in structures or idx not in energies:
+            if idx_key not in structures or idx_key not in energies:
                 # Missing data for successful relaxation
                 failed.append({
                     'name': variant['name'],
@@ -169,8 +172,8 @@ def collect_results(
                 })
             else:
                 # Extract PK and values from nodes
-                structure_node = structures[idx]
-                energy_node = energies[idx]
+                structure_node = structures[idx_key]
+                energy_node = energies[idx_key]
 
                 structure_pk = structure_node.pk if isinstance(structure_node, StructureData) else int(structure_node)
                 energy_value = energy_node.value if isinstance(energy_node, Float) else float(energy_node)
@@ -186,7 +189,7 @@ def collect_results(
                 })
         else:
             # Failure - record error
-            error_node = errors.get(idx, None)
+            error_node = errors.get(idx_key, None)
             if error_node:
                 error_msg = error_node.value if isinstance(error_node, Str) else str(error_node)
             else:

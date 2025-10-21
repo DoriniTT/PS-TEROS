@@ -74,19 +74,23 @@ def test_collect_results_with_mixed_success_failure():
     success_energy = orm.Float(-123.45)
     success_energy.store()
 
-    # Pass relaxation results as namespace kwargs
+    # Structure namespace data into expected parameters
     # In real usage, these come from RelaxationsWorkGraph outputs
-    # Format: structure_0, energy_0, exit_status_0, etc.
-    relaxations_namespace = {
-        'structure_0': success_structure,
-        'energy_0': success_energy,
-        'exit_status_0': orm.Int(0),
-        'exit_status_1': orm.Int(400),
-        'error_1': orm.Str('Convergence failed')
-    }
+    # Use string keys (AiiDA Dict only supports string keys)
+    structures_dict = {'0': success_structure}
+    energies_dict = {'0': success_energy}
+    exit_statuses_dict = {'0': orm.Int(0), '1': orm.Int(400)}
+    errors_dict = {'1': orm.Str('Convergence failed')}
 
-    # Run collect_results with **kwargs to pass namespace
-    result = run(collect_results, manifest=manifest, **relaxations_namespace)
+    # Call collect_results directly (it's a @task, not @calcfunction)
+    # So we can call it like a regular function in tests
+    result = collect_results(
+        manifest=manifest,
+        structures=structures_dict,
+        energies=energies_dict,
+        exit_statuses=exit_statuses_dict,
+        errors=errors_dict
+    )
 
     # Verify outputs
     assert 'successful_relaxations' in result

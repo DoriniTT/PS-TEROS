@@ -170,11 +170,12 @@ def relax_slabs_with_semaphore(
             exit_message=vasp_task.exit_message
         )
 
-        # Map to output dictionaries using integer index
-        structures_out[idx] = vasp_task.structure
-        energies_out[idx] = energy.result
-        exit_statuses_out[idx] = exit_info.exit_status
-        errors_out[idx] = exit_info.error
+        # Map to output dictionaries using string index (AiiDA Dict requires string keys)
+        idx_key = str(idx)
+        structures_out[idx_key] = vasp_task.structure
+        energies_out[idx_key] = energy.result
+        exit_statuses_out[idx_key] = exit_info.exit_status
+        errors_out[idx_key] = exit_info.error
 
     return {
         'structures': structures_out,
