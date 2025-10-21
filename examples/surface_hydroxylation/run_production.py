@@ -191,7 +191,7 @@ vasp_config = {
 options = {
     'resources': {
         'num_machines': 1,
-        'num_mpiprocs_per_machine': 16,  # ← ADJUST: cores per calculation
+        'num_cores_per_machine': 16,  # ← ADJUST: cores per calculation
                                           # Typical: 16-32 for medium systems
                                           # Balance: more cores = faster but less throughput
     },

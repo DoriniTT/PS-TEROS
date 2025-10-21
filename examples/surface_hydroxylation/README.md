@@ -6,8 +6,48 @@ This directory contains examples demonstrating the `surface_hydroxylation` modul
 
 The surface_hydroxylation module provides:
 - **Structure Generation**: Create surface variants with different OH coverages and O vacancies
-- **Parallel Relaxation**: Relax multiple structures with controlled concurrency
+- **Parallel Relaxation**: Relax multiple structures with batch control
 - **Result Collection**: Organize results by coverage and success status
+
+**Key Features:**
+- Builder function pattern for easy workflow creation
+- Direct VASP INCAR parameter configuration
+- Post-processing helper for result organization
+- Complete provenance tracking with AiiDA
+
+## Quick Start
+
+```python
+from teros.core.surface_hydroxylation import (
+    build_surface_hydroxylation_workgraph,
+    organize_hydroxylation_results,
+)
+
+# Build workflow
+wg = build_surface_hydroxylation_workgraph(
+    structure_pk=1234,                    # Your relaxed slab
+    surface_params={'mode': 'hydrogen'},  # Hydroxylation
+    code_label='VASP-6.4.1@cluster',
+    vasp_config={
+        'parameters': {'ENCUT': 520, 'ISIF': 2, 'EDIFFG': -0.02},
+        'kpoints_spacing': 0.3,
+        'potential_family': 'PBE',
+    },
+    options={'resources': {'num_machines': 1}},
+    max_parallel_jobs=3,
+)
+
+# Submit
+result = wg.submit()
+
+# After completion: organize results
+from aiida import orm
+node = orm.load_node(result.pk)
+results = organize_hydroxylation_results(node)
+print(results['statistics'])  # Total, succeeded, failed
+```
+
+See sections below for detailed examples and parameter descriptions.
 
 ## Examples
 
@@ -152,25 +192,27 @@ verdi process report <PK>
 **Success criteria:**
 - Main workflow exits with `[0]`
 - All tasks complete without errors
-- `outputs.statistics` shows total structures generated
-- `outputs.successful_relaxations` contains relaxed structures and energies
+- `outputs.manifest` shows total structures generated
+- `outputs.structures` and `outputs.energies` contain raw namespace outputs
 
-**Checking outputs:**
+**Checking outputs (using post-processing helper):**
 ```python
 from aiida import orm
+from teros.core.surface_hydroxylation import organize_hydroxylation_results
 
 # Load workflow node
 node = orm.load_node(<PK>)
 
+# Organize results using helper function
+results = organize_hydroxylation_results(node)
+
 # Check statistics
-stats = node.outputs.statistics.get_dict()
-print(f"Total: {stats['total']}")
-print(f"Succeeded: {stats['succeeded']}")
-print(f"Failed: {stats['failed']}")
+print(f"Total: {results['statistics']['total']}")
+print(f"Succeeded: {results['statistics']['succeeded']}")
+print(f"Failed: {results['statistics']['failed']}")
 
 # Check successful relaxations
-results = node.outputs.successful_relaxations.get_dict()['results']
-for result in results:
+for result in results['successful_relaxations']:
     name = result['name']
     energy = result['energy']
     coverage = result['coverage']
@@ -184,6 +226,10 @@ for result in results:
     # Load relaxed structure
     relaxed = orm.load_node(structure_pk)
 ```
+
+**Note:** The workflow returns raw namespace outputs (manifest, structures, energies).
+Use `organize_hydroxylation_results()` helper function to organize results into
+successful/failed categories with statistics.
 
 ### 3. Production Example
 
@@ -207,6 +253,7 @@ Production-ready example for real research calculations.
 **Setup:**
 1. Edit `run_production.py` and replace placeholders:
    - Set structure PK from surface_thermodynamics output
+   - Update VASP code label for your cluster
    - Update compute resources (account, queue, cores)
    - Adjust VASP parameters for your system
 
@@ -219,22 +266,45 @@ surface_params = {
     'deduplicate_by_coverage': True
 }
 
-# VASP settings
-builder_config = {
-    'ENCUT': 520,               # Converged cutoff
-    'EDIFFG': -0.02,            # Force convergence
-    'NSW': 200,                 # Max ionic steps
-    'kpoints_distance': 0.3     # Converged k-points
+# VASP configuration (direct INCAR parameters)
+vasp_config = {
+    'parameters': {              # Direct INCAR parameters
+        'PREC': 'Accurate',
+        'ENCUT': 520,            # Converged cutoff
+        'EDIFF': 1e-6,
+        'ISMEAR': 0,
+        'SIGMA': 0.05,
+        'ISIF': 2,               # Relax positions only
+        'NSW': 200,              # Max ionic steps
+        'IBRION': 2,             # CG relaxation
+        'EDIFFG': -0.02,         # Force convergence (eV/Å)
+    },
+    'kpoints_spacing': 0.3,      # Converged k-points (Å⁻¹)
+    'potential_family': 'PBE',
+    'clean_workdir': False,
+}
+
+# Scheduler options
+options = {
+    'resources': {
+        'num_machines': 1,
+        'num_mpiprocs_per_machine': 40,
+    },
+    'queue_name': 'par40',
+    'max_wallclock_seconds': 3600 * 10,
 }
 
 # Parallelization
-max_parallel_jobs = 5           # Adjust for cluster capacity
+max_parallel_jobs = 5            # Adjust for cluster capacity
 ```
 
-3. Submit:
+3. Submit using builder function:
 ```bash
 /home/thiagotd/envs/aiida/bin/python run_production.py
 ```
+
+The script uses `build_surface_hydroxylation_workgraph()` builder function which
+handles code loading and workflow creation automatically.
 
 **Expected Runtime:**
 - Structure generation: < 1 minute
@@ -256,21 +326,25 @@ verdi process report <RELAX_PK>
 **Post-Processing:**
 ```python
 from aiida import orm
+from teros.core.surface_hydroxylation import organize_hydroxylation_results
 
 # Load completed workflow
 wf = orm.load_node(<WORKFLOW_PK>)
 
+# Organize results using helper function
+results = organize_hydroxylation_results(wf)
+
 # Get statistics
-stats = wf.outputs.statistics.get_dict()
+stats = results['statistics']
 print(f"Generated {stats['total']} structures")
 print(f"Successfully relaxed {stats['succeeded']}")
 print(f"Failed {stats['failed']}")
 
 # Analyze successful relaxations
-results = wf.outputs.successful_relaxations.get_dict()['results']
+successful = results['successful_relaxations']
 
 # Find lowest energy configuration
-results_sorted = sorted(results, key=lambda r: r['energy'])
+results_sorted = sorted(successful, key=lambda r: r['energy'])
 best = results_sorted[0]
 
 print(f"\nLowest energy configuration:")
@@ -283,6 +357,9 @@ print(f"  Structure PK: {best['structure_pk']}")
 best_structure = orm.load_node(best['structure_pk'])
 ```
 
+**Important:** The workflow returns raw namespace outputs. Always use
+`organize_hydroxylation_results()` helper to process results after completion.
+
 **Important Notes:**
 - Review VASP settings for your specific system
 - Test with small system first (`test_full_workflow.py`)
@@ -291,46 +368,100 @@ best_structure = orm.load_node(best['structure_pk'])
 
 ## Module Architecture
 
+### Builder Function Pattern
+
+The module follows PS-TEROS builder function pattern with two-tier design:
+
+**High-level (User-facing):**
+```python
+from teros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
+
+wg = build_surface_hydroxylation_workgraph(
+    structure_pk=1234,              # or structure=orm.load_node(1234)
+    surface_params=surface_params,
+    code_label='VASP-6.4.1@cluster',
+    vasp_config=vasp_config,
+    options=options,
+    max_parallel_jobs=3,
+    name='SurfaceHydroxylation',
+)
+result = wg.submit()
+```
+
+**Low-level (@task.graph):**
+```python
+@task.graph(outputs=['manifest', 'structures', 'energies'])
+def SurfaceHydroxylationWorkGraph(...):
+    # Actual workflow implementation
+    pass
+```
+
 ### Workflow Structure
 
 ```
-SurfaceHydroxylationWorkGraph (main workflow)
+build_surface_hydroxylation_workgraph (builder function)
   │
-  ├─> generate_structures (CalcFunction)
-  │     ├─ Converts AiiDA → ASE
-  │     ├─ Runs SurfaceModifier
-  │     ├─ Generates structure variants
-  │     └─ Returns manifest + structures
+  ├─ Input validation (structure, code, parameters)
+  ├─ Set defaults for optional parameters
+  └─ Build and return WorkGraph
+        │
+        └─> SurfaceHydroxylationWorkGraph (@task.graph)
+              │
+              ├─> generate_structures (CalcFunction)
+              │     ├─ Converts AiiDA → ASE
+              │     ├─ Runs SurfaceModifier
+              │     ├─ Generates structure variants
+              │     └─ Returns namespace: manifest + structures dict
+              │
+              ├─> relax_slabs_with_semaphore (child @task.graph)
+              │     ├─ Scatters: Creates VASP task for each structure
+              │     ├─ Batch control: max_parallel_jobs limit
+              │     ├─ Gathers: Collects structures, energies
+              │     └─ Returns namespace: structures dict + energies dict
+              │
+              └─> Returns raw namespace outputs
+                    ├─ manifest (Dict)
+                    ├─ structures (namespace dict)
+                    └─ energies (namespace dict)
+
+organize_hydroxylation_results (post-processing helper)
   │
-  ├─> relax_slabs_with_semaphore (child WorkGraph)
-  │     ├─ Scatters: Creates VASP task for each structure
-  │     ├─ Limits: Max parallel via semaphore
-  │     ├─ Gathers: Collects structures, energies, exit_statuses
-  │     └─ Returns indexed results
-  │
-  └─> collect_results (CalcFunction)
-        ├─ Matches structures to manifest
-        ├─ Separates successful vs failed
-        ├─ Calculates statistics
-        └─ Returns organized results
+  ├─ Input: Completed workflow node
+  ├─ Extracts: manifest, structures, energies namespaces
+  ├─ Processes: Matches results, separates success/failure
+  └─ Returns: {successful_relaxations, failed_relaxations, statistics}
 ```
 
 ### Key Components
 
+**build_surface_hydroxylation_workgraph** (`teros/core/surface_hydroxylation/workgraph.py`)
+- Builder function (user-facing API)
+- Validates inputs, sets defaults
+- Loads structure and code
+- Returns ready-to-submit WorkGraph
+
+**SurfaceHydroxylationWorkGraph** (`teros/core/surface_hydroxylation/workgraph.py`)
+- Main workflow (@task.graph decorator)
+- Orchestrates structure generation and relaxation
+- Returns raw namespace outputs (manifest, structures, energies)
+
 **generate_structures** (`teros/core/surface_hydroxylation/tasks.py`)
 - CalcFunction wrapping SurfaceModifier
 - Input: Single structure + parameters
-- Output: Manifest + multiple structures (structure_0, structure_1, ...)
+- Output: Namespace with manifest + structures dict (indexed by '0', '1', ...)
 
 **relax_slabs_with_semaphore** (`teros/core/surface_hydroxylation/relaxations.py`)
-- Child WorkGraph for parallel relaxations
+- Child @task.graph for parallel relaxations
 - Uses VASP workchain (`vasp.v2.vasp`)
-- Returns: structures, energies, exit_statuses, errors (all indexed)
+- Batch control via max_parallel parameter
+- Returns: Namespace with structures dict + energies dict (indexed)
 
-**collect_results** (`teros/core/surface_hydroxylation/tasks.py`)
-- CalcFunction for result organization
-- Groups by success/failure
-- Stores structure PKs (not full structures) for efficiency
+**organize_hydroxylation_results** (`teros/core/surface_hydroxylation/workgraph.py`)
+- Post-processing helper (runs after workflow completion)
+- Input: Completed workflow node
+- Extracts and organizes raw namespace outputs
+- Returns: Dict with successful_relaxations, failed_relaxations, statistics
+- **Must be used** to get organized results from workflow
 
 ## Parameters
 
@@ -362,43 +493,193 @@ surface_params = {
 - Each bin samples representative configurations
 - Typical: `coverage_bins=5` gives ~5-10 structures
 
-### builder_config (Dict)
+### vasp_config (Dict)
 
-VASP builder configuration:
+VASP configuration with direct INCAR parameters:
 
 ```python
-builder_config = {
-    'code': orm.load_code('VASP-VTST-6.4.3@bohr'),
+vasp_config = {
+    # Direct INCAR parameters (passed to vasp.v2.vasp workflow)
     'parameters': {
-        'EDIFF': 1e-6,
-        'ENCUT': 520,
-        'ISMEAR': 0,
-        'SIGMA': 0.05,
-        'NSW': 200,
-        'IBRION': 2,
-        'ISIF': 2,
+        'PREC': 'Accurate',       # Precision level
+        'ENCUT': 520,             # Plane-wave cutoff (eV)
+        'EDIFF': 1e-6,            # Electronic convergence (eV)
+        'ISMEAR': 0,              # Smearing method (Gaussian)
+        'SIGMA': 0.05,            # Smearing width (eV)
+        'ALGO': 'Normal',         # Electronic minimization algorithm
+        'LREAL': False,           # Real-space projection
+        'NELM': 100,              # Max electronic steps
+        'LWAVE': False,           # Write WAVECAR
+        'LCHARG': False,          # Write CHGCAR
+        # Relaxation parameters
+        'ISIF': 2,                # Relax positions only (2), or positions+cell (3)
+        'NSW': 200,               # Max ionic steps
+        'IBRION': 2,              # Ionic relaxation (2=CG, 1=RMM-DIIS)
+        'EDIFFG': -0.02,          # Force convergence (eV/Å, negative = force criterion)
     },
-    'potential_family': 'PBE',
-    'potential_mapping': {},  # Optional element-specific mapping
-    'kpoints_spacing': 0.3,   # K-points spacing (Å⁻¹)
-    'options': {
-        'resources': {'num_machines': 1, 'num_cores_per_machine': 40},
-        'queue_name': 'par40',
-        'max_wallclock_seconds': 3600 * 10,
-    },
-    'clean_workdir': False,
-    'settings': None,  # Optional parser settings
+    # K-points
+    'kpoints_spacing': 0.3,       # K-points spacing (Å⁻¹)
+
+    # Pseudopotentials
+    'potential_family': 'PBE',    # Potential family name
+    'potential_mapping': {},      # Optional element-specific mapping
+
+    # Cleanup
+    'clean_workdir': False,       # Keep calculation files
 }
 ```
 
+### options (Dict)
+
+Scheduler options (separate from vasp_config):
+
+```python
+options = {
+    'resources': {
+        'num_machines': 1,
+        'num_mpiprocs_per_machine': 40,  # Or num_cores_per_machine
+    },
+    'queue_name': 'par40',
+    'max_wallclock_seconds': 3600 * 10,
+    # Optional:
+    # 'account': 'my_account',
+    # 'prepend_text': 'module load vasp/6.4.2',
+    # 'custom_scheduler_commands': '#SBATCH --constraint=haswell',
+}
+```
+
+**Note:** The `code_label` is passed separately to the builder function, not in vasp_config.
+
 ### max_parallel_jobs (Int)
 
-Maximum number of concurrent VASP relaxations.
+Maximum number of structures to process in this workflow run (batch control).
 
 **Guidelines:**
-- Consider cluster capacity and queue limits
-- Typical: 2-5 for testing, 10-20 for production
-- Each job uses resources specified in `builder_config.options`
+- Use batch approach: processes first N structures only
+- Typical: 1-2 for testing, 5-10 for production batches
+- Each job uses resources specified in `options`
+- Increase this value in subsequent runs to process more structures
+
+**Example workflow:**
+```python
+# First run: test with 2 structures
+wg = build_surface_hydroxylation_workgraph(..., max_parallel_jobs=2)
+
+# After verification: process more structures
+wg = build_surface_hydroxylation_workgraph(..., max_parallel_jobs=10)
+```
+
+## Usage Patterns
+
+### Basic Usage (Recommended)
+
+```python
+from aiida import orm
+from teros.core.surface_hydroxylation import (
+    build_surface_hydroxylation_workgraph,
+    organize_hydroxylation_results,
+)
+
+# 1. Define parameters
+surface_params = {
+    'mode': 'hydrogen',
+    'species': 'O',
+    'coverage_bins': 5,
+}
+
+vasp_config = {
+    'parameters': {
+        'PREC': 'Accurate',
+        'ENCUT': 520,
+        'EDIFF': 1e-6,
+        'ISIF': 2,
+        'NSW': 200,
+        'IBRION': 2,
+        'EDIFFG': -0.02,
+    },
+    'kpoints_spacing': 0.3,
+    'potential_family': 'PBE',
+}
+
+options = {
+    'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 16},
+    'queue_name': 'normal',
+}
+
+# 2. Build and submit workflow
+wg = build_surface_hydroxylation_workgraph(
+    structure_pk=1234,
+    surface_params=surface_params,
+    code_label='VASP-6.4.1@cluster',
+    vasp_config=vasp_config,
+    options=options,
+    max_parallel_jobs=3,
+)
+result = wg.submit()
+pk = result.pk
+
+# 3. Wait for completion
+# Monitor: verdi process show <pk>
+
+# 4. Process results after completion
+node = orm.load_node(pk)
+results = organize_hydroxylation_results(node)
+
+print(f"Total: {results['statistics']['total']}")
+print(f"Succeeded: {results['statistics']['succeeded']}")
+print(f"Failed: {results['statistics']['failed']}")
+
+# 5. Analyze successful relaxations
+for r in results['successful_relaxations']:
+    print(f"{r['name']}: {r['energy']:.6f} eV (coverage={r['coverage']:.2f})")
+```
+
+### Advanced: Accessing Raw Outputs
+
+If you need direct access to the workflow outputs:
+
+```python
+node = orm.load_node(pk)
+
+# Raw namespace outputs
+manifest = node.outputs.manifest.get_dict()
+structures = node.outputs.structures  # Namespace dict
+energies = node.outputs.energies      # Namespace dict
+
+# Access specific structure
+structure_0 = structures['0']
+energy_0 = energies['0'].value
+
+# For most use cases, use organize_hydroxylation_results() instead
+```
+
+### Incremental Processing (Batch Approach)
+
+Process structures in batches to test before full production run:
+
+```python
+# Step 1: Test with first 2 structures
+wg = build_surface_hydroxylation_workgraph(
+    structure_pk=1234,
+    surface_params=surface_params,
+    code_label='VASP-6.4.1@cluster',
+    vasp_config=vasp_config,
+    options=options,
+    max_parallel_jobs=2,  # Process only first 2
+)
+result1 = wg.submit()
+
+# Step 2: After verification, process more
+wg = build_surface_hydroxylation_workgraph(
+    structure_pk=1234,
+    surface_params=surface_params,
+    code_label='VASP-6.4.1@cluster',
+    vasp_config=vasp_config,
+    options=options,
+    max_parallel_jobs=10,  # Process more structures
+)
+result2 = wg.submit()
+```
 
 ## Troubleshooting
 
@@ -423,20 +704,28 @@ Maximum number of concurrent VASP relaxations.
 - Verify VASP code: `verdi code show <code_label>`
 - Check pseudopotentials: `verdi data core.upf listfamilies`
 - Validate compute resources in `options`
+- Check VASP parameters in `vasp_config['parameters']`
 
 **Some relaxations fail:**
 - Check individual job reports: `verdi process report <relax_PK>`
 - Common: Convergence issues with extreme configurations
-- Check failed_relaxations output for patterns
+- Use `organize_hydroxylation_results()` to see failed_relaxations list
+- Review failed configurations to identify problematic structures
 
-**Semaphore not limiting:**
-- Note: Current implementation relies on WorkGraph's natural concurrency
-- For explicit limits, consider external job management
+**Batch control not working:**
+- Verify `max_parallel_jobs` parameter
+- Check workflow outputs to confirm number of structures processed
+- Note: Batch approach processes first N structures only
 
 **Jobs stuck in queue:**
 - Check queue status: `squeue -u $USER`
-- Verify walltime is sufficient
-- Check cluster load
+- Verify walltime is sufficient in `options`
+- Check cluster load and queue limits
+
+**Cannot access results:**
+- Use `organize_hydroxylation_results()` helper function
+- Do NOT try to access namespace dict outputs directly in CalcFunctions
+- Workflow returns raw outputs: manifest, structures, energies
 
 ### Provenance Issues
 
@@ -473,20 +762,64 @@ This module integrates with:
 - Electronic structure analysis (uses output structures)
 - Custom workflow builder (can be added as step)
 
+## Important Architectural Decisions
+
+### Why Builder Function Pattern?
+
+The module uses a two-tier design following PS-TEROS patterns:
+- **Builder function** (`build_surface_hydroxylation_workgraph`): User-facing API
+- **@task.graph function** (`SurfaceHydroxylationWorkGraph`): Internal implementation
+
+This separation provides:
+- Input validation and helpful error messages
+- Sensible defaults for optional parameters
+- Code loading handled automatically
+- Consistent API across PS-TEROS modules
+
+### Why Post-Processing Helper?
+
+The workflow returns **raw namespace outputs** (manifest, structures, energies) because:
+- **WorkGraph limitation**: Namespace dicts containing AiiDA nodes cannot be passed to CalcFunctions due to JSON serialization constraints
+- **Solution**: Return raw namespaces + provide Python helper for post-processing
+
+**DO NOT** try to organize results inside the workflow - use `organize_hydroxylation_results()` after completion.
+
+### Why Direct INCAR Parameters?
+
+VASP configuration uses direct INCAR parameters (`vasp_config['parameters']`) because:
+- **Simplicity**: Matches standard `vasp.v2.vasp` workflow inputs
+- **Clarity**: No confusing translation layer from nested relax/base structure
+- **Flexibility**: Full control over all VASP INCAR tags
+
+This module uses `vasp.v2.vasp` workflow (generic VASP), NOT `vasp.v2.relax` (specialized relaxation).
+
 ## References
 
 **Module location:** `teros/core/surface_hydroxylation/`
 
 **Key files:**
-- `workgraph.py` - Main workflow definition
-- `tasks.py` - CalcFunctions (generate_structures, collect_results)
-- `relaxations.py` - Parallel relaxation WorkGraph
-- `surface_modes.py` - Structure modification logic
-- `utils.py` - Helper functions
+- `workgraph.py` - Builder function, main workflow, post-processing helper
+- `tasks.py` - CalcFunctions (generate_structures)
+- `relaxations.py` - Parallel relaxation @task.graph
+- `surface_modes.py` - Structure modification logic (SurfaceModifier)
+- `utils.py` - Helper functions (AiiDA ↔ ASE conversion)
+- `__init__.py` - Module exports
+
+**Exported API:**
+```python
+from teros.core.surface_hydroxylation import (
+    build_surface_hydroxylation_workgraph,  # Builder function (use this)
+    organize_hydroxylation_results,         # Post-processing helper (use this)
+    SurfaceHydroxylationWorkGraph,          # Low-level @task.graph
+    SurfaceModifier,                        # Structure modification class
+)
+```
 
 **Documentation:**
+- This README: Usage examples and troubleshooting
 - Implementation plan: `docs/plans/2025-10-21-surface-hydroxylation.md`
 - Module tests: `tests/core/surface_hydroxylation/`
+- PS-TEROS module builder skill: `~/.claude/skills/psteros-module-builder/`
 
 ## Support
 

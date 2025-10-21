@@ -45,7 +45,7 @@ def main():
 
     # Load AiiDA profile
     print("\n1. Loading AiiDA profile...")
-    load_profile(profile='presto')
+    load_profile(profile='psteros')
     print("   ✓ Profile loaded: presto")
 
     # Check daemon is running
@@ -102,6 +102,7 @@ def main():
     print("\n4. Setting up VASP configuration...")
     print("   Using LIGHTWEIGHT parameters for fast testing")
 
+    #code_label = 'VASP-6.4.1@cluster02'
     code_label = 'VASP-VTST-6.4.3@bohr'
     print(f"   VASP code: {code_label}")
 
@@ -120,7 +121,7 @@ def main():
             'LCHARG': False,     # Don't write CHGCAR
             # Relaxation parameters
             'ISIF': 2,           # Relax positions only
-            'NSW': 10,           # Very few ionic steps for testing
+            'NSW': 200,           # Very few ionic steps for testing
             'IBRION': 2,         # Conjugate gradient
             'EDIFFG': -0.05,     # Loose force convergence (eV/Å)
         },
@@ -140,9 +141,9 @@ def main():
     options = {
         'resources': {
             'num_machines': 1,
-            'num_cores_per_machine': 40,
+            'num_cores_per_machine': 5,
         },
-        'queue_name': 'par40',
+        'queue_name': 'teste',
     }
 
     print("   VASP parameters:")
@@ -200,9 +201,12 @@ def main():
     print("\nChecking results after completion:")
     print("  python -c \"")
     print("from aiida import orm")
+    print("from teros.core.surface_hydroxylation import organize_hydroxylation_results")
     print(f"node = orm.load_node({pk})")
-    print("print('Statistics:', node.outputs.statistics.get_dict())")
-    print("print('Successful:', node.outputs.successful_relaxations.get_dict())")
+    print("results = organize_hydroxylation_results(node)")
+    print("print('Statistics:', results['statistics'])")
+    print("print('Successful:', len(results['successful_relaxations']), 'structures')")
+    print("print('Failed:', len(results['failed_relaxations']), 'structures')")
     print("  \"")
 
     print("\n" + "="*70 + "\n")

@@ -28,6 +28,7 @@ To build the documentation locally:
 
 ## Documentation structure
 
+### Sphinx documentation (source/)
 - `source/index.rst`: Main entry point
 - `source/installation.rst`: Installation instructions
 - `source/tutorial.rst`: Tutorial for new users
@@ -37,6 +38,16 @@ To build the documentation locally:
 - `source/contributing.rst`: Guidelines for contributors
 - `source/authors.rst`: List of authors and contributors
 - `source/history.rst`: Release history and changelog
+
+### Module documentation (docs/)
+- `cleavage_energy.md`: Cleavage energy calculations
+- `surface_hydroxylation.md`: Surface hydroxylation and vacancy generation
+- `USER_PROVIDED_SLABS.md`: Guide for using custom slab structures
+- `WORKFLOW_SYSTEM_EXPLAINED.md`: Overview of workflow system architecture
+- `WORKFLOW_PRESETS_GUIDE.md`: Guide to workflow presets
+- `WORKFLOW_PRESETS_EXAMPLES.md`: Examples of workflow presets
+- `WORKFLOW_MIGRATION_GUIDE.md`: Migration guide for updating workflows
+- `default_builders_guide.md`: Guide for using builder functions
 
 ## Adding new documentation
 

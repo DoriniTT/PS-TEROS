@@ -301,6 +301,62 @@ verdi process status <PK>
 
 ---
 
+### Step 12: Surface Hydroxylation and Vacancy Generation
+**File:** `step_12_surface_hydroxylation.py`
+**Module:** `teros.core.surface_hydroxylation`
+
+**What it tests:**
+- Generate surface variants with different OH coverages
+- Generate oxygen-deficient surfaces (vacancies)
+- Coverage-based deduplication algorithm (reduces thousands to ~10 structures)
+- Batch VASP relaxation with controlled parallelization
+- Result organization and analysis
+
+**Runtime:** ~30 minutes - 2 hours (depends on coverage_bins and system size)
+
+**Expected outputs:**
+- `manifest`: Dict with metadata for all generated variants
+- `structures`: Namespace dict with relaxed structures (descriptive keys: `idx_variantname`)
+- `energies`: Namespace dict with energies for each structure
+
+**Output naming example:**
+- `0_oh_000_3_7572`: First structure, 3.76 OH/nm² coverage
+- `1_oh_001_7_5145`: Second structure, 7.51 OH/nm² coverage
+
+**Why this step:**
+Tests the surface_hydroxylation module for studying:
+- Hydroxylation effects on surface stability
+- Oxygen vacancy formation energies
+- Coverage-dependent properties
+- Surface reactivity under different conditions
+
+**Post-processing:**
+```python
+from aiida import orm
+from teros.core.surface_hydroxylation import organize_hydroxylation_results
+
+node = orm.load_node(<PK>)
+results = organize_hydroxylation_results(node)
+print('Statistics:', results['statistics'])
+for r in results['successful_relaxations']:
+    print(f"{r['name']}: {r['energy']:.6f} eV (coverage={r['coverage']:.2f})")
+```
+
+**Key features:**
+- Three modes: `'hydrogen'` (OH groups), `'vacancies'` (remove O), `'combine'` (both)
+- Coverage-based deduplication to reduce combinatorial explosion
+- Descriptive output names for easy identification
+- Builder function pattern for simplified workflow creation
+
+**Documentation:** `../../docs/surface_hydroxylation.md`
+
+```bash
+python step_12_surface_hydroxylation.py
+verdi process status <PK>
+```
+
+---
+
 ## Workflow Diagram
 
 ```
@@ -356,6 +412,13 @@ Step 10: Custom Workflow
 
 Step 11: Preset with Overrides
    └─> Preset + custom additions
+
+Step 12: Surface Hydroxylation
+   ├─> Relaxed slab input
+   ├─> Generate hydroxylated/vacancy structures
+   │   └─> Coverage-based deduplication
+   ├─> Batch VASP relaxations
+   └─> Organize results by coverage
 ```
 
 ---

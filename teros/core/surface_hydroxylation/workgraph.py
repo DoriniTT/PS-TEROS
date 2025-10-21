@@ -6,7 +6,6 @@ from aiida_workgraph import task, namespace, dynamic, WorkGraph
 
 from .tasks import (
     generate_structures,
-    collect_results,
     extract_manifest,
     extract_successful_relaxations,
     extract_failed_relaxations,
@@ -17,9 +16,8 @@ from .relaxations import relax_slabs_with_semaphore
 
 @task.graph(outputs=[
     'manifest',
-    'successful_relaxations',
-    'failed_relaxations',
-    'statistics',
+    'structures',
+    'energies',
 ])
 def SurfaceHydroxylationWorkGraph(
     structure: orm.StructureData,
@@ -132,20 +130,14 @@ def SurfaceHydroxylationWorkGraph(
         max_parallel=max_parallel_jobs,
     )
 
-    # Task 3: Collect and organize results
-    # Note: collect_results will detect failures by checking for missing data
-    collect_outputs = collect_results(
-        manifest=gen_outputs.manifest,
-        structures=relax_outputs.structures,
-        energies=relax_outputs.energies,
-    )
-
-    # Return outputs directly
+    # Return raw outputs
+    # Note: Result organization (successful/failed/statistics) must be done
+    # in post-processing due to WorkGraph namespace serialization limitations.
+    # Use the organize_hydroxylation_results() helper function after workflow completion.
     return {
         'manifest': gen_outputs.manifest,
-        'successful_relaxations': collect_outputs.successful_relaxations,
-        'failed_relaxations': collect_outputs.failed_relaxations,
-        'statistics': collect_outputs.statistics,
+        'structures': relax_outputs.structures,
+        'energies': relax_outputs.energies,
     }
 
 
@@ -371,3 +363,76 @@ def build_surface_hydroxylation_workgraph(
     wg.name = name
 
     return wg
+
+
+def organize_hydroxylation_results(workflow_node):
+    """
+    Organize hydroxylation workflow results into successful/failed/statistics.
+
+    This helper function processes the raw outputs from a completed
+    SurfaceHydroxylation workflow and organizes them into structured results.
+
+    Args:
+        workflow_node: Completed WorkGraph node (orm.WorkChainNode)
+
+    Returns:
+        dict with:
+            - successful_relaxations: list of dicts with successful results
+            - failed_relaxations: list of dicts with failed results
+            - statistics: dict with total/succeeded/failed counts
+
+    Example:
+        >>> from aiida import orm
+        >>> from teros.core.surface_hydroxylation import organize_hydroxylation_results
+        >>>
+        >>> node = orm.load_node(12345)  # Completed workflow
+        >>> results = organize_hydroxylation_results(node)
+        >>> print(f"Succeeded: {results['statistics']['succeeded']}")
+        >>> print(f"Failed: {results['statistics']['failed']}")
+    """
+    # Get outputs
+    manifest = workflow_node.outputs.manifest.get_dict()
+    structures = workflow_node.outputs.structures
+    energies = workflow_node.outputs.energies
+
+    variants = manifest['variants']
+    successful = []
+    failed = []
+
+    # Process each variant
+    for idx, variant in enumerate(variants):
+        # Construct the same descriptive key format used in outputs
+        # Format: "idx_variantname" (e.g., "0_oh_000_3_7572")
+        # Replace dots with underscores for AiiDA link label compatibility
+        variant_name_safe = variant['name'].replace('.', '_')
+        key = f"{idx}_{variant_name_safe}"
+
+        # Check if relaxation succeeded (has outputs)
+        try:
+            structure_node = structures[key]
+            energy_node = energies[key]
+
+            successful.append({
+                'name': variant['name'],
+                'structure_pk': structure_node.pk,
+                'energy': energy_node.value,
+                'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
+                'metadata': variant
+            })
+        except (KeyError, AttributeError):
+            # Missing from outputs - relaxation failed
+            failed.append({
+                'name': variant['name'],
+                'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
+                'error_message': 'Relaxation failed - no structure/energy output'
+            })
+
+    return {
+        'successful_relaxations': successful,
+        'failed_relaxations': failed,
+        'statistics': {
+            'total': len(variants),
+            'succeeded': len(successful),
+            'failed': len(failed)
+        }
+    }

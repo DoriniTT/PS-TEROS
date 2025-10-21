@@ -74,7 +74,9 @@ def generate_structures(
     Returns:
         dict with:
             - manifest: Dict (parsed manifest from surface_modes)
-            - structures: dict of StructureData (keyed by index: '0', '1', etc.)
+            - structures: dict of StructureData (keyed by: '0_<variant_name>', '1_<variant_name>', etc.)
+                         e.g., '0_oh_000_3_7572', '1_oh_001_7_5145'
+                         Note: Dots are replaced with underscores for AiiDA link label compatibility
     """
     # Convert AiiDA → ASE
     atoms = aiida_to_ase(structure)
@@ -129,7 +131,11 @@ def generate_structures(
         for idx, variant in enumerate(manifest['variants']):
             filepath = Path(variant['file'])
             variant_atoms = read(filepath.as_posix())
-            structures_dict[str(idx)] = ase_to_aiida(variant_atoms)
+            # Use descriptive key: index_variantname (e.g., "0_oh_000_3_7572")
+            # Replace dots with underscores for AiiDA link label compatibility
+            variant_name_safe = variant['name'].replace('.', '_')
+            key = f"{idx}_{variant_name_safe}"
+            structures_dict[key] = ase_to_aiida(variant_atoms)
 
     # Return manifest and structures as namespace with dynamic structures
     return {
@@ -139,94 +145,63 @@ def generate_structures(
 
 
 @task.calcfunction
-def collect_results(
-    manifest,
-    structures,
-    energies,
+def _process_results(
+    manifest: Dict,
+    structure_pks: Dict,
+    energy_values: Dict,
 ) -> t.Annotated[dict, namespace(
     successful_relaxations=Dict,
     failed_relaxations=Dict,
     statistics=Dict,
 )]:
     """
-    Collect and organize relaxation results from namespace outputs.
+    Process results with PKs and values (CalcFunction - provenance tracked).
 
-    This function accepts the namespace dictionaries from relax_slabs_with_semaphore
-    and organizes them into successful and failed results. Failures are detected
-    by checking for missing structure/energy data.
-
-    Args:
-        manifest: Original manifest Dict from generate_structures
-        structures: Namespace dict mapping indices to relaxed StructureData {0: StructureData, 1: ...}
-                   Only successful relaxations will have entries
-        energies: Namespace dict mapping indices to Float nodes {0: Float, 1: ...}
-                 Only successful relaxations will have entries
-
-    Returns:
-        dict with:
-            - successful_relaxations: Dict with list of successful results
-                Each result contains: name, structure_pk, energy, coverage, metadata
-            - failed_relaxations: Dict with list of failed results
-                Each result contains: name, coverage, error_message
-            - statistics: Dict with total, succeeded, failed counts
-
-    Note:
-        Structures are stored by PK in successful_relaxations.
-        To retrieve: orm.load_node(result['successful_relaxations']['results'][i]['structure_pk'])
+    This is a helper function called by collect_results @task.graph wrapper.
     """
-    from aiida.orm import Int, Float, Str, StructureData
-
     manifest_dict = manifest.get_dict()
     variants = manifest_dict['variants']
+
+    pks_dict = structure_pks.get_dict()
+    vals_dict = energy_values.get_dict()
 
     successful = []
     failed = []
 
-    # Iterate through variants by index
     for idx, variant in enumerate(variants):
-        # Convert idx to string for dict lookup (AiiDA Dict only supports string keys)
-        idx_key = str(idx)
+        # Construct the same descriptive key format used in outputs
+        # Format: "idx_variantname" (e.g., "0_oh_000_3_7572")
+        # Replace dots with underscores for AiiDA link label compatibility
+        variant_name_safe = variant['name'].replace('.', '_')
+        key = f"{idx}_{variant_name_safe}"
 
-        # Check if this relaxation succeeded (has structure and energy outputs)
-        if idx_key in structures and idx_key in energies:
-            # Success - extract structure and energy
-            structure_node = structures[idx_key]
-            energy_node = energies[idx_key]
-
-            structure_pk = structure_node.pk if isinstance(structure_node, StructureData) else int(structure_node)
-            energy_value = energy_node.value if isinstance(energy_node, Float) else float(energy_node)
-
-            # Store JSON-serializable data including structure PK
-            # Users can load structure later with: orm.load_node(structure_pk)
+        if key in pks_dict and key in vals_dict:
             successful.append({
                 'name': variant['name'],
-                'structure_pk': structure_pk,
-                'energy': energy_value,
+                'structure_pk': pks_dict[key],
+                'energy': vals_dict[key],
                 'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
                 'metadata': variant
             })
         else:
-            # Failure - missing structure or energy output
             failed.append({
                 'name': variant['name'],
                 'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
                 'error_message': 'Relaxation failed - no structure/energy output'
             })
 
-    # Calculate statistics
-    statistics = Dict(dict={
-        'total': len(variants),
-        'succeeded': len(successful),
-        'failed': len(failed)
-    })
-
-    # Store results as JSON-serializable dicts
-    successful_dict = Dict(dict={'results': successful})
-    failed_dict = Dict(dict={'results': failed})
-
-    # Return only new nodes (CalcFunctions can't return input nodes)
     return {
-        'successful_relaxations': successful_dict,
-        'failed_relaxations': failed_dict,
-        'statistics': statistics
+        'successful_relaxations': Dict(dict={'results': successful}),
+        'failed_relaxations': Dict(dict={'results': failed}),
+        'statistics': Dict(dict={
+            'total': len(variants),
+            'succeeded': len(successful),
+            'failed': len(failed)
+        })
     }
+
+
+# Note: collect_results is now handled directly in workgraph.py
+# using helper functions that extract PKs/values from namespace outputs
+# and pass them to _process_results CalcFunction.
+# This avoids namespace serialization issues.

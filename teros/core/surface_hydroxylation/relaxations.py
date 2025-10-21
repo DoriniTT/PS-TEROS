@@ -83,10 +83,11 @@ def relax_slabs_with_semaphore(
 
     Returns:
         Dictionary with namespace outputs:
-            - structures: Dict {idx: StructureData} for successful relaxations
-            - energies: Dict {idx: Float} for successful relaxations
+            - structures: Dict {key: StructureData} for successful relaxations
+            - energies: Dict {key: Float} for successful relaxations
 
-        Each dict uses string index matching input (e.g., '0', '1', '2', ...)
+        Each dict uses descriptive keys from input (e.g., '0_oh_000_3_7572', '1_oh_001_7_5145', ...)
+        Note: Dots are replaced with underscores for AiiDA link label compatibility.
         Only successfully relaxed structures appear in outputs.
         Failed relaxations will not have entries in the output dicts.
 
@@ -113,9 +114,9 @@ def relax_slabs_with_semaphore(
     energies_out = {}
 
     # SIMPLE BATCH APPROACH: Only process first max_parallel structures
-    # structures is a dict with string keys: '0', '1', '2', etc.
-    # Sort keys to ensure consistent ordering
-    sorted_keys = sorted(structures.keys(), key=lambda k: int(k))
+    # structures is a dict with descriptive keys: '0_oh_000_3.7572', '1_oh_001_7.5145', etc.
+    # Sort keys by extracting the numeric prefix to ensure consistent ordering
+    sorted_keys = sorted(structures.keys(), key=lambda k: int(k.split('_')[0]))
     # Extract value from max_parallel if it's an AiiDA node
     limit = max_parallel.value if hasattr(max_parallel, 'value') else int(max_parallel)
     selected_keys = sorted_keys[:limit]
@@ -124,8 +125,8 @@ def relax_slabs_with_semaphore(
     for key in selected_keys:
         structure = structures[key]
 
-        # Key is already the index as a string
-        idx = int(key)
+        # Extract index from key (e.g., "0" from "0_oh_000_3.7572")
+        idx = int(key.split('_')[0])
 
         # Build VASP inputs following slabs.py pattern
         vasp_inputs: dict[str, t.Any] = {
@@ -148,12 +149,12 @@ def relax_slabs_with_semaphore(
         # Extract energy from VASP misc output
         energy = extract_total_energy(energies=vasp_task.misc)
 
-        # Map to output dictionaries using string index (AiiDA Dict requires string keys)
+        # Map to output dictionaries using descriptive key from input
         # Note: Only successful relaxations will populate these outputs
         # Failed calculations will be detected in collect_results by absence of data
-        idx_key = str(idx)
-        structures_out[idx_key] = vasp_task.structure
-        energies_out[idx_key] = energy.result
+        # Use the same descriptive key from input (e.g., "0_oh_000_3.7572")
+        structures_out[key] = vasp_task.structure
+        energies_out[key] = energy.result
 
     return {
         'structures': structures_out,
