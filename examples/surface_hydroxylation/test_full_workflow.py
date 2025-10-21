@@ -25,7 +25,7 @@ Usage:
 import sys
 from aiida import orm, load_profile
 from ase.build import fcc111
-from teros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph
+from teros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
 
 
 def main():
@@ -103,45 +103,26 @@ def main():
     print("   Using LIGHTWEIGHT parameters for fast testing")
 
     code_label = 'VASP-VTST-6.4.3@bohr'
-    try:
-        code = orm.load_code(code_label)
-        print(f"   ✓ VASP code loaded: {code_label}")
-    except Exception as e:
-        print(f"\n   ERROR: Could not load VASP code '{code_label}'")
-        print(f"   {e}")
-        print("\n   Available codes:")
-        from aiida.orm import QueryBuilder
-        qb = QueryBuilder()
-        qb.append(orm.Code, project=['label'])
-        for (label,) in qb.iterall():
-            print(f"     - {label}")
-        return 1
+    print(f"   VASP code: {code_label}")
 
-    # Complete VASP configuration for vasp.v2.relax workflow plugin
-    # Split into separate components for WorkGraph serialization
+    # VASP configuration (lightweight for testing - NOT production quality!)
     vasp_config = {
-        # Relaxation settings
-        'relax': {
-            'perform': True,
-            'positions': True,
-            'shape': False,
-            'volume': False,
-            'force_cutoff': 0.05,  # eV/Angstrom - looser for testing
-            'steps': 10,           # Max ionic steps (NSW equivalent)
-            'algo': 'cg',          # Conjugate gradient
-        },
-
-        # Base VASP settings
-        'base': {
-            'PREC': 'Normal',
-            'ENCUT': 400,
-            'EDIFF': 1e-4,
-            'ISMEAR': 0,
-            'SIGMA': 0.05,
-            'ALGO': 'Fast',
-            'LREAL': 'Auto',
-            'LWAVE': False,
-            'LCHARG': False,
+        # INCAR parameters (lightweight for fast testing!)
+        'parameters': {
+            'PREC': 'Normal',    # Lower precision for speed
+            'ENCUT': 400,        # Lower cutoff for speed
+            'EDIFF': 1e-4,       # Looser electronic convergence
+            'ISMEAR': 0,         # Gaussian smearing
+            'SIGMA': 0.05,       # Smearing width
+            'ALGO': 'Fast',      # Faster algorithm
+            'LREAL': 'Auto',     # Faster (but less accurate)
+            'LWAVE': False,      # Don't write WAVECAR
+            'LCHARG': False,     # Don't write CHGCAR
+            # Relaxation parameters
+            'ISIF': 2,           # Relax positions only
+            'NSW': 10,           # Very few ionic steps for testing
+            'IBRION': 2,         # Conjugate gradient
+            'EDIFFG': -0.05,     # Loose force convergence (eV/Å)
         },
 
         # K-points
@@ -165,9 +146,9 @@ def main():
     }
 
     print("   VASP parameters:")
-    print(f"   - ENCUT: {vasp_config['base']['ENCUT']} eV")
-    print(f"   - Max steps: {vasp_config['relax']['steps']}")
-    print(f"   - Force cutoff: {vasp_config['relax']['force_cutoff']} eV/Å")
+    print(f"   - ENCUT: {vasp_config['parameters']['ENCUT']} eV")
+    print(f"   - NSW (max steps): {vasp_config['parameters']['NSW']}")
+    print(f"   - EDIFFG (force): {vasp_config['parameters']['EDIFFG']} eV/Å")
     print(f"   - K-points spacing: {vasp_config['kpoints_spacing']} Å⁻¹")
 
     # Parallelization
@@ -177,20 +158,15 @@ def main():
     # Create and submit workflow
     print("\n6. Creating workflow...")
 
-    # Create a WorkGraph and add the task
-    from aiida_workgraph import WorkGraph
-    wg = WorkGraph(name='test_surface_hydroxylation')
-
-    # Add the @task.graph function as a task
-    hydroxylation_task = wg.add_task(
-        SurfaceHydroxylationWorkGraph,
-        name='hydroxylation_workflow',
+    # Build WorkGraph using builder function
+    wg = build_surface_hydroxylation_workgraph(
         structure=structure,
         surface_params=surface_params,
-        code=code,
+        code_label=code_label,
         vasp_config=vasp_config,
         options=options,
         max_parallel_jobs=max_parallel,
+        name='test_surface_hydroxylation',
     )
 
     print("   ✓ Workflow created")

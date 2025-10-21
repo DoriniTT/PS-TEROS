@@ -73,10 +73,9 @@ def relax_slabs_with_semaphore(
         structures: Dict of structures to relax (e.g., {'structure_0': StructureData, ...})
         code_pk: PK of AiiDA Code for VASP (as int)
         vasp_config: VASP configuration as plain dict containing:
-            - relax: Dict with relaxation settings (positions, shape, volume, etc.)
-            - base: Dict with base VASP settings (force_cutoff, etc.)
+            - parameters: Dict with INCAR parameters (ENCUT, EDIFF, ISIF, NSW, IBRION, EDIFFG, etc.)
             - kpoints_spacing: Float (Angstrom, typical: 0.3-0.5)
-            - potential_family: Str (e.g., 'PBE.54')
+            - potential_family: Str (e.g., 'PBE', 'PBE.54')
             - potential_mapping: Dict (optional, element->potential mapping)
             - clean_workdir: Bool (default: False)
         options: Scheduler options as plain dict (resources, queue, time, etc.)
@@ -92,46 +91,18 @@ def relax_slabs_with_semaphore(
         Failed relaxations will not have entries in the output dicts.
 
     Note:
-        Uses vasp.v2.relax workflow plugin (not vasp.v2.vasp).
+        Uses vasp.v2.vasp workflow plugin.
         All calculations run in parallel (scatter-gather pattern).
     """
-    # Get VASP workchain (using vasp.v2.vasp which handles both static and relax)
+    # Get VASP workchain
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
     VaspTask = task(VaspWorkChain)
 
     # Load code from PK
     code = orm.load_node(code_pk)
 
-    # Extract config from plain dict and merge into INCAR parameters
-    # vasp.v2.vasp expects all VASP settings in parameters['incar']
-    relax_settings = vasp_config.get('relax', {})
-    base_settings = vasp_config.get('base', {})
-
-    # Merge base and relax settings into INCAR parameters
-    incar_params = dict(base_settings)
-
-    # Add relaxation-specific VASP parameters
-    if relax_settings.get('positions', True):
-        incar_params['ISIF'] = 2  # Relax positions only
-    if relax_settings.get('shape', False):
-        incar_params['ISIF'] = 3  # Relax positions and cell shape
-    if relax_settings.get('volume', False):
-        incar_params['ISIF'] = 7  # Relax everything
-
-    # Set NSW (number of ionic steps)
-    incar_params['NSW'] = relax_settings.get('steps', 200)
-
-    # Set IBRION (ionic relaxation algorithm)
-    algo = relax_settings.get('algo', 'cg')
-    if algo == 'cg':
-        incar_params['IBRION'] = 2  # Conjugate gradient
-    elif algo == 'rmm-diis':
-        incar_params['IBRION'] = 1  # RMM-DIIS
-
-    # Set EDIFFG (force convergence criterion)
-    if 'force_cutoff' in relax_settings:
-        incar_params['EDIFFG'] = -relax_settings['force_cutoff']
-
+    # Extract VASP configuration
+    incar_params = vasp_config.get('parameters', {})
     kpoints_spacing = vasp_config.get('kpoints_spacing', 0.5)
     potential_family = vasp_config.get('potential_family', 'PBE')
     potential_mapping = vasp_config.get('potential_mapping', {})
