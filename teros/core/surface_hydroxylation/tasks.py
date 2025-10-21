@@ -2,10 +2,10 @@
 
 import tempfile
 from pathlib import Path
-import json
 
+from ase.io import read
 from aiida.engine import calcfunction
-from aiida.orm import StructureData, Dict, List
+from aiida.orm import StructureData, Dict
 
 from .utils import aiida_to_ase, ase_to_aiida
 from .surface_modes import SurfaceModifier
@@ -32,7 +32,7 @@ def generate_structures(structure: StructureData, params: Dict) -> dict:
     Returns:
         dict with:
             - manifest: Dict (parsed manifest from surface_modes)
-            - structures: List (generated StructureData variants)
+            - structure_0, structure_1, ..., structure_N: StructureData (generated variants)
     """
     # Convert AiiDA → ASE
     atoms = aiida_to_ase(structure)
@@ -86,7 +86,6 @@ def generate_structures(structure: StructureData, params: Dict) -> dict:
         structures = []
         for variant in manifest['variants']:
             filepath = Path(variant['file'])
-            from ase.io import read
             variant_atoms = read(filepath.as_posix())
             structures.append(ase_to_aiida(variant_atoms))
 
