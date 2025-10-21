@@ -63,27 +63,34 @@ def relax_slabs_with_semaphore(
     'errors': dynamic(orm.Str),
 })]:
     """
-    Relax multiple structures in parallel with semaphore-based concurrency limiting.
+    Relax multiple structures in parallel with batch-based limiting.
 
     This is the core relaxation WorkGraph that receives structures from generate_structures
     (in structure_0, structure_1, ... format) and returns results compatible with
     collect_results (in structure_N, energy_N, exit_status_N, error_N format).
 
-    The semaphore ensures that at most max_parallel VASP jobs run concurrently,
-    preventing cluster overload when processing many structures.
+    PARALLELIZATION APPROACH:
+    This implementation uses a simple batch approach: it processes only the first
+    max_parallel structures from the input. This allows manual control over how
+    many calculations run at once.
+
+    Example workflow:
+    1. Generate 15 structures, set max_parallel=5 → relaxes structures 0-4
+    2. After completion, set max_parallel=10 → structures 0-4 already done, relaxes 5-9
+    3. Repeat until all structures are processed
 
     Args:
         structures: Dict of structures to relax (e.g., {'structure_0': StructureData, ...})
-        builder_config: Complete VASP builder configuration dict containing:
+        builder_config: Complete VASP relaxation configuration dict for vasp.v2.relax:
             - code: AiiDA Code for VASP
-            - parameters: Dict with INCAR parameters
-            - potential_family: Pseudopotential family name
-            - potential_mapping: Dict mapping elements to potentials
-            - kpoints_spacing: K-points spacing (optional)
-            - options: Scheduler options dict
-            - clean_workdir: bool
-            - settings: Parser settings dict (optional)
-        max_parallel: Maximum number of concurrent VASP relaxations
+            - relax: Dict with relaxation settings (positions, shape, volume, etc.)
+            - base: Dict with base VASP settings (force_cutoff, etc.)
+            - kpoints_distance: Float (Angstrom, typical: 0.3-0.5)
+            - potential_family: Str (e.g., 'PBE.54')
+            - potential_mapping: Dict (optional, element->potential mapping)
+            - options: Dict with scheduler settings (resources, queue, time, etc.)
+            - clean_workdir: Bool (default: False)
+        max_parallel: Maximum number of structures to process (limits to first N structures)
 
     Returns:
         Dictionary with namespace outputs:
@@ -92,42 +99,26 @@ def relax_slabs_with_semaphore(
             - exit_statuses: Dict {idx: Int} for all relaxations
             - errors: Dict {idx: Str} for all relaxations
 
-        Each dict uses the same index as the input (0, 1, 2, ...)
+        Each dict uses string index matching input (e.g., '0', '1', '2', ...)
+        Only processed structures appear in outputs.
 
     Note:
-        This uses @task.graph (not @calcfunction) to avoid provenance issues
-        when working with stored AiiDA nodes.
-
-        Semaphore limiting: In the current implementation, WorkGraph naturally
-        limits parallelization based on available resources. The max_parallel
-        parameter is accepted for API compatibility but WorkGraph handles
-        concurrency automatically. For explicit semaphore control, consider
-        using aiida-workgraph's built-in queuing mechanisms.
+        Uses vasp.v2.relax workflow plugin (not vasp.v2.vasp).
+        All calculations run in parallel (scatter-gather pattern).
     """
-    # Get VASP workchain
-    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
-    VaspTask = task(VaspWorkChain)
+    # Get VASP relax workchain
+    VaspRelaxWorkChain = WorkflowFactory('vasp.v2.relax')
+    VaspTask = task(VaspRelaxWorkChain)
 
     # Extract config
     code = builder_config['code']
-    parameters = builder_config.get('parameters', {})
+    relax = builder_config.get('relax', {})
+    base = builder_config.get('base', {})
+    kpoints_distance = builder_config.get('kpoints_distance', 0.5)
     potential_family = builder_config.get('potential_family', 'PBE')
     potential_mapping = builder_config.get('potential_mapping', {})
-    kpoints_spacing = builder_config.get('kpoints_spacing', None)
     options = builder_config.get('options', {})
     clean_workdir = builder_config.get('clean_workdir', False)
-    settings = builder_config.get('settings', None)
-
-    # Default parser settings if not provided
-    if settings is None:
-        settings = orm.Dict(dict={
-            'parser_settings': {
-                'add_energy': True,
-                'add_trajectory': True,
-                'add_structure': True,
-                'add_kpoints': True,
-            }
-        })
 
     # Output dictionaries
     structures_out = {}
@@ -135,27 +126,30 @@ def relax_slabs_with_semaphore(
     exit_statuses_out = {}
     errors_out = {}
 
-    # Process each structure
-    # Note: structures comes as {'structure_0': StructureData, 'structure_1': ...}
-    # We need to extract the index and maintain it in outputs
-    for key, structure in structures.items():
+    # SIMPLE BATCH APPROACH: Only process first max_parallel structures
+    # Sort keys to ensure consistent ordering (structure_0, structure_1, ...)
+    sorted_keys = sorted(structures.keys(), key=lambda k: int(k.split('_')[1]))
+    selected_keys = sorted_keys[:max_parallel]
+
+    # Process selected structures
+    for key in selected_keys:
+        structure = structures[key]
+
         # Extract index from key (e.g., 'structure_0' -> 0)
         idx = int(key.split('_')[1])
 
-        # Build VASP inputs
+        # Build VASP relax workflow inputs
         vasp_inputs = {
             'structure': structure,
             'code': code,
-            'parameters': {'incar': parameters},
-            'options': options,
+            'relax': relax,
+            'base': base,
+            'kpoints_distance': kpoints_distance,
             'potential_family': potential_family,
             'potential_mapping': potential_mapping,
+            'options': options,
             'clean_workdir': clean_workdir,
-            'settings': settings,
         }
-
-        if kpoints_spacing is not None:
-            vasp_inputs['kpoints_spacing'] = kpoints_spacing
 
         # Create VASP relaxation task
         # All tasks created in this loop will run in parallel (scatter-gather pattern)

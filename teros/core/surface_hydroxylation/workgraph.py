@@ -40,16 +40,17 @@ def SurfaceHydroxylationWorkGraph(
             - supercell: list[int] or None
             - deduplicate_by_coverage: bool
             - coverage_bins: int or None
-        builder_config: Complete VASP builder configuration (dict with keys):
+        builder_config: Complete VASP relaxation configuration for vasp.v2.relax (dict):
             - code: AiiDA Code for VASP
-            - parameters: Dict with INCAR parameters
-            - potential_family: Pseudopotential family name
-            - potential_mapping: Dict mapping elements to potentials
-            - kpoints_spacing: K-points spacing (optional)
-            - options: Scheduler options dict
-            - clean_workdir: bool
-            - settings: Parser settings dict (optional)
-        max_parallel_jobs: Maximum number of concurrent VASP relaxations (default: 2)
+            - relax: Dict with relaxation settings (positions, shape, volume, force_cutoff, steps, algo)
+            - base: Dict with INCAR parameters (PREC, ENCUT, EDIFF, etc.)
+            - kpoints_distance: Float (Angstrom^-1, typically 0.3-0.5)
+            - potential_family: Str (e.g., 'PBE', 'PBE.54')
+            - potential_mapping: Dict (optional, element->potential)
+            - options: Dict with scheduler settings (resources, queue, time)
+            - clean_workdir: Bool (default: False)
+        max_parallel_jobs: Number of structures to process in this run (default: 2)
+                          Uses simple batch approach: processes first N structures only
 
     Returns:
         Dictionary with outputs:
@@ -75,7 +76,9 @@ def SurfaceHydroxylationWorkGraph(
         ... }
         >>> builder_config = {
         ...     'code': orm.load_code('vasp@cluster'),
-        ...     'parameters': {'EDIFF': 1e-5, 'ENCUT': 520},
+        ...     'relax': {'positions': True, 'force_cutoff': 0.02, 'steps': 200},
+        ...     'base': {'EDIFF': 1e-6, 'ENCUT': 520, 'PREC': 'Accurate'},
+        ...     'kpoints_distance': 0.3,
         ...     'potential_family': 'PBE',
         ...     'options': {'resources': {'num_machines': 1}},
         ... }
@@ -89,11 +92,17 @@ def SurfaceHydroxylationWorkGraph(
         ... )
         >>> wg.submit()
     """
-    # Validate builder_config
-    required_keys = ['code', 'parameters', 'potential_family', 'options']
+    # Validate builder_config (for vasp.v2.relax)
+    required_keys = ['code', 'options']
     missing_keys = [key for key in required_keys if key not in builder_config]
     if missing_keys:
         raise ValueError(f"builder_config missing required keys: {missing_keys}")
+
+    # Warn if using old format
+    if 'parameters' in builder_config:
+        print("WARNING: builder_config uses old 'parameters' key.")
+        print("For vasp.v2.relax, use 'base' for INCAR parameters and 'relax' for relaxation settings.")
+        print("See examples/surface_hydroxylation/run_production.py for correct format.")
 
     # Convert inputs to AiiDA nodes if needed
     if not isinstance(surface_params, orm.Dict):

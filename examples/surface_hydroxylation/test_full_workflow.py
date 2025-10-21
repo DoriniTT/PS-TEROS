@@ -45,8 +45,8 @@ def main():
 
     # Load AiiDA profile
     print("\n1. Loading AiiDA profile...")
-    load_profile(profile='psteros')
-    print("   ✓ Profile loaded: psteros")
+    load_profile(profile='presto')
+    print("   ✓ Profile loaded: presto")
 
     # Check daemon is running
     from aiida.engine.daemon.client import get_daemon_client
@@ -117,41 +117,60 @@ def main():
             print(f"     - {label}")
         return 1
 
+    # Complete VASP configuration for vasp.v2.relax workflow plugin
     builder_config = {
         'code': code,
-        'parameters': {
-            'PREC': 'Normal',      # Lower precision for testing
-            'ENCUT': 400,          # Lower cutoff
-            'EDIFF': 1e-4,         # Looser convergence
+
+        # Relaxation settings
+        'relax': {
+            'perform': True,
+            'positions': True,
+            'shape': False,
+            'volume': False,
+            'force_cutoff': 0.05,  # eV/Angstrom - looser for testing
+            'steps': 10,           # Max ionic steps (NSW equivalent)
+            'algo': 'cg',          # Conjugate gradient
+        },
+
+        # Base VASP settings
+        'base': {
+            'PREC': 'Normal',
+            'ENCUT': 400,
+            'EDIFF': 1e-4,
             'ISMEAR': 0,
             'SIGMA': 0.05,
-            'IBRION': 2,
-            'ISIF': 2,             # Relax atoms only
-            'NSW': 10,             # Very few steps for testing
-            'EDIFFG': -0.05,       # Looser force convergence
             'ALGO': 'Fast',
             'LREAL': 'Auto',
             'LWAVE': False,
             'LCHARG': False,
         },
+
+        # K-points
+        'kpoints_distance': 0.5,  # Angstrom^-1 (coarse for testing)
+
+        # Pseudopotentials
         'potential_family': 'PBE',
-        'potential_mapping': {},
-        'kpoints_spacing': 0.5,    # Coarse k-points
+        'potential_mapping': {},  # Use defaults
+
+        # Scheduler options
         'options': {
             'resources': {
                 'num_machines': 1,
-                'num_cores_per_machine': 40,
+                'num_mpiprocs_per_machine': 40,
             },
             'queue_name': 'par40',
-            'max_wallclock_seconds': 3600,  # 1 hour should be enough
+            'max_wallclock_seconds': 3600,  # 1 hour
         },
+
+        # Cleanup
         'clean_workdir': False,  # Keep files for debugging
     }
 
     print("   VASP parameters:")
-    print(f"   - ENCUT: {builder_config['parameters']['ENCUT']} eV")
-    print(f"   - NSW: {builder_config['parameters']['NSW']} steps")
-    print(f"   - K-points spacing: {builder_config['kpoints_spacing']} Å⁻¹")
+    print(f"   - ENCUT: {builder_config['base']['ENCUT']} eV")
+    print(f"   - Max steps: {builder_config['relax']['steps']}")
+    print(f"   - Force cutoff: {builder_config['relax']['force_cutoff']} eV/Å")
+    print(f"   - K-points distance: {builder_config['kpoints_distance']} Å⁻¹")
 
     # Parallelization
     max_parallel = 2

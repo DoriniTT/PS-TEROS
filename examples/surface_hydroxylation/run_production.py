@@ -17,7 +17,7 @@ from aiida import orm, load_profile
 from teros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph
 
 # Load AiiDA profile
-load_profile('psteros')
+load_profile('presto')
 
 # ============================================================================
 # INPUT STRUCTURE
@@ -46,7 +46,7 @@ print(f"Production slab: {len(structure.sites)} atoms")
 # SURFACE GENERATION PARAMETERS
 # ============================================================================
 # Combined mode: Creates both oxygen-deficient and hydroxylated variants
-surface_params = orm.Dict(dict={
+surface_params = {
     'mode': 'combine',  # 'vacancies', 'hydrogen', or 'combine'
     'species': 'O',     # Target species for modification
     'z_window': 0.5,    # Angstroms - surface identification window
@@ -55,7 +55,7 @@ surface_params = orm.Dict(dict={
     'include_empty': False,  # Include unmodified structure
     'deduplicate_by_coverage': True,  # Remove symmetry-equivalent structures
     'coverage_bins': 10  # Number of coverage bins (controls # of structures)
-})
+}
 
 print("\nSurface modification parameters:")
 print(f"  Mode: {surface_params['mode']}")
@@ -66,54 +66,89 @@ print(f"  Expected structures: ~10-20 (depends on surface)")
 # VASP CONFIGURATION
 # ============================================================================
 # Production VASP settings - adjust for your system!
-builder_config = orm.Dict(dict={
-    'metadata': {
-        'options': {
-            'resources': {
-                'num_machines': 1,
-                'num_mpiprocs_per_machine': 16  # Adjust for your cluster
-            },
-            'max_wallclock_seconds': 3600 * 10,  # 10 hours
-            'account': 'your_production_account',  # CHANGE THIS
-            'queue_name': 'normal'  # CHANGE THIS
-        }
-    },
-    'kpoints_distance': orm.Float(0.3),  # Converged k-points (test convergence!)
-    'parameters': orm.Dict(dict={
-        'EDIFF': 1e-6,      # Energy convergence
-        'EDIFFG': -0.02,    # Force convergence (eV/Å)
-        'ENCUT': 520,       # Plane wave cutoff (eV)
-        'ISMEAR': 0,        # Gaussian smearing
-        'SIGMA': 0.05,      # Smearing width
-        'NSW': 200,         # Max ionic steps
-        'IBRION': 2,        # Conjugate gradient
-        'ISIF': 2,          # Relax atoms only (fixed cell)
-        'LREAL': False,     # Accurate projectors
-        'PREC': 'Accurate', # Precision mode
-        'ALGO': 'Normal',   # Electronic minimization
-        'NELM': 100         # Max electronic steps
-    }),
-    'relax': orm.Dict(dict={
+# Complete configuration for vasp.v2.relax workflow plugin
+
+# IMPORTANT: Adjust these settings for your cluster and system
+code_label = 'your_vasp_code@your_computer'  # CHANGE THIS
+try:
+    code = orm.load_code(code_label)
+except:
+    print(f"ERROR: Could not load VASP code '{code_label}'")
+    print("Available codes:")
+    from aiida.orm import QueryBuilder
+    qb = QueryBuilder()
+    qb.append(orm.Code, project=['label'])
+    for (label,) in qb.iterall():
+        print(f"  - {label}")
+    exit(1)
+
+builder_config = {
+    'code': code,
+
+    # Relaxation settings
+    'relax': {
+        'perform': True,
         'positions': True,
         'shape': False,
-        'volume': False
-    })
-})
+        'volume': False,
+        'force_cutoff': 0.02,  # eV/Angstrom - production convergence
+        'steps': 200,          # Max ionic steps
+        'algo': 'cg',          # Conjugate gradient
+    },
+
+    # Base VASP settings (production quality)
+    'base': {
+        'PREC': 'Accurate',
+        'ENCUT': 520,          # Converged cutoff (test for your system!)
+        'EDIFF': 1e-6,         # Energy convergence
+        'ISMEAR': 0,           # Gaussian smearing
+        'SIGMA': 0.05,         # Smearing width
+        'ALGO': 'Normal',
+        'LREAL': False,        # Accurate projectors (slower but more accurate)
+        'NELM': 100,           # Max electronic steps
+        'LWAVE': False,        # Don't write WAVECAR (saves space)
+        'LCHARG': False,       # Don't write CHGCAR (saves space)
+    },
+
+    # K-points (IMPORTANT: test convergence!)
+    'kpoints_distance': 0.3,  # Angstrom^-1 (typical production value)
+
+    # Pseudopotentials
+    'potential_family': 'PBE',  # Or 'PBE.54', etc. - depends on your setup
+    'potential_mapping': {},    # Optional: element-specific potentials
+
+    # Scheduler options (CHANGE THESE for your cluster!)
+    'options': {
+        'resources': {
+            'num_machines': 1,
+            'num_mpiprocs_per_machine': 16,  # Adjust for your cluster
+        },
+        'queue_name': 'normal',              # CHANGE THIS
+        'max_wallclock_seconds': 3600 * 10,  # 10 hours
+        'account': 'your_account',           # CHANGE THIS if required
+    },
+
+    # Cleanup
+    'clean_workdir': False,  # Keep files for analysis (set True to save space)
+}
 
 print("\nVASP configuration:")
-print(f"  Cores: {builder_config['metadata']['options']['resources']['num_mpiprocs_per_machine']}")
-print(f"  Walltime: {builder_config['metadata']['options']['max_wallclock_seconds'] / 3600} hours")
-print(f"  ENCUT: {builder_config['parameters']['ENCUT']} eV")
-print(f"  EDIFFG: {builder_config['parameters']['EDIFFG']} eV/Å")
+print(f"  Code: {code.label}")
+print(f"  Cores: {builder_config['options']['resources']['num_mpiprocs_per_machine']}")
+print(f"  Walltime: {builder_config['options']['max_wallclock_seconds'] / 3600} hours")
+print(f"  ENCUT: {builder_config['base']['ENCUT']} eV")
+print(f"  Force cutoff: {builder_config['relax']['force_cutoff']} eV/Å")
+print(f"  K-points distance: {builder_config['kpoints_distance']} Å⁻¹")
 
 # ============================================================================
 # PARALLELIZATION CONTROL
 # ============================================================================
-# Limit parallel jobs based on cluster capacity
-# Set to number of VASP jobs you want running simultaneously
-max_parallel = orm.Int(5)
+# BATCH APPROACH: Process only the first N structures
+# Example: If 15 structures generated, max_parallel=5 processes structures 0-4
+# After completion, increase to 10 to process structures 5-9, etc.
+max_parallel = 5
 
-print(f"\nParallelization: Max {max_parallel.value} VASP jobs at once")
+print(f"\nParallelization: Processing first {max_parallel} structures per run")
 
 # ============================================================================
 # WORKFLOW SETUP AND SUBMISSION
