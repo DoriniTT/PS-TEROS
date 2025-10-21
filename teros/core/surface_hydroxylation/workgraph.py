@@ -50,10 +50,10 @@ def SurfaceHydroxylationWorkGraph(
             - deduplicate_by_coverage: bool
             - coverage_bins: int or None
         code: AiiDA Code for VASP (InstalledCode)
-        vasp_config: VASP relaxation configuration (dict) for vasp.v2.relax:
+        vasp_config: VASP relaxation configuration (dict) for vasp.v2.vasp:
             - relax: Dict with relaxation settings (positions, shape, volume, force_cutoff, steps, algo)
             - base: Dict with INCAR parameters (PREC, ENCUT, EDIFF, etc.)
-            - kpoints_distance: Float (Angstrom^-1, typically 0.3-0.5)
+            - kpoints_spacing: Float (Angstrom^-1, typically 0.3-0.5)
             - potential_family: Str (e.g., 'PBE', 'PBE.54')
             - potential_mapping: Dict (optional, element->potential)
             - clean_workdir: Bool (default: False)
@@ -87,7 +87,7 @@ def SurfaceHydroxylationWorkGraph(
         >>> vasp_config = {
         ...     'relax': {'positions': True, 'force_cutoff': 0.02, 'steps': 200},
         ...     'base': {'EDIFF': 1e-6, 'ENCUT': 520, 'PREC': 'Accurate'},
-        ...     'kpoints_distance': 0.3,
+        ...     'kpoints_spacing': 0.3,
         ...     'potential_family': 'PBE',
         ...     'clean_workdir': False,
         ... }
@@ -127,12 +127,11 @@ def SurfaceHydroxylationWorkGraph(
     )
 
     # Task 3: Collect and organize results
+    # Note: collect_results will detect failures by checking for missing data
     collect_outputs = collect_results(
         manifest=gen_outputs.manifest,
         structures=relax_outputs.structures,
         energies=relax_outputs.energies,
-        exit_statuses=relax_outputs.exit_statuses,
-        errors=relax_outputs.errors,
     )
 
     # Return outputs directly

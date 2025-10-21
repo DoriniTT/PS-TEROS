@@ -1,4 +1,4 @@
-"""Child WorkGraph for parallel VASP relaxations with semaphore limiting."""
+"""Child WorkGraph for parallel VASP relaxations with batch limiting."""
 
 import typing as t
 from aiida import orm
@@ -7,7 +7,18 @@ from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, namespace, dynamic
 
 
-@calcfunction
+def get_settings():
+    """Parser settings for aiida-vasp."""
+    return {
+        'parser_settings': {
+            'add_trajectory': True,
+            'add_structure': True,
+            'add_kpoints': True,
+        }
+    }
+
+
+@task.calcfunction
 def extract_total_energy(energies: orm.Dict) -> orm.Float:
     """
     Extract total energy from VASP energies output.
@@ -30,30 +41,9 @@ def extract_total_energy(energies: orm.Dict) -> orm.Float:
     raise ValueError(f'Unable to find total energy in VASP outputs. Available keys: {available}')
 
 
-@calcfunction
-def get_exit_info(exit_status: orm.Int, exit_message: orm.Str) -> dict:
-    """
-    Package exit status and message for output.
-
-    Args:
-        exit_status: Exit status from VASP
-        exit_message: Exit message from VASP
-
-    Returns:
-        dict with exit_status and error
-    """
-    from aiida.orm import Int, Str
-
-    # Create new nodes to avoid provenance cycles
-    return {
-        'exit_status': Int(exit_status.value),
-        'error': Str(exit_message.value if exit_message.value else '')
-    }
-
-
 @task.graph
 def relax_slabs_with_semaphore(
-    structures: dict[str, orm.StructureData],
+    structures: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
     code_pk: int,
     vasp_config: dict,
     options: dict,
@@ -61,8 +51,6 @@ def relax_slabs_with_semaphore(
 ) -> t.Annotated[dict, namespace(**{
     'structures': dynamic(orm.StructureData),
     'energies': dynamic(orm.Float),
-    'exit_statuses': dynamic(orm.Int),
-    'errors': dynamic(orm.Str),
 })]:
     """
     Relax multiple structures in parallel with batch-based limiting.
@@ -87,7 +75,7 @@ def relax_slabs_with_semaphore(
         vasp_config: VASP configuration as plain dict containing:
             - relax: Dict with relaxation settings (positions, shape, volume, etc.)
             - base: Dict with base VASP settings (force_cutoff, etc.)
-            - kpoints_distance: Float (Angstrom, typical: 0.3-0.5)
+            - kpoints_spacing: Float (Angstrom, typical: 0.3-0.5)
             - potential_family: Str (e.g., 'PBE.54')
             - potential_mapping: Dict (optional, element->potential mapping)
             - clean_workdir: Bool (default: False)
@@ -98,36 +86,60 @@ def relax_slabs_with_semaphore(
         Dictionary with namespace outputs:
             - structures: Dict {idx: StructureData} for successful relaxations
             - energies: Dict {idx: Float} for successful relaxations
-            - exit_statuses: Dict {idx: Int} for all relaxations
-            - errors: Dict {idx: Str} for all relaxations
 
         Each dict uses string index matching input (e.g., '0', '1', '2', ...)
-        Only processed structures appear in outputs.
+        Only successfully relaxed structures appear in outputs.
+        Failed relaxations will not have entries in the output dicts.
 
     Note:
         Uses vasp.v2.relax workflow plugin (not vasp.v2.vasp).
         All calculations run in parallel (scatter-gather pattern).
     """
-    # Get VASP relax workchain
-    VaspRelaxWorkChain = WorkflowFactory('vasp.v2.relax')
-    VaspTask = task(VaspRelaxWorkChain)
+    # Get VASP workchain (using vasp.v2.vasp which handles both static and relax)
+    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
+    VaspTask = task(VaspWorkChain)
 
     # Load code from PK
     code = orm.load_node(code_pk)
 
-    # Extract config from plain dict
-    relax = vasp_config.get('relax', {})
-    base = vasp_config.get('base', {})
-    kpoints_distance = vasp_config.get('kpoints_distance', 0.5)
+    # Extract config from plain dict and merge into INCAR parameters
+    # vasp.v2.vasp expects all VASP settings in parameters['incar']
+    relax_settings = vasp_config.get('relax', {})
+    base_settings = vasp_config.get('base', {})
+
+    # Merge base and relax settings into INCAR parameters
+    incar_params = dict(base_settings)
+
+    # Add relaxation-specific VASP parameters
+    if relax_settings.get('positions', True):
+        incar_params['ISIF'] = 2  # Relax positions only
+    if relax_settings.get('shape', False):
+        incar_params['ISIF'] = 3  # Relax positions and cell shape
+    if relax_settings.get('volume', False):
+        incar_params['ISIF'] = 7  # Relax everything
+
+    # Set NSW (number of ionic steps)
+    incar_params['NSW'] = relax_settings.get('steps', 200)
+
+    # Set IBRION (ionic relaxation algorithm)
+    algo = relax_settings.get('algo', 'cg')
+    if algo == 'cg':
+        incar_params['IBRION'] = 2  # Conjugate gradient
+    elif algo == 'rmm-diis':
+        incar_params['IBRION'] = 1  # RMM-DIIS
+
+    # Set EDIFFG (force convergence criterion)
+    if 'force_cutoff' in relax_settings:
+        incar_params['EDIFFG'] = -relax_settings['force_cutoff']
+
+    kpoints_spacing = vasp_config.get('kpoints_spacing', 0.5)
     potential_family = vasp_config.get('potential_family', 'PBE')
     potential_mapping = vasp_config.get('potential_mapping', {})
     clean_workdir = vasp_config.get('clean_workdir', False)
 
-    # Output dictionaries
+    # Output dictionaries (only successful relaxations will be added)
     structures_out = {}
     energies_out = {}
-    exit_statuses_out = {}
-    errors_out = {}
 
     # SIMPLE BATCH APPROACH: Only process first max_parallel structures
     # structures is a dict with string keys: '0', '1', '2', etc.
@@ -144,39 +156,35 @@ def relax_slabs_with_semaphore(
         # Key is already the index as a string
         idx = int(key)
 
-        # Create VASP relaxation task
+        # Build VASP inputs following slabs.py pattern
+        vasp_inputs: dict[str, t.Any] = {
+            'structure': structure,
+            'code': code,
+            'parameters': {'incar': dict(incar_params)},
+            'options': dict(options),
+            'potential_family': potential_family,
+            'potential_mapping': orm.Dict(dict=potential_mapping) if potential_mapping else orm.Dict(dict={}),
+            'clean_workdir': clean_workdir,
+            'settings': orm.Dict(dict=get_settings()),
+        }
+        if kpoints_spacing is not None:
+            vasp_inputs['kpoints_spacing'] = kpoints_spacing
+
+        # Create VASP task
         # All tasks created in this loop will run in parallel (scatter-gather pattern)
-        vasp_task = VaspTask(
-            structure=structure,
-            code=code,
-            relax=relax,
-            base=base,
-            kpoints_distance=kpoints_distance,
-            potential_family=potential_family,
-            potential_mapping=potential_mapping,
-            options=options,
-            clean_workdir=clean_workdir,
-        )
+        vasp_task = VaspTask(**vasp_inputs)
 
         # Extract energy from VASP misc output
         energy = extract_total_energy(energies=vasp_task.misc)
 
-        # Get exit information
-        exit_info = get_exit_info(
-            exit_status=vasp_task.exit_status,
-            exit_message=vasp_task.exit_message
-        )
-
         # Map to output dictionaries using string index (AiiDA Dict requires string keys)
+        # Note: Only successful relaxations will populate these outputs
+        # Failed calculations will be detected in collect_results by absence of data
         idx_key = str(idx)
         structures_out[idx_key] = vasp_task.structure
         energies_out[idx_key] = energy.result
-        exit_statuses_out[idx_key] = exit_info.exit_status
-        errors_out[idx_key] = exit_info.error
 
     return {
         'structures': structures_out,
         'energies': energies_out,
-        'exit_statuses': exit_statuses_out,
-        'errors': errors_out,
     }

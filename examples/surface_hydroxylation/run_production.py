@@ -110,7 +110,7 @@ vasp_config = {
     },
 
     # K-points (IMPORTANT: test convergence!)
-    'kpoints_distance': 0.3,  # Angstrom^-1 (typical production value)
+    'kpoints_spacing': 0.3,  # Angstrom^-1 (typical production value)
 
     # Pseudopotentials
     'potential_family': 'PBE',  # Or 'PBE.54', etc. - depends on your setup
@@ -137,7 +137,7 @@ print(f"  Cores: {options['resources']['num_mpiprocs_per_machine']}")
 print(f"  Walltime: {options['max_wallclock_seconds'] / 3600} hours")
 print(f"  ENCUT: {vasp_config['base']['ENCUT']} eV")
 print(f"  Force cutoff: {vasp_config['relax']['force_cutoff']} eV/Å")
-print(f"  K-points distance: {vasp_config['kpoints_distance']} Å⁻¹")
+print(f"  K-points spacing: {vasp_config['kpoints_spacing']} Å⁻¹")
 
 # ============================================================================
 # PARALLELIZATION CONTROL

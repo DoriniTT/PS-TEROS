@@ -145,7 +145,7 @@ def main():
         },
 
         # K-points
-        'kpoints_distance': 0.5,  # Angstrom^-1 (coarse for testing)
+        'kpoints_spacing': 0.5,  # Angstrom^-1 (coarse for testing)
 
         # Pseudopotentials
         'potential_family': 'PBE',
@@ -168,7 +168,7 @@ def main():
     print(f"   - ENCUT: {vasp_config['base']['ENCUT']} eV")
     print(f"   - Max steps: {vasp_config['relax']['steps']}")
     print(f"   - Force cutoff: {vasp_config['relax']['force_cutoff']} eV/Å")
-    print(f"   - K-points distance: {vasp_config['kpoints_distance']} Å⁻¹")
+    print(f"   - K-points spacing: {vasp_config['kpoints_spacing']} Å⁻¹")
 
     # Parallelization
     max_parallel = 2

@@ -143,8 +143,6 @@ def collect_results(
     manifest,
     structures,
     energies,
-    exit_statuses,
-    errors,
 ) -> t.Annotated[dict, namespace(
     successful_relaxations=Dict,
     failed_relaxations=Dict,
@@ -153,22 +151,23 @@ def collect_results(
     """
     Collect and organize relaxation results from namespace outputs.
 
-    This function accepts the raw namespace dictionaries from relax_slabs_with_semaphore
-    and extracts data from AiiDA nodes to create organized result lists.
+    This function accepts the namespace dictionaries from relax_slabs_with_semaphore
+    and organizes them into successful and failed results. Failures are detected
+    by checking for missing structure/energy data.
 
     Args:
         manifest: Original manifest Dict from generate_structures
         structures: Namespace dict mapping indices to relaxed StructureData {0: StructureData, 1: ...}
+                   Only successful relaxations will have entries
         energies: Namespace dict mapping indices to Float nodes {0: Float, 1: ...}
-        exit_statuses: Namespace dict mapping indices to Int nodes {0: Int, 1: ...}
-        errors: Namespace dict mapping indices to Str nodes {0: Str, 1: ...}
+                 Only successful relaxations will have entries
 
     Returns:
         dict with:
             - successful_relaxations: Dict with list of successful results
                 Each result contains: name, structure_pk, energy, coverage, metadata
             - failed_relaxations: Dict with list of failed results
-                Each result contains: name, coverage, exit_status, error_message
+                Each result contains: name, coverage, error_message
             - statistics: Dict with total, succeeded, failed counts
 
     Note:
@@ -188,58 +187,30 @@ def collect_results(
         # Convert idx to string for dict lookup (AiiDA Dict only supports string keys)
         idx_key = str(idx)
 
-        if idx_key not in exit_statuses:
-            # Relaxation not found (shouldn't happen in normal operation)
-            failed.append({
-                'name': variant['name'],
-                'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
-                'error_message': 'Relaxation output not found'
-            })
-            continue
-
-        # Extract values from AiiDA nodes
-        exit_status_node = exit_statuses[idx_key]
-        exit_status_value = exit_status_node.value if isinstance(exit_status_node, Int) else int(exit_status_node)
-
-        if exit_status_value == 0:
+        # Check if this relaxation succeeded (has structure and energy outputs)
+        if idx_key in structures and idx_key in energies:
             # Success - extract structure and energy
-            if idx_key not in structures or idx_key not in energies:
-                # Missing data for successful relaxation
-                failed.append({
-                    'name': variant['name'],
-                    'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
-                    'error_message': 'Missing structure or energy data'
-                })
-            else:
-                # Extract PK and values from nodes
-                structure_node = structures[idx_key]
-                energy_node = energies[idx_key]
+            structure_node = structures[idx_key]
+            energy_node = energies[idx_key]
 
-                structure_pk = structure_node.pk if isinstance(structure_node, StructureData) else int(structure_node)
-                energy_value = energy_node.value if isinstance(energy_node, Float) else float(energy_node)
+            structure_pk = structure_node.pk if isinstance(structure_node, StructureData) else int(structure_node)
+            energy_value = energy_node.value if isinstance(energy_node, Float) else float(energy_node)
 
-                # Store JSON-serializable data including structure PK
-                # Users can load structure later with: orm.load_node(structure_pk)
-                successful.append({
-                    'name': variant['name'],
-                    'structure_pk': structure_pk,
-                    'energy': energy_value,
-                    'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
-                    'metadata': variant
-                })
+            # Store JSON-serializable data including structure PK
+            # Users can load structure later with: orm.load_node(structure_pk)
+            successful.append({
+                'name': variant['name'],
+                'structure_pk': structure_pk,
+                'energy': energy_value,
+                'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
+                'metadata': variant
+            })
         else:
-            # Failure - record error
-            error_node = errors.get(idx_key, None)
-            if error_node:
-                error_msg = error_node.value if isinstance(error_node, Str) else str(error_node)
-            else:
-                error_msg = 'Unknown error'
-
+            # Failure - missing structure or energy output
             failed.append({
                 'name': variant['name'],
                 'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
-                'exit_status': exit_status_value,
-                'error_message': error_msg
+                'error_message': 'Relaxation failed - no structure/energy output'
             })
 
     # Calculate statistics
