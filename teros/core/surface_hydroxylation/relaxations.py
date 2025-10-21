@@ -2,11 +2,12 @@
 
 import typing as t
 from aiida import orm
+from aiida.engine import calcfunction
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, namespace, dynamic
 
 
-@task.calcfunction
+@calcfunction
 def extract_total_energy(energies: orm.Dict) -> orm.Float:
     """
     Extract total energy from VASP energies output.
@@ -29,7 +30,7 @@ def extract_total_energy(energies: orm.Dict) -> orm.Float:
     raise ValueError(f'Unable to find total energy in VASP outputs. Available keys: {available}')
 
 
-@task.calcfunction
+@calcfunction
 def get_exit_info(exit_status: orm.Int, exit_message: orm.Str) -> dict:
     """
     Package exit status and message for output.
@@ -41,12 +42,12 @@ def get_exit_info(exit_status: orm.Int, exit_message: orm.Str) -> dict:
     Returns:
         dict with exit_status and error
     """
-    from aiida.orm import Str
+    from aiida.orm import Int, Str
 
-    # Return exit_status as-is, and error message
+    # Create new nodes to avoid provenance cycles
     return {
-        'exit_status': exit_status,
-        'error': exit_message if exit_message.value else Str('')
+        'exit_status': Int(exit_status.value),
+        'error': Str(exit_message.value if exit_message.value else '')
     }
 
 
