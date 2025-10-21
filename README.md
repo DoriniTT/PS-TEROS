@@ -5,6 +5,7 @@ PS-TEROS is a Python package for calculating surface Gibbs free energy using ab 
 ## Features
 
 - **Automated Surface Energy Calculations**: Complete workflow for surface Gibbs free energy calculations using ab initio atomistic thermodynamics
+- **Adsorption Energy Calculations**: NEW! Calculate adsorption energies with automatic structure separation, relaxation, and full builder API control with atom fixing for slabs
 - **DFT Code Support**: Currently supports VASP via AiiDA plugins (CP2K and Quantum ESPRESSO support planned for future releases)
 - **Flexible Slab Generation**: Automatic generation or manual input of surface terminations
 - **Cleavage Energy Calculations**: Built-in module for computing cleavage energies of complementary surface pairs
@@ -206,6 +207,7 @@ workflow_preset='surface_thermodynamics'  # Activates full thermodynamics workfl
 **Available presets:**
 - `surface_thermodynamics` (default) - Complete surface energy calculations
 - `surface_thermodynamics_unrelaxed` - Quick screening with unrelaxed slabs
+- `adsorption_energy` - NEW! Adsorption energy calculations with relaxation and SCF
 - `cleavage_only` - Cleavage energy calculations
 - `relaxation_energy_only` - Surface reconstruction analysis
 - `bulk_only` - Bulk optimization only
@@ -284,6 +286,88 @@ PS-TEROS workflows follow this execution pattern:
    - **Thermodynamics**: Surface Gibbs free energy vs chemical potentials
    - **Cleavage Energy**: Energy cost of cleaving complementary surfaces
 
+## Adsorption Energy Calculations
+
+PS-TEROS now includes a complete workflow for calculating adsorption energies on oxide surfaces using the formula:
+
+```
+E_ads = E_complete - E_substrate - E_molecule
+```
+
+**NEW Features:**
+- **Full Builder API**: Complete control over `vasp.v2.relax` with `relax_settings`
+- **Atom Fixing**: Fix bottom/top/center layers during slab relaxation
+- **Automatic Structure Separation**: Intelligently separates substrate and adsorbate using connectivity analysis
+- **Parallel SCF Calculations**: Efficient calculation of all three energy components
+
+### Basic Usage
+
+```python
+from teros.core.workgraph import build_core_workgraph
+
+wg = build_core_workgraph(
+    workflow_preset='adsorption_energy',
+
+    # Structure with adsorbate already placed
+    adsorption_structures={'oh_site': structure_with_oh},
+    adsorption_formulas={'oh_site': 'OH'},
+
+    # Full builder control for relaxation
+    relax_before_adsorption=True,
+    adsorption_relax_builder_inputs={
+        'relax_settings': {
+            'algo': 'cg',
+            'force_cutoff': 0.1,
+            'steps': 500,
+            'positions': True,
+            'shape': False,
+            'volume': False,
+        },
+        'vasp': {
+            'parameters': {'incar': {...}},
+            'options': {...},
+            'potential_family': 'PBE',
+            'potential_mapping': {...},
+        }
+    },
+
+    # Atom fixing for slabs
+    adsorption_fix_atoms=True,
+    adsorption_fix_type='bottom',     # Fix bottom layers
+    adsorption_fix_thickness=7.0,     # 7 Å from bottom
+
+    code_label='vasp@cluster',
+    potential_family='PBE',
+)
+```
+
+### Workflow Phases
+
+1. **Relax** (optional): Relax complete substrate+adsorbate system with constraints
+2. **Separate**: Automatically identify and separate substrate, adsorbate, and complete structures
+3. **SCF**: Run single-point calculations on all three components (parallel)
+4. **Calculate**: Compute E_ads = E_complete - E_substrate - E_molecule
+
+### Atom Fixing Options
+
+- `'bottom'`: Fix atoms from bottom up to specified thickness
+- `'top'`: Fix atoms from top down to specified thickness
+- `'center'`: Fix atoms around slab center
+- `fix_elements=['La', 'Mn']`: Optionally fix only specific elements
+
+### Example
+
+See complete working example:
+- **Script**: `teros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py`
+- **Documentation**: `teros/experimental/adsorption_energy/lamno3/README.md`
+- **System**: OH radical on LaMnO3(100) surface
+
+**Key Features Demonstrated:**
+- Full `relax_settings` control
+- Bottom 7 Å fixed during relaxation
+- Automatic OH/substrate separation
+- Expected E_ads: -2 to -4 eV
+
 ## Core Modules
 
 ### `teros.core.workgraph`
@@ -309,6 +393,20 @@ Cleavage energy calculations:
 - `calculate_cleavage_energy()`: Energy for single complementary pair
 - `compute_cleavage_energies_scatter()`: Parallel calculation for all pairs
 - Automatic pairing of complementary terminations
+
+### `teros.core.adsorption_energy`
+Adsorption energy calculations (NEW):
+- `compute_adsorption_energies_scatter()`: Complete adsorption energy workflow
+- `separate_adsorbate_structure()`: Intelligent structure separation using connectivity
+- `calculate_adsorption_energy()`: Compute E_ads from component energies
+- Full builder API support for `vasp.v2.relax` and `vasp.v2.vasp`
+- Atom fixing for slab calculations
+
+### `teros.core.fixed_atoms`
+Atom constraint utilities (NEW):
+- `get_fixed_atoms_list()`: Identify atoms to fix by position
+- `add_fixed_atoms_to_vasp_parameters()`: Add selective dynamics constraints
+- Support for bottom/top/center fixing with element filtering
 
 ### `teros.core.builders`
 Default parameter sets:
@@ -339,7 +437,19 @@ Default parameter sets:
 - `compute_electronic_properties_bulk`: Enable/disable bulk DOS/bands
 - `compute_electronic_properties_slabs`: Enable/disable slab DOS/bands
 - `run_aimd`: Enable/disable AIMD simulations
+- `run_adsorption_energy`: Enable/disable adsorption energy calculations (NEW)
 - `restart_from_node`: PK of previous calculation for restart (optional)
+
+### Adsorption Energy Parameters (NEW)
+- `adsorption_structures`: Dict of substrate+adsorbate structures
+- `adsorption_formulas`: Dict mapping labels to adsorbate formulas (e.g., {'site1': 'OH'})
+- `relax_before_adsorption`: Enable relaxation before separation
+- `adsorption_relax_builder_inputs`: Full builder dict for vasp.v2.relax
+- `adsorption_scf_builder_inputs`: Full builder dict for vasp.v2.vasp (SCF)
+- `adsorption_fix_atoms`: Enable atom fixing during relaxation
+- `adsorption_fix_type`: Type of fixing ('bottom', 'top', 'center')
+- `adsorption_fix_thickness`: Thickness in Angstroms for fixing region
+- `adsorption_fix_elements`: Optional list of elements to fix
 
 **Note:** When using `workflow_preset`, most flags are set automatically. Use individual flags only to override preset defaults.
 
@@ -359,8 +469,9 @@ The `examples/` directory contains comprehensive demonstrations:
 - **`examples/cleavage/`**: Cleavage energy calculations
 - **`examples/slabs/`**: Manual slab input workflows
 - **`examples/vasp/`**: VASP-specific examples
+- **`teros/experimental/adsorption_energy/lamno3/`**: NEW! Adsorption energy calculations with full builder API and atom fixing
 
-Each example includes detailed documentation in accompanying `.md` files.
+Each example includes detailed documentation in accompanying `.md` or `README.md` files.
 
 ## Analyzing Results
 
@@ -390,6 +501,14 @@ thermo_data = results.thermodynamics
 
 # Cleavage energies (if computed)
 cleavage_data = results.cleavage_energies
+
+# Adsorption energy results (if computed)
+adsorption_energies = results.adsorption_energies  # Dict: {'label': E_ads}
+relaxed_structures = results.relaxed_complete_structures  # Relaxed substrate+adsorbate
+separated_structures = results.separated_structures  # Separated components
+substrate_energies = results.substrate_energies  # Substrate SCF energies
+molecule_energies = results.molecule_energies  # Molecule SCF energies
+complete_energies = results.complete_energies  # Complete system SCF energies
 
 # Remote folders (for restart)
 remote_folders = results.slab_remote
