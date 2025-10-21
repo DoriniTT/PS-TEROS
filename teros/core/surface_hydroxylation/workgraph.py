@@ -120,20 +120,15 @@ def SurfaceHydroxylationWorkGraph(
     # Task 1b: Extract manifest from result dict
     manifest = extract_manifest(result=gen_result)
 
-    # Task 2: Prepare VASP configuration
-    # Convert code PK and other components to AiiDA nodes
-    code_pk = orm.Int(code.pk)
-    options_dict = orm.Dict(dict=options)
-    vasp_config_dict = orm.Dict(dict=vasp_config)
-
-    # Task 3: Relax all generated structures in parallel
+    # Task 2: Relax all generated structures in parallel
     # Pass the full result dict from gen_result
     # relax_slabs_with_semaphore will extract structure_* keys
+    # Pass plain values (int/dict) instead of AiiDA nodes to avoid serialization issues
     relax_outputs = relax_slabs_with_semaphore(
         structures=gen_result,
-        code_pk=code_pk,
-        vasp_config=vasp_config_dict,
-        options=options_dict,
+        code_pk=code.pk,
+        vasp_config=vasp_config,
+        options=options,
         max_parallel=max_parallel_jobs,
     )
 

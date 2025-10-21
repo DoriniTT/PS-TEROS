@@ -54,9 +54,9 @@ def get_exit_info(exit_status: orm.Int, exit_message: orm.Str) -> dict:
 @task.graph
 def relax_slabs_with_semaphore(
     structures: dict[str, orm.StructureData],
-    code_pk: orm.Int,
-    vasp_config: orm.Dict,
-    options: orm.Dict,
+    code_pk: int,
+    vasp_config: dict,
+    options: dict,
     max_parallel: int,
 ) -> t.Annotated[dict, namespace(**{
     'structures': dynamic(orm.StructureData),
@@ -83,15 +83,15 @@ def relax_slabs_with_semaphore(
 
     Args:
         structures: Dict of structures to relax (e.g., {'structure_0': StructureData, ...})
-        code_pk: PK of AiiDA Code for VASP (as Int node)
-        vasp_config: VASP configuration as AiiDA Dict containing:
+        code_pk: PK of AiiDA Code for VASP (as int)
+        vasp_config: VASP configuration as plain dict containing:
             - relax: Dict with relaxation settings (positions, shape, volume, etc.)
             - base: Dict with base VASP settings (force_cutoff, etc.)
             - kpoints_distance: Float (Angstrom, typical: 0.3-0.5)
             - potential_family: Str (e.g., 'PBE.54')
             - potential_mapping: Dict (optional, element->potential mapping)
             - clean_workdir: Bool (default: False)
-        options: Scheduler options as AiiDA Dict (resources, queue, time, etc.)
+        options: Scheduler options as plain dict (resources, queue, time, etc.)
         max_parallel: Maximum number of structures to process (limits to first N structures)
 
     Returns:
@@ -113,18 +113,15 @@ def relax_slabs_with_semaphore(
     VaspTask = task(VaspRelaxWorkChain)
 
     # Load code from PK
-    code = orm.load_node(code_pk.value)
+    code = orm.load_node(code_pk)
 
-    # Extract config from Dict nodes
-    config = vasp_config.get_dict()
-    relax = config.get('relax', {})
-    base = config.get('base', {})
-    kpoints_distance = config.get('kpoints_distance', 0.5)
-    potential_family = config.get('potential_family', 'PBE')
-    potential_mapping = config.get('potential_mapping', {})
-    clean_workdir = config.get('clean_workdir', False)
-
-    options_dict = options.get_dict()
+    # Extract config from plain dict
+    relax = vasp_config.get('relax', {})
+    base = vasp_config.get('base', {})
+    kpoints_distance = vasp_config.get('kpoints_distance', 0.5)
+    potential_family = vasp_config.get('potential_family', 'PBE')
+    potential_mapping = vasp_config.get('potential_mapping', {})
+    clean_workdir = vasp_config.get('clean_workdir', False)
 
     # Output dictionaries
     structures_out = {}
@@ -155,7 +152,7 @@ def relax_slabs_with_semaphore(
             'kpoints_distance': kpoints_distance,
             'potential_family': potential_family,
             'potential_mapping': potential_mapping,
-            'options': options_dict,
+            'options': options,
             'clean_workdir': clean_workdir,
         }
 
