@@ -127,8 +127,10 @@ def relax_slabs_with_semaphore(
     errors_out = {}
 
     # SIMPLE BATCH APPROACH: Only process first max_parallel structures
+    # Filter for structure keys only (ignore 'manifest' and other keys)
+    structure_keys = [k for k in structures.keys() if k.startswith('structure_')]
     # Sort keys to ensure consistent ordering (structure_0, structure_1, ...)
-    sorted_keys = sorted(structures.keys(), key=lambda k: int(k.split('_')[1]))
+    sorted_keys = sorted(structure_keys, key=lambda k: int(k.split('_')[1]))
     selected_keys = sorted_keys[:max_parallel]
 
     # Process selected structures

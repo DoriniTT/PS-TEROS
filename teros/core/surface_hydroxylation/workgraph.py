@@ -109,36 +109,26 @@ def SurfaceHydroxylationWorkGraph(
         surface_params = orm.Dict(dict=surface_params)
 
     # Task 1: Generate surface structure variants
+    # Wrap @calcfunction with task() for use in WorkGraph
     # Returns: {manifest: Dict, structure_0: StructureData, structure_1: ..., structure_N: ...}
-    gen_task = generate_structures(
+    gen_task = task(generate_structures)(
         structure=structure,
         params=surface_params,
     )
 
-    # Task 2: Relax all generated structures in parallel with semaphore
-    # Input: Need to extract structure_* outputs from gen_task and pass as dict
-    # In WorkGraph's @task.graph, we can directly access the returned dict items
-    # generate_structures returns a dict with manifest and structure_N keys
-    # We filter to get only the structure keys and pass them
-
-    # Extract structures from gen_task outputs
-    # gen_task returns a dict, so we can access items like: gen_task['structure_0']
-    # However, in @task.graph context, we need to build the structures dict at graph definition time
-    # The actual filtering happens at runtime through the namespace
-
-    # Pass the full gen_task namespace (contains manifest + structure_0, structure_1, ...)
-    # relax_slabs_with_semaphore will filter out the structure_* keys
+    # Task 2: Relax all generated structures in parallel
+    # Pass the full result namespace from gen_task
+    # relax_slabs_with_semaphore will extract structure_* keys
     relax_outputs = relax_slabs_with_semaphore(
-        structures=gen_task.namespace,
+        structures=gen_task.outputs.result,
         builder_config=builder_config,
         max_parallel=max_parallel_jobs,
     )
 
     # Task 3: Collect and organize results
     # Wrap collect_results with task() to use it in the WorkGraph
-    # Pass namespace outputs directly - collect_results will extract data from nodes
     collect_task = task(collect_results)(
-        manifest=gen_task.manifest,
+        manifest=gen_task.outputs.manifest,
         structures=relax_outputs.structures,
         energies=relax_outputs.energies,
         exit_statuses=relax_outputs.exit_statuses,
@@ -147,7 +137,7 @@ def SurfaceHydroxylationWorkGraph(
 
     # Return outputs
     return {
-        'manifest': gen_task.manifest,
+        'manifest': gen_task.outputs.manifest,
         'successful_relaxations': collect_task.successful_relaxations,
         'failed_relaxations': collect_task.failed_relaxations,
         'statistics': collect_task.statistics,
