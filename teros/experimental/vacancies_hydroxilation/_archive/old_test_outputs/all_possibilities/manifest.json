@@ -1,0 +1,35 @@
+{
+  "mode": "complete",
+  "total_variants": 24,
+  "modes": {
+    "vacancies": {
+      "count": 4,
+      "manifest_file": "manifest_vacancies.json"
+    },
+    "hydrogen": {
+      "count": 4,
+      "manifest_file": "manifest_hydrogen.json"
+    },
+    "combine": {
+      "count": 16,
+      "manifest_file": "manifest_combine.json"
+    }
+  },
+  "deduplication_summary": {
+    "vacancies": {
+      "total_generated": 255,
+      "unique_coverages": 8,
+      "kept": 8
+    },
+    "hydrogen": {
+      "total_generated": 255,
+      "unique_coverages": 8,
+      "kept": 8
+    },
+    "combine": {
+      "total_generated": 6050,
+      "unique_coverages": 28,
+      "kept": 28
+    }
+  }
+}

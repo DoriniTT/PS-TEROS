@@ -31,8 +31,8 @@ def main():
 
     # Load AiiDA profile
     print("\n1. Loading AiiDA profile...")
-    load_profile(profile='psteros')
-    print("   ✓ Profile loaded: psteros")
+    load_profile(profile='presto')
+    print("   ✓ Profile loaded: presto")
 
     # Create test slab (2x2 Pt(111) with O adlayer)
     print("\n2. Creating test structure...")

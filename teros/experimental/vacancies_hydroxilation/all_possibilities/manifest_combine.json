@@ -1,0 +1,241 @@
+{
+  "mode": "combine",
+  "variants": [
+    {
+      "surface": "top",
+      "deleted_indices": [
+        54,
+        58
+      ],
+      "decorated_indices": [
+        116,
+        120
+      ],
+      "count_deleted": 2,
+      "count_H": 2,
+      "surface_area_nm2": 2.1029618776443435,
+      "vacancy_coverage": 0.951,
+      "OH_coverage": 0.951,
+      "bin_id_vac": 0,
+      "bin_id_oh": 0,
+      "bin_center_vac": 1.268,
+      "bin_center_oh": 1.268,
+      "name": "combo_000_0.951_0.951",
+      "file": "all_possibilities/combo_000_0.951_0.951.vasp"
+    },
+    {
+      "surface": "top",
+      "deleted_indices": [
+        54,
+        58
+      ],
+      "decorated_indices": [
+        116,
+        120,
+        178,
+        182
+      ],
+      "count_deleted": 2,
+      "count_H": 4,
+      "surface_area_nm2": 2.1029618776443435,
+      "vacancy_coverage": 0.951,
+      "OH_coverage": 1.9021,
+      "bin_id_vac": 0,
+      "bin_id_oh": 1,
+      "bin_center_vac": 1.268,
+      "bin_center_oh": 1.902,
+      "name": "combo_001_0.951_1.9021",
+      "file": "all_possibilities/combo_001_0.951_1.9021.vasp"
+    },
+    {
+      "surface": "top",
+      "deleted_indices": [
+        54,
+        58
+      ],
+      "decorated_indices": [
+        116,
+        120,
+        178,
+        182,
+        240,
+        244
+      ],
+      "count_deleted": 2,
+      "count_H": 6,
+      "surface_area_nm2": 2.1029618776443435,
+      "vacancy_coverage": 0.951,
+      "OH_coverage": 2.8531,
+      "bin_id_vac": 0,
+      "bin_id_oh": 2,
+      "bin_center_vac": 1.268,
+      "bin_center_oh": 2.5361,
+      "name": "combo_002_0.951_2.8531",
+      "file": "all_possibilities/combo_002_0.951_2.8531.vasp"
+    },
+    {
+      "surface": "top",
+      "deleted_indices": [
+        54,
+        58,
+        116,
+        120
+      ],
+      "decorated_indices": [
+        178,
+        182
+      ],
+      "count_deleted": 4,
+      "count_H": 2,
+      "surface_area_nm2": 2.1029618776443435,
+      "vacancy_coverage": 1.9021,
+      "OH_coverage": 0.951,
+      "bin_id_vac": 1,
+      "bin_id_oh": 0,
+      "bin_center_vac": 1.902,
+      "bin_center_oh": 1.268,
+      "name": "combo_003_1.9021_0.951",
+      "file": "all_possibilities/combo_003_1.9021_0.951.vasp"
+    },
+    {
+      "surface": "top",
+      "deleted_indices": [
+        54,
+        58,
+        116,
+        120
+      ],
+      "decorated_indices": [
+        178,
+        182,
+        240,
+        244
+      ],
+      "count_deleted": 4,
+      "count_H": 4,
+      "surface_area_nm2": 2.1029618776443435,
+      "vacancy_coverage": 1.9021,
+      "OH_coverage": 1.9021,
+      "bin_id_vac": 1,
+      "bin_id_oh": 1,
+      "bin_center_vac": 1.902,
+      "bin_center_oh": 1.902,
+      "name": "combo_004_1.9021_1.9021",
+      "file": "all_possibilities/combo_004_1.9021_1.9021.vasp"
+    },
+    {
+      "surface": "top",
+      "deleted_indices": [
+        54,
+        58,
+        116
+      ],
+      "decorated_indices": [
+        120,
+        178,
+        182,
+        240,
+        244
+      ],
+      "count_deleted": 3,
+      "count_H": 5,
+      "surface_area_nm2": 2.1029618776443435,
+      "vacancy_coverage": 1.4266,
+      "OH_coverage": 2.3776,
+      "bin_id_vac": 0,
+      "bin_id_oh": 2,
+      "bin_center_vac": 1.268,
+      "bin_center_oh": 2.5361,
+      "name": "combo_005_1.4266_2.3776",
+      "file": "all_possibilities/combo_005_1.4266_2.3776.vasp"
+    },
+    {
+      "surface": "top",
+      "deleted_indices": [
+        54,
+        58,
+        116,
+        120,
+        178,
+        182
+      ],
+      "decorated_indices": [
+        240,
+        244
+      ],
+      "count_deleted": 6,
+      "count_H": 2,
+      "surface_area_nm2": 2.1029618776443435,
+      "vacancy_coverage": 2.8531,
+      "OH_coverage": 0.951,
+      "bin_id_vac": 2,
+      "bin_id_oh": 0,
+      "bin_center_vac": 2.5361,
+      "bin_center_oh": 1.268,
+      "name": "combo_006_2.8531_0.951",
+      "file": "all_possibilities/combo_006_2.8531_0.951.vasp"
+    },
+    {
+      "surface": "top",
+      "deleted_indices": [
+        54,
+        58,
+        116,
+        120,
+        178
+      ],
+      "decorated_indices": [
+        182,
+        240,
+        244
+      ],
+      "count_deleted": 5,
+      "count_H": 3,
+      "surface_area_nm2": 2.1029618776443435,
+      "vacancy_coverage": 2.3776,
+      "OH_coverage": 1.4266,
+      "bin_id_vac": 2,
+      "bin_id_oh": 0,
+      "bin_center_vac": 2.5361,
+      "bin_center_oh": 1.268,
+      "name": "combo_007_2.3776_1.4266",
+      "file": "all_possibilities/combo_007_2.3776_1.4266.vasp"
+    },
+    {
+      "surface": "top",
+      "deleted_indices": [
+        54,
+        58,
+        116
+      ],
+      "decorated_indices": [
+        120,
+        178,
+        182,
+        240
+      ],
+      "count_deleted": 3,
+      "count_H": 4,
+      "surface_area_nm2": 2.1029618776443435,
+      "vacancy_coverage": 1.4266,
+      "OH_coverage": 1.9021,
+      "bin_id_vac": 0,
+      "bin_id_oh": 1,
+      "bin_center_vac": 1.268,
+      "bin_center_oh": 1.902,
+      "name": "combo_008_1.4266_1.9021",
+      "file": "all_possibilities/combo_008_1.4266_1.9021.vasp"
+    }
+  ],
+  "deduplication_stats": {
+    "total_generated": 6050,
+    "unique_coverages": 28,
+    "kept": 28
+  },
+  "binning_stats": {
+    "bins_requested": 3,
+    "before_binning": 28,
+    "after_binning": 9,
+    "binning_type": "2D_grid"
+  }
+}

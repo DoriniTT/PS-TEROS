@@ -130,35 +130,33 @@ def relax_slabs_with_semaphore(
     errors_out = {}
 
     # SIMPLE BATCH APPROACH: Only process first max_parallel structures
-    # Filter for structure keys only (ignore 'manifest' and other keys)
-    structure_keys = [k for k in structures.keys() if k.startswith('structure_')]
-    # Sort keys to ensure consistent ordering (structure_0, structure_1, ...)
-    sorted_keys = sorted(structure_keys, key=lambda k: int(k.split('_')[1]))
-    selected_keys = sorted_keys[:max_parallel]
+    # structures is a dict with string keys: '0', '1', '2', etc.
+    # Sort keys to ensure consistent ordering
+    sorted_keys = sorted(structures.keys(), key=lambda k: int(k))
+    # Extract value from max_parallel if it's an AiiDA node
+    limit = max_parallel.value if hasattr(max_parallel, 'value') else int(max_parallel)
+    selected_keys = sorted_keys[:limit]
 
     # Process selected structures
     for key in selected_keys:
         structure = structures[key]
 
-        # Extract index from key (e.g., 'structure_0' -> 0)
-        idx = int(key.split('_')[1])
-
-        # Build VASP relax workflow inputs
-        vasp_inputs = {
-            'structure': structure,
-            'code': code,
-            'relax': relax,
-            'base': base,
-            'kpoints_distance': kpoints_distance,
-            'potential_family': potential_family,
-            'potential_mapping': potential_mapping,
-            'options': options,
-            'clean_workdir': clean_workdir,
-        }
+        # Key is already the index as a string
+        idx = int(key)
 
         # Create VASP relaxation task
         # All tasks created in this loop will run in parallel (scatter-gather pattern)
-        vasp_task = VaspTask(**vasp_inputs)
+        vasp_task = VaspTask(
+            structure=structure,
+            code=code,
+            relax=relax,
+            base=base,
+            kpoints_distance=kpoints_distance,
+            potential_family=potential_family,
+            potential_mapping=potential_mapping,
+            options=options,
+            clean_workdir=clean_workdir,
+        )
 
         # Extract energy from VASP misc output
         energy = extract_total_energy(energies=vasp_task.misc)

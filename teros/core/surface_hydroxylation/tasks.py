@@ -2,17 +2,17 @@
 
 import tempfile
 from pathlib import Path
+import typing as t
 
 from ase.io import read
-from aiida.engine import calcfunction
 from aiida.orm import StructureData, Dict
-from aiida_workgraph import task
+from aiida_workgraph import task, namespace, dynamic
 
 from .utils import aiida_to_ase, ase_to_aiida
 from .surface_modes import SurfaceModifier
 
 
-@calcfunction
+@task.calcfunction
 def extract_manifest(result: dict) -> Dict:
     """
     Extract manifest from generate_structures result.
@@ -29,26 +29,32 @@ def extract_manifest(result: dict) -> Dict:
     return result['manifest']
 
 
-@calcfunction
+@task.calcfunction
 def extract_successful_relaxations(result: dict) -> Dict:
     """Extract successful_relaxations from collect_results result."""
     return result['successful_relaxations']
 
 
-@calcfunction
+@task.calcfunction
 def extract_failed_relaxations(result: dict) -> Dict:
     """Extract failed_relaxations from collect_results result."""
     return result['failed_relaxations']
 
 
-@calcfunction
+@task.calcfunction
 def extract_statistics(result: dict) -> Dict:
     """Extract statistics from collect_results result."""
     return result['statistics']
 
 
-@calcfunction
-def generate_structures(structure: StructureData, params: Dict) -> dict:
+@task.calcfunction
+def generate_structures(
+    structure: StructureData,
+    params: Dict
+) -> t.Annotated[dict, namespace(
+    manifest=Dict,
+    structures=dynamic(StructureData),
+)]:
     """
     Generate surface variants using surface_modes.py.
 
@@ -68,7 +74,7 @@ def generate_structures(structure: StructureData, params: Dict) -> dict:
     Returns:
         dict with:
             - manifest: Dict (parsed manifest from surface_modes)
-            - structure_0, structure_1, ..., structure_N: StructureData (generated variants)
+            - structures: dict of StructureData (keyed by index: '0', '1', etc.)
     """
     # Convert AiiDA → ASE
     atoms = aiida_to_ase(structure)
@@ -119,33 +125,31 @@ def generate_structures(structure: StructureData, params: Dict) -> dict:
             raise ValueError(f"Unknown mode: {mode}")
 
         # Read generated structures
-        structures = []
-        for variant in manifest['variants']:
+        structures_dict = {}
+        for idx, variant in enumerate(manifest['variants']):
             filepath = Path(variant['file'])
             variant_atoms = read(filepath.as_posix())
-            structures.append(ase_to_aiida(variant_atoms))
+            structures_dict[str(idx)] = ase_to_aiida(variant_atoms)
 
-    # Return manifest and structures as namespace
-    # AiiDA can't store List of unstored StructureData, so return as dict
-    result = {
+    # Return manifest and structures as namespace with dynamic structures
+    return {
         'manifest': Dict(dict=manifest),
+        'structures': structures_dict,
     }
 
-    # Add each structure as a separate output
-    for idx, struct in enumerate(structures):
-        result[f'structure_{idx}'] = struct
 
-    return result
-
-
-@calcfunction
+@task.calcfunction
 def collect_results(
     manifest,
     structures,
     energies,
     exit_statuses,
     errors,
-):
+) -> t.Annotated[dict, namespace(
+    successful_relaxations=Dict,
+    failed_relaxations=Dict,
+    statistics=Dict,
+)]:
     """
     Collect and organize relaxation results from namespace outputs.
 

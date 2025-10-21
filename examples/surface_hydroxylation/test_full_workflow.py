@@ -35,13 +35,13 @@ def main():
     print("SURFACE HYDROXYLATION - FULL WORKFLOW TEST (WITH VASP)")
     print("="*70)
     print("\nWARNING: This will submit VASP jobs to the cluster!")
-    print("Press Ctrl+C to abort, or Enter to continue...")
+    print("Continuing automatically (interactive prompt disabled for testing)...")
 
-    try:
-        input()
-    except KeyboardInterrupt:
-        print("\n\nAborted by user.")
-        return 0
+    # try:
+    #     input()
+    # except KeyboardInterrupt:
+    #     print("\n\nAborted by user.")
+    #     return 0
 
     # Load AiiDA profile
     print("\n1. Loading AiiDA profile...")

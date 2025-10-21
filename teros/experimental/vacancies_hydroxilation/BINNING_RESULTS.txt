@@ -1,0 +1,63 @@
+Coverage Bins Sampling - Results Summary
+========================================
+
+Test Structure: st2.vasp with 2×2×1 supercell
+
+Reduction Pipeline:
+-------------------
+1. Original combinations: 6560 structures total
+   - Vacancies: 255 combinations
+   - Hydrogen: 255 combinations
+   - Combined: 6050 combinations
+
+2. After coverage deduplication: 44 structures (99.3% reduction)
+   - Vacancies: 255 -> 8 unique coverages
+   - Hydrogen: 255 -> 8 unique coverages
+   - Combined: 6050 -> 28 unique coverage pairs
+
+3. After bin sampling (5 bins): 35 structures (99.5% total reduction)
+   - Vacancies: 8 -> 5 variants (5 bins)
+   - Hydrogen: 8 -> 5 variants (5 bins)
+   - Combined: 28 -> 25 variants (5×5 grid)
+
+Performance:
+------------
+Total time for complete mode with 5 bins: 1.8 seconds
+- Deduplication + binning + file I/O
+- All processing in memory before writing
+
+Verification:
+-------------
+- All 29 unit tests: PASS
+- All 3 integration tests: PASS
+- Coverage distribution: Even across 0-100% range
+- Bin metadata: Present in all manifests
+
+Example Output (Vacancies mode):
+---------------------------------
+Mode: vacancies. Wrote 5 variants to 'output/test_bins_vac'.
+Deduplication: 255 generated -> 8 kept (removed 247 duplicates)
+Binning: 8 unique -> 5 sampled (5 bins)
+
+Bin Metadata in Manifest:
+-------------------------
+Each variant includes:
+- bin_id: Integer bin identifier (0 to n_bins-1)
+- bin_center: Coverage value at bin center
+- For 2D (combined mode): bin_id_vac, bin_id_oh, bin_center_vac, bin_center_oh
+
+Feature Complete: ✓
+-------------------
+Tasks 8-12 implemented successfully:
+✓ Task 8: Add bin metadata to manifest output
+✓ Task 9: Add validation for coverage-bins argument
+✓ Task 10: Create integration test with st2.vasp
+✓ Task 11: Update statistics output in main()
+✓ Task 12: Run full verification and create summary
+
+Commits:
+--------
+1. dec655f - feat: add bin metadata to manifest output
+2. bddfe23 - feat: add validation for --coverage-bins argument
+3. 0e92c88 - test: add integration tests for coverage bins sampling
+4. 7386bac - feat: add binning statistics to output

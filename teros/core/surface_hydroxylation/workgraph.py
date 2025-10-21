@@ -110,48 +110,35 @@ def SurfaceHydroxylationWorkGraph(
         surface_params = orm.Dict(dict=surface_params)
 
     # Task 1: Generate surface structure variants
-    # Use task() wrapper to create task connections, not execute immediately
-    # Returns: {manifest: Dict, structure_0: StructureData, structure_1: ..., structure_N: ...}
-    from aiida_workgraph import task as wgtask
-    gen_task = wgtask(generate_structures)(
+    # Returns namespace with manifest (Dict) and structures (dynamic dict of StructureData)
+    gen_outputs = generate_structures(
         structure=structure,
         params=surface_params,
     )
 
-    # Task 1b: Extract manifest from result dict
-    manifest_task = wgtask(extract_manifest)(result=gen_task.outputs['result'])
-
     # Task 2: Relax all generated structures in parallel
-    # Pass the full result dict from gen_task
-    # relax_slabs_with_semaphore will extract structure_* keys
-    # Pass plain values (int/dict) instead of AiiDA nodes to avoid serialization issues
+    # Pass structures dict from generate_structures
     relax_outputs = relax_slabs_with_semaphore(
-        structures=gen_task.outputs['result'],
+        structures=gen_outputs.structures,
         code_pk=code.pk,
         vasp_config=vasp_config,
         options=options,
         max_parallel=max_parallel_jobs,
     )
 
-    # Task 4: Collect and organize results
-    # Use task() wrapper to create task connections
-    collect_task = wgtask(collect_results)(
-        manifest=manifest_task.outputs['result'],
+    # Task 3: Collect and organize results
+    collect_outputs = collect_results(
+        manifest=gen_outputs.manifest,
         structures=relax_outputs.structures,
         energies=relax_outputs.energies,
         exit_statuses=relax_outputs.exit_statuses,
         errors=relax_outputs.errors,
     )
 
-    # Task 5: Extract individual outputs from collect_results result
-    successful_task = wgtask(extract_successful_relaxations)(result=collect_task.outputs['result'])
-    failed_task = wgtask(extract_failed_relaxations)(result=collect_task.outputs['result'])
-    statistics_task = wgtask(extract_statistics)(result=collect_task.outputs['result'])
-
-    # Return outputs - reference task outputs, not actual values
+    # Return outputs directly
     return {
-        'manifest': manifest_task.outputs['result'],
-        'successful_relaxations': successful_task.outputs['result'],
-        'failed_relaxations': failed_task.outputs['result'],
-        'statistics': statistics_task.outputs['result'],
+        'manifest': gen_outputs.manifest,
+        'successful_relaxations': collect_outputs.successful_relaxations,
+        'failed_relaxations': collect_outputs.failed_relaxations,
+        'statistics': collect_outputs.statistics,
     }
