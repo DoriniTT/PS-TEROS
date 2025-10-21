@@ -117,10 +117,10 @@ def SurfaceHydroxylationWorkGraph(
     )
 
     # Task 2: Relax all generated structures in parallel
-    # Pass the full result namespace from gen_task
+    # Pass the full result dict from gen_task
     # relax_slabs_with_semaphore will extract structure_* keys
     relax_outputs = relax_slabs_with_semaphore(
-        structures=gen_task.outputs.result,
+        structures=gen_task.result,
         builder_config=builder_config,
         max_parallel=max_parallel_jobs,
     )
@@ -128,7 +128,7 @@ def SurfaceHydroxylationWorkGraph(
     # Task 3: Collect and organize results
     # Wrap collect_results with task() to use it in the WorkGraph
     collect_task = task(collect_results)(
-        manifest=gen_task.outputs.manifest,
+        manifest=gen_task.manifest,
         structures=relax_outputs.structures,
         energies=relax_outputs.energies,
         exit_statuses=relax_outputs.exit_statuses,
@@ -137,7 +137,7 @@ def SurfaceHydroxylationWorkGraph(
 
     # Return outputs
     return {
-        'manifest': gen_task.outputs.manifest,
+        'manifest': gen_task.manifest,
         'successful_relaxations': collect_task.successful_relaxations,
         'failed_relaxations': collect_task.failed_relaxations,
         'statistics': collect_task.statistics,
