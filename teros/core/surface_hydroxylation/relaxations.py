@@ -56,7 +56,12 @@ def relax_slabs_with_semaphore(
     structures: dict[str, orm.StructureData],
     builder_config: dict,
     max_parallel: int,
-) -> dict:
+) -> t.Annotated[dict, namespace(**{
+    'structures': dynamic(orm.StructureData),
+    'energies': dynamic(orm.Float),
+    'exit_statuses': dynamic(orm.Int),
+    'errors': dynamic(orm.Str),
+})]:
     """
     Relax multiple structures in parallel with batch-based limiting.
 

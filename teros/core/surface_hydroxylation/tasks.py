@@ -122,12 +122,12 @@ def generate_structures(structure: StructureData, params: Dict) -> dict:
 
 @calcfunction
 def collect_results(
-    manifest: Dict,
-    structures: dict,
-    energies: dict,
-    exit_statuses: dict,
-    errors: dict,
-) -> dict:
+    manifest,
+    structures,
+    energies,
+    exit_statuses,
+    errors,
+):
     """
     Collect and organize relaxation results from namespace outputs.
 
