@@ -13,6 +13,23 @@ from .surface_modes import SurfaceModifier
 
 
 @calcfunction
+def extract_manifest(result: dict) -> Dict:
+    """
+    Extract manifest from generate_structures result.
+
+    Helper function to extract the manifest Dict from the full result
+    returned by generate_structures.
+
+    Args:
+        result: Full result dict from generate_structures
+
+    Returns:
+        Manifest Dict
+    """
+    return result['manifest']
+
+
+@calcfunction
 def generate_structures(structure: StructureData, params: Dict) -> dict:
     """
     Generate surface variants using surface_modes.py.
@@ -103,6 +120,7 @@ def generate_structures(structure: StructureData, params: Dict) -> dict:
     return result
 
 
+@calcfunction
 def collect_results(
     manifest: Dict,
     structures: dict,
