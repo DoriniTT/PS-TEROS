@@ -126,16 +126,34 @@ def SurfaceHydroxylationWorkGraph(
     # Task 1b: Extract manifest from result dict
     manifest_task = task(extract_manifest)(result=gen_task.result)
 
-    # Task 2: Relax all generated structures in parallel
+    # Task 2: Prepare VASP configuration
+    # Extract code and convert other components to AiiDA Dict nodes
+    code = builder_config['code']
+    options = orm.Dict(dict=builder_config.get('options', {}))
+
+    # VASP config without code and options
+    vasp_config_dict = {
+        'relax': builder_config.get('relax', {}),
+        'base': builder_config.get('base', {}),
+        'kpoints_distance': builder_config.get('kpoints_distance', 0.5),
+        'potential_family': builder_config.get('potential_family', 'PBE'),
+        'potential_mapping': builder_config.get('potential_mapping', {}),
+        'clean_workdir': builder_config.get('clean_workdir', False),
+    }
+    vasp_config = orm.Dict(dict=vasp_config_dict)
+
+    # Task 3: Relax all generated structures in parallel
     # Pass the full result dict from gen_task
     # relax_slabs_with_semaphore will extract structure_* keys
     relax_outputs = relax_slabs_with_semaphore(
         structures=gen_task.result,
-        builder_config=builder_config,
+        code=code,
+        vasp_config=vasp_config,
+        options=options,
         max_parallel=max_parallel_jobs,
     )
 
-    # Task 3: Collect and organize results
+    # Task 4: Collect and organize results
     # Wrap collect_results with task() to use it in the WorkGraph
     collect_task = task(collect_results)(
         manifest=manifest_task.result,
@@ -145,7 +163,7 @@ def SurfaceHydroxylationWorkGraph(
         errors=relax_outputs.errors,
     )
 
-    # Task 3b: Extract individual outputs from collect_results result
+    # Task 5: Extract individual outputs from collect_results result
     successful_task = task(extract_successful_relaxations)(result=collect_task.result)
     failed_task = task(extract_failed_relaxations)(result=collect_task.result)
     statistics_task = task(extract_statistics)(result=collect_task.result)
