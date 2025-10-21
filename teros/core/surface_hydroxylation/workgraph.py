@@ -110,15 +110,15 @@ def SurfaceHydroxylationWorkGraph(
         surface_params = orm.Dict(dict=surface_params)
 
     # Task 1: Generate surface structure variants
-    # Wrap @calcfunction with task() for use in WorkGraph
+    # Call @calcfunction directly - @task.graph handles task creation
     # Returns: {manifest: Dict, structure_0: StructureData, structure_1: ..., structure_N: ...}
-    gen_task = task(generate_structures)(
+    gen_result = generate_structures(
         structure=structure,
         params=surface_params,
     )
 
     # Task 1b: Extract manifest from result dict
-    manifest_task = task(extract_manifest)(result=gen_task.result)
+    manifest = extract_manifest(result=gen_result)
 
     # Task 2: Prepare VASP configuration
     # Convert code PK and other components to AiiDA nodes
@@ -127,10 +127,10 @@ def SurfaceHydroxylationWorkGraph(
     vasp_config_dict = orm.Dict(dict=vasp_config)
 
     # Task 3: Relax all generated structures in parallel
-    # Pass the full result dict from gen_task
+    # Pass the full result dict from gen_result
     # relax_slabs_with_semaphore will extract structure_* keys
     relax_outputs = relax_slabs_with_semaphore(
-        structures=gen_task.result,
+        structures=gen_result,
         code_pk=code_pk,
         vasp_config=vasp_config_dict,
         options=options_dict,
@@ -138,9 +138,9 @@ def SurfaceHydroxylationWorkGraph(
     )
 
     # Task 4: Collect and organize results
-    # Wrap collect_results with task() to use it in the WorkGraph
-    collect_task = task(collect_results)(
-        manifest=manifest_task.result,
+    # Call @calcfunction directly - @task.graph handles task creation
+    collect_result = collect_results(
+        manifest=manifest,
         structures=relax_outputs.structures,
         energies=relax_outputs.energies,
         exit_statuses=relax_outputs.exit_statuses,
@@ -148,14 +148,14 @@ def SurfaceHydroxylationWorkGraph(
     )
 
     # Task 5: Extract individual outputs from collect_results result
-    successful_task = task(extract_successful_relaxations)(result=collect_task.result)
-    failed_task = task(extract_failed_relaxations)(result=collect_task.result)
-    statistics_task = task(extract_statistics)(result=collect_task.result)
+    successful = extract_successful_relaxations(result=collect_result)
+    failed = extract_failed_relaxations(result=collect_result)
+    statistics = extract_statistics(result=collect_result)
 
     # Return outputs
     return {
-        'manifest': manifest_task.result,
-        'successful_relaxations': successful_task.result,
-        'failed_relaxations': failed_task.result,
-        'statistics': statistics_task.result,
+        'manifest': manifest,
+        'successful_relaxations': successful,
+        'failed_relaxations': failed,
+        'statistics': statistics,
     }
