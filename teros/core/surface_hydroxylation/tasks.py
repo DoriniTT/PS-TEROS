@@ -103,52 +103,25 @@ def generate_structures(structure: StructureData, params: Dict) -> dict:
 
 
 @calcfunction
-def package_namespace_to_dict(namespace_dict: dict) -> Dict:
-    """
-    Convert a namespace dict of AiiDA nodes to a serializable Dict.
-
-    This helper extracts PKs from StructureData nodes and values from other nodes.
-
-    Args:
-        namespace_dict: Dict with integer keys and AiiDA node values
-
-    Returns:
-        Dict node with string keys and serializable values
-    """
-    from aiida.orm import Float, Int, Str, StructureData
-
-    result = {}
-    for key, value in namespace_dict.items():
-        key_str = str(key)
-        if isinstance(value, StructureData):
-            result[key_str] = value.pk
-        elif isinstance(value, (Float, Int)):
-            result[key_str] = value.value
-        elif isinstance(value, Str):
-            result[key_str] = value.value
-        else:
-            result[key_str] = str(value)
-
-    return Dict(dict=result)
-
-
-@calcfunction
 def collect_results(
     manifest: Dict,
-    structures: Dict,
-    energies: Dict,
-    exit_statuses: Dict,
-    errors: Dict,
+    structures: dict,
+    energies: dict,
+    exit_statuses: dict,
+    errors: dict,
 ) -> dict:
     """
-    Collect and organize relaxation results.
+    Collect and organize relaxation results from namespace outputs.
+
+    This function accepts the raw namespace dictionaries from relax_slabs_with_semaphore
+    and extracts data from AiiDA nodes to create organized result lists.
 
     Args:
         manifest: Original manifest Dict from generate_structures
-        structures: Dict mapping indices to relaxed StructureData {0: StructureData, 1: ...}
-        energies: Dict mapping indices to energies {0: Float, 1: ...}
-        exit_statuses: Dict mapping indices to exit statuses {0: Int, 1: ...}
-        errors: Dict mapping indices to error messages {0: Str, 1: ...}
+        structures: Namespace dict mapping indices to relaxed StructureData {0: StructureData, 1: ...}
+        energies: Namespace dict mapping indices to Float nodes {0: Float, 1: ...}
+        exit_statuses: Namespace dict mapping indices to Int nodes {0: Int, 1: ...}
+        errors: Namespace dict mapping indices to Str nodes {0: Str, 1: ...}
 
     Returns:
         dict with:
@@ -162,25 +135,17 @@ def collect_results(
         Structures are stored by PK in successful_relaxations.
         To retrieve: orm.load_node(result['successful_relaxations']['results'][i]['structure_pk'])
     """
-    from aiida.orm import Int, Float, Str
+    from aiida.orm import Int, Float, Str, StructureData
 
     manifest_dict = manifest.get_dict()
     variants = manifest_dict['variants']
-
-    # Convert Dict inputs to Python dicts
-    structures_dict = structures.get_dict()
-    energies_dict = energies.get_dict()
-    exit_statuses_dict = exit_statuses.get_dict()
-    errors_dict = errors.get_dict()
 
     successful = []
     failed = []
 
     # Iterate through variants by index
     for idx, variant in enumerate(variants):
-        idx_str = str(idx)  # Dict keys are strings
-
-        if idx_str not in exit_statuses_dict:
+        if idx not in exit_statuses:
             # Relaxation not found (shouldn't happen in normal operation)
             failed.append({
                 'name': variant['name'],
@@ -189,11 +154,13 @@ def collect_results(
             })
             continue
 
-        exit_status_value = exit_statuses_dict[idx_str]
+        # Extract values from AiiDA nodes
+        exit_status_node = exit_statuses[idx]
+        exit_status_value = exit_status_node.value if isinstance(exit_status_node, Int) else int(exit_status_node)
 
         if exit_status_value == 0:
             # Success - extract structure and energy
-            if idx_str not in structures_dict or idx_str not in energies_dict:
+            if idx not in structures or idx not in energies:
                 # Missing data for successful relaxation
                 failed.append({
                     'name': variant['name'],
@@ -201,9 +168,12 @@ def collect_results(
                     'error_message': 'Missing structure or energy data'
                 })
             else:
-                # Get structure PK and energy value
-                structure_pk = structures_dict[idx_str]
-                energy_value = energies_dict[idx_str]
+                # Extract PK and values from nodes
+                structure_node = structures[idx]
+                energy_node = energies[idx]
+
+                structure_pk = structure_node.pk if isinstance(structure_node, StructureData) else int(structure_node)
+                energy_value = energy_node.value if isinstance(energy_node, Float) else float(energy_node)
 
                 # Store JSON-serializable data including structure PK
                 # Users can load structure later with: orm.load_node(structure_pk)
@@ -216,7 +186,11 @@ def collect_results(
                 })
         else:
             # Failure - record error
-            error_msg = errors_dict.get(idx_str, 'Unknown error')
+            error_node = errors.get(idx, None)
+            if error_node:
+                error_msg = error_node.value if isinstance(error_node, Str) else str(error_node)
+            else:
+                error_msg = 'Unknown error'
 
             failed.append({
                 'name': variant['name'],

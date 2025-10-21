@@ -4,7 +4,7 @@ import typing as t
 from aiida import orm
 from aiida_workgraph import task, namespace, dynamic
 
-from .tasks import generate_structures, collect_results, package_namespace_to_dict
+from .tasks import generate_structures, collect_results
 from .relaxations import relax_slabs_with_semaphore
 
 
@@ -89,6 +89,12 @@ def SurfaceHydroxylationWorkGraph(
         ... )
         >>> wg.submit()
     """
+    # Validate builder_config
+    required_keys = ['code', 'parameters', 'potential_family', 'options']
+    missing_keys = [key for key in required_keys if key not in builder_config]
+    if missing_keys:
+        raise ValueError(f"builder_config missing required keys: {missing_keys}")
+
     # Convert inputs to AiiDA nodes if needed
     if not isinstance(surface_params, orm.Dict):
         surface_params = orm.Dict(dict=surface_params)
@@ -119,23 +125,14 @@ def SurfaceHydroxylationWorkGraph(
         max_parallel=max_parallel_jobs,
     )
 
-    # Task 3: Package namespace outputs into Dict nodes
-    # relax_slabs_with_semaphore returns namespaces with dynamic outputs
-    # We need to convert them to Dict nodes for collect_results
-
-    # Package each namespace into a Dict
-    structures_dict = package_namespace_to_dict(relax_outputs.structures)
-    energies_dict = package_namespace_to_dict(relax_outputs.energies)
-    exit_statuses_dict = package_namespace_to_dict(relax_outputs.exit_statuses)
-    errors_dict = package_namespace_to_dict(relax_outputs.errors)
-
-    # Task 4: Collect and organize results
+    # Task 3: Collect and organize results
+    # Pass namespace outputs directly - collect_results will extract data from nodes
     collect_task = collect_results(
         manifest=gen_task.manifest,
-        structures=structures_dict.result,
-        energies=energies_dict.result,
-        exit_statuses=exit_statuses_dict.result,
-        errors=errors_dict.result,
+        structures=relax_outputs.structures,
+        energies=relax_outputs.energies,
+        exit_statuses=relax_outputs.exit_statuses,
+        errors=relax_outputs.errors,
     )
 
     # Return outputs
