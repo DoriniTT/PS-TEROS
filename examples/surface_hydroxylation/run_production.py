@@ -82,9 +82,8 @@ except:
         print(f"  - {label}")
     exit(1)
 
-builder_config = {
-    'code': code,
-
+# VASP configuration (split into separate components for WorkGraph serialization)
+vasp_config = {
     # Relaxation settings
     'relax': {
         'perform': True,
@@ -117,28 +116,28 @@ builder_config = {
     'potential_family': 'PBE',  # Or 'PBE.54', etc. - depends on your setup
     'potential_mapping': {},    # Optional: element-specific potentials
 
-    # Scheduler options (CHANGE THESE for your cluster!)
-    'options': {
-        'resources': {
-            'num_machines': 1,
-            'num_mpiprocs_per_machine': 16,  # Adjust for your cluster
-        },
-        'queue_name': 'normal',              # CHANGE THIS
-        'max_wallclock_seconds': 3600 * 10,  # 10 hours
-        'account': 'your_account',           # CHANGE THIS if required
-    },
-
     # Cleanup
     'clean_workdir': False,  # Keep files for analysis (set True to save space)
 }
 
+# Scheduler options (separate from VASP config for serialization)
+options = {
+    'resources': {
+        'num_machines': 1,
+        'num_mpiprocs_per_machine': 16,  # Adjust for your cluster
+    },
+    'queue_name': 'normal',              # CHANGE THIS
+    'max_wallclock_seconds': 3600 * 10,  # 10 hours
+    'account': 'your_account',           # CHANGE THIS if required
+}
+
 print("\nVASP configuration:")
 print(f"  Code: {code.label}")
-print(f"  Cores: {builder_config['options']['resources']['num_mpiprocs_per_machine']}")
-print(f"  Walltime: {builder_config['options']['max_wallclock_seconds'] / 3600} hours")
-print(f"  ENCUT: {builder_config['base']['ENCUT']} eV")
-print(f"  Force cutoff: {builder_config['relax']['force_cutoff']} eV/Å")
-print(f"  K-points distance: {builder_config['kpoints_distance']} Å⁻¹")
+print(f"  Cores: {options['resources']['num_mpiprocs_per_machine']}")
+print(f"  Walltime: {options['max_wallclock_seconds'] / 3600} hours")
+print(f"  ENCUT: {vasp_config['base']['ENCUT']} eV")
+print(f"  Force cutoff: {vasp_config['relax']['force_cutoff']} eV/Å")
+print(f"  K-points distance: {vasp_config['kpoints_distance']} Å⁻¹")
 
 # ============================================================================
 # PARALLELIZATION CONTROL
@@ -164,7 +163,9 @@ wg.add_task(
     name='hydroxylation',
     structure=structure,
     surface_params=surface_params,
-    builder_config=builder_config,
+    code=code,
+    vasp_config=vasp_config,
+    options=options,
     max_parallel_jobs=max_parallel,
 )
 

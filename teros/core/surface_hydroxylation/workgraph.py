@@ -24,7 +24,9 @@ from .relaxations import relax_slabs_with_semaphore
 def SurfaceHydroxylationWorkGraph(
     structure: orm.StructureData,
     surface_params: dict,
-    builder_config: dict,
+    code: orm.InstalledCode,
+    vasp_config: dict,
+    options: dict,
     max_parallel_jobs: int = 2,
 ) -> dict:
     """
@@ -47,15 +49,15 @@ def SurfaceHydroxylationWorkGraph(
             - supercell: list[int] or None
             - deduplicate_by_coverage: bool
             - coverage_bins: int or None
-        builder_config: Complete VASP relaxation configuration for vasp.v2.relax (dict):
-            - code: AiiDA Code for VASP
+        code: AiiDA Code for VASP (InstalledCode)
+        vasp_config: VASP relaxation configuration (dict) for vasp.v2.relax:
             - relax: Dict with relaxation settings (positions, shape, volume, force_cutoff, steps, algo)
             - base: Dict with INCAR parameters (PREC, ENCUT, EDIFF, etc.)
             - kpoints_distance: Float (Angstrom^-1, typically 0.3-0.5)
             - potential_family: Str (e.g., 'PBE', 'PBE.54')
             - potential_mapping: Dict (optional, element->potential)
-            - options: Dict with scheduler settings (resources, queue, time)
             - clean_workdir: Bool (default: False)
+        options: Scheduler options (dict) with resources, queue, time, etc.
         max_parallel_jobs: Number of structures to process in this run (default: 2)
                           Uses simple batch approach: processes first N structures only
 
@@ -74,6 +76,7 @@ def SurfaceHydroxylationWorkGraph(
         >>>
         >>> # Load relaxed slab structure
         >>> structure = orm.load_node(1234)
+        >>> code = orm.load_code('vasp@cluster')
         >>>
         >>> # Define parameters
         >>> surface_params = {
@@ -81,35 +84,26 @@ def SurfaceHydroxylationWorkGraph(
         ...     'species': 'O',
         ...     'coverage_bins': 5,
         ... }
-        >>> builder_config = {
-        ...     'code': orm.load_code('vasp@cluster'),
+        >>> vasp_config = {
         ...     'relax': {'positions': True, 'force_cutoff': 0.02, 'steps': 200},
         ...     'base': {'EDIFF': 1e-6, 'ENCUT': 520, 'PREC': 'Accurate'},
         ...     'kpoints_distance': 0.3,
         ...     'potential_family': 'PBE',
-        ...     'options': {'resources': {'num_machines': 1}},
+        ...     'clean_workdir': False,
         ... }
+        >>> options = {'resources': {'num_machines': 1}}
         >>>
         >>> # Create and submit workflow
         >>> wg = SurfaceHydroxylationWorkGraph(
         ...     structure=structure,
         ...     surface_params=surface_params,
-        ...     builder_config=builder_config,
+        ...     code=code,
+        ...     vasp_config=vasp_config,
+        ...     options=options,
         ...     max_parallel_jobs=3,
         ... )
         >>> wg.submit()
     """
-    # Validate builder_config (for vasp.v2.relax)
-    required_keys = ['code', 'options']
-    missing_keys = [key for key in required_keys if key not in builder_config]
-    if missing_keys:
-        raise ValueError(f"builder_config missing required keys: {missing_keys}")
-
-    # Warn if using old format
-    if 'parameters' in builder_config:
-        print("WARNING: builder_config uses old 'parameters' key.")
-        print("For vasp.v2.relax, use 'base' for INCAR parameters and 'relax' for relaxation settings.")
-        print("See examples/surface_hydroxylation/run_production.py for correct format.")
 
     # Convert inputs to AiiDA nodes if needed
     if not isinstance(surface_params, orm.Dict):
@@ -127,21 +121,10 @@ def SurfaceHydroxylationWorkGraph(
     manifest_task = task(extract_manifest)(result=gen_task.result)
 
     # Task 2: Prepare VASP configuration
-    # Extract code PK and convert other components to AiiDA Dict nodes
-    code = builder_config['code']
+    # Convert code PK and other components to AiiDA nodes
     code_pk = orm.Int(code.pk)
-    options = orm.Dict(dict=builder_config.get('options', {}))
-
-    # VASP config without code and options
-    vasp_config_dict = {
-        'relax': builder_config.get('relax', {}),
-        'base': builder_config.get('base', {}),
-        'kpoints_distance': builder_config.get('kpoints_distance', 0.5),
-        'potential_family': builder_config.get('potential_family', 'PBE'),
-        'potential_mapping': builder_config.get('potential_mapping', {}),
-        'clean_workdir': builder_config.get('clean_workdir', False),
-    }
-    vasp_config = orm.Dict(dict=vasp_config_dict)
+    options_dict = orm.Dict(dict=options)
+    vasp_config_dict = orm.Dict(dict=vasp_config)
 
     # Task 3: Relax all generated structures in parallel
     # Pass the full result dict from gen_task
@@ -149,8 +132,8 @@ def SurfaceHydroxylationWorkGraph(
     relax_outputs = relax_slabs_with_semaphore(
         structures=gen_task.result,
         code_pk=code_pk,
-        vasp_config=vasp_config,
-        options=options,
+        vasp_config=vasp_config_dict,
+        options=options_dict,
         max_parallel=max_parallel_jobs,
     )
 

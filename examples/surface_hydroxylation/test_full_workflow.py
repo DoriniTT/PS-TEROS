@@ -118,9 +118,8 @@ def main():
         return 1
 
     # Complete VASP configuration for vasp.v2.relax workflow plugin
-    builder_config = {
-        'code': code,
-
+    # Split into separate components for WorkGraph serialization
+    vasp_config = {
         # Relaxation settings
         'relax': {
             'perform': True,
@@ -152,25 +151,24 @@ def main():
         'potential_family': 'PBE',
         'potential_mapping': {},  # Use defaults
 
-        # Scheduler options
-        'options': {
-            'resources': {
-                'num_machines': 1,
-                'num_mpiprocs_per_machine': 40,
-            },
-            'queue_name': 'par40',
-            'max_wallclock_seconds': 3600,  # 1 hour
-        },
-
         # Cleanup
         'clean_workdir': False,  # Keep files for debugging
     }
 
+    # Scheduler options (separate from VASP config for serialization)
+    options = {
+        'resources': {
+            'num_machines': 1,
+            'num_cores_per_machine': 40,
+        },
+        'queue_name': 'par40',
+    }
+
     print("   VASP parameters:")
-    print(f"   - ENCUT: {builder_config['base']['ENCUT']} eV")
-    print(f"   - Max steps: {builder_config['relax']['steps']}")
-    print(f"   - Force cutoff: {builder_config['relax']['force_cutoff']} eV/Å")
-    print(f"   - K-points distance: {builder_config['kpoints_distance']} Å⁻¹")
+    print(f"   - ENCUT: {vasp_config['base']['ENCUT']} eV")
+    print(f"   - Max steps: {vasp_config['relax']['steps']}")
+    print(f"   - Force cutoff: {vasp_config['relax']['force_cutoff']} eV/Å")
+    print(f"   - K-points distance: {vasp_config['kpoints_distance']} Å⁻¹")
 
     # Parallelization
     max_parallel = 2
@@ -189,7 +187,9 @@ def main():
         name='hydroxylation_workflow',
         structure=structure,
         surface_params=surface_params,
-        builder_config=builder_config,
+        code=code,
+        vasp_config=vasp_config,
+        options=options,
         max_parallel_jobs=max_parallel,
     )
 
