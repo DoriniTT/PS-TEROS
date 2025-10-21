@@ -59,7 +59,6 @@ def create_dummy_structure() -> orm.StructureData:
     dummy = Atoms()
     return orm.StructureData(ase=dummy)
 
-
 def get_settings():
     """
     Parser settings for aiida-vasp.
