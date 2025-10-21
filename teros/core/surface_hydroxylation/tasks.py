@@ -103,15 +103,52 @@ def generate_structures(structure: StructureData, params: Dict) -> dict:
 
 
 @calcfunction
-def collect_results(manifest: Dict, **kwargs) -> dict:
+def package_namespace_to_dict(namespace_dict: dict) -> Dict:
+    """
+    Convert a namespace dict of AiiDA nodes to a serializable Dict.
+
+    This helper extracts PKs from StructureData nodes and values from other nodes.
+
+    Args:
+        namespace_dict: Dict with integer keys and AiiDA node values
+
+    Returns:
+        Dict node with string keys and serializable values
+    """
+    from aiida.orm import Float, Int, Str, StructureData
+
+    result = {}
+    for key, value in namespace_dict.items():
+        key_str = str(key)
+        if isinstance(value, StructureData):
+            result[key_str] = value.pk
+        elif isinstance(value, (Float, Int)):
+            result[key_str] = value.value
+        elif isinstance(value, Str):
+            result[key_str] = value.value
+        else:
+            result[key_str] = str(value)
+
+    return Dict(dict=result)
+
+
+@calcfunction
+def collect_results(
+    manifest: Dict,
+    structures: Dict,
+    energies: Dict,
+    exit_statuses: Dict,
+    errors: Dict,
+) -> dict:
     """
     Collect and organize relaxation results.
 
     Args:
         manifest: Original manifest Dict from generate_structures
-        **kwargs: Namespace outputs from RelaxationsWorkGraph
-            Expected keys: structure_N, energy_N, exit_status_N, error_N
-            where N is the index (0, 1, 2, ...)
+        structures: Dict mapping indices to relaxed StructureData {0: StructureData, 1: ...}
+        energies: Dict mapping indices to energies {0: Float, 1: ...}
+        exit_statuses: Dict mapping indices to exit statuses {0: Int, 1: ...}
+        errors: Dict mapping indices to error messages {0: Str, 1: ...}
 
     Returns:
         dict with:
@@ -130,15 +167,20 @@ def collect_results(manifest: Dict, **kwargs) -> dict:
     manifest_dict = manifest.get_dict()
     variants = manifest_dict['variants']
 
+    # Convert Dict inputs to Python dicts
+    structures_dict = structures.get_dict()
+    energies_dict = energies.get_dict()
+    exit_statuses_dict = exit_statuses.get_dict()
+    errors_dict = errors.get_dict()
+
     successful = []
     failed = []
 
     # Iterate through variants by index
     for idx, variant in enumerate(variants):
-        # Get exit status for this relaxation
-        exit_status_key = f'exit_status_{idx}'
+        idx_str = str(idx)  # Dict keys are strings
 
-        if exit_status_key not in kwargs:
+        if idx_str not in exit_statuses_dict:
             # Relaxation not found (shouldn't happen in normal operation)
             failed.append({
                 'name': variant['name'],
@@ -147,18 +189,11 @@ def collect_results(manifest: Dict, **kwargs) -> dict:
             })
             continue
 
-        exit_status = kwargs[exit_status_key]
-        exit_status_value = exit_status.value if hasattr(exit_status, 'value') else int(exit_status)
+        exit_status_value = exit_statuses_dict[idx_str]
 
         if exit_status_value == 0:
             # Success - extract structure and energy
-            structure_key = f'structure_{idx}'
-            energy_key = f'energy_{idx}'
-
-            structure = kwargs.get(structure_key, None)
-            energy = kwargs.get(energy_key, None)
-
-            if structure is None or energy is None:
+            if idx_str not in structures_dict or idx_str not in energies_dict:
                 # Missing data for successful relaxation
                 failed.append({
                     'name': variant['name'],
@@ -166,29 +201,28 @@ def collect_results(manifest: Dict, **kwargs) -> dict:
                     'error_message': 'Missing structure or energy data'
                 })
             else:
-                # Extract energy value
-                energy_value = energy.value if hasattr(energy, 'value') else float(energy)
+                # Get structure PK and energy value
+                structure_pk = structures_dict[idx_str]
+                energy_value = energies_dict[idx_str]
 
                 # Store JSON-serializable data including structure PK
                 # Users can load structure later with: orm.load_node(structure_pk)
                 successful.append({
                     'name': variant['name'],
-                    'structure_pk': structure.pk,
+                    'structure_pk': structure_pk,
                     'energy': energy_value,
                     'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
                     'metadata': variant
                 })
         else:
             # Failure - record error
-            error_key = f'error_{idx}'
-            error_msg = kwargs.get(error_key, Str('Unknown error'))
-            error_str = error_msg.value if hasattr(error_msg, 'value') else str(error_msg)
+            error_msg = errors_dict.get(idx_str, 'Unknown error')
 
             failed.append({
                 'name': variant['name'],
                 'coverage': variant.get('OH_coverage') or variant.get('vacancy_coverage', 0.0),
                 'exit_status': exit_status_value,
-                'error_message': error_str
+                'error_message': error_msg
             })
 
     # Calculate statistics
