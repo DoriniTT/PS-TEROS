@@ -126,6 +126,7 @@ def main():
             'convergence_volume': 0.01,
             'convergence_shape_lengths': 0.1,
             'convergence_shape_angles': 0.1,
+            'convergence_mode': 'last',  # REQUIRED: 'last' or 'inout'
             'perform': True,
         },
         'vasp': {
@@ -185,7 +186,7 @@ def main():
         'options': common_options,
         'potential_family': potential_family,
         'potential_mapping': common_potential_mapping,
-        # Note: k-points spacing passed separately to workgraph
+        'kpoints_spacing': kpoints_spacing,  # REQUIRED for VaspWorkChain
     }
 
     # Atom fixing parameters (NEW feature)
