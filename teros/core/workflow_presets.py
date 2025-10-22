@@ -30,6 +30,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': False,
             'compute_electronic_properties_slabs': False,
             'run_aimd': False,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': ['metal_name', 'oxygen_name'],
@@ -54,6 +55,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': False,
             'compute_electronic_properties_slabs': False,
             'run_aimd': False,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': ['metal_name', 'oxygen_name'],
@@ -78,6 +80,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': False,
             'compute_electronic_properties_slabs': False,
             'run_aimd': False,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': [],
@@ -102,6 +105,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': False,
             'compute_electronic_properties_slabs': False,
             'run_aimd': False,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': [],
@@ -126,6 +130,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': False,
             'compute_electronic_properties_slabs': False,
             'run_aimd': False,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': [],
@@ -150,6 +155,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': False,
             'compute_electronic_properties_slabs': False,
             'run_aimd': False,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': ['metal_name', 'oxygen_name'],
@@ -174,6 +180,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': True,
             'compute_electronic_properties_slabs': False,
             'run_aimd': False,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': ['bands_parameters'],
@@ -198,6 +205,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': False,
             'compute_electronic_properties_slabs': True,
             'run_aimd': False,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': ['slab_bands_parameters', 'slab_band_settings'],
@@ -222,6 +230,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': True,
             'compute_electronic_properties_slabs': True,
             'run_aimd': False,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': ['bands_parameters', 'band_settings', 'slab_bands_parameters', 'slab_band_settings'],
@@ -246,6 +255,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': False,
             'compute_electronic_properties_slabs': False,
             'run_aimd': True,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': ['aimd_sequence', 'aimd_parameters'],
@@ -258,7 +268,32 @@ WORKFLOW_PRESETS = {
             'Dynamic property analysis',
         ],
     },
-    
+
+    'adsorption_energy': {
+        'name': 'adsorption_energy',
+        'description': 'Adsorption energy calculation with automatic structure separation',
+        'flags': {
+            'relax_slabs': False,
+            'compute_thermodynamics': False,
+            'compute_cleavage': False,
+            'compute_relaxation_energy': False,
+            'compute_electronic_properties_bulk': False,
+            'compute_electronic_properties_slabs': False,
+            'run_aimd': False,
+            'run_adsorption_energy': True,
+        },
+        'requires': {
+            'parameters': ['adsorption_structures', 'adsorption_formulas'],
+            'optional': ['adsorption_parameters', 'adsorption_options', 'adsorption_potential_mapping', 'adsorption_kpoints_spacing'],
+        },
+        'dependencies': ['adsorption'],
+        'use_cases': [
+            'Adsorption energy calculations',
+            'Adsorbate binding strength analysis',
+            'Catalytic activity assessment',
+        ],
+    },
+
     'comprehensive': {
         'name': 'comprehensive',
         'description': 'Complete analysis: thermodynamics + electronic properties + AIMD',
@@ -270,6 +305,7 @@ WORKFLOW_PRESETS = {
             'compute_electronic_properties_bulk': True,
             'compute_electronic_properties_slabs': True,
             'run_aimd': True,
+            'run_adsorption_energy': False,
         },
         'requires': {
             'parameters': [
@@ -312,15 +348,16 @@ def resolve_preset(
     compute_electronic_properties_bulk: Optional[bool] = None,
     compute_electronic_properties_slabs: Optional[bool] = None,
     run_aimd: Optional[bool] = None,
+    run_adsorption_energy: Optional[bool] = None,
 ) -> Tuple[str, Dict[str, bool]]:
     """
     Resolve workflow preset and apply user overrides.
-    
+
     Resolution order:
     1. Load preset (or use default)
     2. Apply user overrides for individual flags
     3. Return resolved preset name and final flag configuration
-    
+
     Args:
         workflow_preset: Name of preset to use. If None, uses DEFAULT_PRESET
         relax_slabs: Override preset default
@@ -330,6 +367,7 @@ def resolve_preset(
         compute_electronic_properties_bulk: Override preset default
         compute_electronic_properties_slabs: Override preset default
         run_aimd: Override preset default
+        run_adsorption_energy: Override preset default
         
     Returns:
         Tuple of (preset_name, resolved_flags_dict)
@@ -369,6 +407,7 @@ def resolve_preset(
         'compute_electronic_properties_bulk': compute_electronic_properties_bulk,
         'compute_electronic_properties_slabs': compute_electronic_properties_slabs,
         'run_aimd': run_aimd,
+        'run_adsorption_energy': run_adsorption_energy,
     }
     
     for flag_name, flag_value in overrides.items():
@@ -624,12 +663,13 @@ def check_old_style_api(
     compute_electronic_properties_bulk: Optional[bool],
     compute_electronic_properties_slabs: Optional[bool],
     run_aimd: Optional[bool],
+    run_adsorption_energy: Optional[bool],
 ) -> None:
     """
     Check if user is using old-style API (explicit flags without preset).
-    
+
     Emit deprecation warning if old style is detected.
-    
+
     Args:
         workflow_preset: Preset parameter
         All flag parameters: Individual flag values
@@ -647,6 +687,7 @@ def check_old_style_api(
         compute_electronic_properties_bulk is not None,
         compute_electronic_properties_slabs is not None,
         run_aimd is not None,
+        run_adsorption_energy is not None,
     ]
     
     if any(flags_set):

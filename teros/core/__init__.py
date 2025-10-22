@@ -27,6 +27,11 @@ from .workflow_presets import (
     WORKFLOW_PRESETS,
     DEFAULT_PRESET,
 )
+from .adsorption_energy import (
+    separate_adsorbate_structure,
+    calculate_adsorption_energy,
+    compute_adsorption_energies_scatter,
+)
 
 __all__ = [
     'get_structure_from_file',
@@ -46,4 +51,7 @@ __all__ = [
     'get_preset_summary',
     'WORKFLOW_PRESETS',
     'DEFAULT_PRESET',
+    'separate_adsorbate_structure',
+    'calculate_adsorption_energy',
+    'compute_adsorption_energies_scatter',
 ]
