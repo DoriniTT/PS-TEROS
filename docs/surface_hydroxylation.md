@@ -74,9 +74,14 @@ wg = build_surface_hydroxylation_workgraph(
     structure_pk=1234,
     surface_params=params,
     code_label='VASP-6.4.1@cluster',
-    vasp_config=vasp_config,
-    options=options,
+    builder_inputs=builder_inputs,  # Complete VASP builder configuration
     max_parallel_jobs=3,
+    fix_type='bottom',              # Optional: fix bottom atoms
+    fix_thickness=5.0,              # Optional: fix bottom 5Å
+    structure_specific_builder_inputs={  # Optional: per-structure overrides
+        0: {'parameters': {'incar': {'ALGO': 'Normal'}}},
+        2: {'kpoints_spacing': 0.2},
+    }
 )
 ```
 
@@ -136,40 +141,43 @@ surface_params = {
     'deduplicate_by_coverage': True, # Enable deduplication
 }
 
-# 2. Configure VASP (direct INCAR parameters)
-vasp_config = {
+# 2. Configure VASP builder (complete WorkChain parameters)
+builder_inputs = {
     'parameters': {
-        'PREC': 'Accurate',
-        'ENCUT': 520,
-        'EDIFF': 1e-6,
-        'ISMEAR': 0,
-        'SIGMA': 0.05,
-        'ISIF': 2,          # Relax positions only
-        'NSW': 200,
-        'IBRION': 2,
-        'EDIFFG': -0.02,    # Force convergence (eV/Å)
+        'incar': {  # Note: nested under 'incar' key
+            'PREC': 'Accurate',
+            'ENCUT': 520,
+            'EDIFF': 1e-6,
+            'ISMEAR': 0,
+            'SIGMA': 0.05,
+            'ISIF': 2,          # Relax positions only
+            'NSW': 200,
+            'IBRION': 2,
+            'EDIFFG': -0.02,    # Force convergence (eV/Å)
+            'LWAVE': False,
+            'LCHARG': False,
+        }
     },
     'kpoints_spacing': 0.3,
     'potential_family': 'PBE',
-}
-
-# 3. Scheduler options
-options = {
-    'resources': {
-        'num_machines': 1,
-        'num_mpiprocs_per_machine': 40,
+    'potential_mapping': {},  # Auto-detect potentials
+    'options': {
+        'resources': {
+            'num_machines': 1,
+            'num_mpiprocs_per_machine': 40,
+        },
+        'queue_name': 'par40',
+        'max_wallclock_seconds': 3600 * 10,
     },
-    'queue_name': 'par40',
-    'max_wallclock_seconds': 3600 * 10,
+    'clean_workdir': False,
 }
 
-# 4. Build and submit workflow
+# 3. Build and submit workflow
 wg = build_surface_hydroxylation_workgraph(
     structure_pk=1234,
     surface_params=surface_params,
     code_label='VASP-6.4.1@cluster',
-    vasp_config=vasp_config,
-    options=options,
+    builder_inputs=builder_inputs,
     max_parallel_jobs=3,
 )
 result = wg.submit()
@@ -255,33 +263,52 @@ surface_params = {
 | `deduplicate_by_coverage` | bool | True | Enable coverage-based deduplication |
 | `coverage_bins` | int | 5 | Number of coverage bins for sampling |
 
-### vasp_config (Dict)
+### builder_inputs (Dict)
 
-Direct VASP INCAR parameters (no translation layer):
+Complete VASP builder configuration for `vasp.v2.vasp` WorkChain.
 
+**Required keys:**
 ```python
-vasp_config = {
-    'parameters': {          # Direct INCAR tags
-        'PREC': 'Accurate',
-        'ENCUT': 520,
-        'EDIFF': 1e-6,
-        'ISMEAR': 0,
-        'SIGMA': 0.05,
-        'ALGO': 'Normal',
-        'LREAL': False,
-        'LWAVE': False,
-        'LCHARG': False,
-        'ISIF': 2,           # Ionic relaxation mode
-        'NSW': 200,          # Max ionic steps
-        'IBRION': 2,         # Conjugate gradient
-        'EDIFFG': -0.02,     # Force convergence
+builder_inputs = {
+    'parameters': {
+        'incar': {  # IMPORTANT: INCAR tags nested under 'incar' key
+            'PREC': 'Accurate',
+            'ENCUT': 520,
+            'EDIFF': 1e-6,
+            'ISMEAR': 0,
+            'SIGMA': 0.05,
+            'ALGO': 'Normal',
+            'LREAL': False,
+            'LWAVE': False,
+            'LCHARG': False,
+            'ISIF': 2,           # Ionic relaxation mode
+            'NSW': 200,          # Max ionic steps
+            'IBRION': 2,         # Conjugate gradient
+            'EDIFFG': -0.02,     # Force convergence
+        }
     },
-    'kpoints_spacing': 0.3,  # K-points spacing (Å⁻¹)
-    'potential_family': 'PBE',
-    'potential_mapping': {}, # Optional element-specific
-    'clean_workdir': False,
+    'potential_family': 'PBE',  # Or 'PBE.54', 'LDA', etc.
+    'options': {
+        'resources': {
+            'num_machines': 1,
+            'num_mpiprocs_per_machine': 40,
+        },
+        'queue_name': 'par40',
+        'max_wallclock_seconds': 3600 * 10,
+    },
 }
 ```
+
+**Optional keys:**
+- `kpoints_spacing`: Float (Å⁻¹, default: 0.5)
+- `potential_mapping`: Dict (element→potential, default: {})
+- `settings`: Dict (parser settings, default: add trajectory/structure/kpoints)
+- `dynamics`: Dict (selective dynamics - auto-added if fix_type is set)
+- `clean_workdir`: Bool (default: False)
+- `max_iterations`: Int (max restart attempts, default: 5)
+- `verbose`: Bool (detailed logging, default: False)
+
+**Note**: The workflow automatically sets `code` and `structure` for each relaxation.
 
 ### max_parallel_jobs (Int)
 
@@ -402,6 +429,230 @@ surface_params = {
 }
 ```
 
+### Selective Dynamics (Fixing Substrate Atoms)
+
+**NEW FEATURE**: Fix substrate atoms during relaxation using VASP selective dynamics.
+
+When studying surface hydroxylation, it's often desirable to fix the substrate atoms and only relax the adsorbates (OH groups). This is accomplished using three parameters:
+
+```python
+wg = build_surface_hydroxylation_workgraph(
+    structure_pk=1234,
+    surface_params=surface_params,
+    code_label='VASP-6.4.1@cluster',
+    builder_inputs=builder_inputs,
+    max_parallel_jobs=3,
+    # Selective dynamics parameters
+    fix_type='bottom',       # Where to fix: 'bottom', 'top', or 'center'
+    fix_thickness=5.0,       # Fix region thickness in Angstroms
+    fix_elements=['Ag', 'P'],  # Optional: only fix specific elements
+)
+```
+
+**Parameters:**
+- `fix_type`: `str` - Where to fix atoms (default: `None` = no fixing)
+  - `'bottom'`: Fix bottom region of slab (most common)
+  - `'top'`: Fix top region of slab
+  - `'center'`: Fix central region of slab
+  - `None`: No atoms fixed (all relax freely)
+
+- `fix_thickness`: `float` - Thickness of fix region in Angstroms (default: 0.0)
+  - Example: `5.0` = fix bottom 5Å of slab
+
+- `fix_elements`: `list[str]` or `None` - Element symbols to fix (default: `None`)
+  - `None`: Fix all elements in the specified region
+  - `['Ag', 'P']`: Only fix Ag and P atoms in the region, O and H relax freely
+  - Useful when you want adsorbates to relax but substrate to stay fixed
+
+**How it works:**
+1. Workflow calculates Z-coordinates of all atoms
+2. Identifies atoms in the fix region based on `fix_type` and `fix_thickness`
+3. Optionally filters by element symbols if `fix_elements` is provided
+4. Creates VASP `positions_dof` array: `[True, True, True]` = relax, `[False, False, False]` = fix
+5. Adds `dynamics` dict to VASP builder inputs automatically
+
+**Common use cases:**
+
+1. **Fix entire substrate, relax adsorbates:**
+```python
+fix_type='bottom'
+fix_thickness=5.0
+fix_elements=None  # Fix all atoms in bottom 5Å
+```
+
+2. **Fix only metal atoms, allow surface oxygen to relax:**
+```python
+fix_type='bottom'
+fix_thickness=5.0
+fix_elements=['Ag']  # Fix only Ag in bottom 5Å, O/P relax
+```
+
+3. **No fixing (default behavior):**
+```python
+fix_type=None  # All atoms relax freely
+```
+
+**Note**: The `dynamics` parameter in `builder_inputs` will be automatically overwritten if `fix_type` is set. To have full manual control over selective dynamics, set `fix_type=None` and provide `dynamics` directly in `builder_inputs`.
+
+### Structure-Specific Builder Inputs
+
+**NEW FEATURE**: Override VASP parameters for specific structures using deep merge.
+
+Sometimes specific structures need different VASP settings (e.g., failed calculations, difficult convergence). Instead of rerunning the entire workflow, you can provide structure-specific overrides:
+
+```python
+# Default builder used for all structures
+builder_inputs = {
+    'parameters': {
+        'incar': {
+            'PREC': 'Normal',
+            'ENCUT': 400,
+            'ALGO': 'Fast',
+            'EDIFFG': -0.02,
+            # ... other INCAR tags
+        }
+    },
+    'kpoints_spacing': 0.5,
+    'potential_family': 'PBE',
+    'options': {
+        'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 16},
+        'max_wallclock_seconds': 3600,
+    },
+}
+
+# Override parameters for specific structures
+structure_specific_builder_inputs = {
+    0: {  # Structure 0: increase precision
+        'parameters': {
+            'incar': {
+                'PREC': 'Accurate',
+                'ENCUT': 600,
+            }
+        },
+        'kpoints_spacing': 0.2,  # Denser k-points
+    },
+    2: {  # Structure 2: different algorithm + more resources
+        'parameters': {
+            'incar': {
+                'ALGO': 'Normal',  # Slower but more stable
+                'EDIFFG': -0.05,   # Looser convergence
+            }
+        },
+        'options': {
+            'resources': {'num_machines': 2},  # More resources
+            'max_wallclock_seconds': 7200,     # More time
+        },
+    },
+    5: {  # Structure 5: completely custom settings
+        'parameters': {
+            'incar': {
+                'IBRION': 1,   # RMM-DIIS instead of CG
+                'POTIM': 0.2,  # Smaller step size
+            }
+        },
+    }
+    # Structures 1, 3, 4, 6, ... use default builder_inputs
+}
+
+wg = build_surface_hydroxylation_workgraph(
+    structure_pk=1234,
+    surface_params=surface_params,
+    code_label='VASP-6.4.1@cluster',
+    builder_inputs=builder_inputs,  # Default for all
+    structure_specific_builder_inputs=structure_specific_builder_inputs,  # Overrides
+    max_parallel_jobs=10,
+)
+```
+
+**How deep merging works:**
+
+The workflow uses **deep merge** strategy, which means:
+- Only specified parameters are overridden
+- All other parameters are inherited from default `builder_inputs`
+- Nested dicts are recursively merged
+
+**Example:**
+
+```python
+# Default
+builder_inputs = {
+    'parameters': {'incar': {'PREC': 'Normal', 'ENCUT': 400, 'EDIFF': 1e-5, 'ALGO': 'Fast'}},
+    'kpoints_spacing': 0.5,
+    'potential_family': 'PBE',
+    'options': {'resources': {'num_machines': 1}},
+}
+
+# Structure 0 override
+structure_specific_builder_inputs = {
+    0: {
+        'parameters': {'incar': {'PREC': 'Accurate', 'ENCUT': 600}},
+        'kpoints_spacing': 0.2,
+    }
+}
+
+# Resulting builder for structure 0 (after deep merge):
+{
+    'parameters': {
+        'incar': {
+            'PREC': 'Accurate',  # Overridden
+            'ENCUT': 600,        # Overridden
+            'EDIFF': 1e-5,       # Inherited from default
+            'ALGO': 'Fast',      # Inherited from default
+        }
+    },
+    'kpoints_spacing': 0.2,          # Overridden
+    'potential_family': 'PBE',       # Inherited from default
+    'options': {'resources': {'num_machines': 1}},  # Inherited from default
+}
+```
+
+**Common use cases:**
+
+1. **Rerun only failed calculations with different parameters:**
+```python
+# After first run, identify failed structures (indices 2, 5, 7)
+structure_specific_builder_inputs = {
+    2: {'parameters': {'incar': {'ALGO': 'Normal', 'EDIFFG': -0.05}}},
+    5: {'parameters': {'incar': {'IBRION': 1, 'NSW': 300}}},
+    7: {'options': {'max_wallclock_seconds': 7200}},  # More time
+}
+# Set max_parallel_jobs=10 to include all structures, but only 2,5,7 will use custom settings
+```
+
+2. **High-precision calculation for specific coverage:**
+```python
+# Use high precision only for low-coverage structures (indices 0, 1)
+structure_specific_builder_inputs = {
+    0: {'parameters': {'incar': {'PREC': 'Accurate', 'ENCUT': 600}}, 'kpoints_spacing': 0.2},
+    1: {'parameters': {'incar': {'PREC': 'Accurate', 'ENCUT': 600}}, 'kpoints_spacing': 0.2},
+}
+```
+
+3. **Different algorithms for difficult structures:**
+```python
+# Structure 3 has convergence issues - try different algorithm
+structure_specific_builder_inputs = {
+    3: {
+        'parameters': {
+            'incar': {
+                'ALGO': 'All',      # Try all algorithms sequentially
+                'IBRION': 1,        # RMM-DIIS
+                'POTIM': 0.2,       # Smaller ionic step
+                'EDIFFG': -0.05,    # Looser convergence
+            }
+        },
+        'options': {'max_wallclock_seconds': 10800},  # 3 hours instead of 1
+    }
+}
+```
+
+**Important notes:**
+- Keys are **structure indices** (0, 1, 2, ...) corresponding to generation order
+- Indices match the numeric prefix in output keys (e.g., `0_oh_000_3_7572` → index 0)
+- Integer keys are automatically converted to strings for AiiDA serialization
+- All structures not listed will use the default `builder_inputs`
+- This is the **recommended pattern** for all PS-TEROS modules going forward
+
 ### Direct Namespace Access
 
 For custom post-processing:
@@ -434,7 +685,7 @@ print(f"Decorated atoms: {variant['decorated_indices']}")
 **Solutions**:
 1. Verify VASP code: `verdi code show <code_label>`
 2. Check pseudopotentials: `verdi data core.upf listfamilies`
-3. Validate VASP parameters in `vasp_config['parameters']`
+3. Validate VASP parameters in `builder_inputs['parameters']['incar']`
 4. Test single structure relaxation manually
 
 ### Some Structures Failed
@@ -448,13 +699,30 @@ print(f"Decorated atoms: {variant['decorated_indices']}")
 
 **Solutions**:
 ```python
-# Use looser convergence for difficult structures
-vasp_config = {
-    'parameters': {
-        'EDIFFG': -0.05,  # Looser (was -0.02)
-        'NSW': 300,        # More steps
-        'IBRION': 1,       # RMM-DIIS instead of CG
+# Option 1: Use structure-specific builder inputs for failed structures
+structure_specific_builder_inputs = {
+    2: {  # Assuming structure 2 failed
+        'parameters': {
+            'incar': {
+                'EDIFFG': -0.05,  # Looser (was -0.02)
+                'NSW': 300,        # More steps
+                'IBRION': 1,       # RMM-DIIS instead of CG
+            }
+        }
     }
+}
+
+# Option 2: Use looser convergence for all structures
+builder_inputs = {
+    'parameters': {
+        'incar': {
+            'EDIFFG': -0.05,  # Looser (was -0.02)
+            'NSW': 300,        # More steps
+            'IBRION': 1,       # RMM-DIIS instead of CG
+            # ... other INCAR tags
+        }
+    },
+    # ... other builder parameters
 }
 ```
 
@@ -522,12 +790,17 @@ wg = build_surface_hydroxylation_workgraph(..., max_parallel_jobs=15)
 
 **Cluster configuration**:
 ```python
-options = {
-    'resources': {
-        'num_machines': 1,
-        'num_mpiprocs_per_machine': 40,
+builder_inputs = {
+    'parameters': {'incar': {...}},  # INCAR settings
+    'potential_family': 'PBE',
+    'kpoints_spacing': 0.3,
+    'options': {
+        'resources': {
+            'num_machines': 1,
+            'num_mpiprocs_per_machine': 40,
+        },
+        'max_wallclock_seconds': 3600 * 10,  # 10 hours
     },
-    'max_wallclock_seconds': 3600 * 10,  # 10 hours
 }
 ```
 
@@ -563,6 +836,148 @@ dos_wg = build_dos_workflow(
     ...
 )
 ```
+
+## API Reference
+
+### build_surface_hydroxylation_workgraph()
+
+```python
+def build_surface_hydroxylation_workgraph(
+    structure: orm.StructureData = None,
+    structure_pk: int = None,
+    surface_params: dict = None,
+    code_label: str = 'VASP-VTST-6.4.3@bohr',
+    builder_inputs: dict = None,
+    max_parallel_jobs: int = 2,
+    fix_type: str = None,
+    fix_thickness: float = 0.0,
+    fix_elements: list[str] = None,
+    structure_specific_builder_inputs: dict = None,
+    name: str = 'SurfaceHydroxylation',
+) -> WorkGraph
+```
+
+Build a WorkGraph for surface hydroxylation/vacancy calculations.
+
+**Parameters:**
+- `structure` (StructureData): Input relaxed slab structure (either this or `structure_pk`)
+- `structure_pk` (int): PK of relaxed slab structure (either this or `structure`)
+- `surface_params` (dict): Surface modification parameters (see Parameters Reference)
+- `code_label` (str): Label of VASP code (default: 'VASP-VTST-6.4.3@bohr')
+- `builder_inputs` (dict): Complete VASP builder configuration (see Parameters Reference)
+- `max_parallel_jobs` (int): Number of structures to process (default: 2)
+- `fix_type` (str): Where to fix atoms - 'bottom'/'top'/'center'/None (default: None)
+- `fix_thickness` (float): Thickness of fix region in Angstroms (default: 0.0)
+- `fix_elements` (list[str]): Optional element symbols to fix (default: None)
+- `structure_specific_builder_inputs` (dict): Per-structure VASP overrides (default: None)
+- `name` (str): Workflow name (default: 'SurfaceHydroxylation')
+
+**Returns:**
+- `WorkGraph`: Ready-to-submit workflow instance
+
+**Example:**
+```python
+wg = build_surface_hydroxylation_workgraph(
+    structure_pk=1234,
+    surface_params={'mode': 'hydrogen', 'coverage_bins': 5},
+    code_label='VASP-6.4.1@cluster',
+    builder_inputs=builder_inputs,
+    max_parallel_jobs=3,
+    fix_type='bottom',
+    fix_thickness=5.0,
+)
+result = wg.submit()
+```
+
+### SurfaceHydroxylationWorkGraph()
+
+```python
+@task.graph(outputs=['manifest', 'structures', 'energies'])
+def SurfaceHydroxylationWorkGraph(
+    structure: orm.StructureData,
+    surface_params: dict,
+    code: orm.InstalledCode,
+    builder_inputs: dict,
+    max_parallel_jobs: int = 2,
+    fix_type: str = None,
+    fix_thickness: float = 0.0,
+    fix_elements: list[str] = None,
+    structure_specific_builder_inputs: dict = None,
+) -> dict
+```
+
+Main workflow task graph for surface hydroxylation (lower-level API).
+
+**Parameters:** Same as `build_surface_hydroxylation_workgraph()` but takes `code` object instead of `code_label`.
+
+**Returns:**
+- `dict` with outputs:
+  - `manifest` (Dict): Metadata for all generated variants
+  - `structures` (namespace): {idx_variantname: StructureData} for successful relaxations
+  - `energies` (namespace): {idx_variantname: Float} for successful relaxations
+
+**Note:** Most users should use `build_surface_hydroxylation_workgraph()` instead.
+
+### organize_hydroxylation_results()
+
+```python
+def organize_hydroxylation_results(workflow_node) -> dict
+```
+
+Organize hydroxylation workflow results into structured format.
+
+**Parameters:**
+- `workflow_node`: Completed WorkGraph node (orm.WorkChainNode)
+
+**Returns:**
+- `dict` with:
+  - `successful_relaxations` (list): List of dicts with successful results
+    - Each contains: `name`, `structure_pk`, `energy`, `coverage`, `metadata`
+  - `failed_relaxations` (list): List of dicts with failed results
+    - Each contains: `name`, `coverage`, `error_message`
+  - `statistics` (dict): Summary with `total`, `succeeded`, `failed` counts
+
+**Example:**
+```python
+node = orm.load_node(workflow_pk)
+results = organize_hydroxylation_results(node)
+
+print(f"Succeeded: {results['statistics']['succeeded']}")
+print(f"Failed: {results['statistics']['failed']}")
+
+for r in results['successful_relaxations']:
+    print(f"{r['name']}: {r['energy']:.6f} eV")
+```
+
+### SurfaceModifier
+
+```python
+class SurfaceModifier:
+    def __init__(
+        self,
+        atoms: Atoms,
+        species: str = "O",
+        z_window: float = 0.5,
+        which_surface: str = "top",
+        oh_dist: float = 0.98,
+        include_empty: bool = False,
+        outdir: Path | str = "outputs",
+        fmt: str = "vasp",
+        supercell: tuple[int, int, int] | None = None,
+        deduplicate_by_coverage: bool = False,
+        coverage_bins: int | None = None,
+    )
+```
+
+Surface structure modification engine (used internally by `generate_structures` task).
+
+**Methods:**
+- `run_vacancies()`: Generate vacancy configurations
+- `run_hydrogen()`: Generate hydroxylation configurations
+- `run_combine()`: Generate combined vacancy + hydroxylation configurations
+- `run_complete()`: Run all three modes
+
+**Note:** This class is used internally. Most users interact with it through `surface_params` in the workflow functions.
 
 ## Citation
 

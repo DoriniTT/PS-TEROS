@@ -20,8 +20,41 @@ from pymatgen.analysis.graphs import StructureGraph
 from pymatgen.analysis.local_env import CrystalNN
 from pymatgen.core import Composition
 
-from .slabs import extract_total_energy
+from .slabs import extract_total_energy, get_settings
 from .fixed_atoms import get_fixed_atoms_list, add_fixed_atoms_to_vasp_parameters
+
+
+def deep_merge_dicts(base: dict, override: dict) -> dict:
+    """
+    Deep merge override dict into base dict.
+
+    For nested dicts, recursively merges. For other values, override replaces base.
+
+    Args:
+        base: Base dictionary
+        override: Override dictionary (values take precedence)
+
+    Returns:
+        Merged dictionary
+
+    Example:
+        >>> base = {'a': 1, 'b': {'c': 2, 'd': 3}}
+        >>> override = {'b': {'c': 99}, 'e': 5}
+        >>> result = deep_merge_dicts(base, override)
+        >>> result
+        {'a': 1, 'b': {'c': 99, 'd': 3}, 'e': 5}
+    """
+    result = copy.deepcopy(base)
+
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            # Recursively merge nested dicts
+            result[key] = deep_merge_dicts(result[key], value)
+        else:
+            # Override value
+            result[key] = copy.deepcopy(value)
+
+    return result
 
 
 def _build_vasp_inputs(
@@ -231,7 +264,7 @@ def _build_vasp_inputs(
             # Build relax_settings from INCAR parameters
             relax_settings = {
                 'algo': 'cg',  # Default: conjugate gradient
-                'force_cutoff': abs(incar.get('EDIFFG', 0.01)),  # Default 0.01 eV/Å
+                'force_cutoff': abs(incar.get('EDIFFG', 0.05)),  # Default 0.05 eV/Å
                 'steps': incar.get('NSW', 100),  # Default 100 steps
                 'positions': True,  # Always relax positions
                 'shape': incar.get('ISIF', 2) in [3, 4, 5, 6, 7],  # ISIF 3-7 include shape
@@ -523,26 +556,31 @@ def compute_adsorption_energies_scatter(
     potential_family: str,
     potential_mapping: t.Mapping[str, str],
 
-    # NEW: Relaxation control
+    # Relaxation control
     relax_before_adsorption: bool = False,
+    relax_parameters: t.Mapping[str, t.Any] | None = None,
+
+    # SCF parameters
+    scf_parameters: t.Mapping[str, t.Any] | None = None,
+
+    # Common settings
+    options: t.Mapping[str, t.Any] | None = None,
+    kpoints_spacing: float | None = None,
+    clean_workdir: bool = True,
+
+    # Builder inputs (NEW - complete control over VASP parameters)
     relax_builder_inputs: dict | None = None,
-
-    # NEW: SCF control
     scf_builder_inputs: dict | None = None,
+    structure_specific_relax_builder_inputs: dict | None = None,
+    structure_specific_scf_builder_inputs: dict | None = None,
 
-    # NEW: Atom fixing control (for relaxation)
+    # Atom fixing control (for relaxation)
     fix_atoms: bool = False,
     fix_type: str | None = None,
     fix_thickness: float = 0.0,
     fix_elements: list[str] | None = None,
-
-    # DEPRECATED (kept for backward compatibility)
-    parameters: t.Mapping[str, t.Any] | None = None,
-    options: t.Mapping[str, t.Any] | None = None,
-    kpoints_spacing: float | None = None,
-    clean_workdir: bool = True,
 ) -> t.Annotated[dict, namespace(
-    relaxed_complete_structures=dynamic(orm.StructureData),  # NEW
+    relaxed_complete_structures=dynamic(orm.StructureData),
     separated_structures=dynamic(dict),
     substrate_energies=dynamic(orm.Float),
     molecule_energies=dynamic(orm.Float),
@@ -550,16 +588,16 @@ def compute_adsorption_energies_scatter(
     adsorption_energies=dynamic(orm.Float),
 )]:
     """
-    Scatter-gather workflow for calculating adsorption energies.
+    Scatter-gather workflow for calculating adsorption energies using vasp.v2.vasp.
 
     This workflow supports two modes:
     1. Direct SCF: separate → SCF (3N jobs)
     2. Relax + SCF: relax → separate → SCF (N+3N jobs)
 
     Workflow phases:
-    - Phase 1 (optional): Relax complete structures using vasp.v2.relax
+    - Phase 1 (optional): Relax complete structures using vasp.v2.vasp (NSW > 0)
     - Phase 2: Separate relaxed (or original) structures into substrate/molecule/complete
-    - Phase 3: SCF calculations using vasp.v2.vasp for all three components
+    - Phase 3: SCF calculations using vasp.v2.vasp (NSW=0) for all three components
 
     Args:
         structures: Dynamic namespace of complete structures (substrate + adsorbate)
@@ -570,18 +608,33 @@ def compute_adsorption_energies_scatter(
         potential_mapping: Element to potential mapping
 
         relax_before_adsorption: If True, relax complete structures before separation
-        relax_builder_inputs: Full builder dict for vasp.v2.relax (NSW, IBRION, ISIF)
-        scf_builder_inputs: Full builder dict for vasp.v2.vasp (NSW=0 enforced)
+        relax_parameters: INCAR parameters for relaxation (must include NSW > 0, IBRION, ISIF)
+        scf_parameters: INCAR parameters for SCF (NSW will be overridden to 0)
+
+        options: Scheduler options dict
+        kpoints_spacing: K-points spacing in Angstrom^-1
+        clean_workdir: Whether to clean remote working directories
+
+        relax_builder_inputs: Complete VASP builder dict for relaxation (NEW)
+                             Takes priority over relax_parameters if provided
+                             Format: {'parameters': {'incar': {...}}, 'options': {...}, 'kpoints_spacing': 0.2, ...}
+        scf_builder_inputs: Complete VASP builder dict for SCF calculations (NEW)
+                           Takes priority over scf_parameters if provided
+                           Format: {'parameters': {'incar': {...}}, 'options': {...}, 'kpoints_spacing': 0.2, ...}
+        structure_specific_relax_builder_inputs: Per-structure overrides for relaxation (NEW)
+                                                 Dict mapping structure indices to builder dicts
+                                                 Uses deep merge - only specified parameters are overridden
+                                                 Format: {0: {'parameters': {'incar': {'ALGO': 'Normal'}}}, ...}
+        structure_specific_scf_builder_inputs: Per-structure overrides for SCF calculations (NEW)
+                                               Dict mapping structure indices to builder dicts
+                                               Applies to all three SCF calculations (substrate, molecule, complete)
+                                               Uses deep merge - only specified parameters are overridden
+                                               Format: {1: {'kpoints_spacing': 0.15}, ...}
 
         fix_atoms: If True, apply atom fixing constraints during relaxation
         fix_type: Type of fixing ('bottom', 'top', 'center')
         fix_thickness: Thickness in Angstrom for fixing region
         fix_elements: Optional list of elements to fix (None = all elements)
-
-        parameters: [DEPRECATED] Old-style INCAR parameters dict (for backward compat)
-        options: [DEPRECATED] Old-style scheduler options dict
-        kpoints_spacing: [DEPRECATED] K-points spacing in Angstrom^-1
-        clean_workdir: Whether to clean remote working directories
 
     Returns:
         Dictionary with namespaces:
@@ -592,40 +645,21 @@ def compute_adsorption_energies_scatter(
         - complete_energies: Energies of complete systems
         - adsorption_energies: Final adsorption energies (E_ads = E_complete - E_substrate - E_molecule)
 
-    Example (new API):
-        >>> relax_inputs = {
-        ...     'parameters': {'incar': {'NSW': 100, 'IBRION': 2, 'ENCUT': 520}},
-        ...     'options': {'resources': {'num_machines': 1}},
-        ...     'potential_family': 'PBE',
-        ...     'potential_mapping': {'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'},
-        ... }
-        >>> scf_inputs = {
-        ...     'parameters': {'incar': {'ENCUT': 520}},  # NSW=0 added automatically
-        ...     'options': {'resources': {'num_machines': 1}},
-        ...     'potential_family': 'PBE',
-        ...     'potential_mapping': {'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'},
-        ... }
+    Example:
+        >>> relax_params = {'NSW': 200, 'IBRION': 2, 'ISIF': 2, 'EDIFFG': -0.05, 'ENCUT': 520, ...}
+        >>> scf_params = {'ENCUT': 520, 'EDIFF': 1e-6, ...}  # NSW=0 added automatically
+        >>> options = {'resources': {'num_machines': 1, 'num_cores_per_machine': 40}, 'queue_name': 'par40'}
         >>> results = compute_adsorption_energies_scatter(
         ...     structures={'oh_lamno3': structure},
         ...     adsorbate_formulas={'oh_lamno3': 'OH'},
         ...     code=code,
         ...     potential_family='PBE',
-        ...     potential_mapping={...},
+        ...     potential_mapping={'La': 'La', 'Ni': 'Ni', 'O': 'O', 'H': 'H'},
         ...     relax_before_adsorption=True,
-        ...     relax_builder_inputs=relax_inputs,
-        ...     scf_builder_inputs=scf_inputs,
-        ... )
-
-    Example (old API, backward compatible):
-        >>> results = compute_adsorption_energies_scatter(
-        ...     structures={'oh_ag': structure},
-        ...     adsorbate_formulas={'oh_ag': 'OH'},
-        ...     code=code,
-        ...     potential_family='PBE',
-        ...     potential_mapping={'Ag': 'Ag', 'O': 'O', 'H': 'H'},
-        ...     parameters={'PREC': 'Accurate', 'ENCUT': 520},
-        ...     options={'resources': {'num_machines': 1}},
-        ...     kpoints_spacing=0.3,
+        ...     relax_parameters=relax_params,
+        ...     scf_parameters=scf_params,
+        ...     options=options,
+        ...     kpoints_spacing=0.6,
         ... )
     """
     # Validate inputs
@@ -636,56 +670,114 @@ def compute_adsorption_energies_scatter(
             f"Formulas: {list(adsorbate_formulas.keys())}"
         )
 
-    # Get workflow plugins with error handling
+    # Get vasp.v2.vasp workflow
     try:
-        vasp_relax = WorkflowFactory('vasp.v2.relax')
-        vasp_scf = WorkflowFactory('vasp.v2.vasp')
+        vasp_wc = WorkflowFactory('vasp.v2.vasp')
     except Exception as e:
         raise RuntimeError(
-            f"Failed to load VASP workflow plugins. "
+            f"Failed to load vasp.v2.vasp workflow plugin. "
             f"Ensure aiida-vasp is installed and registered. Error: {e}"
         ) from e
 
-    relax_task_cls = task(vasp_relax)
-    scf_task_cls = task(vasp_scf)
+    vasp_task_cls = task(vasp_wc)
 
     # ===== PHASE 1: OPTIONAL RELAXATION =====
     # Relax complete structures before separation if requested
-    if relax_before_adsorption:
-        relaxed_structures: dict[str, orm.StructureData] = {}
+    relaxed_structures: dict[str, orm.StructureData] = {}
 
-        for key, structure in structures.items():
-            # Build relaxation inputs
-            relax_inputs = _build_vasp_inputs(
-                structure=structure,
-                code=code,
-                builder_inputs=relax_builder_inputs,
-                parameters=parameters,
-                options=options,
-                potential_family=potential_family,
-                potential_mapping=potential_mapping,
-                kpoints_spacing=kpoints_spacing,
-                clean_workdir=clean_workdir,
-                force_scf=False,  # Allow relaxation (NSW > 0)
-                workchain_type='relax',  # Use VaspRelaxWorkChain
-                # Atom fixing parameters
-                fix_atoms=fix_atoms,
-                fix_type=fix_type,
-                fix_thickness=fix_thickness,
-                fix_elements=fix_elements,
+    if relax_before_adsorption:
+        # Validate that we have either builder_inputs or parameters
+        if relax_builder_inputs is None and relax_parameters is None:
+            raise ValueError(
+                "When relax_before_adsorption=True, either relax_builder_inputs or "
+                "relax_parameters must be provided"
             )
 
-            # Run relaxation
-            relax_task = relax_task_cls(**relax_inputs)
+        # Create index mapping: key -> index
+        key_to_index = {key: idx for idx, key in enumerate(structures.keys())}
 
-            # Connect relaxation output to relaxed structures dict
+        # Build default relax builder inputs
+        if relax_builder_inputs is not None:
+            # New style: use builder_inputs directly
+            default_relax_builder = copy.deepcopy(relax_builder_inputs)
+        else:
+            # Old style: construct from parameters
+            default_relax_builder = {
+                'parameters': {'incar': dict(relax_parameters)},
+                'options': dict(options) if options is not None else {},
+                'potential_family': potential_family,
+                'potential_mapping': dict(potential_mapping),
+                'clean_workdir': clean_workdir,
+                'settings': orm.Dict(dict=get_settings()),
+            }
+            if kpoints_spacing is not None:
+                default_relax_builder['kpoints_spacing'] = kpoints_spacing
+
+        # Convert structure_specific keys from int to str for lookup
+        structure_specific_relax = {}
+        if structure_specific_relax_builder_inputs is not None:
+            for idx_key, override in structure_specific_relax_builder_inputs.items():
+                # Accept both int and str keys
+                str_key = str(idx_key)
+                structure_specific_relax[str_key] = override
+
+        # Process each structure
+        for key, structure in structures.items():
+            # Get structure index
+            idx = key_to_index[key]
+            idx_str = str(idx)
+
+            # Deep merge structure-specific overrides if they exist
+            if idx_str in structure_specific_relax:
+                relax_inputs = deep_merge_dicts(
+                    default_relax_builder,
+                    structure_specific_relax[idx_str]
+                )
+            else:
+                relax_inputs = copy.deepcopy(default_relax_builder)
+
+            # Always set structure and code (override any user-provided values)
+            relax_inputs['structure'] = structure
+            relax_inputs['code'] = code
+
+            # Apply atom fixing if requested (modifies relax_inputs in-place)
+            if fix_atoms and fix_type is not None and fix_thickness > 0.0:
+                fixed_atoms_list = get_fixed_atoms_list(
+                    structure=relax_inputs['structure'],
+                    fix_type=fix_type,
+                    fix_thickness=fix_thickness,
+                    fix_elements=fix_elements,
+                )
+
+                if fixed_atoms_list:
+                    # Get parameters location
+                    if 'parameters' in relax_inputs and 'incar' in relax_inputs['parameters']:
+                        incar_params = relax_inputs['parameters']['incar']
+                    else:
+                        relax_inputs['parameters'] = {'incar': {}}
+                        incar_params = relax_inputs['parameters']['incar']
+
+                    # Apply fixing
+                    updated_params, constrained_structure = add_fixed_atoms_to_vasp_parameters(
+                        base_parameters=incar_params,
+                        structure=relax_inputs['structure'],
+                        fixed_atoms_list=fixed_atoms_list,
+                    )
+
+                    # Update inputs
+                    relax_inputs['parameters']['incar'] = updated_params
+                    relax_inputs['structure'] = constrained_structure
+
+            # Run relaxation using vasp.v2.vasp
+            relax_task = vasp_task_cls(**relax_inputs)
+
+            # Extract relaxed structure
             relaxed_structures[key] = relax_task.structure
 
         # Use relaxed structures for separation
         structures_to_separate = relaxed_structures
     else:
         # No relaxation: use original structures
-        relaxed_structures = {}
         structures_to_separate = structures
 
     # Output dictionaries
@@ -713,22 +805,74 @@ def compute_adsorption_energies_scatter(
 
     # ===== PHASE 3: SCF CALCULATIONS =====
     # Single-point calculations for substrate, molecule, and complete systems
+
+    # Build default SCF builder inputs
+    if scf_builder_inputs is not None:
+        # New style: use builder_inputs directly
+        default_scf_builder = copy.deepcopy(scf_builder_inputs)
+    elif scf_parameters is not None:
+        # Old style: construct from scf_parameters
+        default_scf_builder = {
+            'parameters': {'incar': dict(scf_parameters)},
+            'options': dict(options) if options is not None else {},
+            'potential_family': potential_family,
+            'potential_mapping': dict(potential_mapping),
+            'clean_workdir': clean_workdir,
+            'settings': orm.Dict(dict=get_settings()),
+        }
+        if kpoints_spacing is not None:
+            default_scf_builder['kpoints_spacing'] = kpoints_spacing
+    elif relax_parameters is not None:
+        # Fallback: use relax_parameters as base for SCF
+        default_scf_builder = {
+            'parameters': {'incar': dict(relax_parameters)},
+            'options': dict(options) if options is not None else {},
+            'potential_family': potential_family,
+            'potential_mapping': dict(potential_mapping),
+            'clean_workdir': clean_workdir,
+            'settings': orm.Dict(dict=get_settings()),
+        }
+        if kpoints_spacing is not None:
+            default_scf_builder['kpoints_spacing'] = kpoints_spacing
+    else:
+        # No parameters provided at all - use minimal defaults
+        default_scf_builder = {
+            'parameters': {'incar': {}},
+            'options': dict(options) if options is not None else {},
+            'potential_family': potential_family,
+            'potential_mapping': dict(potential_mapping),
+            'clean_workdir': clean_workdir,
+            'settings': orm.Dict(dict=get_settings()),
+        }
+        if kpoints_spacing is not None:
+            default_scf_builder['kpoints_spacing'] = kpoints_spacing
+
+    # Convert structure_specific keys from int to str for lookup
+    structure_specific_scf = {}
+    if structure_specific_scf_builder_inputs is not None:
+        for idx_key, override in structure_specific_scf_builder_inputs.items():
+            # Accept both int and str keys
+            str_key = str(idx_key)
+            structure_specific_scf[str_key] = override
+
+    # Recreate key_to_index mapping for SCF phase
+    key_to_index = {key: idx for idx, key in enumerate(structures.keys())}
+
+    # Process each structure's SCF calculations
     for key, separated in separated_structures_dict.items():
-        # Helper function to create SCF inputs for each structure
-        def create_scf_inputs(struct: orm.StructureData) -> dict:
-            return _build_vasp_inputs(
-                structure=struct,
-                code=code,
-                builder_inputs=scf_builder_inputs,
-                parameters=parameters,
-                options=options,
-                potential_family=potential_family,
-                potential_mapping=potential_mapping,
-                kpoints_spacing=kpoints_spacing,
-                clean_workdir=clean_workdir,
-                force_scf=True,  # Enforce NSW=0, IBRION=-1
-                workchain_type='vasp',  # Use VaspWorkChain
+        # Get structure index
+        idx = key_to_index[key]
+        idx_str = str(idx)
+
+        # Deep merge structure-specific overrides if they exist
+        # These overrides apply to all three SCF calculations for this structure
+        if idx_str in structure_specific_scf:
+            base_scf_inputs = deep_merge_dicts(
+                default_scf_builder,
+                structure_specific_scf[idx_str]
             )
+        else:
+            base_scf_inputs = copy.deepcopy(default_scf_builder)
 
         # Run SCF calculations for all three components
         scf_components = [
@@ -737,8 +881,25 @@ def compute_adsorption_energies_scatter(
             ('complete', separated['complete'], complete_energies),
         ]
 
-        for component_name, structure, energy_dict in scf_components:
-            scf_calc = scf_task_cls(**create_scf_inputs(structure))
+        for component_name, struct, energy_dict in scf_components:
+            # Make a copy of base_scf_inputs for this component
+            scf_inputs = copy.deepcopy(base_scf_inputs)
+
+            # Always set structure and code
+            scf_inputs['structure'] = struct
+            scf_inputs['code'] = code
+
+            # Force single-point calculation (NSW=0, IBRION=-1)
+            if 'parameters' not in scf_inputs:
+                scf_inputs['parameters'] = {'incar': {}}
+            if 'incar' not in scf_inputs['parameters']:
+                scf_inputs['parameters']['incar'] = {}
+
+            scf_inputs['parameters']['incar']['NSW'] = 0
+            scf_inputs['parameters']['incar']['IBRION'] = -1
+
+            # Run SCF using vasp.v2.vasp
+            scf_calc = vasp_task_cls(**scf_inputs)
             energy_dict[key] = extract_total_energy(energies=scf_calc.misc).result
 
     # ===== PHASE 4: ADSORPTION ENERGY CALCULATION =====
@@ -754,7 +915,7 @@ def compute_adsorption_energies_scatter(
 
     # Return all results
     return {
-        'relaxed_complete_structures': relaxed_structures,  # NEW: Empty dict if relax=False
+        'relaxed_complete_structures': relaxed_structures,
         'separated_structures': separated_structures_dict,
         'substrate_energies': substrate_energies,
         'molecule_energies': molecule_energies,

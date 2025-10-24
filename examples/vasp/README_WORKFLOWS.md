@@ -92,6 +92,69 @@ Complete analysis with all features enabled.
 - Thermodynamics + electronic properties + AIMD
 - Most expensive workflow
 
+#### 12. `adsorption_energy`
+Calculate adsorption energies for molecules/radicals on surfaces.
+- Optional: Relax complete system (substrate + adsorbate) before separation
+- Structure separation using connectivity analysis (pymatgen CrystalNN)
+- SCF calculations on separated components (substrate, adsorbate, complete system)
+- Adsorption energy: E_ads = E_complete - E_substrate - E_molecule
+
+**Required**: `adsorption_structures`, `adsorption_formulas`, `adsorption_potential_mapping`
+
+**New Simplified API** (uses only vasp.v2.vasp):
+```python
+# Relaxation parameters (NSW > 0)
+relax_params = {
+    'PREC': 'Accurate',
+    'ENCUT': 520,
+    'IBRION': 2,
+    'NSW': 200,
+    'ISIF': 2,
+    'EDIFFG': -0.05,
+    # ... other INCAR parameters
+}
+
+# SCF parameters (NSW=0 set automatically)
+scf_params = {
+    'PREC': 'Accurate',
+    'ENCUT': 520,
+    'EDIFF': 1e-6,
+    'NELM': 200,
+    # ... other INCAR parameters
+}
+
+wg = build_core_workgraph(
+    workflow_preset='adsorption_energy',
+
+    # Structures and formulas
+    adsorption_structures={'site1': structure1, 'site2': structure2},
+    adsorption_formulas={'site1': 'OH', 'site2': 'OH'},
+    adsorption_potential_mapping={'La': 'La', 'Ni': 'Ni', 'O': 'O', 'H': 'H'},
+
+    # Code settings
+    code_label='VASP@cluster',
+    potential_family='PBE',
+
+    # Simplified API: Direct INCAR parameters
+    relax_before_adsorption=True,  # Enable initial relaxation
+    adsorption_relax_builder_inputs={'parameters': {'incar': relax_params}},
+    adsorption_scf_builder_inputs={'parameters': {'incar': scf_params}},
+
+    # Scheduler
+    adsorption_options={'resources': {...}},
+    adsorption_kpoints_spacing=0.6,
+)
+```
+
+**Key features**:
+- Uses only `vasp.v2.vasp` WorkflowFactory (not `vasp.v2.relax`)
+- Direct INCAR parameters via `builder_inputs`
+- Relaxation controlled by NSW parameter (NSW > 0 = relax, NSW = 0 = SCF)
+- Automatic structure separation using chemical connectivity
+- Parallel execution: N_sites × (1 relax + 3 SCF) calculations
+
+**See**: `step_12_adsorption_energy.py`
+
 ## Custom Workflows
 
 ### Method 1: Set Individual Flags (No Preset)
@@ -183,6 +246,7 @@ All workflow flags (can be set individually or via preset):
 | 9 | `step_09_electronic_structure_bulk_and_slabs.py` | `electronic_structure_bulk_and_slabs` | Full electronic structure |
 | 10 | `step_10_custom_workflow.py` | None (custom) | Custom flag configuration |
 | 11 | `step_11_preset_with_overrides.py` | `surface_thermodynamics` + overrides | Preset with additions |
+| 12 | `step_12_adsorption_energy.py` | `adsorption_energy` | Adsorption energy calculation |
 
 ## Key Changes from Previous Version
 

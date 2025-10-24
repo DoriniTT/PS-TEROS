@@ -50,33 +50,55 @@ wg = build_core_workgraph(
 Input structure → Relax → Separate relaxed → SCF (3 jobs) → E_ads
 ```
 
-**Example:**
+**Example (Simplified API - Direct INCAR Parameters):**
 ```python
-relax_inputs = {
-    'parameters': {'incar': {'NSW': 100, 'IBRION': 2, 'ISIF': 2, ...}},
-    'options': {'resources': {'num_machines': 1}},
-    'potential_family': 'PBE',
-    'potential_mapping': {...},
-    'kpoints_spacing': 0.3,
+# Relaxation parameters (NSW > 0 for relaxation)
+relax_params = {
+    'PREC': 'Accurate',
+    'ENCUT': 520,
+    'IBRION': 2,
+    'NSW': 100,      # NSW > 0 = relaxation
+    'ISIF': 2,
+    'EDIFFG': -0.05,
+    'EDIFF': 1e-6,
+    'ISMEAR': 0,
+    'SIGMA': 0.05,
+    'LWAVE': False,
+    'LCHARG': False,
 }
 
-scf_inputs = {
-    'parameters': {'incar': {'PREC': 'Accurate', 'ENCUT': 520, ...}},
-    # NSW=0, IBRION=-1 enforced automatically
-    'options': {'resources': {'num_machines': 1}},
-    'potential_family': 'PBE',
-    'potential_mapping': {...},
-    'kpoints_spacing': 0.3,
+# SCF parameters (NSW=0, IBRION=-1 set automatically)
+scf_params = {
+    'PREC': 'Accurate',
+    'ENCUT': 520,
+    'EDIFF': 1e-6,
+    'ISMEAR': 0,
+    'SIGMA': 0.05,
+    'NELM': 200,
+    'LWAVE': False,
+    'LCHARG': False,
 }
 
 wg = build_core_workgraph(
     workflow_preset='adsorption_energy',
+
+    # Structures
     adsorption_structures={'system': structure},
     adsorption_formulas={'system': 'OH'},
+    adsorption_potential_mapping={'Ag': 'Ag', 'O': 'O', 'H': 'H'},
 
+    # Code
+    code_label='VASP@cluster',
+    potential_family='PBE',
+
+    # Simplified API: Direct INCAR parameters
     relax_before_adsorption=True,
-    adsorption_relax_builder_inputs=relax_inputs,
-    adsorption_scf_builder_inputs=scf_inputs,
+    adsorption_relax_builder_inputs={'parameters': {'incar': relax_params}},
+    adsorption_scf_builder_inputs={'parameters': {'incar': scf_params}},
+
+    # Scheduler
+    adsorption_options={'resources': {'num_machines': 1}},
+    adsorption_kpoints_spacing=0.3,
 )
 
 # Access relaxed structure
@@ -93,40 +115,237 @@ relaxed = wg.outputs.relaxed_complete_structures['system']
 
 ---
 
+### Mode 3: Structure-Specific Parameter Overrides (NEW)
+
+**When to use:** Different structures need different VASP settings (e.g., failed calculations, difficult convergence, or precision requirements vary by system)
+
+**NEW FEATURE**: Override parameters for specific structures using deep merge strategy. This allows you to:
+- Rerun only failed calculations with custom settings
+- Use tighter convergence for specific structures
+- Adjust resources for computationally demanding systems
+- Test different algorithms for problematic structures
+
+**How it works:**
+- Structure indices (0, 1, 2, ...) match the order in `adsorption_structures` dict
+- Deep merge: Only specified parameters are overridden, others inherited from defaults
+- Applies to both relaxation and SCF phases independently
+- All three SCF calculations (substrate, molecule, complete) use the same overrides
+
+**Example:**
+```python
+# Default parameters for all structures
+relax_params = {
+    'PREC': 'Normal',
+    'ENCUT': 400,
+    'ALGO': 'Fast',
+    'EDIFFG': -0.02,
+    'NSW': 100,
+    'IBRION': 2,
+    'ISIF': 2,
+}
+
+scf_params = {
+    'PREC': 'Normal',
+    'ENCUT': 400,
+    'EDIFF': 1e-6,
+}
+
+# Override for structure 0 (LaNiO3): Use higher precision
+structure_specific_relax = {
+    0: {  # Structure index 0
+        'parameters': {
+            'incar': {
+                'PREC': 'Accurate',
+                'ENCUT': 600,
+                'ALGO': 'Normal',
+            }
+        },
+        'kpoints_spacing': 0.8,  # Denser k-points
+    }
+}
+
+# Override for structure 1 (LaCoO3): Tighter convergence + more resources
+structure_specific_scf = {
+    1: {  # Structure index 1
+        'parameters': {
+            'incar': {
+                'EDIFF': 1e-7,
+                'PREC': 'Accurate',
+            }
+        },
+        'kpoints_spacing': 0.15,  # Very dense k-points for final energy
+        'options': {
+            'resources': {
+                'num_machines': 2,  # More resources
+            }
+        }
+    }
+}
+
+wg = build_core_workgraph(
+    workflow_preset='adsorption_energy',
+    adsorption_structures={
+        'lanio3_oh': structure0,  # Index 0
+        'lacoo3_oh': structure1,  # Index 1
+    },
+    adsorption_formulas={
+        'lanio3_oh': 'OH',
+        'lacoo3_oh': 'OH',
+    },
+    code_label='VASP@cluster',
+    potential_family='PBE',
+    adsorption_potential_mapping={'La': 'La', 'Ni': 'Ni', 'Co': 'Co', 'O': 'O', 'H': 'H'},
+
+    # Default parameters (all structures)
+    relax_before_adsorption=True,
+    adsorption_relax_builder_inputs={'parameters': {'incar': relax_params}},
+    adsorption_scf_builder_inputs={'parameters': {'incar': scf_params}},
+    adsorption_options={'resources': {'num_machines': 1}},
+    adsorption_kpoints_spacing=1.0,
+
+    # NEW: Structure-specific overrides
+    adsorption_structure_specific_relax_builder_inputs=structure_specific_relax,
+    adsorption_structure_specific_scf_builder_inputs=structure_specific_scf,
+)
+```
+
+**Result after deep merge:**
+- Structure 0 (lanio3_oh) relaxation: Uses PREC='Accurate', ENCUT=600, ALGO='Normal', kpoints=0.8, but inherits EDIFFG, NSW, IBRION, ISIF from defaults
+- Structure 0 SCF: Uses default scf_params
+- Structure 1 (lacoo3_oh) relaxation: Uses default relax_params
+- Structure 1 SCF: Uses EDIFF=1e-7, PREC='Accurate', kpoints=0.15, num_machines=2, but inherits other parameters from defaults
+- All other structures: Use defaults for both relax and SCF
+
+**Common use cases:**
+
+1. **Rerun failed calculations:**
+```python
+# After first run, identify failed structures (e.g., indices 2, 5)
+structure_specific_relax = {
+    2: {'parameters': {'incar': {'ALGO': 'All', 'EDIFFG': -0.05}}},
+    5: {'parameters': {'incar': {'IBRION': 1, 'NSW': 200}}},
+}
+# All structures will be processed, but only 2 and 5 will use custom settings
+```
+
+2. **Different precision levels:**
+```python
+# Use high precision for critical structures
+structure_specific_scf = {
+    0: {'parameters': {'incar': {'PREC': 'Accurate', 'ENCUT': 600}}, 'kpoints_spacing': 0.15},
+    1: {'parameters': {'incar': {'PREC': 'Accurate', 'ENCUT': 600}}, 'kpoints_spacing': 0.15},
+}
+```
+
+3. **Algorithm testing:**
+```python
+# Test different algorithms for problematic structures
+structure_specific_relax = {
+    3: {
+        'parameters': {
+            'incar': {
+                'ALGO': 'All',      # Try all algorithms
+                'IBRION': 1,        # RMM-DIIS
+                'POTIM': 0.2,       # Smaller ionic step
+                'EDIFFG': -0.05,    # Looser convergence
+            }
+        },
+        'options': {'max_wallclock_seconds': 10800},  # More time
+    }
+}
+```
+
+**Important notes:**
+- Structure indices are determined by insertion order into `adsorption_structures` dict
+- Indices are 0-based (first structure = 0, second = 1, etc.)
+- Keys can be integers or strings ('0', '1', etc.) - both are accepted
+- Deep merge means only specified parameters override defaults
+- This is the **recommended pattern** for all PS-TEROS modules going forward
+
+---
+
 ## API Reference
 
 ### New Parameters (build_core_workgraph)
 
 **`relax_before_adsorption`** (bool, default=False)
 - If True, relax complete structures before separation and SCF
-- Uses `vasp.v2.relax` plugin
+- Uses only `vasp.v2.vasp` WorkflowFactory (not `vasp.v2.relax`)
+- Relaxation controlled by NSW parameter (NSW > 0)
 
 **`adsorption_relax_builder_inputs`** (dict, optional)
-- Full builder dictionary for relaxation calculations
-- Must include: parameters, options, potential_family, potential_mapping
-- Example: `{'parameters': {'incar': {'NSW': 100, ...}}, 'options': {...}, ...}`
+- **Simplified API**: Pass INCAR parameters directly wrapped in nested dict
+- Structure: `{'parameters': {'incar': {INCAR_PARAMS}}}`
+- Must include: NSW > 0 (for relaxation), IBRION, ISIF, EDIFFG
+- Example: `{'parameters': {'incar': {'NSW': 100, 'IBRION': 2, 'ISIF': 2, 'EDIFFG': -0.05}}}`
+- Note: Common parameters (code, potential_family, options) are set separately
 
 **`adsorption_scf_builder_inputs`** (dict, optional)
-- Full builder dictionary for SCF calculations
-- NSW=0 and IBRION=-1 enforced automatically
-- Example: `{'parameters': {'incar': {'ENCUT': 520, ...}}, 'options': {...}, ...}`
+- **Simplified API**: Pass INCAR parameters directly wrapped in nested dict
+- Structure: `{'parameters': {'incar': {INCAR_PARAMS}}}`
+- NSW=0 and IBRION=-1 are **automatically enforced** (don't need to specify)
+- Example: `{'parameters': {'incar': {'ENCUT': 520, 'EDIFF': 1e-6, 'NELM': 200}}}`
+- Note: Common parameters (code, potential_family, options) are set separately
+
+**`adsorption_structure_specific_relax_builder_inputs`** (dict, optional) - NEW
+- Per-structure overrides for relaxation parameters using deep merge
+- Structure: Dict mapping structure indices (0, 1, 2, ...) to builder dicts
+- Example: `{0: {'parameters': {'incar': {'ALGO': 'Normal'}}, 'kpoints_spacing': 0.2}}`
+- Only specified parameters are overridden; others inherited from `adsorption_relax_builder_inputs`
+- Applies to relaxation of complete (substrate+adsorbate) structure only
+- Integer keys automatically converted to strings for AiiDA compatibility
+
+**`adsorption_structure_specific_scf_builder_inputs`** (dict, optional) - NEW
+- Per-structure overrides for SCF parameters using deep merge
+- Structure: Dict mapping structure indices (0, 1, 2, ...) to builder dicts
+- Example: `{1: {'parameters': {'incar': {'EDIFF': 1e-7}}, 'options': {'resources': {'num_machines': 2}}}}`
+- Only specified parameters are overridden; others inherited from `adsorption_scf_builder_inputs`
+- Applies to ALL THREE SCF calculations (substrate, molecule, complete) for that structure
+- Integer keys automatically converted to strings for AiiDA compatibility
+
+**Key Change from Previous Version:**
+- Old: Complex builder structure with multiple namespaces
+- New: Direct INCAR parameters via simple wrapped dict
+- Plugin: Uses only `vasp.v2.vasp` (not `vasp.v2.relax`)
+- Control: Relaxation vs SCF determined by NSW parameter
+- **Latest**: Structure-specific builder inputs for fine-grained control (v2.1+)
 
 ### Backward Compatibility
 
-Old parameter style still works (no relaxation):
+The simplified API can coexist with the old parameter style:
 
+**Old style (deprecated but still works):**
 ```python
 wg = build_core_workgraph(
     workflow_preset='adsorption_energy',
     adsorption_structures={...},
     adsorption_formulas={...},
-    adsorption_parameters={'PREC': 'Accurate', 'ENCUT': 520},  # Still works!
+    adsorption_parameters={'PREC': 'Accurate', 'ENCUT': 520, 'NSW': 100},
     adsorption_options={...},
     adsorption_potential_mapping={...},
 )
 ```
 
-Migration is optional and gradual.
+**New simplified API (recommended):**
+```python
+relax_params = {'PREC': 'Accurate', 'ENCUT': 520, 'NSW': 100, 'IBRION': 2, ...}
+scf_params = {'PREC': 'Accurate', 'ENCUT': 520, 'EDIFF': 1e-6, 'NELM': 200, ...}
+
+wg = build_core_workgraph(
+    workflow_preset='adsorption_energy',
+    adsorption_structures={...},
+    adsorption_formulas={...},
+    adsorption_potential_mapping={...},
+
+    relax_before_adsorption=True,
+    adsorption_relax_builder_inputs={'parameters': {'incar': relax_params}},
+    adsorption_scf_builder_inputs={'parameters': {'incar': scf_params}},
+
+    adsorption_options={...},
+)
+```
+
+Migration is recommended for new workflows. Old scripts continue to work.
 
 ---
 
@@ -134,26 +353,37 @@ Migration is optional and gradual.
 
 ### Test Cases
 
-**Test 1: Backward compatibility**
+**Test 1: Simplified API with relaxation**
 - File: `examples/vasp/step_12_adsorption_energy.py`
-- Tests: Old API still works, no relaxation
+- Tests: New simplified API with direct INCAR parameters and relaxation enabled
+- Plugin: Uses only `vasp.v2.vasp` (not `vasp.v2.relax`)
 
-**Test 2: Relaxation workflow**
-- File: `examples/adsorption_energy/test_relax_oh_ag111/run_relax_adsorption.py`
-- Tests: New API with relaxation enabled
-
-**Test 3: Production example**
-- File: `teros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py`
-- Tests: Perovskite oxide with relaxation (real-world case)
+**Test 2: Production example (perovskite oxides)**
+- Location: User workflows (e.g., LaNiO3, LaMnO3 with OOH adsorption)
+- Tests: Real-world cases with relaxation on complex oxide surfaces
 
 ### Validation Checklist
 
-- [ ] Old scripts run unchanged (backward compatibility)
-- [ ] Relaxation completes successfully
+- [ ] Simplified API works correctly (relax_builder_inputs + scf_builder_inputs)
+- [ ] Uses only vasp.v2.vasp plugin (verify in WorkGraph)
+- [ ] Relaxation completes successfully (NSW > 0)
 - [ ] Separation works on relaxed structures
-- [ ] SCF calculations have NSW=0, IBRION=-1
+- [ ] SCF calculations automatically have NSW=0, IBRION=-1
 - [ ] E_ads values are physically reasonable
 - [ ] Relaxed structures show expected geometry changes
+
+### Key API Changes
+
+**Before (complex builder):**
+- Used `vasp.v2.relax` for relaxation
+- Complex nested builder structure with multiple namespaces
+- Required separate parameters for each namespace
+
+**After (simplified):**
+- Uses only `vasp.v2.vasp` for all calculations
+- Direct INCAR parameters via `{'parameters': {'incar': {...}}}`
+- Common settings (code, options) set separately
+- NSW parameter controls relaxation vs SCF automatically
 
 ## Theory
 
@@ -266,10 +496,22 @@ Complete scatter-gather workflow: separation + VASP relaxations + energy calcula
 - `potential_family` (str): Pseudopotential family name
 - `potential_mapping` (dict): Element to potential mapping
   - Example: `{'La': 'La', 'Mn': 'Mn_pv', 'O': 'O', 'H': 'H'}`
-- `parameters` (dict): VASP INCAR parameters
+- `relax_before_adsorption` (bool): If True, relax complete structures before SCF (default: False)
+- `relax_parameters` (dict, optional): VASP INCAR parameters for relaxation (old-style API)
+- `scf_parameters` (dict, optional): VASP INCAR parameters for SCF (old-style API)
+- `relax_builder_inputs` (dict, optional): Complete VASP builder dict for relaxation (new-style API)
+- `scf_builder_inputs` (dict, optional): Complete VASP builder dict for SCF (new-style API)
+- `structure_specific_relax_builder_inputs` (dict, optional): Per-structure overrides for relaxation (NEW)
+  - Format: `{idx: {'parameters': {'incar': {...}}, 'kpoints_spacing': 0.2, ...}}`
+- `structure_specific_scf_builder_inputs` (dict, optional): Per-structure overrides for SCF (NEW)
+  - Format: `{idx: {'parameters': {'incar': {...}}, 'options': {...}, ...}}`
 - `options` (dict): Scheduler options for VASP calculations
 - `kpoints_spacing` (float, optional): K-points spacing in Angstrom^-1
 - `clean_workdir` (bool, optional): Whether to clean remote working directories (default: True)
+- `fix_atoms` (bool): Enable atom fixing during relaxation (default: False)
+- `fix_type` (str, optional): Type of fixing ('bottom', 'top', 'center')
+- `fix_thickness` (float, optional): Thickness in Angstroms for fixing region (default: 0.0)
+- `fix_elements` (list[str], optional): Element symbols to fix (default: None = all elements)
 
 **Returns:**
 Dictionary with namespaces:

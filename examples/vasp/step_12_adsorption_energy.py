@@ -2,22 +2,27 @@
 """
 STEP 12: Adsorption Energy Calculation (Multi-Site Test)
 
-This script tests the adsorption energy workflow with multiple structures:
-- Structure separation (substrate + molecule identification)
-- Substrate relaxation
-- Molecule relaxation
-- Complete system relaxation
-- Adsorption energy calculation: E_ads = E_complete - E_substrate - E_molecule
+This script tests the adsorption energy workflow with multiple structures using
+the simplified API that directly accepts INCAR parameters.
 
-The module uses connectivity analysis (pymatgen StructureGraph with CrystalNN)
-to automatically identify and separate the adsorbate from the substrate.
+Workflow (4 phases):
+1. Initial relaxation of complete system (optional, controlled by relax_before_adsorption)
+2. Structure separation using connectivity analysis (pymatgen StructureGraph with CrystalNN)
+3. SCF calculations on all three components (substrate, molecule, complete)
+4. Adsorption energy calculation: E_ads = E_complete - E_substrate - E_molecule
 
 Test case: OH radical on Ag(111) at two different adsorption sites
 - Site 1: OH on hollow site (3-fold coordination)
 - Site 2: OH on top site (1-fold coordination, bonded to Ag)
 
-This tests the scatter functionality with 6 parallel VASP calculations:
-  2 sites × 3 calculations each (substrate, molecule, complete)
+This tests the scatter functionality with parallel VASP calculations:
+  If relax_before_adsorption=True:  2 relax + (2 sites × 3 SCF) = 8 calculations
+  If relax_before_adsorption=False: 2 sites × 3 SCF = 6 calculations
+
+Key API features:
+- Uses only vasp.v2.vasp plugin (not vasp.v2.relax)
+- Direct INCAR parameters via builder_inputs
+- Relaxation controlled by NSW parameter (NSW > 0 = relax, NSW = 0 = SCF)
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -127,15 +132,16 @@ def main():
     print(f"   Code: {code_label}")
     print(f"   Potential family: {potential_family}")
 
-    # VASP parameters (production-quality for Ag + OH)
-    adsorption_parameters = {
+    # Relaxation parameters for initial complete system relaxation (NSW > 0)
+    # These are used when relax_before_adsorption=True
+    relax_parameters = {
         'PREC': 'Accurate',
         'ENCUT': 400,          # Adequate for Ag and light elements
         'EDIFF': 1e-5,
         'ISMEAR': 0,           # Gaussian smearing for molecules
         'SIGMA': 0.05,
         'IBRION': 2,           # Conjugate gradient
-        'NSW': 100,            # Relaxation steps
+        'NSW': 100,            # Relaxation steps (>0 = relaxation)
         'ISIF': 2,             # Relax ions only (keep cell fixed)
         'EDIFFG': -0.02,       # Force convergence
         'ALGO': 'Normal',
@@ -143,6 +149,22 @@ def main():
         'LWAVE': False,
         'LCHARG': False,
         'NCORE': 4,            # Parallel efficiency
+    }
+
+    # SCF parameters for final energy calculations (NSW=0 set automatically)
+    # These are used for substrate, molecule, and complete system energies
+    scf_parameters = {
+        'PREC': 'Accurate',
+        'ENCUT': 400,
+        'EDIFF': 1e-5,
+        'ISMEAR': 0,
+        'SIGMA': 0.05,
+        'ALGO': 'Normal',
+        'LREAL': 'Auto',
+        'LWAVE': False,
+        'LCHARG': False,
+        'NCORE': 4,
+        'NELM': 100,           # SCF iterations
     }
 
     # Scheduler options
@@ -161,13 +183,65 @@ def main():
         'H': 'H',
     }
 
+    # ===== STRUCTURE-SPECIFIC BUILDER INPUTS (OPTIONAL - NEW FEATURE) =====
+    # Override parameters for specific structures using structure indices (0, 1, 2, ...)
+    # Indices match the order in adsorption_structures dict (oh_hollow=0, oh_top=1)
+
+    # Example 1: Override relaxation parameters for structure 0 (oh_hollow)
+    # structure_specific_relax = {
+    #     0: {  # oh_hollow - use different algorithm
+    #         'parameters': {
+    #             'incar': {
+    #                 'ALGO': 'All',      # Try all algorithms
+    #                 'EDIFFG': -0.03,    # Looser convergence
+    #             }
+    #         },
+    #         'kpoints_spacing': 0.4,  # Coarser k-points
+    #     }
+    # }
+
+    # Example 2: Override SCF parameters for structure 1 (oh_top)
+    # structure_specific_scf = {
+    #     1: {  # oh_top - use tighter convergence for final energy
+    #         'parameters': {
+    #             'incar': {
+    #                 'EDIFF': 1e-6,      # Tighter electronic convergence
+    #                 'PREC': 'Accurate',
+    #             }
+    #         },
+    #         'kpoints_spacing': 0.2,  # Denser k-points for final SCF
+    #     }
+    # }
+
+    # For this example, we'll use default settings for all structures (no overrides)
+    structure_specific_relax = None
+    structure_specific_scf = None
+
     print("\n4. Building WorkGraph...")
     print("   Using preset: 'adsorption_energy'")
-    print("   This will create 6 VASP calculations (3 per structure):")
-    print("     For each site (hollow and top):")
-    print("       1. Complete system (Ag slab + OH)")
-    print("       2. Bare substrate (Ag slab only)")
-    print("       3. Isolated molecule (OH in same cell)")
+    print("   Workflow phases:")
+    print("     1. Initial relaxation of complete systems (if enabled)")
+    print("     2. Structure separation (connectivity analysis)")
+    print("     3. SCF calculations on separated components")
+    print("     4. Adsorption energy calculation")
+    if structure_specific_relax is not None or structure_specific_scf is not None:
+        print("   Structure-specific overrides: ENABLED")
+        if structure_specific_relax:
+            print(f"     Relaxation overrides for structures: {list(structure_specific_relax.keys())}")
+        if structure_specific_scf:
+            print(f"     SCF overrides for structures: {list(structure_specific_scf.keys())}")
+    else:
+        print("   Structure-specific overrides: DISABLED (using defaults for all)")
+    print("   ")
+    print("   This will create 8 VASP calculations (with relax_before_adsorption=True):")
+    print("     Phase 1: 2 relaxations (one per site)")
+    print("       - oh_hollow: Ag slab + OH (relaxation)")
+    print("       - oh_top:    Ag slab + OH (relaxation)")
+    print("     Phase 3: 6 SCF calculations (3 per site)")
+    print("       For each site (hollow and top):")
+    print("         1. Complete system (Ag slab + OH) - SCF")
+    print("         2. Bare substrate (Ag slab only) - SCF")
+    print("         3. Isolated molecule (OH in same cell) - SCF")
     print("   ")
     print("   Formula: E_ads = E_complete - E_substrate - E_molecule")
     print("   Negative E_ads = favorable (exothermic) adsorption")
@@ -176,7 +250,7 @@ def main():
     print("   Expected: E_ads(hollow) < E_ads(top)")
     print("   (Hollow sites typically more favorable than top sites)")
 
-    # Build workgraph using adsorption_energy preset
+    # Build workgraph using adsorption_energy preset with simplified API
     wg = build_core_workgraph(
         workflow_preset='adsorption_energy',
 
@@ -185,13 +259,26 @@ def main():
         potential_family=potential_family,
         clean_workdir=False,
 
-        # Adsorption energy specific
+        # Adsorption energy structures
         adsorption_structures=adsorption_structures,
         adsorption_formulas=adsorption_formulas,
-        adsorption_parameters=adsorption_parameters,
-        adsorption_options=adsorption_options,
         adsorption_potential_mapping=adsorption_potential_mapping,
+
+        # Simplified API: Direct INCAR parameters
+        # Phase 1: Relax complete system before separation
+        relax_before_adsorption=True,
+        adsorption_relax_builder_inputs={'parameters': {'incar': relax_parameters}},
+
+        # Phase 3: SCF calculations on separated components
+        adsorption_scf_builder_inputs={'parameters': {'incar': scf_parameters}},
+
+        # Scheduler and k-points
+        adsorption_options=adsorption_options,
         adsorption_kpoints_spacing=0.3,
+
+        # NEW FEATURE: Structure-specific builder inputs (optional)
+        adsorption_structure_specific_relax_builder_inputs=structure_specific_relax,
+        adsorption_structure_specific_scf_builder_inputs=structure_specific_scf,
 
         name='Step12_AdsorptionEnergy_Ag_OH',
     )
@@ -232,8 +319,15 @@ def main():
     print(f"  All systems use the SAME simulation cell (per structure)")
     print(f"  This eliminates basis set superposition error (BSSE)")
     print(f"\nParallel execution:")
-    print(f"  6 VASP calculations will run in parallel")
-    print(f"  Total: 2 sites × 3 calculations each")
+    print(f"  With relax_before_adsorption=True:")
+    print(f"    Phase 1: 2 relaxations run in parallel")
+    print(f"    Phase 3: 6 SCF calculations run in parallel")
+    print(f"  Total: 2 relax + (2 sites × 3 SCF) = 8 VASP calculations")
+    print(f"\nKey API change:")
+    print(f"  Old: adsorption_parameters (single dict)")
+    print(f"  New: adsorption_relax_builder_inputs + adsorption_scf_builder_inputs")
+    print(f"       (separate dicts for relaxation and SCF)")
+    print(f"  Plugin: Uses only vasp.v2.vasp (not vasp.v2.relax)")
     print(f"{'='*70}\n")
 
     return wg

@@ -6,6 +6,8 @@ from aiida.engine import calcfunction
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, namespace, dynamic
 
+from ..fixed_atoms import get_fixed_atoms_list
+
 
 def get_settings():
     """Parser settings for aiida-vasp."""
@@ -16,6 +18,39 @@ def get_settings():
             'add_kpoints': True,
         }
     }
+
+
+def deep_merge_dicts(base: dict, override: dict) -> dict:
+    """
+    Deep merge override dict into base dict.
+
+    For nested dicts, recursively merges. For other values, override replaces base.
+
+    Args:
+        base: Base dictionary
+        override: Override dictionary (values take precedence)
+
+    Returns:
+        Merged dictionary
+
+    Example:
+        >>> base = {'a': 1, 'b': {'c': 2, 'd': 3}}
+        >>> override = {'b': {'c': 99}, 'e': 5}
+        >>> deep_merge_dicts(base, override)
+        {'a': 1, 'b': {'c': 99, 'd': 3}, 'e': 5}
+    """
+    import copy
+    result = copy.deepcopy(base)
+
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            # Recursively merge nested dicts
+            result[key] = deep_merge_dicts(result[key], value)
+        else:
+            # Override value
+            result[key] = copy.deepcopy(value)
+
+    return result
 
 
 @task.calcfunction
@@ -45,9 +80,12 @@ def extract_total_energy(energies: orm.Dict) -> orm.Float:
 def relax_slabs_with_semaphore(
     structures: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
     code_pk: int,
-    vasp_config: dict,
-    options: dict,
+    builder_inputs: dict,
     max_parallel: int,
+    fix_type: str = None,
+    fix_thickness: float = 0.0,
+    fix_elements: t.List[str] = None,
+    structure_specific_builder_inputs: dict = None,
 ) -> t.Annotated[dict, namespace(**{
     'structures': dynamic(orm.StructureData),
     'energies': dynamic(orm.Float),
@@ -72,14 +110,25 @@ def relax_slabs_with_semaphore(
     Args:
         structures: Dict of structures to relax (e.g., {'structure_0': StructureData, ...})
         code_pk: PK of AiiDA Code for VASP (as int)
-        vasp_config: VASP configuration as plain dict containing:
-            - parameters: Dict with INCAR parameters (ENCUT, EDIFF, ISIF, NSW, IBRION, EDIFFG, etc.)
-            - kpoints_spacing: Float (Angstrom, typical: 0.3-0.5)
-            - potential_family: Str (e.g., 'PBE', 'PBE.54')
-            - potential_mapping: Dict (optional, element->potential mapping)
-            - clean_workdir: Bool (default: False)
-        options: Scheduler options as plain dict (resources, queue, time, etc.)
+        builder_inputs: Complete builder configuration dict for vasp.v2.vasp WorkChain.
+            Must contain all builder parameters (see workgraph.py for details).
+            The 'code' and 'structure' keys will be set automatically for each structure.
         max_parallel: Maximum number of structures to process (limits to first N structures)
+        fix_type: Where to fix atoms ('bottom'/'top'/'center'/None). Default: None (no fixing)
+        fix_thickness: Thickness in Angstroms for fixing region. Default: 0.0
+        fix_elements: Optional list of element symbols to fix (e.g., ['Ag', 'O']).
+                     If None, all elements in the region are fixed
+        structure_specific_builder_inputs: Optional dict to override builder_inputs for specific
+                     structure indices. Keys are integer indices (0, 1, 2, ...) matching structure
+                     order. Values are PARTIAL builder_inputs dicts that will be MERGED into the
+                     default builder_inputs. This allows you to override only specific parameters
+                     (e.g., change 'Algo' or increase 'ENCUT') while keeping all other parameters
+                     from the default builder.
+                     Example: {0: {'parameters': {'incar': {'ALGO': 'Normal'}}, 'kpoints_spacing': 0.2}}
+                              only changes ALGO and kpoints_spacing for structure 0, keeping all
+                              other parameters (potential_mapping, options, etc.) from default builder.
+                     Structures not listed (e.g., 1, 3) will use the default builder_inputs.
+                     Default: None (use default builder_inputs for all)
 
     Returns:
         Dictionary with namespace outputs:
@@ -102,13 +151,6 @@ def relax_slabs_with_semaphore(
     # Load code from PK
     code = orm.load_node(code_pk)
 
-    # Extract VASP configuration
-    incar_params = vasp_config.get('parameters', {})
-    kpoints_spacing = vasp_config.get('kpoints_spacing', 0.5)
-    potential_family = vasp_config.get('potential_family', 'PBE')
-    potential_mapping = vasp_config.get('potential_mapping', {})
-    clean_workdir = vasp_config.get('clean_workdir', False)
-
     # Output dictionaries (only successful relaxations will be added)
     structures_out = {}
     energies_out = {}
@@ -127,20 +169,60 @@ def relax_slabs_with_semaphore(
 
         # Extract index from key (e.g., "0" from "0_oh_000_3.7572")
         idx = int(key.split('_')[0])
+        idx_str = str(idx)
 
-        # Build VASP inputs following slabs.py pattern
-        vasp_inputs: dict[str, t.Any] = {
-            'structure': structure,
-            'code': code,
-            'parameters': {'incar': dict(incar_params)},
-            'options': dict(options),
-            'potential_family': potential_family,
-            'potential_mapping': orm.Dict(dict=potential_mapping) if potential_mapping else orm.Dict(dict={}),
-            'clean_workdir': clean_workdir,
-            'settings': orm.Dict(dict=get_settings()),
-        }
-        if kpoints_spacing is not None:
-            vasp_inputs['kpoints_spacing'] = kpoints_spacing
+        # Check if there's a structure-specific builder for this index
+        # Note: structure_specific_builder_inputs uses string keys (required by AiiDA)
+        import copy
+        if structure_specific_builder_inputs is not None and idx_str in structure_specific_builder_inputs:
+            # Deep merge structure-specific overrides into default builder
+            # This allows partial overrides (e.g., only changing 'Algo' or 'kpoints_spacing')
+            # while keeping all other required parameters from the default builder
+            vasp_inputs = deep_merge_dicts(builder_inputs, structure_specific_builder_inputs[idx_str])
+        else:
+            # Use default builder for all other structures
+            vasp_inputs = copy.deepcopy(builder_inputs)
+
+        # Override structure and code (these are set by the workflow)
+        vasp_inputs['structure'] = structure
+        vasp_inputs['code'] = code
+
+        # Convert plain dicts to orm.Dict where needed
+        if 'potential_mapping' in vasp_inputs and not isinstance(vasp_inputs['potential_mapping'], orm.Dict):
+            vasp_inputs['potential_mapping'] = orm.Dict(dict=vasp_inputs['potential_mapping'])
+
+        if 'settings' in vasp_inputs and not isinstance(vasp_inputs['settings'], orm.Dict):
+            vasp_inputs['settings'] = orm.Dict(dict=vasp_inputs['settings'])
+        elif 'settings' not in vasp_inputs:
+            # Ensure settings are present (add defaults if not provided by user)
+            vasp_inputs['settings'] = orm.Dict(dict=get_settings())
+
+        # Apply selective dynamics if requested
+        if fix_type is not None and fix_thickness > 0.0:
+            # Get list of atoms to fix (1-based indices)
+            fixed_atoms_list = get_fixed_atoms_list(
+                structure=structure,
+                fix_type=fix_type,
+                fix_thickness=fix_thickness,
+                fix_elements=fix_elements,
+            )
+
+            if fixed_atoms_list:
+                # Create positions_dof array for selective dynamics
+                # True = relax, False = fix
+                num_atoms = len(structure.sites)
+                positions_dof = []
+
+                for i in range(1, num_atoms + 1):  # 1-based indexing
+                    if i in fixed_atoms_list:
+                        positions_dof.append([False, False, False])  # Fix atom
+                    else:
+                        positions_dof.append([True, True, True])  # Relax atom
+
+                # Add selective dynamics to VASP inputs (plain dict, not orm.Dict)
+                vasp_inputs['dynamics'] = {
+                    'positions_dof': positions_dof
+                }
 
         # Create VASP task
         # All tasks created in this loop will run in parallel (scatter-gather pattern)

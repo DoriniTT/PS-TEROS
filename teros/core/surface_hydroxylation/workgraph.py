@@ -23,9 +23,12 @@ def SurfaceHydroxylationWorkGraph(
     structure: orm.StructureData,
     surface_params: dict,
     code: orm.InstalledCode,
-    vasp_config: dict,
-    options: dict,
+    builder_inputs: dict,
     max_parallel_jobs: int = 2,
+    fix_type: str = None,
+    fix_thickness: float = 0.0,
+    fix_elements: t.List[str] = None,
+    structure_specific_builder_inputs: dict = None,
 ) -> dict:
     """
     Main workflow for surface hydroxylation studies.
@@ -48,15 +51,34 @@ def SurfaceHydroxylationWorkGraph(
             - deduplicate_by_coverage: bool
             - coverage_bins: int or None
         code: AiiDA Code for VASP (InstalledCode)
-        vasp_config: VASP configuration (dict) for vasp.v2.vasp:
-            - parameters: Dict with INCAR parameters (PREC, ENCUT, EDIFF, ISIF, NSW, IBRION, EDIFFG, etc.)
-            - kpoints_spacing: Float (Angstrom^-1, typically 0.3-0.5)
+        builder_inputs: Complete builder configuration (dict) for vasp.v2.vasp WorkChain.
+            This dict should contain ALL builder parameters as you would set them directly:
+            - parameters: Dict with nested 'incar' dict containing VASP tags
+            - kpoints_spacing: Float (or provide 'kpoints' KpointsData)
             - potential_family: Str (e.g., 'PBE', 'PBE.54')
-            - potential_mapping: Dict (optional, element->potential)
+            - potential_mapping: Dict or orm.Dict (element->potential mapping)
+            - options: Dict or orm.Dict (scheduler options: resources, queue, walltime)
+            - settings: Dict or orm.Dict (parser settings, optional)
+            - dynamics: Dict (selective dynamics, optional - will be added automatically if fix_type is set)
             - clean_workdir: Bool (default: False)
-        options: Scheduler options (dict) with resources, queue, time, etc.
+            Note: 'code' and 'structure' will be set automatically by the workflow
         max_parallel_jobs: Number of structures to process in this run (default: 2)
                           Uses simple batch approach: processes first N structures only
+        fix_type: Where to fix atoms ('bottom'/'top'/'center'/None). Default: None (no fixing)
+        fix_thickness: Thickness in Angstroms for fixing region. Default: 0.0
+        fix_elements: Optional list of element symbols to fix (e.g., ['Ag', 'O']).
+                     If None, all elements in the region are fixed. Default: None
+        structure_specific_builder_inputs: Optional dict to override builder_inputs for specific
+                     structure indices. Keys are integer indices (0, 1, 2, ...) corresponding to
+                     generated structures. Values are PARTIAL builder_inputs dicts that will be
+                     MERGED into the default builder_inputs. You only need to specify the parameters
+                     you want to override.
+                     Example: {0: {'parameters': {'incar': {'ALGO': 'Normal'}}},
+                              2: {'kpoints_spacing': 0.2, 'options': {'resources': {...}}}}
+                     Structure 0 will use ALGO='Normal' with all other default parameters.
+                     Structure 2 will use kpoints_spacing=0.2 and custom resources with all other defaults.
+                     Structures 1, 3, etc. will use the complete default builder_inputs.
+                     Default: None (use default builder_inputs for all)
 
     Returns:
         Dictionary with outputs:
@@ -125,9 +147,12 @@ def SurfaceHydroxylationWorkGraph(
     relax_outputs = relax_slabs_with_semaphore(
         structures=gen_outputs.structures,
         code_pk=code.pk,
-        vasp_config=vasp_config,
-        options=options,
+        builder_inputs=builder_inputs,
         max_parallel=max_parallel_jobs,
+        fix_type=fix_type,
+        fix_thickness=fix_thickness,
+        fix_elements=fix_elements,
+        structure_specific_builder_inputs=structure_specific_builder_inputs,
     )
 
     # Return raw outputs
@@ -146,9 +171,12 @@ def build_surface_hydroxylation_workgraph(
     structure_pk: int = None,
     surface_params: dict = None,
     code_label: str = 'VASP-VTST-6.4.3@bohr',
-    vasp_config: dict = None,
-    options: dict = None,
+    builder_inputs: dict = None,
     max_parallel_jobs: int = 2,
+    fix_type: str = None,
+    fix_thickness: float = 0.0,
+    fix_elements: t.List[str] = None,
+    structure_specific_builder_inputs: dict = None,
     name: str = 'SurfaceHydroxylation',
 ) -> WorkGraph:
     """
@@ -178,36 +206,54 @@ def build_surface_hydroxylation_workgraph(
             - deduplicate_by_coverage: bool (default True)
             - coverage_bins: int or None
         code_label: Label of VASP code (e.g., 'VASP-VTST-6.4.3@bohr')
-        vasp_config: VASP configuration (dict) for vasp.v2.vasp workflow:
-            - parameters: Dict with INCAR parameters
-              * PREC: str ('Normal'/'Accurate')
-              * ENCUT: float (plane-wave cutoff in eV)
-              * EDIFF: float (electronic convergence in eV)
-              * ISMEAR: int (smearing method)
-              * SIGMA: float (smearing width in eV)
-              * ALGO: str (electronic minimization algorithm)
-              * LREAL: bool or str (real-space projection)
-              * NELM: int (max electronic steps)
-              * LWAVE: bool (write WAVECAR)
-              * LCHARG: bool (write CHGCAR)
-              * ISIF: int (relaxation type: 2=positions only, 3=positions+cell)
-              * NSW: int (max ionic steps)
-              * IBRION: int (ionic relaxation: 2=CG, 1=RMM-DIIS)
-              * EDIFFG: float (force convergence in eV/Å, negative = force criterion)
-            - kpoints_spacing: Float (Angstrom^-1, typically 0.3-0.5)
+        builder_inputs: Complete builder configuration (dict) for vasp.v2.vasp WorkChain.
+            Provide ALL builder parameters you want to control:
+
+            Required keys:
+            - parameters: Dict with nested 'incar' dict
+                {'incar': {'PREC': 'Accurate', 'ENCUT': 500, 'EDIFF': 1e-6, ...}}
             - potential_family: Str (e.g., 'PBE', 'PBE.54')
-            - potential_mapping: Dict (optional, element->potential mapping)
-            - clean_workdir: Bool (default False)
-        options: Scheduler options (dict):
-            - resources: Dict with 'num_machines' and 'num_mpiprocs_per_machine'
-            - queue_name: str (queue name)
-            - max_wallclock_seconds: int (walltime in seconds)
-            - account: str (optional, cluster account)
-            - prepend_text: str (optional, commands before VASP)
-            - custom_scheduler_commands: str (optional, scheduler directives)
+            - options: Dict with scheduler settings
+                {'resources': {'num_machines': 1, 'num_cores_per_machine': 16},
+                 'queue_name': 'normal', 'max_wallclock_seconds': 3600}
+
+            Optional keys:
+            - kpoints_spacing: Float (Å⁻¹, default: 0.5)
+            - potential_mapping: Dict (element->potential, default: {})
+            - settings: Dict (parser settings, default: add_trajectory/structure/kpoints)
+            - dynamics: Dict (selective dynamics - auto-added if fix_type set)
+            - clean_workdir: Bool (default: False)
+            - max_iterations: Int (max restart attempts, default: 5)
+            - verbose: Bool (detailed logging, default: False)
+
+            Example:
+                builder_inputs = {
+                    'parameters': {'incar': {'ENCUT': 500, 'EDIFF': 1e-6, ...}},
+                    'kpoints_spacing': 0.3,
+                    'potential_family': 'PBE',
+                    'potential_mapping': {},
+                    'options': {'resources': {...}, 'queue_name': 'normal'},
+                    'clean_workdir': False,
+                }
         max_parallel_jobs: Number of structures to process in this run (default 2).
                           Uses simple batch approach: processes first N structures only.
                           Increase this value in subsequent runs to process more structures.
+        fix_type: Where to fix atoms ('bottom'/'top'/'center'/None). Default: None (no fixing)
+                 Example: 'bottom' to fix bottom 5Å of atoms in slab
+        fix_thickness: Thickness in Angstroms for fixing region. Default: 0.0
+                      Example: 5.0 to fix 5Å region
+        fix_elements: Optional list of element symbols to fix (e.g., ['Ag', 'O']).
+                     If None, all elements in the region are fixed. Default: None
+        structure_specific_builder_inputs: Optional dict to override builder_inputs for specific
+                     structure indices. Keys are integer indices (0, 1, 2, ...) matching the
+                     generated structure order. Values are PARTIAL builder_inputs dicts that will
+                     be MERGED into the default builder. Only specify parameters you want to override.
+                     Example: {0: {'parameters': {'incar': {'ALGO': 'Normal'}}, 'kpoints_spacing': 0.2}}
+                              overrides only ALGO and kpoints_spacing for structure 0, keeping all
+                              other parameters (potential_mapping, options, etc.) from default builder.
+                     Structures not listed will use the complete default builder_inputs.
+                     Useful for rerunning only failed calculations with different parameters.
+                     Default: None (use default builder_inputs for all structures)
         name: Name for the workflow (default 'SurfaceHydroxylation')
 
     Returns:
@@ -309,54 +355,64 @@ def build_surface_hydroxylation_workgraph(
             'coverage_bins': 10,
         }
 
-    if vasp_config is None:
-        # Default lightweight VASP configuration
-        vasp_config = {
+    if builder_inputs is None:
+        # Default lightweight VASP builder configuration
+        builder_inputs = {
             'parameters': {
-                'PREC': 'Normal',
-                'ENCUT': 400,
-                'EDIFF': 1e-5,
-                'ISMEAR': 0,
-                'SIGMA': 0.05,
-                'ALGO': 'Normal',
-                'LREAL': False,
-                'NELM': 100,
-                'LWAVE': False,
-                'LCHARG': False,
-                'ISIF': 2,
-                'NSW': 100,
-                'IBRION': 2,
-                'EDIFFG': -0.02,
+                'incar': {
+                    'PREC': 'Normal',
+                    'ENCUT': 400,
+                    'EDIFF': 1e-5,
+                    'ISMEAR': 0,
+                    'SIGMA': 0.05,
+                    'ALGO': 'Normal',
+                    'LREAL': False,
+                    'NELM': 100,
+                    'LWAVE': False,
+                    'LCHARG': False,
+                    'ISIF': 2,
+                    'NSW': 100,
+                    'IBRION': 2,
+                    'EDIFFG': -0.02,
+                }
             },
             'kpoints_spacing': 0.5,
             'potential_family': 'PBE',
             'potential_mapping': {},
-            'clean_workdir': False,
-        }
-
-    if options is None:
-        # Default scheduler options
-        options = {
-            'resources': {
-                'num_machines': 1,
-                'num_mpiprocs_per_machine': 16,
+            'options': {
+                'resources': {
+                    'num_machines': 1,
+                    'num_mpiprocs_per_machine': 16,
+                },
+                'queue_name': 'normal',
+                'max_wallclock_seconds': 3600,
             },
-            'queue_name': 'normal',
-            'max_wallclock_seconds': 3600,
+            'clean_workdir': False,
         }
 
     # ========================================================================
     # BUILD WORKGRAPH
     # ========================================================================
 
+    # Convert structure_specific_builder_inputs integer keys to strings
+    # (AiiDA Dict requires string keys for serialization)
+    if structure_specific_builder_inputs is not None:
+        structure_specific_builder_inputs_str = {}
+        for key, value in structure_specific_builder_inputs.items():
+            structure_specific_builder_inputs_str[str(key)] = value
+        structure_specific_builder_inputs = structure_specific_builder_inputs_str
+
     # Build the WorkGraph using the @task.graph function
     wg = SurfaceHydroxylationWorkGraph.build(
         structure=structure,
         surface_params=surface_params,
         code=code,
-        vasp_config=vasp_config,
-        options=options,
+        builder_inputs=builder_inputs,
         max_parallel_jobs=max_parallel_jobs,
+        fix_type=fix_type,
+        fix_thickness=fix_thickness,
+        fix_elements=fix_elements,
+        structure_specific_builder_inputs=structure_specific_builder_inputs,
     )
 
     # Set the workflow name

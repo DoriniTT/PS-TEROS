@@ -161,6 +161,9 @@ def core_workgraph(
     adsorption_fix_type: str = None,
     adsorption_fix_thickness: float = 0.0,
     adsorption_fix_elements: list = None,
+    # Adsorption energy: Structure-specific builder inputs (NEW)
+    adsorption_structure_specific_relax_builder_inputs: dict = None,
+    adsorption_structure_specific_scf_builder_inputs: dict = None,
     # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
@@ -651,6 +654,9 @@ def build_core_workgraph(
     adsorption_fix_type: str = None,
     adsorption_fix_thickness: float = 0.0,
     adsorption_fix_elements: list = None,
+    # Adsorption energy: Structure-specific builder inputs (NEW)
+    adsorption_structure_specific_relax_builder_inputs: dict = None,
+    adsorption_structure_specific_scf_builder_inputs: dict = None,
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -1218,6 +1224,8 @@ def build_core_workgraph(
         adsorption_fix_type=adsorption_fix_type,  # NEW
         adsorption_fix_thickness=adsorption_fix_thickness,  # NEW
         adsorption_fix_elements=adsorption_fix_elements,  # NEW
+        adsorption_structure_specific_relax_builder_inputs=adsorption_structure_specific_relax_builder_inputs,  # NEW
+        adsorption_structure_specific_scf_builder_inputs=adsorption_structure_specific_scf_builder_inputs,  # NEW
         # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
@@ -1737,28 +1745,30 @@ def build_core_workgraph(
         ads_pot_map = adsorption_potential_mapping if adsorption_potential_mapping is not None else slab_pot_map
         ads_kpts = adsorption_kpoints_spacing if adsorption_kpoints_spacing is not None else slab_kpts
 
-        # Backward compatibility: construct builder inputs from old-style if needed
-        scf_builder_inputs = adsorption_scf_builder_inputs
-        if scf_builder_inputs is None and ads_params is not None:
-            # Auto-construct from old-style parameters
-            scf_builder_inputs = {
-                'parameters': {'incar': dict(ads_params)},
-                'options': dict(ads_opts),
-                'potential_family': potential_family,
-                'potential_mapping': dict(ads_pot_map),
-                'clean_workdir': clean_workdir,
-                'settings': orm.Dict(dict={
-                    'parser_settings': {
-                        'add_trajectory': True,
-                        'add_structure': True,
-                        'add_kpoints': True,
-                    }
-                }),
-            }
-            if ads_kpts is not None:
-                scf_builder_inputs['kpoints_spacing'] = ads_kpts
+        # Extract relax and SCF parameters from builder_inputs or use old-style
+        # For backward compatibility, extract INCAR params if only builder_inputs provided
+        relax_params = None
+        scf_params = None
 
-        # Add adsorption energy scatter task
+        if adsorption_relax_builder_inputs is not None:
+            # New style: extract INCAR from builder_inputs (for backward compat)
+            relax_params = adsorption_relax_builder_inputs.get('parameters', {})
+            if 'incar' in relax_params:
+                relax_params = relax_params['incar']
+        elif ads_params is not None:
+            # Old style: use ads_params directly
+            relax_params = dict(ads_params)
+
+        if adsorption_scf_builder_inputs is not None:
+            # New style: extract INCAR from builder_inputs (for backward compat)
+            scf_params = adsorption_scf_builder_inputs.get('parameters', {})
+            if 'incar' in scf_params:
+                scf_params = scf_params['incar']
+        elif ads_params is not None:
+            # Old style: use ads_params directly
+            scf_params = dict(ads_params)
+
+        # Add adsorption energy scatter task (with NEW builder inputs support)
         adsorption_task = wg.add_task(
             compute_adsorption_energies_scatter,
             name='compute_adsorption_energies_scatter',
@@ -1768,22 +1778,27 @@ def build_core_workgraph(
             potential_family=potential_family,
             potential_mapping=ads_pot_map,
 
-            # NEW: Relaxation parameters
+            # Relaxation parameters (old-style for backward compat)
             relax_before_adsorption=relax_before_adsorption,
-            relax_builder_inputs=adsorption_relax_builder_inputs,
-            scf_builder_inputs=scf_builder_inputs,
+            relax_parameters=relax_params,
+            scf_parameters=scf_params,
 
-            # NEW: Atom fixing parameters
+            # Common settings (old-style for backward compat)
+            options=ads_opts,
+            kpoints_spacing=ads_kpts,
+            clean_workdir=clean_workdir,
+
+            # NEW: Builder inputs (full control)
+            relax_builder_inputs=adsorption_relax_builder_inputs,
+            scf_builder_inputs=adsorption_scf_builder_inputs,
+            structure_specific_relax_builder_inputs=adsorption_structure_specific_relax_builder_inputs,
+            structure_specific_scf_builder_inputs=adsorption_structure_specific_scf_builder_inputs,
+
+            # Atom fixing parameters
             fix_atoms=adsorption_fix_atoms,
             fix_type=adsorption_fix_type,
             fix_thickness=adsorption_fix_thickness,
             fix_elements=adsorption_fix_elements,
-
-            # OLD: Backward compatibility fallback
-            parameters=ads_params,
-            options=ads_opts,
-            kpoints_spacing=ads_kpts,
-            clean_workdir=clean_workdir,
         )
 
         # Connect outputs

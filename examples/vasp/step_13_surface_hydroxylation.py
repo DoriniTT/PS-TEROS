@@ -1,6 +1,6 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-STEP 12: Surface Hydroxylation and Vacancy Generation
+STEP 13: Surface Hydroxylation and Vacancy Generation
 
 This script demonstrates the surface_hydroxylation module:
 - Generate surface variants with different OH coverages
@@ -31,10 +31,10 @@ from aiida import orm, load_profile
 from teros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
 
 def main():
-    """Step 12: Test surface hydroxylation workflow."""
+    """Step 13: Test surface hydroxylation workflow."""
 
     print("\n" + "="*70)
-    print("STEP 12: SURFACE HYDROXYLATION AND VACANCY GENERATION")
+    print("STEP 13: SURFACE HYDROXYLATION AND VACANCY GENERATION")
     print("="*70)
 
     # Load AiiDA profile
@@ -119,49 +119,84 @@ def main():
     code_label = 'VASP-6.4.1@cluster02'  # Update to your VASP code
     print(f"   VASP code: {code_label}")
 
-    vasp_config = {
-        # Direct INCAR parameters (no translation layer)
+    # Builder inputs (new API)
+    builder_inputs = {
         'parameters': {
-            'PREC': 'Normal',       # Lower precision for speed
-            'ENCUT': 400,           # Lower cutoff for demonstration
-            'EDIFF': 1e-4,          # Looser electronic convergence
-            'ISMEAR': 0,            # Gaussian smearing
-            'SIGMA': 0.05,
-            'ALGO': 'Fast',         # Faster algorithm
-            'LREAL': 'Auto',        # Real-space projection (faster)
-            'LWAVE': False,         # Don't write WAVECAR
-            'LCHARG': False,        # Don't write CHGCAR
-            # Relaxation parameters
-            'ISIF': 2,              # Relax positions only
-            'NSW': 50,              # Fewer ionic steps for demo
-            'IBRION': 2,            # Conjugate gradient
-            'EDIFFG': -0.05,        # Loose force convergence (eV/Å)
+            'incar': {  # IMPORTANT: INCAR tags nested under 'incar' key
+                'PREC': 'Normal',       # Lower precision for speed
+                'ENCUT': 400,           # Lower cutoff for demonstration
+                'EDIFF': 1e-4,          # Looser electronic convergence
+                'ISMEAR': 0,            # Gaussian smearing
+                'SIGMA': 0.05,
+                'ALGO': 'Fast',         # Faster algorithm
+                'LREAL': 'Auto',        # Real-space projection (faster)
+                'LWAVE': False,         # Don't write WAVECAR
+                'LCHARG': False,        # Don't write CHGCAR
+                # Relaxation parameters
+                'ISIF': 2,              # Relax positions only
+                'NSW': 50,              # Fewer ionic steps for demo
+                'IBRION': 2,            # Conjugate gradient
+                'EDIFFG': -0.05,        # Loose force convergence (eV/Å)
+            }
         },
-        # K-points
         'kpoints_spacing': 0.5,     # Coarse k-points (Å⁻¹)
-
-        # Pseudopotentials
         'potential_family': 'PBE',
         'potential_mapping': {},    # Use defaults
-
-        # Cleanup
+        'options': {
+            'resources': {
+                'num_machines': 1,
+                'num_cores_per_machine': 24,  # Update to your cluster
+            },
+            'queue_name': 'normal',            # Update to your queue
+            'max_wallclock_seconds': 3600 * 4, # 4 hours
+        },
         'clean_workdir': False,     # Keep files for inspection
     }
 
-    print(f"   ENCUT: {vasp_config['parameters']['ENCUT']} eV")
-    print(f"   NSW (max steps): {vasp_config['parameters']['NSW']}")
-    print(f"   EDIFFG (force): {vasp_config['parameters']['EDIFFG']} eV/Å")
-    print(f"   K-points spacing: {vasp_config['kpoints_spacing']} Å⁻¹")
+    print(f"   ENCUT: {builder_inputs['parameters']['incar']['ENCUT']} eV")
+    print(f"   NSW (max steps): {builder_inputs['parameters']['incar']['NSW']}")
+    print(f"   EDIFFG (force): {builder_inputs['parameters']['incar']['EDIFFG']} eV/Å")
+    print(f"   K-points spacing: {builder_inputs['kpoints_spacing']} Å⁻¹")
 
-    # Scheduler options
-    options = {
-        'resources': {
-            'num_machines': 1,
-            'num_cores_per_machine': 24,  # Update to your cluster
-        },
-        'queue_name': 'normal',            # Update to your queue
-        'max_wallclock_seconds': 3600 * 4, # 4 hours
-    }
+    # ===== STRUCTURE-SPECIFIC BUILDER INPUTS (OPTIONAL - NEW FEATURE) =====
+    # Override parameters for specific structures using structure indices (0, 1, 2, ...)
+    # Indices match the order structures are generated (first=0, second=1, etc.)
+
+    # Example 1: Override parameters for structure 0
+    # structure_specific_builder_inputs = {
+    #     0: {  # First structure - use different algorithm
+    #         'parameters': {
+    #             'incar': {
+    #                 'ALGO': 'All',      # Try all algorithms
+    #                 'EDIFFG': -0.03,    # Looser convergence
+    #             }
+    #         },
+    #         'kpoints_spacing': 0.6,  # Coarser k-points
+    #     }
+    # }
+
+    # Example 2: Override for multiple structures with different settings
+    # structure_specific_builder_inputs = {
+    #     0: {  # First structure - higher precision
+    #         'parameters': {
+    #             'incar': {
+    #                 'PREC': 'Accurate',
+    #                 'ENCUT': 600,
+    #             }
+    #         },
+    #         'kpoints_spacing': 0.3,  # Denser k-points
+    #     },
+    #     2: {  # Third structure - more resources
+    #         'options': {
+    #             'resources': {
+    #                 'num_machines': 2,  # More nodes
+    #             }
+    #         }
+    #     }
+    # }
+
+    # For this example, we'll use default settings for all structures (no overrides)
+    structure_specific_builder_inputs = None
 
     # Parallelization control
     max_parallel = 2  # Process 2 structures for demonstration
@@ -170,6 +205,12 @@ def main():
     print(f"   Batch size: {max_parallel} structures")
     print(f"   (Use higher values in production for efficiency)")
 
+    if structure_specific_builder_inputs is not None:
+        print(f"   Structure-specific overrides: ENABLED")
+        print(f"     Overrides for structures: {list(structure_specific_builder_inputs.keys())}")
+    else:
+        print(f"   Structure-specific overrides: DISABLED (using defaults for all)")
+
     # Build workflow
     print("\n6. Building workflow...")
 
@@ -177,10 +218,10 @@ def main():
         structure=structure,            # or structure_pk=<PK>
         surface_params=surface_params,
         code_label=code_label,
-        vasp_config=vasp_config,
-        options=options,
+        builder_inputs=builder_inputs,  # NEW: Complete builder configuration
         max_parallel_jobs=max_parallel,
-        name='Step12_SurfaceHydroxylation_Ag2O',
+        structure_specific_builder_inputs=structure_specific_builder_inputs,  # NEW: Per-structure overrides
+        name='Step13_SurfaceHydroxylation_Ag2O',
     )
 
     print("   ✓ Workflow built successfully")
@@ -191,7 +232,7 @@ def main():
     pk = result.pk
 
     print(f"\n{'='*70}")
-    print("STEP 12 SUBMITTED SUCCESSFULLY")
+    print("STEP 13 SUBMITTED SUCCESSFULLY")
     print(f"{'='*70}")
     print(f"\nWorkflow PK: {pk}")
 
