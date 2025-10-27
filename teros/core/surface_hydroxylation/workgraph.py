@@ -183,6 +183,38 @@ def SurfaceHydroxylationWorkGraph(
     from .utils import extract_total_energy_from_misc
     bulk_energy = extract_total_energy_from_misc(misc=bulk_vasp.outputs.misc)
 
+    # =========================================================================
+    # Task 0.5: Pristine Slab Relaxation (NEW)
+    # =========================================================================
+
+    # Prepare settings for pristine slab
+    pristine_settings = builder_inputs.get('settings', {})
+    if not pristine_settings:
+        pristine_settings = {
+            'parser_settings': {
+                'add_trajectory': True,
+                'add_structure': True,
+                'add_kpoints': True,
+            }
+        }
+    if not isinstance(pristine_settings, orm.Dict):
+        pristine_settings = orm.Dict(dict=pristine_settings)
+
+    # Create pristine slab relaxation task
+    pristine_vasp = VaspTask(
+        structure=structure,  # Use input slab structure
+        code=code,
+        parameters=orm.Dict(dict=builder_inputs['parameters']),
+        kpoints_spacing=orm.Float(builder_inputs.get('kpoints_spacing', 0.5)),
+        potential_family=orm.Str(builder_inputs['potential_family']),
+        potential_mapping=orm.Dict(dict=builder_inputs.get('potential_mapping', {})),
+        options=orm.Dict(dict=builder_inputs['options']),
+        settings=pristine_settings,
+        clean_workdir=orm.Bool(builder_inputs.get('clean_workdir', False)),
+    )
+
+    pristine_energy = extract_total_energy_from_misc(misc=pristine_vasp.outputs.misc)
+
     # Task 1: Generate surface structure variants
     # Returns namespace with manifest (Dict) and structures (dynamic dict of StructureData)
     gen_outputs = generate_structures(
@@ -211,6 +243,10 @@ def SurfaceHydroxylationWorkGraph(
         'manifest': gen_outputs.manifest,
         'structures': relax_outputs.structures,
         'energies': relax_outputs.energies,
+        'bulk_structure': bulk_vasp.outputs.structure,
+        'bulk_energy': bulk_energy,
+        'pristine_structure': pristine_vasp.outputs.structure,
+        'pristine_energy': pristine_energy,
     }
 
 
