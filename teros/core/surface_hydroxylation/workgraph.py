@@ -472,7 +472,18 @@ def build_surface_hydroxylation_workgraph(
         try:
             from ase.io import read
             from pathlib import Path
-            cif_path = Path(bulk_cif_path)
+            cif_path = Path(bulk_cif_path).resolve()  # Resolve symlinks and .. paths
+            working_dir = Path.cwd().resolve()
+
+            # Validate the file is within allowed directory
+            if not str(cif_path).startswith(str(working_dir)):
+                raise ValueError(
+                    f"CIF file must be in current working directory.\n"
+                    f"Requested: {cif_path}\n"
+                    f"Working dir: {working_dir}\n"
+                    f"Use relative paths only (e.g., 'structures/ag3po4.cif')"
+                )
+
             if not cif_path.exists():
                 raise FileNotFoundError(f"CIF file not found: {bulk_cif_path}")
             atoms = read(str(cif_path))
@@ -545,6 +556,18 @@ def build_surface_hydroxylation_workgraph(
             },
             'clean_workdir': False,
         }
+    # Validate ISIF=3 for user-provided bulk_builder_inputs (CRITICAL)
+    else:
+        # User provided bulk_builder_inputs - validate ISIF=3
+        isif_value = bulk_builder_inputs.get('parameters', {}).get('incar', {}).get('ISIF')
+        if isif_value != 3:
+            raise ValueError(
+                f"bulk_builder_inputs MUST include ISIF=3 for cell relaxation.\n"
+                f"Found: ISIF={isif_value}\n\n"
+                f"Bulk reference calculations require full cell relaxation (ISIF=3).\n"
+                f"This is critical for accurate surface energy calculations per Section S2.\n\n"
+                f"Fix: bulk_builder_inputs['parameters']['incar']['ISIF'] = 3"
+            )
 
     # Set defaults for optional parameters
     if surface_params is None:
