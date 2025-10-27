@@ -145,6 +145,41 @@ def SurfaceHydroxylationWorkGraph(
     if not isinstance(surface_params, orm.Dict):
         surface_params = orm.Dict(dict=surface_params)
 
+    # =========================================================================
+    # Task 0: Bulk Relaxation (NEW)
+    # =========================================================================
+    from aiida_workgraph.tasks import VaspWorkChain as VaspTask
+
+    # Prepare settings with parser configuration
+    bulk_settings = bulk_builder_inputs.get('settings', {})
+    if not bulk_settings:
+        bulk_settings = {
+            'parser_settings': {
+                'add_trajectory': True,
+                'add_structure': True,
+                'add_kpoints': True,
+            }
+        }
+    if not isinstance(bulk_settings, orm.Dict):
+        bulk_settings = orm.Dict(dict=bulk_settings)
+
+    # Create bulk relaxation task
+    bulk_vasp = VaspTask(
+        structure=bulk_structure,
+        code=code,
+        parameters=orm.Dict(dict=bulk_builder_inputs['parameters']),
+        kpoints_spacing=orm.Float(bulk_builder_inputs.get('kpoints_spacing', 0.5)),
+        potential_family=orm.Str(bulk_builder_inputs['potential_family']),
+        potential_mapping=orm.Dict(dict=bulk_builder_inputs.get('potential_mapping', {})),
+        options=orm.Dict(dict=bulk_builder_inputs['options']),
+        settings=bulk_settings,
+        clean_workdir=orm.Bool(bulk_builder_inputs.get('clean_workdir', False)),
+    )
+
+    # Extract energy from bulk relaxation
+    from .utils import extract_total_energy_from_misc
+    bulk_energy = extract_total_energy_from_misc(misc=bulk_vasp.outputs.misc)
+
     # Task 1: Generate surface structure variants
     # Returns namespace with manifest (Dict) and structures (dynamic dict of StructureData)
     gen_outputs = generate_structures(
