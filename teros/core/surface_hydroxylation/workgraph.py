@@ -612,6 +612,8 @@ def build_surface_hydroxylation_workgraph(
         surface_params=surface_params,
         code=code,
         builder_inputs=builder_inputs,
+        bulk_structure=bulk_structure,
+        bulk_builder_inputs=bulk_builder_inputs,
         max_parallel_jobs=max_parallel_jobs,
         fix_type=fix_type,
         fix_thickness=fix_thickness,
