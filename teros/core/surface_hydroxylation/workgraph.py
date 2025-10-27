@@ -438,6 +438,77 @@ def build_surface_hydroxylation_workgraph(
             f"  Or setup VASP code with: verdi code create core.code.installed"
         )
 
+    # ========================================================================
+    # BULK STRUCTURE VALIDATION
+    # ========================================================================
+
+    # Validate exactly one bulk input is provided
+    bulk_inputs_provided = sum([
+        bulk_structure is not None,
+        bulk_structure_pk is not None,
+        bulk_cif_path is not None,
+    ])
+
+    if bulk_inputs_provided == 0:
+        raise ValueError(
+            "Bulk structure is required for surface energy calculations.\n"
+            "Provide one of: bulk_structure, bulk_structure_pk, or bulk_cif_path.\n\n"
+            "Examples:\n"
+            "  bulk_cif_path='ag3po4.cif'\n"
+            "  bulk_structure_pk=1234\n"
+            "  bulk_structure=orm.load_node(1234)"
+        )
+
+    if bulk_inputs_provided > 1:
+        raise ValueError(
+            "Provide exactly ONE bulk structure input.\n"
+            f"Found: bulk_structure={bulk_structure is not None}, "
+            f"bulk_structure_pk={bulk_structure_pk is not None}, "
+            f"bulk_cif_path={bulk_cif_path is not None}"
+        )
+
+    # Load/convert bulk structure to StructureData
+    if bulk_cif_path is not None:
+        try:
+            from ase.io import read
+            from pathlib import Path
+            cif_path = Path(bulk_cif_path)
+            if not cif_path.exists():
+                raise FileNotFoundError(f"CIF file not found: {bulk_cif_path}")
+            atoms = read(str(cif_path))
+            bulk_structure = orm.StructureData(ase=atoms)
+            print(f"   ✓ Loaded bulk structure from CIF: {bulk_cif_path}")
+            print(f"   Formula: {atoms.get_chemical_formula()}")
+        except Exception as e:
+            raise ValueError(
+                f"Could not read CIF file: {bulk_cif_path}\n"
+                f"Error: {e}\n"
+                f"Check file exists and is valid CIF format."
+            )
+
+    elif bulk_structure_pk is not None:
+        try:
+            bulk_structure = orm.load_node(bulk_structure_pk)
+            if not isinstance(bulk_structure, orm.StructureData):
+                raise ValueError(
+                    f"Node {bulk_structure_pk} is not a StructureData.\n"
+                    f"Found: {type(bulk_structure).__name__}"
+                )
+            print(f"   ✓ Loaded bulk structure from PK: {bulk_structure_pk}")
+        except Exception as e:
+            raise ValueError(
+                f"Could not load bulk structure from PK {bulk_structure_pk}.\n"
+                f"Error: {e}\n"
+                f"Use 'verdi data core.structure list' to see available structures."
+            )
+
+    # If bulk_structure provided directly, validate type
+    elif bulk_structure is not None:
+        if not isinstance(bulk_structure, orm.StructureData):
+            raise ValueError(
+                f"bulk_structure must be StructureData, got {type(bulk_structure).__name__}"
+            )
+
     # Set defaults for optional parameters
     if surface_params is None:
         surface_params = {
