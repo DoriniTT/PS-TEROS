@@ -509,6 +509,43 @@ def build_surface_hydroxylation_workgraph(
                 f"bulk_structure must be StructureData, got {type(bulk_structure).__name__}"
             )
 
+    # Set default bulk_builder_inputs if not provided
+    if bulk_builder_inputs is None:
+        print("   ⚠ Using default bulk_builder_inputs (ISIF=3, ENCUT=500)")
+        # Default bulk relaxation parameters (based on default_ag3po4_builders.py)
+        bulk_builder_inputs = {
+            'parameters': {
+                'incar': {
+                    'PREC': 'Accurate',
+                    'ENCUT': 500,
+                    'EDIFF': 1e-6,
+                    'ISMEAR': 0,
+                    'SIGMA': 0.05,
+                    'ALGO': 'Fast',
+                    'LREAL': False,
+                    'NELM': 200,
+                    'LWAVE': False,
+                    'LCHARG': False,
+                    'ISIF': 3,        # Cell + ionic relaxation for bulk
+                    'NSW': 500,
+                    'IBRION': 2,
+                    'EDIFFG': -0.01,  # Tighter convergence for bulk
+                }
+            },
+            'kpoints_spacing': 0.3,  # Denser k-points for bulk
+            'potential_family': 'PBE',
+            'potential_mapping': {},
+            'options': {
+                'resources': {
+                    'num_machines': 1,
+                    'num_mpiprocs_per_machine': 16,
+                },
+                'queue_name': 'normal',
+                'max_wallclock_seconds': 3600 * 4,
+            },
+            'clean_workdir': False,
+        }
+
     # Set defaults for optional parameters
     if surface_params is None:
         surface_params = {
