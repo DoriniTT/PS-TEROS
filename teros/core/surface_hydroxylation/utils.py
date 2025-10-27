@@ -31,7 +31,7 @@ def ase_to_aiida(atoms: Atoms) -> orm.StructureData:
     return orm.StructureData(ase=atoms)
 
 
-@task()
+@task.calcfunction
 def extract_total_energy_from_misc(misc: orm.Dict) -> orm.Float:
     """
     Extract total energy from VASP WorkChain misc output.
@@ -44,15 +44,15 @@ def extract_total_energy_from_misc(misc: orm.Dict) -> orm.Float:
     """
     misc_dict = misc.get_dict()
 
-    # Get total_energies array from misc
     if 'total_energies' not in misc_dict:
         raise ValueError("total_energies not found in misc output")
 
-    total_energies = misc_dict['total_energies']
+    energy_dict = misc_dict['total_energies']
 
-    if not total_energies:
-        raise ValueError("total_energies array is empty")
+    # Try standard keys in order of preference
+    for key in ('energy_extrapolated', 'energy_no_entropy', 'energy'):
+        if key in energy_dict:
+            return orm.Float(float(energy_dict[key]))
 
-    # Return final energy (last ionic step)
-    final_energy = float(total_energies[-1])
-    return orm.Float(final_energy)
+    available = ', '.join(sorted(energy_dict.keys()))
+    raise ValueError(f'Unable to find total energy. Available keys: {available}')

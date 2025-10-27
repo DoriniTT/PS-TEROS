@@ -148,7 +148,10 @@ def SurfaceHydroxylationWorkGraph(
     # =========================================================================
     # Task 0: Bulk Relaxation (NEW)
     # =========================================================================
-    from aiida_workgraph.tasks import VaspWorkChain as VaspTask
+    from aiida.plugins import WorkflowFactory
+
+    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
+    VaspTask = task(VaspWorkChain)
 
     # Prepare settings with parser configuration
     bulk_settings = bulk_builder_inputs.get('settings', {})
