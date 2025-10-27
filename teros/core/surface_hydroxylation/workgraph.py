@@ -256,6 +256,10 @@ def build_surface_hydroxylation_workgraph(
     surface_params: dict = None,
     code_label: str = 'VASP-VTST-6.4.3@bohr',
     builder_inputs: dict = None,
+    bulk_structure: orm.StructureData = None,
+    bulk_structure_pk: int = None,
+    bulk_cif_path: str = None,
+    bulk_builder_inputs: dict = None,
     max_parallel_jobs: int = 2,
     fix_type: str = None,
     fix_thickness: float = 0.0,
@@ -300,6 +304,14 @@ def build_surface_hydroxylation_workgraph(
             - options: Dict with scheduler settings
                 {'resources': {'num_machines': 1, 'num_cores_per_machine': 16},
                  'queue_name': 'normal', 'max_wallclock_seconds': 3600}
+        bulk_structure: Bulk crystal structure (StructureData).
+                       Provide one of: bulk_structure, bulk_structure_pk, or bulk_cif_path.
+        bulk_structure_pk: PK of bulk StructureData node (int).
+        bulk_cif_path: Path to CIF file for bulk structure (str).
+                      Example: 'ag3po4.cif'
+        bulk_builder_inputs: VASP parameters for bulk relaxation (dict).
+                            Must include ISIF=3 for cell relaxation.
+                            If None, uses sensible defaults.
 
             Optional keys:
             - kpoints_spacing: Float (Å⁻¹, default: 0.5)
