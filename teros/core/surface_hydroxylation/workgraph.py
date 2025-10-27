@@ -665,6 +665,7 @@ def organize_hydroxylation_results(workflow_node):
             - successful_relaxations: list of dicts with successful results
             - failed_relaxations: list of dicts with failed results
             - statistics: dict with total/succeeded/failed counts
+            - reference_data: dict with bulk and pristine reference calculations
 
     Example:
         >>> from aiida import orm
@@ -679,6 +680,14 @@ def organize_hydroxylation_results(workflow_node):
     manifest = workflow_node.outputs.manifest.get_dict()
     structures = workflow_node.outputs.structures
     energies = workflow_node.outputs.energies
+
+    # Extract reference data from bulk and pristine calculations
+    reference_data = {
+        'bulk_structure_pk': workflow_node.outputs.bulk_structure.pk,
+        'bulk_energy': workflow_node.outputs.bulk_energy.value,
+        'pristine_structure_pk': workflow_node.outputs.pristine_structure.pk,
+        'pristine_energy': workflow_node.outputs.pristine_energy.value,
+    }
 
     variants = manifest['variants']
     successful = []
@@ -719,5 +728,6 @@ def organize_hydroxylation_results(workflow_node):
             'total': len(variants),
             'succeeded': len(successful),
             'failed': len(failed)
-        }
+        },
+        'reference_data': reference_data,
     }
