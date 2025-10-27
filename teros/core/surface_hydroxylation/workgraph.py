@@ -18,12 +18,18 @@ from .relaxations import relax_slabs_with_semaphore
     'manifest',
     'structures',
     'energies',
+    'bulk_structure',
+    'bulk_energy',
+    'pristine_structure',
+    'pristine_energy',
 ])
 def SurfaceHydroxylationWorkGraph(
     structure: orm.StructureData,
     surface_params: dict,
     code: orm.InstalledCode,
     builder_inputs: dict,
+    bulk_structure: orm.StructureData,
+    bulk_builder_inputs: dict,
     max_parallel_jobs: int = 2,
     fix_type: str = None,
     fix_thickness: float = 0.0,
@@ -62,6 +68,10 @@ def SurfaceHydroxylationWorkGraph(
             - dynamics: Dict (selective dynamics, optional - will be added automatically if fix_type is set)
             - clean_workdir: Bool (default: False)
             Note: 'code' and 'structure' will be set automatically by the workflow
+        bulk_structure: Bulk crystal structure for reference calculations (StructureData).
+                       Required for surface energy calculations per Section S2.
+        bulk_builder_inputs: VASP parameters for bulk relaxation (dict). Must include
+                            ISIF=3 for cell relaxation. Same format as builder_inputs.
         max_parallel_jobs: Number of structures to process in this run (default: 2)
                           Uses simple batch approach: processes first N structures only
         fix_type: Where to fix atoms ('bottom'/'top'/'center'/None). Default: None (no fixing)
