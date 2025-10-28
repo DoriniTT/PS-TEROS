@@ -51,3 +51,33 @@ def test_get_mu_correction_temperature_dependence():
 
     # Higher temperature should give more negative correction
     assert mu_500 < mu_298
+
+
+def test_invalid_species():
+    """Test error on invalid species."""
+    db = JanafDatabase()
+
+    with pytest.raises(ValueError, match="not found"):
+        db.get_mu_correction('CO2', T=298)
+
+
+def test_invalid_temperature():
+    """Test error on invalid temperature."""
+    db = JanafDatabase()
+
+    # Not a 50 K step
+    with pytest.raises(ValueError, match="not found in database"):
+        db.get_mu_correction('H2O', T=299)
+
+    # Out of range
+    with pytest.raises(ValueError, match="not found in database"):
+        db.get_mu_correction('H2O', T=3000)
+
+
+def test_temperature_must_be_discrete():
+    """Test that intermediate temperatures are not allowed."""
+    db = JanafDatabase()
+
+    # 325 K is between 300 and 350
+    with pytest.raises(ValueError, match="not found in database"):
+        db.get_mu_correction('H2O', T=325)
