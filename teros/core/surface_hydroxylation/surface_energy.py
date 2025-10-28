@@ -386,3 +386,188 @@ def calc_gamma(gamma_s_modified, gamma_0_pristine):
     gamma = 2 * gamma_s_modified.value - gamma_0_pristine.value
 
     return Float(gamma)
+
+
+def calculate_surface_energies(
+    structures_dict,
+    energies_dict,
+    bulk_structure,
+    bulk_energy,
+    temperature,
+    pressures,
+    which_reaction,
+):
+    """
+    Calculate surface energies for all structures in workflow.
+
+    Main orchestration function that:
+        1. Gets chemical potential corrections from JANAF database
+        2. Identifies pristine structure (x=0, y=0) for γ_0 reference
+        3. Calculates formation energies for all structures
+        4. Calculates surface energies with pristine correction
+
+    Args:
+        structures_dict: dict - {name: StructureData}
+        energies_dict: dict - {name: Float (eV)}
+        bulk_structure: StructureData - Bulk unit cell
+        bulk_energy: Float - Bulk energy per formula unit (eV/f.u.)
+        temperature: float - Temperature in Kelvin
+        pressures: dict - {'H2O': float, 'O2': float, 'H2': float} in bar
+        which_reaction: int - Formation reaction to use (1, 2, or 3)
+
+    Returns:
+        dict: {
+            'surface_energies': {name: gamma (J/m²)},
+            'formation_energies': {name: DeltaG (eV)},
+            'stoichiometry': {name: {'n': int, 'x': int, 'y': int, ...}},
+            'reference_data': {
+                'temperature': float (K),
+                'pressures': dict,
+                'reaction_used': int,
+                'mu_corrections': dict,
+                'E_bulk': float (eV/f.u.),
+                'gamma_0': float (J/m²),
+            }
+        }
+
+    Raises:
+        ValueError: If no pristine structure found or if required pressure missing
+    """
+    from teros.core.surface_hydroxylation.thermodynamics import JanafDatabase
+
+    # Initialize JANAF database
+    janaf_db = JanafDatabase()
+
+    # Get chemical potential corrections
+    mu_corrections = {}
+    for species in ['H2O', 'H2', 'O2']:
+        if species in pressures:
+            mu_corrections[species] = janaf_db.get_mu_correction(
+                species=species,
+                T=temperature,
+                P=pressures[species]
+            )
+
+    # Select reaction function
+    calc_delta_g = select_reaction_function(which_reaction)
+
+    # Prepare outputs
+    surface_energies = {}
+    formation_energies = {}
+    stoichiometry_data = {}
+
+    # Find pristine structure (x=0, y=0) for γ_0 reference
+    pristine_name = None
+    for name, structure in structures_dict.items():
+        comp = analyze_composition(structure, bulk_structure)
+        stoichiometry_data[name] = comp
+
+        if comp['x'] == 0 and comp['y'] == 0:
+            pristine_name = name
+
+    if pristine_name is None:
+        raise ValueError(
+            "No pristine structure found (x=0, y=0). "
+            "Set include_empty=True in surface_params or ensure pristine slab is included."
+        )
+
+    # Calculate γ_0 (pristine surface energy)
+    pristine_structure = structures_dict[pristine_name]
+    pristine_comp = stoichiometry_data[pristine_name]
+    pristine_area = get_surface_area(pristine_structure)
+
+    # For pristine: x=0, y=0, so formation energy simplifies
+    # Prepare arguments based on reaction
+    if which_reaction == 1:
+        pristine_delta_g = calc_delta_g(
+            E_slab=energies_dict[pristine_name],
+            E_bulk=bulk_energy,
+            n=Int(pristine_comp['n']),
+            x=Int(0),
+            y=Int(0),
+            delta_mu_h2o=Float(mu_corrections.get('H2O', 0.0)),
+            delta_mu_o2=Float(mu_corrections.get('O2', 0.0)),
+        )
+    elif which_reaction == 2:
+        pristine_delta_g = calc_delta_g(
+            E_slab=energies_dict[pristine_name],
+            E_bulk=bulk_energy,
+            n=Int(pristine_comp['n']),
+            x=Int(0),
+            y=Int(0),
+            delta_mu_h2=Float(mu_corrections.get('H2', 0.0)),
+            delta_mu_h2o=Float(mu_corrections.get('H2O', 0.0)),
+        )
+    else:  # reaction 3
+        pristine_delta_g = calc_delta_g(
+            E_slab=energies_dict[pristine_name],
+            E_bulk=bulk_energy,
+            n=Int(pristine_comp['n']),
+            x=Int(0),
+            y=Int(0),
+            delta_mu_h2=Float(mu_corrections.get('H2', 0.0)),
+            delta_mu_o2=Float(mu_corrections.get('O2', 0.0)),
+        )
+
+    pristine_gamma_s = calc_gamma_s(pristine_delta_g, pristine_area)
+    gamma_0 = pristine_gamma_s  # For pristine, γ_s = γ_0 (no correction needed)
+
+    # Process all structures
+    for name, structure in structures_dict.items():
+        comp = stoichiometry_data[name]
+        area = get_surface_area(structure)
+
+        # Calculate formation energy based on reaction
+        if which_reaction == 1:
+            delta_g = calc_delta_g(
+                E_slab=energies_dict[name],
+                E_bulk=bulk_energy,
+                n=Int(comp['n']),
+                x=Int(comp['x']),
+                y=Int(comp['y']),
+                delta_mu_h2o=Float(mu_corrections['H2O']),
+                delta_mu_o2=Float(mu_corrections['O2']),
+            )
+        elif which_reaction == 2:
+            delta_g = calc_delta_g(
+                E_slab=energies_dict[name],
+                E_bulk=bulk_energy,
+                n=Int(comp['n']),
+                x=Int(comp['x']),
+                y=Int(comp['y']),
+                delta_mu_h2=Float(mu_corrections['H2']),
+                delta_mu_h2o=Float(mu_corrections['H2O']),
+            )
+        else:  # reaction 3
+            delta_g = calc_delta_g(
+                E_slab=energies_dict[name],
+                E_bulk=bulk_energy,
+                n=Int(comp['n']),
+                x=Int(comp['x']),
+                y=Int(comp['y']),
+                delta_mu_h2=Float(mu_corrections['H2']),
+                delta_mu_o2=Float(mu_corrections['O2']),
+            )
+
+        formation_energies[name] = delta_g.value
+
+        # Calculate surface energies
+        gamma_s = calc_gamma_s(delta_g, area)
+        gamma = calc_gamma(gamma_s, gamma_0)
+
+        surface_energies[name] = gamma.value
+
+    # Return complete results
+    return {
+        'surface_energies': surface_energies,
+        'formation_energies': formation_energies,
+        'stoichiometry': stoichiometry_data,
+        'reference_data': {
+            'temperature': temperature,
+            'pressures': pressures,
+            'reaction_used': which_reaction,
+            'mu_corrections': {k: v for k, v in mu_corrections.items()},
+            'E_bulk': bulk_energy.value,
+            'gamma_0': gamma_0.value,
+        }
+    }

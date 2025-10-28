@@ -270,3 +270,52 @@ def test_calc_gamma_with_pristine():
     )
 
     assert abs(gamma.value - 5.0) < 1e-6
+
+
+def test_calculate_surface_energies_full_workflow(
+    ag3po4_bulk,
+    ag3po4_slab_pristine,
+    ag3po4_slab_2oh,
+    expected_values
+):
+    """Test complete orchestration function with pristine + modified structures."""
+    from teros.core.surface_hydroxylation.surface_energy import calculate_surface_energies
+
+    structures = {
+        'pristine': ag3po4_slab_pristine,
+        '2oh': ag3po4_slab_2oh,
+    }
+    energies = {
+        'pristine': Float(expected_values['E_pristine']),
+        '2oh': Float(expected_values['E_modified']),
+    }
+
+    results = calculate_surface_energies(
+        structures_dict=structures,
+        energies_dict=energies,
+        bulk_structure=ag3po4_bulk,
+        bulk_energy=Float(expected_values['E_bulk']),
+        temperature=298.0,
+        pressures={'H2O': 0.023, 'O2': 0.21},
+        which_reaction=1,
+    )
+
+    # Check structure of results
+    assert 'surface_energies' in results
+    assert 'formation_energies' in results
+    assert 'stoichiometry' in results
+    assert 'reference_data' in results
+
+    # Check stoichiometry was calculated correctly
+    assert results['stoichiometry']['2oh']['n'] == 4
+    assert results['stoichiometry']['2oh']['x'] == 2
+    assert results['stoichiometry']['2oh']['y'] == 0
+
+    # Check that pristine was identified
+    assert results['stoichiometry']['pristine']['x'] == 0
+    assert results['stoichiometry']['pristine']['y'] == 0
+
+    # Check reference data
+    assert results['reference_data']['temperature'] == 298.0
+    assert results['reference_data']['reaction_used'] == 1
+    assert 'gamma_0' in results['reference_data']
