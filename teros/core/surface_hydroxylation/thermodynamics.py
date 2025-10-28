@@ -6,6 +6,7 @@ species (H2O, H2, O2) from NIST-JANAF thermochemical tables.
 """
 
 import json
+import math
 from pathlib import Path
 from typing import Optional
 
@@ -83,7 +84,7 @@ class JanafDatabase:
         Example:
             >>> db = JanafDatabase()
             >>> db.get_mu_correction('H2O', T=298)
-            -0.5643
+            -0.4806
         """
         # Validate species
         self._validate_species(species)
@@ -102,7 +103,6 @@ class JanafDatabase:
 
         # Add pressure correction if P != 1.0
         if P != 1.0:
-            import math
             pressure_correction = KB_EV * T * math.log(P)
             delta_mu += pressure_correction
 
