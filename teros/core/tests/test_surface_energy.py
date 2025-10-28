@@ -95,3 +95,29 @@ def test_get_formula_dict(ag3po4_bulk):
     formula = _get_formula_dict(ag3po4_bulk)
 
     assert formula == {'Ag': 3, 'P': 1, 'O': 4}
+
+
+def test_analyze_composition_pristine(ag3po4_bulk, ag3po4_slab_pristine):
+    """Test composition analysis on pristine slab (no OH, no vacancies)."""
+    from teros.core.surface_hydroxylation.surface_energy import analyze_composition
+
+    comp = analyze_composition(ag3po4_slab_pristine, ag3po4_bulk)
+
+    assert comp['n'] == 4
+    assert comp['x'] == 0
+    assert comp['y'] == 0
+    assert comp['n_h'] == 0
+    assert comp['n_o_deficit'] == 0
+
+
+def test_analyze_composition_2oh(ag3po4_bulk, ag3po4_slab_2oh):
+    """Test composition analysis on 2 OH structure."""
+    from teros.core.surface_hydroxylation.surface_energy import analyze_composition
+
+    comp = analyze_composition(ag3po4_slab_2oh, ag3po4_bulk)
+
+    assert comp['n'] == 4
+    assert comp['x'] == 2
+    assert comp['y'] == 0
+    assert comp['n_h'] == 2
+    assert comp['n_o_deficit'] == -2  # Net gain of 2 O from OH
