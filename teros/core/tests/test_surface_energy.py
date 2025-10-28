@@ -319,3 +319,21 @@ def test_calculate_surface_energies_full_workflow(
     assert results['reference_data']['temperature'] == 298.0
     assert results['reference_data']['reaction_used'] == 1
     assert 'gamma_0' in results['reference_data']
+
+
+def test_module_exports():
+    """Test that public functions are exported from module."""
+    from teros.core.surface_hydroxylation import (
+        analyze_composition,
+        calc_delta_g_reaction1,
+        calc_delta_g_reaction2,
+        calc_delta_g_reaction3,
+        calc_gamma_s,
+        calc_gamma,
+        calculate_surface_energies,
+    )
+
+    # Just check they're importable
+    assert callable(analyze_composition)
+    assert callable(calc_delta_g_reaction1)
+    assert callable(calculate_surface_energies)
