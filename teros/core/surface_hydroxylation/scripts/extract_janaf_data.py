@@ -158,6 +158,50 @@ def process_molecule_data(raw_data: list[tuple]) -> dict:
     return processed
 
 
+def generate_json_output(processed_data: dict) -> dict:
+    """
+    Generate final JSON structure.
+
+    Args:
+        processed_data: Dict mapping species to processed data
+
+    Returns:
+        Complete JSON structure with metadata
+    """
+    output = {
+        'metadata': {
+            'source': 'NIST-JANAF Thermochemical Tables',
+            'urls': JANAF_URLS,
+            'units': {
+                'temperature': 'K',
+                'enthalpy': 'kJ/mol (H(T) - H(0 K))',
+                'entropy': 'J/(mol·K)',
+                'delta_mu': 'eV/molecule'
+            },
+            'reference_temperature': 298.15,
+            'temperature_range': [0, 2000],
+            'temperature_step': 50,
+            'data_extraction': {
+                'date': '2025-10-27',
+                'method': 'Manual extraction from JANAF HTML tables',
+                'verification': 'Spot-checked against Section 4 example values'
+            },
+            'conversion_factors': {
+                'kJ_to_eV': KJ_TO_EV,
+                'J_to_kJ': J_TO_KJ,
+            }
+        },
+        'molecules': {}
+    }
+
+    for species, data in processed_data.items():
+        output['molecules'][species] = {
+            'data': data
+        }
+
+    return output
+
+
 def main():
     """Extract and process JANAF data."""
     print("JANAF Data Extraction Script")
@@ -180,6 +224,17 @@ def main():
         data_298 = processed_data[species].get('298', {})
         if data_298:
             print(f"  At 298 K: Δμ⁰ = {data_298['delta_mu']} eV")
+
+    # Generate JSON structure
+    json_output = generate_json_output(processed_data)
+
+    # Write to file
+    output_path = Path(__file__).parent.parent / 'thermodynamics_data.json'
+    with open(output_path, 'w') as f:
+        json.dump(json_output, f, indent=2)
+
+    print(f"\nJSON file written to: {output_path}")
+    print(f"File size: {output_path.stat().st_size} bytes")
 
     print("\n" + "=" * 50)
     print("Processing complete!")
