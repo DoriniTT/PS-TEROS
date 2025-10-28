@@ -573,6 +573,7 @@ def compute_adsorption_energies_scatter(
     scf_builder_inputs: dict | None = None,
     structure_specific_relax_builder_inputs: dict | None = None,
     structure_specific_scf_builder_inputs: dict | None = None,
+    structure_component_specific_scf_builder_inputs: dict | None = None,
 
     # Atom fixing control (for relaxation)
     fix_atoms: bool = False,
@@ -630,6 +631,12 @@ def compute_adsorption_energies_scatter(
                                                Applies to all three SCF calculations (substrate, molecule, complete)
                                                Uses deep merge - only specified parameters are overridden
                                                Format: {1: {'kpoints_spacing': 0.15}, ...}
+        structure_component_specific_scf_builder_inputs: Per-structure, per-component overrides (NEW)
+                                                         Dict mapping structure indices to component-specific dicts
+                                                         Allows modifying only substrate/molecule/complete for specific structures
+                                                         Uses deep merge - only specified parameters are overridden
+                                                         Format: {2: {'substrate': {'parameters': {'incar': {'ALGO': 'Fast'}}}}, ...}
+                                                         Components: 'substrate', 'molecule', 'complete'
 
         fix_atoms: If True, apply atom fixing constraints during relaxation
         fix_type: Type of fixing ('bottom', 'top', 'center')
@@ -855,6 +862,14 @@ def compute_adsorption_energies_scatter(
             str_key = str(idx_key)
             structure_specific_scf[str_key] = override
 
+    # Convert structure_component_specific keys from int to str for lookup
+    structure_component_specific_scf = {}
+    if structure_component_specific_scf_builder_inputs is not None:
+        for idx_key, component_overrides in structure_component_specific_scf_builder_inputs.items():
+            # Accept both int and str keys
+            str_key = str(idx_key)
+            structure_component_specific_scf[str_key] = component_overrides
+
     # Recreate key_to_index mapping for SCF phase
     key_to_index = {key: idx for idx, key in enumerate(structures.keys())}
 
@@ -884,6 +899,16 @@ def compute_adsorption_energies_scatter(
         for component_name, struct, energy_dict in scf_components:
             # Make a copy of base_scf_inputs for this component
             scf_inputs = copy.deepcopy(base_scf_inputs)
+
+            # Apply component-specific overrides if they exist
+            # Priority: base_scf_inputs < structure_specific < component_specific
+            if idx_str in structure_component_specific_scf:
+                component_overrides = structure_component_specific_scf[idx_str]
+                if component_name in component_overrides:
+                    scf_inputs = deep_merge_dicts(
+                        scf_inputs,
+                        component_overrides[component_name]
+                    )
 
             # Always set structure and code
             scf_inputs['structure'] = struct

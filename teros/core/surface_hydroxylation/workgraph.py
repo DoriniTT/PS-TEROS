@@ -181,7 +181,7 @@ def SurfaceHydroxylationWorkGraph(
 
     # Extract energy from bulk relaxation
     from .utils import extract_total_energy_from_misc
-    bulk_energy = extract_total_energy_from_misc(misc=bulk_vasp.outputs.misc)
+    bulk_energy = extract_total_energy_from_misc(misc=bulk_vasp.misc)
 
     # =========================================================================
     # Task 0.5: Pristine Slab Relaxation (NEW)
@@ -213,7 +213,7 @@ def SurfaceHydroxylationWorkGraph(
         clean_workdir=orm.Bool(builder_inputs.get('clean_workdir', False)),
     )
 
-    pristine_energy = extract_total_energy_from_misc(misc=pristine_vasp.outputs.misc)
+    pristine_energy = extract_total_energy_from_misc(misc=pristine_vasp.misc)
 
     # Task 1: Generate surface structure variants
     # Returns namespace with manifest (Dict) and structures (dynamic dict of StructureData)
@@ -243,9 +243,9 @@ def SurfaceHydroxylationWorkGraph(
         'manifest': gen_outputs.manifest,
         'structures': relax_outputs.structures,
         'energies': relax_outputs.energies,
-        'bulk_structure': bulk_vasp.outputs.structure,
+        'bulk_structure': bulk_vasp.structure,
         'bulk_energy': bulk_energy,
-        'pristine_structure': pristine_vasp.outputs.structure,
+        'pristine_structure': pristine_vasp.structure,
         'pristine_energy': pristine_energy,
     }
 

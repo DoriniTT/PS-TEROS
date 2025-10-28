@@ -164,6 +164,7 @@ def core_workgraph(
     # Adsorption energy: Structure-specific builder inputs (NEW)
     adsorption_structure_specific_relax_builder_inputs: dict = None,
     adsorption_structure_specific_scf_builder_inputs: dict = None,
+    adsorption_structure_component_specific_scf_builder_inputs: dict = None,
     # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
@@ -657,6 +658,7 @@ def build_core_workgraph(
     # Adsorption energy: Structure-specific builder inputs (NEW)
     adsorption_structure_specific_relax_builder_inputs: dict = None,
     adsorption_structure_specific_scf_builder_inputs: dict = None,
+    adsorption_structure_component_specific_scf_builder_inputs: dict = None,
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -1226,6 +1228,7 @@ def build_core_workgraph(
         adsorption_fix_elements=adsorption_fix_elements,  # NEW
         adsorption_structure_specific_relax_builder_inputs=adsorption_structure_specific_relax_builder_inputs,  # NEW
         adsorption_structure_specific_scf_builder_inputs=adsorption_structure_specific_scf_builder_inputs,  # NEW
+        adsorption_structure_component_specific_scf_builder_inputs=adsorption_structure_component_specific_scf_builder_inputs,  # NEW
         # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
@@ -1793,6 +1796,7 @@ def build_core_workgraph(
             scf_builder_inputs=adsorption_scf_builder_inputs,
             structure_specific_relax_builder_inputs=adsorption_structure_specific_relax_builder_inputs,
             structure_specific_scf_builder_inputs=adsorption_structure_specific_scf_builder_inputs,
+            structure_component_specific_scf_builder_inputs=adsorption_structure_component_specific_scf_builder_inputs,
 
             # Atom fixing parameters
             fix_atoms=adsorption_fix_atoms,
