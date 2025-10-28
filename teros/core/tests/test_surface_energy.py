@@ -2,8 +2,15 @@
 
 import pytest
 import numpy as np
+from aiida import load_profile
 from aiida.orm import Float, Int, StructureData
 from ase import Atoms
+
+
+@pytest.fixture(scope="module", autouse=True)
+def load_aiida_profile():
+    """Load AiiDA profile for all tests."""
+    load_profile('psteros')
 
 
 @pytest.fixture
@@ -79,3 +86,12 @@ def expected_values():
 def test_fixtures_load():
     """Test that fixtures load correctly."""
     pass  # Placeholder - fixtures tested indirectly
+
+
+def test_get_formula_dict(ag3po4_bulk):
+    """Test formula dictionary extraction from structure."""
+    from teros.core.surface_hydroxylation.surface_energy import _get_formula_dict
+
+    formula = _get_formula_dict(ag3po4_bulk)
+
+    assert formula == {'Ag': 3, 'P': 1, 'O': 4}
