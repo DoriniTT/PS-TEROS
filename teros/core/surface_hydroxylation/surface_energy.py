@@ -5,6 +5,7 @@ Implements equations 4-10 from Section S3 for calculating surface Gibbs free ene
 """
 
 from collections import Counter
+import numpy as np
 from aiida.engine import calcfunction
 from aiida.orm import Float, Int
 
@@ -255,3 +256,133 @@ def calc_delta_g_reaction3(E_slab, E_bulk, n, x, y, delta_mu_h2, delta_mu_o2):
     )
 
     return Float(delta_g)
+
+
+def select_reaction_function(which_reaction):
+    """
+    Return the appropriate formation energy calculation function.
+
+    Args:
+        which_reaction: int (1, 2, or 3)
+            1: H2O/O2 reservoirs (oxidizing, water-rich)
+            2: H2/H2O reservoirs (reducing, water-present)
+            3: H2/O2 reservoirs (reducing, dry)
+
+    Returns:
+        callable: The corresponding calc_delta_g function
+
+    Raises:
+        ValueError: If which_reaction not in {1, 2, 3}
+    """
+    reactions = {
+        1: calc_delta_g_reaction1,
+        2: calc_delta_g_reaction2,
+        3: calc_delta_g_reaction3,
+    }
+
+    if which_reaction not in reactions:
+        raise ValueError(
+            f"which_reaction must be 1, 2, or 3, got {which_reaction}"
+        )
+
+    return reactions[which_reaction]
+
+
+def get_surface_area(structure):
+    """
+    Calculate surface area from structure cell parameters.
+
+    Assumes surface is perpendicular to c-axis (standard slab convention).
+    Area is calculated as magnitude of cross product of in-plane lattice vectors.
+
+    Args:
+        structure: AiiDA StructureData
+
+    Returns:
+        Float: Surface area in m² (converted from ų)
+    """
+    # Get cell vectors (3x3 array in ų)
+    cell = np.array(structure.cell)
+
+    # In-plane vectors (a and b)
+    a = cell[0]
+    b = cell[1]
+
+    # Cross product gives area vector
+    cross = np.cross(a, b)
+    area_angstrom2 = np.linalg.norm(cross)
+
+    # Convert ų to m²: 1 ų = 1e-20 m²
+    area_m2 = area_angstrom2 * 1e-20
+
+    return Float(area_m2)
+
+
+# Unit conversion constant
+EV_TO_J = 1.602176634e-19  # eV to Joules
+
+
+@calcfunction
+def calc_gamma_s(delta_g, area):
+    """
+    Calculate average surface energy of both surfaces.
+
+    Equation 9: γ_s = ΔG / (2A)
+
+    Where:
+        γ_s = average energy of top and bottom surfaces
+        ΔG = formation energy (eV)
+        A = surface area (m²)
+        Factor of 2 accounts for two surfaces in slab
+
+    Args:
+        delta_g: Float - Formation energy (eV)
+        area: Float - Surface area (m²)
+
+    Returns:
+        Float: Average surface energy γ_s in J/m²
+
+    Raises:
+        ValueError: If area <= 0
+    """
+    # Validate
+    if area.value <= 0:
+        raise ValueError(f"Surface area must be positive, got {area.value} m²")
+
+    # Convert energy from eV to J
+    delta_g_J = delta_g.value * EV_TO_J
+
+    # Equation 9: γ_s = ΔG / (2A)
+    gamma_s = delta_g_J / (2 * area.value)
+
+    return Float(gamma_s)
+
+
+@calcfunction
+def calc_gamma(gamma_s_modified, gamma_0_pristine):
+    """
+    Calculate corrected surface energy (removes pristine contribution).
+
+    Equation 10: γ = 2γ_s - γ_0
+
+    Physical meaning:
+        γ_s = (γ_top + γ_bottom) / 2
+
+        For single-sided modification:
+            γ_top = modified surface energy (what we want)
+            γ_bottom = γ_0 (pristine, unchanged)
+
+        Solving for γ_top:
+            γ_top = 2γ_s - γ_0
+
+    Args:
+        gamma_s_modified: Float - Average surface energy of modified structure (J/m²)
+        gamma_0_pristine: Float - Pristine surface energy reference (J/m²)
+
+    Returns:
+        Float: Corrected surface energy γ in J/m²
+    """
+    # Equation 10
+    gamma = 2 * gamma_s_modified.value - gamma_0_pristine.value
+
+    return Float(gamma)

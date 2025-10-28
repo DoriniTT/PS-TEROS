@@ -81,8 +81,8 @@ def expected_values():
         'delta_mu_o2': -0.5837,    # eV at 298K, 0.21 bar
         'delta_g': 103.4548,       # eV (calculated from above)
         'area_m2': 9.6e-19,        # m² (example value)
-        'gamma_s': 3.931,          # J/m²
-        'gamma': 7.862,            # J/m²
+        'gamma_s': 8.633,          # J/m² (gamma_s = ΔG/(2A) = 103.4548*1.602e-19/(2*9.6e-19))
+        'gamma': 17.266,           # J/m² (gamma = 2*gamma_s - gamma_0, where gamma_0=0 for pristine)
     }
 
 
@@ -195,3 +195,78 @@ def test_calc_delta_g_reaction3():
     mu_o = 0.5 * (-0.6)
     expected = -1500.0 + (-2)*mu_o - 4*(-400.0) - 2*(-0.3)
     assert abs(delta_g.value - expected) < 0.001
+
+
+def test_select_reaction_function():
+    """Test reaction function selector."""
+    from teros.core.surface_hydroxylation.surface_energy import (
+        select_reaction_function,
+        calc_delta_g_reaction1,
+        calc_delta_g_reaction2,
+        calc_delta_g_reaction3,
+    )
+
+    assert select_reaction_function(1) == calc_delta_g_reaction1
+    assert select_reaction_function(2) == calc_delta_g_reaction2
+    assert select_reaction_function(3) == calc_delta_g_reaction3
+
+    # Test invalid reaction number
+    with pytest.raises(ValueError, match="must be 1, 2, or 3"):
+        select_reaction_function(4)
+
+
+def test_get_surface_area(ag3po4_slab_pristine):
+    """Test surface area calculation from cell parameters."""
+    from teros.core.surface_hydroxylation.surface_energy import get_surface_area
+
+    area = get_surface_area(ag3po4_slab_pristine)
+
+    # Area should be cross product magnitude of a and b vectors
+    # Cell is [12.0, 8.0, 20.0], so area = 12*8 = 96 Ų = 96e-20 m²
+    assert isinstance(area, Float)
+    assert area.value > 0
+    assert abs(area.value - 96e-20) < 1e-21  # Tolerance for float comparison
+
+
+def test_calc_gamma_s(expected_values):
+    """Test average surface energy calculation (Equation 9)."""
+    from teros.core.surface_hydroxylation.surface_energy import calc_gamma_s
+
+    # γ_s = ΔG / (2A)
+    # Using expected values from Section S3
+    gamma_s = calc_gamma_s(
+        delta_g=Float(expected_values['delta_g']),
+        area=Float(expected_values['area_m2'])
+    )
+
+    assert isinstance(gamma_s, Float)
+    assert abs(gamma_s.value - expected_values['gamma_s']) < 0.01
+
+
+def test_calc_gamma(expected_values):
+    """Test corrected surface energy calculation (Equation 10)."""
+    from teros.core.surface_hydroxylation.surface_energy import calc_gamma
+
+    # γ = 2γ_s - γ_0
+    # For single-sided modification, removes pristine surface contribution
+    gamma = calc_gamma(
+        gamma_s_modified=Float(expected_values['gamma_s']),
+        gamma_0_pristine=Float(0.0)  # Assuming pristine is reference
+    )
+
+    assert isinstance(gamma, Float)
+    assert abs(gamma.value - expected_values['gamma']) < 0.01
+
+
+def test_calc_gamma_with_pristine():
+    """Test gamma correction with non-zero pristine."""
+    from teros.core.surface_hydroxylation.surface_energy import calc_gamma
+
+    # If pristine has γ_0 = 1.0 J/m² and modified has γ_s = 3.0 J/m²
+    # Then γ = 2*3.0 - 1.0 = 5.0 J/m²
+    gamma = calc_gamma(
+        gamma_s_modified=Float(3.0),
+        gamma_0_pristine=Float(1.0)
+    )
+
+    assert abs(gamma.value - 5.0) < 1e-6
