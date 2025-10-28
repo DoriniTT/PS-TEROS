@@ -128,3 +128,24 @@ def test_analyze_composition_2oh(ag3po4_bulk, ag3po4_slab_2oh):
     assert comp['y'] == 0  # y = (-2 + 2) / 2 = 0
     assert comp['n_h'] == 4
     assert comp['n_o_deficit'] == -2  # Net gain of 2 O from OH
+
+
+def test_calc_delta_g_reaction1(expected_values):
+    """Test Reaction 1 formation energy: H2O/O2 reservoirs."""
+    from teros.core.surface_hydroxylation.surface_energy import calc_delta_g_reaction1
+
+    delta_g = calc_delta_g_reaction1(
+        E_slab=Float(expected_values['E_modified']),
+        E_bulk=Float(expected_values['E_bulk']),
+        n=Int(expected_values['n']),
+        x=Int(expected_values['x']),
+        y=Int(expected_values['y']),
+        delta_mu_h2o=Float(expected_values['delta_mu_h2o']),
+        delta_mu_o2=Float(expected_values['delta_mu_o2']),
+    )
+
+    # Should match worked example from Section S3
+    # ΔG = E_slab + 2y·μ_O - n·E_bulk - x·μ_H2O
+    # For pristine: E_pristine - n*E_bulk = -1600.8 - 4*(-400.2) = 0
+    # For modified: -1498.5 + 0 - 4*(-400.2) - 2*(-0.5774) = 103.4548 eV
+    assert abs(delta_g.value - expected_values['delta_g']) < 0.001

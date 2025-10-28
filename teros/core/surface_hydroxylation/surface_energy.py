@@ -5,6 +5,8 @@ Implements equations 4-10 from Section S3 for calculating surface Gibbs free ene
 """
 
 from collections import Counter
+from aiida.engine import calcfunction
+from aiida.orm import Float, Int
 
 
 def _get_formula_dict(structure):
@@ -120,3 +122,53 @@ def analyze_composition(slab_structure, bulk_structure):
             'slab': slab_str,
         }
     }
+
+
+@calcfunction
+def calc_delta_g_reaction1(E_slab, E_bulk, n, x, y, delta_mu_h2o, delta_mu_o2):
+    """
+    Calculate formation energy using Reaction 1: H2O/O2 reservoirs.
+
+    Reaction: n Ag3PO4 + x H2O ↔ surface + y O2
+    Use case: Water-rich oxidizing environment
+
+    Equation 4: ΔG = E + 2y·μ_O - n·E_bulk - x·μ_H2O
+
+    Args:
+        E_slab: Float - Total energy of modified slab (eV)
+        E_bulk: Float - Bulk energy per formula unit (eV/f.u.)
+        n: Int - Number of bulk formula units in slab
+        x: Int - Number of OH groups added
+        y: Int - Net oxygen atoms removed (can be negative)
+        delta_mu_h2o: Float - Δμ(H2O) from JANAF (eV/molecule)
+        delta_mu_o2: Float - Δμ(O2) from JANAF (eV/molecule)
+
+    Returns:
+        Float: Formation energy ΔG in eV
+
+    Raises:
+        ValueError: If validation fails (n <= 0 or E_bulk >= 0)
+    """
+    # Validate inputs
+    if n.value <= 0:
+        raise ValueError(f"n must be positive, got {n.value}")
+
+    if E_bulk.value >= 0:
+        raise ValueError(
+            f"E_bulk should be negative (binding energy), got {E_bulk.value} eV. "
+            f"Check that bulk energy is per formula unit, not total energy."
+        )
+
+    # Calculate atomic oxygen chemical potential from O2
+    # μ(O) = (1/2)·μ(O2) = (1/2)·Δμ(O2)
+    mu_o = 0.5 * delta_mu_o2.value
+
+    # Equation 4: ΔG = E + 2y·μ_O - n·E_bulk - x·μ_H2O
+    delta_g = (
+        E_slab.value +
+        2 * y.value * mu_o -
+        n.value * E_bulk.value -
+        x.value * delta_mu_h2o.value
+    )
+
+    return Float(delta_g)
