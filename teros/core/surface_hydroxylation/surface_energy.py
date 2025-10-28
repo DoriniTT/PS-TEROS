@@ -172,3 +172,86 @@ def calc_delta_g_reaction1(E_slab, E_bulk, n, x, y, delta_mu_h2o, delta_mu_o2):
     )
 
     return Float(delta_g)
+
+
+@calcfunction
+def calc_delta_g_reaction2(E_slab, E_bulk, n, x, y, delta_mu_h2, delta_mu_h2o):
+    """
+    Calculate formation energy using Reaction 2: H2/H2O reservoirs.
+
+    Reaction: n Ag3PO4 + x H2 ↔ surface + (2y-x) H2O
+    Use case: Reducing environment with water
+
+    Equation 5: ΔG = E + (2y-x)·μ_H2O - n·E_bulk - x·μ_H2
+
+    Args:
+        E_slab: Float - Total energy of modified slab (eV)
+        E_bulk: Float - Bulk energy per formula unit (eV/f.u.)
+        n: Int - Number of bulk formula units in slab
+        x: Int - Number of OH groups added
+        y: Int - Net oxygen atoms removed
+        delta_mu_h2: Float - Δμ(H2) from JANAF (eV/molecule)
+        delta_mu_h2o: Float - Δμ(H2O) from JANAF (eV/molecule)
+
+    Returns:
+        Float: Formation energy ΔG in eV
+    """
+    # Validate inputs
+    if n.value <= 0:
+        raise ValueError(f"n must be positive, got {n.value}")
+
+    if E_bulk.value >= 0:
+        raise ValueError(f"E_bulk should be negative, got {E_bulk.value}")
+
+    # Equation 5
+    delta_g = (
+        E_slab.value +
+        (2 * y.value - x.value) * delta_mu_h2o.value -
+        n.value * E_bulk.value -
+        x.value * delta_mu_h2.value
+    )
+
+    return Float(delta_g)
+
+
+@calcfunction
+def calc_delta_g_reaction3(E_slab, E_bulk, n, x, y, delta_mu_h2, delta_mu_o2):
+    """
+    Calculate formation energy using Reaction 3: H2/O2 reservoirs.
+
+    Reaction: n Ag3PO4 + x H2 ↔ surface + (y-0.5x) O2
+    Use case: Reducing environment
+
+    Equation 6: ΔG = E + (2y-x)·μ_O - n·E_bulk - x·μ_H2
+
+    Args:
+        E_slab: Float - Total energy of modified slab (eV)
+        E_bulk: Float - Bulk energy per formula unit (eV/f.u.)
+        n: Int - Number of bulk formula units in slab
+        x: Int - Number of OH groups added
+        y: Int - Net oxygen atoms removed
+        delta_mu_h2: Float - Δμ(H2) from JANAF (eV/molecule)
+        delta_mu_o2: Float - Δμ(O2) from JANAF (eV/molecule)
+
+    Returns:
+        Float: Formation energy ΔG in eV
+    """
+    # Validate inputs
+    if n.value <= 0:
+        raise ValueError(f"n must be positive, got {n.value}")
+
+    if E_bulk.value >= 0:
+        raise ValueError(f"E_bulk should be negative, got {E_bulk.value}")
+
+    # Calculate atomic oxygen chemical potential
+    mu_o = 0.5 * delta_mu_o2.value
+
+    # Equation 6
+    delta_g = (
+        E_slab.value +
+        (2 * y.value - x.value) * mu_o -
+        n.value * E_bulk.value -
+        x.value * delta_mu_h2.value
+    )
+
+    return Float(delta_g)

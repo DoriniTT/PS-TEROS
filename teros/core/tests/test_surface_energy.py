@@ -149,3 +149,49 @@ def test_calc_delta_g_reaction1(expected_values):
     # For pristine: E_pristine - n*E_bulk = -1600.8 - 4*(-400.2) = 0
     # For modified: -1498.5 + 0 - 4*(-400.2) - 2*(-0.5774) = 103.4548 eV
     assert abs(delta_g.value - expected_values['delta_g']) < 0.001
+
+
+def test_calc_delta_g_reaction2():
+    """Test Reaction 2 formation energy: H2/H2O reservoirs."""
+    from teros.core.surface_hydroxylation.surface_energy import calc_delta_g_reaction2
+
+    # Use simple values for validation
+    delta_g = calc_delta_g_reaction2(
+        E_slab=Float(-1500.0),
+        E_bulk=Float(-400.0),
+        n=Int(4),
+        x=Int(2),
+        y=Int(0),
+        delta_mu_h2=Float(-0.3),
+        delta_mu_h2o=Float(-0.5),
+    )
+
+    # ΔG = E + (2y-x)·μ_H2O - n·E_bulk - x·μ_H2
+    # = -1500 + (0-2)*(-0.5) - 4*(-400) - 2*(-0.3)
+    # = -1500 + 1.0 + 1600 + 0.6 = 101.6
+    expected = -1500.0 + (-2)*(-0.5) - 4*(-400.0) - 2*(-0.3)
+    assert abs(delta_g.value - expected) < 0.001
+
+
+def test_calc_delta_g_reaction3():
+    """Test Reaction 3 formation energy: H2/O2 reservoirs."""
+    from teros.core.surface_hydroxylation.surface_energy import calc_delta_g_reaction3
+
+    # Use simple values for validation
+    delta_g = calc_delta_g_reaction3(
+        E_slab=Float(-1500.0),
+        E_bulk=Float(-400.0),
+        n=Int(4),
+        x=Int(2),
+        y=Int(0),
+        delta_mu_h2=Float(-0.3),
+        delta_mu_o2=Float(-0.6),
+    )
+
+    # ΔG = E + (2y-x)·μ_O - n·E_bulk - x·μ_H2
+    # μ_O = 0.5·Δμ(O2) = 0.5*(-0.6) = -0.3
+    # = -1500 + (-2)*(-0.3) - 4*(-400) - 2*(-0.3)
+    # = -1500 + 0.6 + 1600 + 0.6 = 101.2
+    mu_o = 0.5 * (-0.6)
+    expected = -1500.0 + (-2)*mu_o - 4*(-400.0) - 2*(-0.3)
+    assert abs(delta_g.value - expected) < 0.001
