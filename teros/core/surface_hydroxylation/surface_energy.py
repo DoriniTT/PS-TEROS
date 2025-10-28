@@ -81,16 +81,21 @@ def analyze_composition(slab_structure, bulk_structure):
     # Calculate hydrogen addition
     n_h = slab_formula.get('H', 0)
 
+    # Validate n_h is even (required for H_{2x} formula)
+    if n_h % 2 != 0:
+        raise ValueError(f"Number of H atoms must be even for H_{{2x}} formula, got n_h={n_h}")
+
     # Calculate oxygen deficit
     expected_o = n * bulk_formula['O']
     actual_o = slab_formula['O']
     n_o_deficit = expected_o - actual_o
 
     # Derive x and y
-    # From modified formula: Ag_{3n}P_nO_{4n+x-2y}H_x
-    # n_h = x → x = n_h
+    # From modified formula: Ag_{3n}P_nO_{4n+x-2y}H_{2x}
+    # n_h = 2x → x = n_h / 2
     # n_o_deficit = -(x - 2y) → y = (n_o_deficit + x) / 2
-    x = n_h
+    # TODO: Verify H_{2x} formula interpretation with experimental data
+    x = n_h // 2
     y = (n_o_deficit + x) // 2
 
     # Validate results

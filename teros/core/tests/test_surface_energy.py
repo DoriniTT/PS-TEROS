@@ -52,12 +52,15 @@ def ag3po4_slab_pristine():
 
 @pytest.fixture
 def ag3po4_slab_2oh():
-    """Ag3PO4 slab + 2 OH groups (Ag12P4O18H2)."""
-    # Create slab with 2 OH added: Ag12P4O16 + 2OH -> Ag12P4O18H2
+    """Ag3PO4 slab + 2 OH groups (Ag12P4O18H4).
+
+    With H_{2x} formula: x=2 OH groups requires 2x=4 H atoms.
+    Formula: Ag12P4O16 + 2OH -> Ag12P4O18H4
+    """
     rng = np.random.default_rng(seed=42)
     atoms = Atoms(
-        symbols='Ag12P4O18H2',
-        positions=rng.random((36, 3)) * [12.0, 8.0, 20.0],
+        symbols='Ag12P4O18H4',
+        positions=rng.random((38, 3)) * [12.0, 8.0, 20.0],
         cell=[12.0, 8.0, 20.0],
         pbc=True
     )
@@ -111,13 +114,17 @@ def test_analyze_composition_pristine(ag3po4_bulk, ag3po4_slab_pristine):
 
 
 def test_analyze_composition_2oh(ag3po4_bulk, ag3po4_slab_2oh):
-    """Test composition analysis on 2 OH structure."""
+    """Test composition analysis on 2 OH structure.
+
+    With H_{2x} formula: 4 H atoms → x=2 OH groups (4 / 2 = 2).
+    Formula: Ag12P4O18H4 means n=4, x=2, y=0.
+    """
     from teros.core.surface_hydroxylation.surface_energy import analyze_composition
 
     comp = analyze_composition(ag3po4_slab_2oh, ag3po4_bulk)
 
     assert comp['n'] == 4
-    assert comp['x'] == 2
-    assert comp['y'] == 0
-    assert comp['n_h'] == 2
+    assert comp['x'] == 2  # 4 H atoms / 2 = 2 OH groups (H_{2x} formula)
+    assert comp['y'] == 0  # y = (-2 + 2) / 2 = 0
+    assert comp['n_h'] == 4
     assert comp['n_o_deficit'] == -2  # Net gain of 2 O from OH
