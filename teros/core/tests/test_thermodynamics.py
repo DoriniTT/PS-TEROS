@@ -1,5 +1,6 @@
 """Tests for JANAF thermodynamics database."""
 
+import math
 import pytest
 from pathlib import Path
 from teros.core.surface_hydroxylation.thermodynamics import JanafDatabase
@@ -126,3 +127,41 @@ def test_list_temperatures():
     assert 300 in temps
     assert 500 in temps
     assert 1000 in temps
+
+
+def test_pressure_correction():
+    """Test pressure-dependent corrections."""
+    db = JanafDatabase()
+
+    # At P = 1 bar (reference)
+    mu_1bar = db.get_mu_correction('O2', T=298, P=1.0)
+
+    # At P = 0.21 bar (atmospheric O2 partial pressure)
+    mu_021bar = db.get_mu_correction('O2', T=298, P=0.21)
+
+    # Should differ by k_B*T*ln(0.21)
+    KB_EV = 8.617333e-5
+    expected_diff = KB_EV * 298 * math.log(0.21)
+
+    actual_diff = mu_021bar - mu_1bar
+
+    assert abs(actual_diff - expected_diff) < 1e-6
+
+
+def test_pressure_correction_increases_with_temperature():
+    """Test pressure correction magnitude increases with T."""
+    db = JanafDatabase()
+
+    P = 0.5  # Half standard pressure
+
+    mu_298_1bar = db.get_mu_correction('H2O', T=298, P=1.0)
+    mu_298_05bar = db.get_mu_correction('H2O', T=298, P=P)
+
+    mu_500_1bar = db.get_mu_correction('H2O', T=500, P=1.0)
+    mu_500_05bar = db.get_mu_correction('H2O', T=500, P=P)
+
+    correction_298 = abs(mu_298_05bar - mu_298_1bar)
+    correction_500 = abs(mu_500_05bar - mu_500_1bar)
+
+    # Higher temperature should give larger pressure correction
+    assert correction_500 > correction_298
