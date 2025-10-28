@@ -165,3 +165,55 @@ def test_pressure_correction_increases_with_temperature():
 
     # Higher temperature should give larger pressure correction
     assert correction_500 > correction_298
+
+
+def test_delta_mu_calculation_validation():
+    """Verify Δμ⁰ calculation from raw data matches stored value."""
+    db = JanafDatabase()
+
+    # Test at multiple temperatures
+    test_temps = [0, 298, 500, 1000, 2000]
+
+    for species in ['H2O', 'H2', 'O2']:
+        for T in test_temps:
+            raw = db.get_raw_data(species, T=T)
+
+            # Manual calculation
+            H_kJ = raw['H']
+            S_kJ = raw['S'] * 0.001  # J/(mol·K) to kJ/(mol·K)
+            KJ_TO_EV = 0.010364269
+
+            delta_mu_manual = (H_kJ - T * S_kJ) * KJ_TO_EV
+
+            # Should match stored value
+            assert abs(delta_mu_manual - raw['delta_mu']) < 1e-5, \
+                f"Mismatch for {species} at {T} K"
+
+
+def test_monotonic_behavior():
+    """Verify Δμ⁰ decreases with temperature (becomes more negative)."""
+    db = JanafDatabase()
+
+    temps = [0, 298, 500, 1000, 2000]
+
+    for species in ['H2O', 'H2', 'O2']:
+        mu_values = [db.get_mu_correction(species, T=T) for T in temps]
+
+        # Δμ⁰ should become more negative with increasing T
+        for i in range(len(mu_values) - 1):
+            assert mu_values[i+1] < mu_values[i], \
+                f"{species}: mu({temps[i+1]}) should be < mu({temps[i]})"
+
+
+def test_zero_temperature_values():
+    """Test that T=0 K gives zero correction."""
+    db = JanafDatabase()
+
+    for species in ['H2O', 'H2', 'O2']:
+        mu_0 = db.get_mu_correction(species, T=0)
+        raw_0 = db.get_raw_data(species, T=0)
+
+        # At T=0: H=0, S=0, therefore Δμ⁰=0
+        assert mu_0 == 0.0
+        assert raw_0['H'] == 0.0
+        assert raw_0['S'] == 0.0
