@@ -114,3 +114,41 @@ class JanafDatabase:
             raise ValueError(
                 f"Species '{species}' not found. Available: {SPECIES}"
             )
+
+    def get_raw_data(self, species: str, T: float) -> dict:
+        """
+        Get raw JANAF data for verification and transparency.
+
+        Args:
+            species: Molecular species ('H2O', 'H2', 'O2')
+            T: Temperature in Kelvin
+
+        Returns:
+            Dictionary with keys: 'H' (kJ/mol), 'S' (J/(mol·K)), 'delta_mu' (eV)
+
+        Raises:
+            ValueError: If species or T invalid
+        """
+        self._validate_species(species)
+
+        T_str = str(int(T))
+        if T_str not in self._data['molecules'][species]['data']:
+            raise ValueError(f"Temperature {T} K not found for {species}")
+
+        return self._data['molecules'][species]['data'][T_str]
+
+    def list_temperatures(self, species: Optional[str] = None) -> list:
+        """
+        Get available temperature points.
+
+        Args:
+            species: Optional species to check (default: use first species)
+
+        Returns:
+            Sorted list of available temperatures in Kelvin
+        """
+        if species is None:
+            species = list(self._data['molecules'].keys())[0]
+
+        temps = [int(t) for t in self._data['molecules'][species]['data'].keys()]
+        return sorted(temps)

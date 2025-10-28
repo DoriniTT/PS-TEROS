@@ -81,3 +81,48 @@ def test_temperature_must_be_discrete():
     # 325 K is between 300 and 350
     with pytest.raises(ValueError, match="not found in database"):
         db.get_mu_correction('H2O', T=325)
+
+
+def test_get_raw_data():
+    """Test raw JANAF data retrieval."""
+    db = JanafDatabase()
+
+    raw = db.get_raw_data('H2O', T=298)
+
+    assert 'H' in raw
+    assert 'S' in raw
+    assert 'delta_mu' in raw
+
+    # Enthalpy should be positive and reasonable
+    assert 0 < raw['H'] < 20  # kJ/mol
+
+    # Entropy should be positive
+    assert raw['S'] > 0  # J/(mol·K)
+
+    # Delta mu should match correction method
+    mu = db.get_mu_correction('H2O', T=298)
+    assert abs(raw['delta_mu'] - mu) < 1e-6
+
+
+def test_list_temperatures():
+    """Test temperature listing."""
+    db = JanafDatabase()
+
+    temps = db.list_temperatures()
+
+    # Should have multiple points covering 0-2000 K range
+    assert len(temps) > 20  # At least 20+ points
+
+    # Should be sorted
+    assert temps == sorted(temps)
+
+    # Check range
+    assert temps[0] == 0
+    assert temps[-1] == 2000
+
+    # Check specific important temperatures exist
+    assert 50 in temps
+    assert 298 in temps  # Room temperature
+    assert 300 in temps
+    assert 500 in temps
+    assert 1000 in temps
