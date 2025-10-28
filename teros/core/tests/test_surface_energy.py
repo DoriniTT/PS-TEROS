@@ -33,9 +33,10 @@ def ag3po4_bulk():
 def ag3po4_slab_pristine():
     """Pristine Ag12P4O16 slab (4 bulk units, stoichiometric)."""
     # Create slab with 4 bulk formula units
+    rng = np.random.default_rng(seed=42)
     atoms = Atoms(
         symbols='Ag12P4O16',
-        positions=np.random.rand(32, 3) * [12.0, 8.0, 20.0],
+        positions=rng.random((32, 3)) * [12.0, 8.0, 20.0],
         cell=[12.0, 8.0, 20.0],
         pbc=True
     )
@@ -46,9 +47,10 @@ def ag3po4_slab_pristine():
 def ag3po4_slab_2oh():
     """Ag3PO4 slab + 2 OH groups (Ag12P4O18H2)."""
     # Create slab with 2 OH added: Ag12P4O16 + 2OH -> Ag12P4O18H2
+    rng = np.random.default_rng(seed=42)
     atoms = Atoms(
         symbols='Ag12P4O18H2',
-        positions=np.random.rand(36, 3) * [12.0, 8.0, 20.0],
+        positions=rng.random((36, 3)) * [12.0, 8.0, 20.0],
         cell=[12.0, 8.0, 20.0],
         pbc=True
     )
