@@ -23,6 +23,9 @@ from .surface_energy_workgraph import create_surface_energy_task, calculate_all_
     'bulk_energy',
     'pristine_structure',
     'pristine_energy',
+    'surface_energies_reaction1',
+    'surface_energies_reaction2',
+    'surface_energies_reaction3',
 ])
 def SurfaceHydroxylationWorkGraph(
     structure: orm.StructureData,
@@ -36,6 +39,7 @@ def SurfaceHydroxylationWorkGraph(
     fix_thickness: float = 0.0,
     fix_elements: t.List[str] = None,
     structure_specific_builder_inputs: dict = None,
+    calculate_surface_energies: bool = True,
 ) -> dict:
     """
     Main workflow for surface hydroxylation studies.
@@ -236,6 +240,25 @@ def SurfaceHydroxylationWorkGraph(
         structure_specific_builder_inputs=structure_specific_builder_inputs,
     )
 
+    # Calculate surface energies (if enabled)
+    if calculate_surface_energies:
+        se_results = calculate_all_surface_energies(
+            structures_dict=relax_outputs.structures,
+            energies_dict=relax_outputs.energies,
+            bulk_structure=bulk_vasp.structure,
+            bulk_energy=bulk_energy,
+            temperature=298.0,
+            pressures={'H2O': 0.023, 'O2': 0.21, 'H2': 1.0},
+        )
+        reaction1 = se_results.reaction1_results
+        reaction2 = se_results.reaction2_results
+        reaction3 = se_results.reaction3_results
+    else:
+        # Provide empty dicts if disabled
+        reaction1 = {}
+        reaction2 = {}
+        reaction3 = {}
+
     # Return raw outputs
     # Note: Result organization (successful/failed/statistics) must be done
     # in post-processing due to WorkGraph namespace serialization limitations.
@@ -248,6 +271,9 @@ def SurfaceHydroxylationWorkGraph(
         'bulk_energy': bulk_energy,
         'pristine_structure': pristine_vasp.structure,
         'pristine_energy': pristine_energy,
+        'surface_energies_reaction1': reaction1,
+        'surface_energies_reaction2': reaction2,
+        'surface_energies_reaction3': reaction3,
     }
 
 
@@ -650,39 +676,11 @@ def build_surface_hydroxylation_workgraph(
         fix_thickness=fix_thickness,
         fix_elements=fix_elements,
         structure_specific_builder_inputs=structure_specific_builder_inputs,
+        calculate_surface_energies=calculate_surface_energies,
     )
 
     # Set the workflow name
     wg.name = name
-
-    # Surface energy calculations (if enabled)
-    if calculate_surface_energies:
-        # Add surface energy calculation task
-        # Connect directly to the WorkGraph outputs
-        se_task = wg.add_task(
-            calculate_all_surface_energies,
-            name='surface_energy_calc',
-            structures_dict=wg.outputs['structures'].value,
-            energies_dict=wg.outputs['energies'].value,
-            bulk_structure=wg.outputs['bulk_structure'].value,
-            bulk_energy=wg.outputs['bulk_energy'].value,
-            temperature=298.0,
-            pressures={'H2O': 0.023, 'O2': 0.21, 'H2': 1.0},
-        )
-
-        # Expose outputs
-        wg.outputs.new(
-            'surface_energies_reaction1',
-            value=se_task.outputs.reaction1_results
-        )
-        wg.outputs.new(
-            'surface_energies_reaction2',
-            value=se_task.outputs.reaction2_results
-        )
-        wg.outputs.new(
-            'surface_energies_reaction3',
-            value=se_task.outputs.reaction3_results
-        )
 
     return wg
 
