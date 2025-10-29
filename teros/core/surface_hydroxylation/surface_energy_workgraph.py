@@ -19,9 +19,9 @@ def _calculate_all_surface_energies_impl(
     The @task-decorated version wraps this for WorkGraph execution.
 
     Args:
-        structures_dict: Dict of {name: StructureData}
+        structures_dict: Dict of {name: StructureData or Atoms}
         energies_dict: Dict of {name: Float}
-        bulk_structure: StructureData for bulk
+        bulk_structure: StructureData or Atoms for bulk
         bulk_energy: Float for bulk energy
         temperature: Float for temperature in K
         pressures: Dict of partial pressures
@@ -33,12 +33,27 @@ def _calculate_all_surface_energies_impl(
             - reaction3_results
     """
     from teros.core.surface_hydroxylation import calculate_surface_energies
+    from aiida.orm import StructureData
+    from ase import Atoms
+
+    # Convert ASE Atoms to AiiDA StructureData if needed
+    # (WorkGraph automatically converts StructureData → Atoms when passing between tasks)
+    if isinstance(bulk_structure, Atoms):
+        bulk_structure = StructureData(ase=bulk_structure)
+
+    # Convert structures_dict entries from Atoms to StructureData if needed
+    converted_structures = {}
+    for name, structure in structures_dict.items():
+        if isinstance(structure, Atoms):
+            converted_structures[name] = StructureData(ase=structure)
+        else:
+            converted_structures[name] = structure
 
     results = {}
     for reaction_num in [1, 2, 3]:
         try:
             results[f'reaction{reaction_num}_results'] = AiidaDict(dict=calculate_surface_energies(
-                structures_dict=structures_dict,
+                structures_dict=converted_structures,
                 energies_dict=energies_dict,
                 bulk_structure=bulk_structure,
                 bulk_energy=bulk_energy,
