@@ -16,6 +16,7 @@ from .surface_energy import (
     calc_gamma,
     calculate_surface_energies,
 )
+from .surface_energy_workgraph import create_surface_energy_task
 
 __all__ = [
     'SurfaceHydroxylationWorkGraph',
@@ -30,4 +31,5 @@ __all__ = [
     'calc_gamma_s',
     'calc_gamma',
     'calculate_surface_energies',
+    'create_surface_energy_task',
 ]
