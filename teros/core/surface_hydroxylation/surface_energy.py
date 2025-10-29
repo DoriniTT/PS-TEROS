@@ -29,9 +29,13 @@ def _get_formula_dict(structure):
     return formula_dict
 
 
-def analyze_composition(slab_structure, bulk_structure, pristine_structure=None):
+def analyze_composition(slab_structure, bulk_structure):
     """
     Determine stoichiometry parameters (n, x, y) from slab composition.
+
+    DEPRECATED: This function uses parametric formula Ag₃ₙPₙO₄ₙ₊ₓ₋₂ᵧH₂ₓ which
+    only works for stoichiometric surfaces. Use analyze_composition_general()
+    instead for non-stoichiometric surfaces.
 
     Algorithm:
         1. Parse bulk formula (e.g., Ag3PO4 → {'Ag': 3, 'P': 1, 'O': 4})
@@ -40,16 +44,9 @@ def analyze_composition(slab_structure, bulk_structure, pristine_structure=None)
         4. Calculate x from hydrogen count: x = n_h / 2
         5. Calculate y from oxygen deficit: y = (n_o_deficit + x) / 2
 
-    For non-stoichiometric surface slabs (e.g., (110) surfaces), provide
-    pristine_structure to use it as the oxygen reference instead of bulk
-    stoichiometry. This handles cases where the surface termination creates
-    an inherent oxygen excess/deficit.
-
     Args:
         slab_structure: AiiDA StructureData for modified surface
         bulk_structure: AiiDA StructureData for bulk unit cell
-        pristine_structure: Optional AiiDA StructureData for unmodified slab
-                          (use for non-stoichiometric surfaces)
 
     Returns:
         dict: {
@@ -57,7 +54,7 @@ def analyze_composition(slab_structure, bulk_structure, pristine_structure=None)
             'x': int,              # OH groups added
             'y': int,              # Net O atoms removed
             'n_h': int,            # Total H atoms
-            'n_o_deficit': int,    # O deficit vs reference
+            'n_o_deficit': int,    # O deficit vs n×bulk
             'formulas': {
                 'bulk': str,
                 'slab': str
@@ -96,13 +93,7 @@ def analyze_composition(slab_structure, bulk_structure, pristine_structure=None)
         raise ValueError(f"Number of H atoms must be even for H_{{2x}} formula, got n_h={n_h}")
 
     # Calculate oxygen deficit
-    # For non-stoichiometric slabs, use pristine as reference
-    if pristine_structure is not None:
-        pristine_formula = _get_formula_dict(pristine_structure)
-        expected_o = pristine_formula['O']
-    else:
-        expected_o = n * bulk_formula['O']
-
+    expected_o = n * bulk_formula['O']
     actual_o = slab_formula['O']
     n_o_deficit = expected_o - actual_o
 
@@ -110,7 +101,6 @@ def analyze_composition(slab_structure, bulk_structure, pristine_structure=None)
     # From modified formula: Ag_{3n}P_nO_{4n+x-2y}H_{2x}
     # n_h = 2x → x = n_h / 2
     # n_o_deficit = -(x - 2y) → y = (n_o_deficit + x) / 2
-    # TODO: Verify H_{2x} formula interpretation with experimental data
     x = n_h // 2
     y = (n_o_deficit + x) // 2
 
@@ -136,6 +126,172 @@ def analyze_composition(slab_structure, bulk_structure, pristine_structure=None)
             'slab': slab_str,
         }
     }
+
+
+def analyze_composition_general(slab_structure, pristine_structure):
+    """
+    Determine composition changes relative to pristine slab (general approach).
+
+    This approach does NOT assume any specific parametric formula like Ag₃ₙPₙO₄ₙ₊ₓ₋₂ᵧH₂ₓ.
+    It works for ANY surface composition, stoichiometric or not.
+
+    Formation reaction: pristine + Δn_H2O H₂O → modified + Δn_O2 O₂
+
+    Where:
+        - Δn_H2O = (H_modified - H_pristine) / 2 (H₂O molecules added)
+        - Δn_O2 = (O_pristine - O_modified + Δn_H2O) / 2 (O₂ molecules released)
+
+    Args:
+        slab_structure: AiiDA StructureData for modified surface
+        pristine_structure: AiiDA StructureData for unmodified slab
+
+    Returns:
+        dict: {
+            'n_h2o': float,        # H₂O molecules added (can be negative)
+            'n_o2': float,         # O₂ molecules released (can be negative)
+            'delta_h': int,        # Change in H atoms
+            'delta_o': int,        # Change in O atoms
+            'formulas': {
+                'pristine': str,
+                'modified': str
+            }
+        }
+
+    Raises:
+        ValueError: If composition analysis fails
+    """
+    # Parse formulas
+    pristine_formula = _get_formula_dict(pristine_structure)
+    slab_formula = _get_formula_dict(slab_structure)
+
+    # Calculate changes in H and O
+    h_pristine = pristine_formula.get('H', 0)
+    h_slab = slab_formula.get('H', 0)
+    delta_h = h_slab - h_pristine
+
+    o_pristine = pristine_formula['O']
+    o_slab = slab_formula['O']
+    delta_o = o_slab - o_pristine
+
+    # Validate H change is even (required for H₂O)
+    if delta_h % 2 != 0:
+        raise ValueError(f"H change must be even for H₂O, got delta_H={delta_h}")
+
+    # Calculate H₂O and O₂ exchange
+    n_h2o = delta_h / 2.0
+    n_o2 = (o_pristine - o_slab + n_h2o) / 2.0
+
+    # Format output
+    pristine_str = ''.join(f"{elem}{count}" for elem, count in sorted(pristine_formula.items()))
+    slab_str = ''.join(f"{elem}{count}" for elem, count in sorted(slab_formula.items()))
+
+    return {
+        'n_h2o': n_h2o,
+        'n_o2': n_o2,
+        'delta_h': delta_h,
+        'delta_o': delta_o,
+        'formulas': {
+            'pristine': pristine_str,
+            'modified': slab_str,
+        }
+    }
+
+
+@calcfunction
+def calc_delta_g_general_reaction1(E_modified, E_pristine, n_h2o, n_o2, delta_mu_h2o, delta_mu_o2):
+    """
+    Calculate formation energy using general approach - Reaction 1: H2O/O2 reservoirs.
+
+    Formation reaction: pristine + n_H2O H₂O → modified + n_O2 O₂
+
+    ΔG = E_modified - E_pristine - n_H2O·μ_H2O + n_O2·μ_O2
+
+    Args:
+        E_modified: Float - Total energy of modified slab (eV)
+        E_pristine: Float - Total energy of pristine slab (eV)
+        n_h2o: Float - Number of H₂O molecules added
+        n_o2: Float - Number of O₂ molecules released
+        delta_mu_h2o: Float - Δμ(H2O) from JANAF (eV/molecule)
+        delta_mu_o2: Float - Δμ(O2) from JANAF (eV/molecule)
+
+    Returns:
+        Float: Formation energy ΔG in eV
+    """
+    delta_g = (
+        E_modified.value -
+        E_pristine.value -
+        n_h2o.value * delta_mu_h2o.value +
+        n_o2.value * delta_mu_o2.value
+    )
+
+    return Float(delta_g)
+
+
+@calcfunction
+def calc_delta_g_general_reaction2(E_modified, E_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_h2o):
+    """
+    Calculate formation energy using general approach - Reaction 2: H2/H2O reservoirs.
+
+    Formation reaction: pristine + n_H2O H₂O → modified + n_O2 O₂
+    But H₂O = H₂ + (1/2)O₂, so:
+    pristine + n_H2O H₂ → modified + (n_O2 - n_H2O) O₂ + n_H2O H₂O
+
+    Simplifying: pristine + n_H2O H₂ → modified + (n_O2 - 0.5·n_H2O) O₂
+
+    Args:
+        E_modified: Float - Total energy of modified slab (eV)
+        E_pristine: Float - Total energy of pristine slab (eV)
+        n_h2o: Float - H₂O equivalent (from H balance)
+        n_o2: Float - O₂ released (from O balance with H₂O)
+        delta_mu_h2: Float - Δμ(H2) from JANAF (eV/molecule)
+        delta_mu_h2o: Float - Δμ(H2O) from JANAF (eV/molecule)
+
+    Returns:
+        Float: Formation energy ΔG in eV
+    """
+    # Convert reaction to H2 reservoir
+    # pristine + n_h2o·H2 → modified + (n_o2 - 0.5·n_h2o)·H2O
+    delta_g = (
+        E_modified.value -
+        E_pristine.value -
+        n_h2o.value * delta_mu_h2.value +
+        (n_o2.value - 0.5 * n_h2o.value) * delta_mu_h2o.value
+    )
+
+    return Float(delta_g)
+
+
+@calcfunction
+def calc_delta_g_general_reaction3(E_modified, E_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_o2):
+    """
+    Calculate formation energy using general approach - Reaction 3: H2/O2 reservoirs.
+
+    Formation reaction: pristine + n_H2O H₂O → modified + n_O2 O₂
+    But H₂O = H₂ + (1/2)O₂, so:
+    pristine + n_H2O H₂ + 0.5·n_H2O O₂ → modified + n_O2 O₂
+
+    Simplifying: pristine + n_H2O H₂ → modified + (n_O2 - 0.5·n_H2O) O₂
+
+    Args:
+        E_modified: Float - Total energy of modified slab (eV)
+        E_pristine: Float - Total energy of pristine slab (eV)
+        n_h2o: Float - H₂O equivalent (from H balance)
+        n_o2: Float - O₂ released (from O balance with H₂O)
+        delta_mu_h2: Float - Δμ(H2) from JANAF (eV/molecule)
+        delta_mu_o2: Float - Δμ(O2) from JANAF (eV/molecule)
+
+    Returns:
+        Float: Formation energy ΔG in eV
+    """
+    # pristine + n_h2o·H2 → modified + (n_o2 - 0.5·n_h2o)·O2
+    delta_g = (
+        E_modified.value -
+        E_pristine.value -
+        n_h2o.value * delta_mu_h2.value +
+        (n_o2.value - 0.5 * n_h2o.value) * delta_mu_o2.value
+    )
+
+    return Float(delta_g)
 
 
 @calcfunction
@@ -401,6 +557,185 @@ def calc_gamma(gamma_s_modified, gamma_0_pristine):
     return Float(gamma)
 
 
+def calculate_surface_energies_general(
+    structures_dict,
+    energies_dict,
+    temperature,
+    pressures,
+    which_reaction,
+):
+    """
+    Calculate surface energies using general composition-based approach.
+
+    This approach does NOT require parametric formula Ag₃ₙPₙO₄ₙ₊ₓ₋₂ᵧH₂ₓ.
+    Works for ANY surface composition, including non-stoichiometric surfaces.
+
+    Uses reference slab as reference state:
+        Formation reaction: reference + Δn_H2O H₂O → modified + Δn_O2 O₂
+
+    Reference structure selection:
+        - Prefers structure with H=0 (true pristine)
+        - Falls back to minimum-H structure if no H=0 exists
+        - This handles 'combine' mode where all structures have some H
+
+    Main steps:
+        1. Identify reference structure (minimum H count)
+        2. Calculate composition changes relative to reference
+        3. Calculate formation energies using chemical potential corrections
+        4. Calculate surface energies
+
+    Args:
+        structures_dict: dict - {name: StructureData}
+        energies_dict: dict - {name: Float (eV)}
+        temperature: float - Temperature in Kelvin
+        pressures: dict - {'H2O': float, 'O2': float, 'H2': float} in bar
+        which_reaction: int - Formation reaction to use (1, 2, or 3)
+
+    Returns:
+        dict: {
+            'surface_energies': {name: gamma (J/m²)},
+            'formation_energies': {name: DeltaG (eV)},
+            'composition_changes': {name: {'n_h2o': float, 'n_o2': float, ...}},
+            'reference_data': {
+                'temperature': float (K),
+                'pressures': dict,
+                'reaction_used': int,
+                'mu_corrections': dict,
+                'pristine_name': str,
+                'E_pristine': float (eV),
+            }
+        }
+
+    Raises:
+        ValueError: If no pristine structure found or if required pressure missing
+    """
+    from teros.core.surface_hydroxylation.thermodynamics import JanafDatabase
+
+    # Initialize JANAF database
+    janaf_db = JanafDatabase()
+
+    # Get chemical potential corrections
+    mu_corrections = {}
+    for species in ['H2O', 'H2', 'O2']:
+        if species in pressures:
+            mu_corrections[species] = janaf_db.get_mu_correction(
+                species=species,
+                T=temperature,
+                P=pressures[species]
+            )
+
+    # Step 1: Identify reference structure (minimum H count)
+    # For combine mode where all structures have H, use minimum-H structure as reference
+    min_h = float('inf')
+    pristine_name = None
+
+    for name, structure in structures_dict.items():
+        formula_dict = _get_formula_dict(structure)
+        n_h = formula_dict.get('H', 0)
+
+        if n_h < min_h:
+            min_h = n_h
+            pristine_name = name
+
+    if pristine_name is None:
+        raise ValueError("No structures found in structures_dict")
+
+    # Log reference selection
+    if min_h == 0:
+        print(f"Using pristine structure (H=0): {pristine_name}")
+    else:
+        print(f"Using minimum-H structure (H={min_h}) as reference: {pristine_name}")
+        print(f"  (No true pristine H=0 found - typical for 'combine' mode)")
+
+    pristine_structure = structures_dict[pristine_name]
+    pristine_energy = energies_dict[pristine_name]
+
+    # Step 2: Analyze all structures relative to pristine
+    composition_changes = {}
+    for name, structure in structures_dict.items():
+        comp = analyze_composition_general(structure, pristine_structure)
+        composition_changes[name] = comp
+
+    # Step 3: Calculate formation energies
+    formation_energies = {}
+
+    # Select reaction functions
+    if which_reaction == 1:
+        calc_delta_g_func = calc_delta_g_general_reaction1
+        required_species = ['H2O', 'O2']
+    elif which_reaction == 2:
+        calc_delta_g_func = calc_delta_g_general_reaction2
+        required_species = ['H2', 'H2O']
+    elif which_reaction == 3:
+        calc_delta_g_func = calc_delta_g_general_reaction3
+        required_species = ['H2', 'O2']
+    else:
+        raise ValueError(f"which_reaction must be 1, 2, or 3, got {which_reaction}")
+
+    # Check required species are present
+    for species in required_species:
+        if species not in mu_corrections:
+            raise ValueError(f"Reaction {which_reaction} requires {species} pressure, but it was not provided")
+
+    # Calculate ΔG for each structure
+    for name, comp in composition_changes.items():
+        if which_reaction == 1:
+            delta_g = calc_delta_g_func(
+                E_modified=energies_dict[name],
+                E_pristine=pristine_energy,
+                n_h2o=Float(comp['n_h2o']),
+                n_o2=Float(comp['n_o2']),
+                delta_mu_h2o=Float(mu_corrections['H2O']),
+                delta_mu_o2=Float(mu_corrections['O2']),
+            )
+        elif which_reaction == 2:
+            delta_g = calc_delta_g_func(
+                E_modified=energies_dict[name],
+                E_pristine=pristine_energy,
+                n_h2o=Float(comp['n_h2o']),
+                n_o2=Float(comp['n_o2']),
+                delta_mu_h2=Float(mu_corrections['H2']),
+                delta_mu_h2o=Float(mu_corrections['H2O']),
+            )
+        else:  # reaction 3
+            delta_g = calc_delta_g_func(
+                E_modified=energies_dict[name],
+                E_pristine=pristine_energy,
+                n_h2o=Float(comp['n_h2o']),
+                n_o2=Float(comp['n_o2']),
+                delta_mu_h2=Float(mu_corrections['H2']),
+                delta_mu_o2=Float(mu_corrections['O2']),
+            )
+
+        formation_energies[name] = delta_g.value
+
+    # Step 4: Calculate surface energies
+    surface_energies = {}
+    for name, structure in structures_dict.items():
+        area = get_surface_area(structure)
+        delta_g = Float(formation_energies[name])
+
+        # γ = ΔG / (2A)
+        # Note: No pristine correction needed - ΔG is already relative to pristine!
+        gamma_value = calc_gamma_s(delta_g, area).value
+        surface_energies[name] = gamma_value
+
+    return {
+        'surface_energies': surface_energies,
+        'formation_energies': formation_energies,
+        'composition_changes': composition_changes,
+        'reference_data': {
+            'temperature': temperature,
+            'pressures': pressures,
+            'reaction_used': which_reaction,
+            'mu_corrections': mu_corrections,
+            'reference_name': pristine_name,
+            'reference_H_count': int(min_h),
+            'E_reference': pristine_energy.value,
+        }
+    }
+
+
 def calculate_surface_energies(
     structures_dict,
     energies_dict,
@@ -412,6 +747,10 @@ def calculate_surface_energies(
 ):
     """
     Calculate surface energies for all structures in workflow.
+
+    DEPRECATED: This function uses parametric formula Ag₃ₙPₙO₄ₙ₊ₓ₋₂ᵧH₂ₓ which
+    only works for stoichiometric surfaces. Use calculate_surface_energies_general()
+    instead for non-stoichiometric surfaces.
 
     Main orchestration function that:
         1. Gets chemical potential corrections from JANAF database
@@ -446,6 +785,14 @@ def calculate_surface_energies(
     Raises:
         ValueError: If no pristine structure found or if required pressure missing
     """
+    # Try using general approach instead
+    return calculate_surface_energies_general(
+        structures_dict=structures_dict,
+        energies_dict=energies_dict,
+        temperature=temperature,
+        pressures=pressures,
+        which_reaction=which_reaction,
+    )
     from teros.core.surface_hydroxylation.thermodynamics import JanafDatabase
 
     # Initialize JANAF database
