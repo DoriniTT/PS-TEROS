@@ -12,6 +12,7 @@ from .tasks import (
     extract_statistics,
 )
 from .relaxations import relax_slabs_with_semaphore
+from .surface_energy_workgraph import create_surface_energy_task
 
 
 @task.graph(outputs=[
@@ -266,6 +267,8 @@ def build_surface_hydroxylation_workgraph(
     fix_elements: t.List[str] = None,
     structure_specific_builder_inputs: dict = None,
     name: str = 'SurfaceHydroxylation',
+    # NEW: Surface energy calculation control
+    calculate_surface_energies: bool = True,
 ) -> WorkGraph:
     """
     Build a WorkGraph for surface hydroxylation/vacancy calculations.
@@ -351,6 +354,11 @@ def build_surface_hydroxylation_workgraph(
                      Useful for rerunning only failed calculations with different parameters.
                      Default: None (use default builder_inputs for all structures)
         name: Name for the workflow (default 'SurfaceHydroxylation')
+        calculate_surface_energies: Enable automatic surface energy calculations at workflow end.
+                     If True (default), calculates γ for all 3 formation reactions (H2O/O2, H2/H2O, H2/O2)
+                     and exposes outputs: surface_energies_reaction1/2/3.
+                     Set to False to disable surface energy calculations (v2 backward compat mode).
+                     Default: True
 
     Returns:
         WorkGraph: Ready-to-submit workflow instance
