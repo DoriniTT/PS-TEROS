@@ -1,6 +1,6 @@
 """WorkGraph integration for surface energy calculations."""
 import typing as t
-from aiida.orm import Dict
+from aiida.orm import Dict, Dict as AiidaDict
 from aiida_workgraph import task, namespace
 
 
@@ -34,8 +34,6 @@ def calculate_all_surface_energies(
             - reaction2_results
             - reaction3_results
     """
-    from aiida.orm import Dict as AiidaDict
-
     # Minimal implementation - will expand in later steps
     return {
         'reaction1_results': AiidaDict(dict={}),
