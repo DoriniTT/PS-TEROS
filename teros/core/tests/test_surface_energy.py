@@ -303,37 +303,45 @@ def test_calculate_surface_energies_full_workflow(
     # Check structure of results
     assert 'surface_energies' in results
     assert 'formation_energies' in results
-    assert 'stoichiometry' in results
+    assert 'composition_changes' in results
     assert 'reference_data' in results
 
-    # Check stoichiometry was calculated correctly
-    assert results['stoichiometry']['2oh']['n'] == 4
-    assert results['stoichiometry']['2oh']['x'] == 2
-    assert results['stoichiometry']['2oh']['y'] == 0
+    # Check composition changes were calculated correctly
+    # For 2OH structure: added 4 H atoms (2 H2O molecules)
+    assert results['composition_changes']['2oh']['n_h2o'] == 2.0
+    assert results['composition_changes']['2oh']['delta_h'] == 4
 
-    # Check that pristine was identified
-    assert results['stoichiometry']['pristine']['x'] == 0
-    assert results['stoichiometry']['pristine']['y'] == 0
+    # Check that pristine was identified (no changes)
+    assert results['composition_changes']['pristine']['n_h2o'] == 0.0
+    assert results['composition_changes']['pristine']['delta_h'] == 0
 
     # Check reference data
     assert results['reference_data']['temperature'] == 298.0
     assert results['reference_data']['reaction_used'] == 1
-    assert 'gamma_0' in results['reference_data']
+    assert 'reference_name' in results['reference_data']
 
 
 def test_module_exports():
     """Test that public functions are exported from module."""
     from teros.core.surface_hydroxylation import (
         analyze_composition,
+        analyze_composition_general,
         calc_delta_g_reaction1,
         calc_delta_g_reaction2,
         calc_delta_g_reaction3,
+        calc_delta_g_general_reaction1,
+        calc_delta_g_general_reaction2,
+        calc_delta_g_general_reaction3,
         calc_gamma_s,
         calc_gamma,
         calculate_surface_energies,
+        calculate_surface_energies_general,
     )
 
     # Just check they're importable
     assert callable(analyze_composition)
+    assert callable(analyze_composition_general)
     assert callable(calc_delta_g_reaction1)
+    assert callable(calc_delta_g_general_reaction1)
     assert callable(calculate_surface_energies)
+    assert callable(calculate_surface_energies_general)
