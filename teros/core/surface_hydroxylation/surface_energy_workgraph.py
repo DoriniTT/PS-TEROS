@@ -4,21 +4,19 @@ from aiida.orm import Dict, Dict as AiidaDict
 from aiida_workgraph import task, namespace
 
 
-@task()
-def calculate_all_surface_energies(
+def _calculate_all_surface_energies_impl(
     structures_dict,
     energies_dict,
     bulk_structure,
     bulk_energy,
     temperature,
     pressures,
-) -> t.Annotated[dict, namespace(
-    reaction1_results=Dict,
-    reaction2_results=Dict,
-    reaction3_results=Dict,
-)]:
+):
     """
-    Calculate surface energies for all 3 reactions.
+    Implementation of surface energy calculations for all 3 reactions.
+
+    This is the actual implementation function that can be called directly in tests.
+    The @task-decorated version wraps this for WorkGraph execution.
 
     Args:
         structures_dict: Dict of {name: StructureData}
@@ -34,12 +32,71 @@ def calculate_all_surface_energies(
             - reaction2_results
             - reaction3_results
     """
-    # Minimal implementation - will expand in later steps
-    return {
-        'reaction1_results': AiidaDict(dict={}),
-        'reaction2_results': AiidaDict(dict={}),
-        'reaction3_results': AiidaDict(dict={}),
-    }
+    from teros.core.surface_hydroxylation import calculate_surface_energies
+
+    results = {}
+    for reaction_num in [1, 2, 3]:
+        try:
+            results[f'reaction{reaction_num}_results'] = AiidaDict(dict=calculate_surface_energies(
+                structures_dict=structures_dict,
+                energies_dict=energies_dict,
+                bulk_structure=bulk_structure,
+                bulk_energy=bulk_energy,
+                temperature=temperature,
+                pressures=pressures,
+                which_reaction=reaction_num,
+            ))
+        except Exception as e:
+            # Log error but continue with other reactions
+            results[f'reaction{reaction_num}_results'] = AiidaDict(dict={
+                'error': str(e),
+                'surface_energies': {},
+                'formation_energies': {},
+                'stoichiometry': {},
+                'reference_data': {},
+            })
+
+    return results
+
+
+@task()
+def calculate_all_surface_energies(
+    structures_dict,
+    energies_dict,
+    bulk_structure,
+    bulk_energy,
+    temperature,
+    pressures,
+) -> t.Annotated[dict, namespace(
+    reaction1_results=Dict,
+    reaction2_results=Dict,
+    reaction3_results=Dict,
+)]:
+    """
+    Calculate surface energies for all 3 reactions (WorkGraph task).
+
+    Args:
+        structures_dict: Dict of {name: StructureData}
+        energies_dict: Dict of {name: Float}
+        bulk_structure: StructureData for bulk
+        bulk_energy: Float for bulk energy
+        temperature: Float for temperature in K
+        pressures: Dict of partial pressures
+
+    Returns:
+        dict: Results for all 3 reactions with keys:
+            - reaction1_results
+            - reaction2_results
+            - reaction3_results
+    """
+    return _calculate_all_surface_energies_impl(
+        structures_dict=structures_dict,
+        energies_dict=energies_dict,
+        bulk_structure=bulk_structure,
+        bulk_energy=bulk_energy,
+        temperature=temperature,
+        pressures=pressures,
+    )
 
 
 def create_surface_energy_task(
