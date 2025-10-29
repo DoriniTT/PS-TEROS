@@ -149,3 +149,70 @@ def test_calculate_all_surface_energies_with_fixtures():
     assert r1['surface_energies']['pristine'] >= 0
     # Modified structures should have calculated surface energies
     assert isinstance(r1['surface_energies']['modified_2oh'], (int, float))
+
+
+def test_missing_pristine_structure_error():
+    """Test error when no pristine structure exists."""
+    from teros.core.surface_hydroxylation.surface_energy_workgraph import (
+        _calculate_all_surface_energies_impl
+    )
+    from aiida import orm
+
+    # Create only modified structure (no pristine!)
+    from ase import Atoms
+    modified_atoms = Atoms(
+        symbols='Ag12P4O18H4',
+        positions=[[0, 0, 5], [0.5, 0.5, 7], [0.5, 0.5, 8], [1, 1, 6],
+                   [2, 2, 5], [3, 3, 7], [4, 4, 8], [5, 5, 6],
+                   [0, 2, 5], [1.5, 2.5, 7], [2.5, 2.5, 8], [3, 3, 6],
+                   [0, 0, 9], [1, 1, 10], [2, 2, 11], [3, 3, 12],
+                   [0.5, 0.5, 13], [1.5, 1.5, 14], [2.5, 2.5, 15], [3.5, 3.5, 16],
+                   [0, 1, 5], [1, 2, 6], [2, 3, 7], [3, 4, 8],
+                   [0.2, 0.2, 9], [1.2, 1.2, 10], [2.2, 2.2, 11], [3.2, 3.2, 12],
+                   [0.7, 0.7, 13], [1.7, 1.7, 14], [2.7, 2.7, 15], [3.7, 3.7, 16],
+                   [0.3, 0.3, 5], [1.3, 1.3, 6], [2.3, 2.3, 7], [3.3, 3.3, 8],
+                   [0.8, 0.8, 9], [1.8, 1.8, 10]],
+        cell=[10.0, 10.0, 15.0],
+        pbc=True
+    )
+    modified_structure = orm.StructureData(ase=modified_atoms)
+
+    bulk_atoms = Atoms(
+        symbols='Ag3PO4',
+        positions=[[0, 0, 0], [1, 1, 0], [2, 0, 0], [1, 0.5, 0.5],
+                   [1, 0, 1], [0.5, 1, 0.5], [1.5, 1, 0.5], [1, 1, 1]],
+        cell=[3.0, 2.0, 2.0],
+        pbc=True
+    )
+    bulk_structure = orm.StructureData(ase=bulk_atoms)
+
+    structures_dict = {'modified_1oh': modified_structure}
+    energies_dict = {'modified_1oh': orm.Float(-1498.5)}
+
+    # Execute - should handle error gracefully
+    results = _calculate_all_surface_energies_impl(
+        structures_dict=structures_dict,
+        energies_dict=energies_dict,
+        bulk_structure=bulk_structure,
+        bulk_energy=orm.Float(-400.2),
+        temperature=298.0,
+        pressures={'H2O': 0.023, 'O2': 0.21, 'H2': 1.0},
+    )
+
+    # Extract results if they are AiidaDict objects
+    r1 = results['reaction1_results']
+    r2 = results['reaction2_results']
+    r3 = results['reaction3_results']
+
+    if hasattr(r1, 'get_dict'):
+        r1 = r1.get_dict()
+        r2 = r2.get_dict()
+        r3 = r3.get_dict()
+
+    # Verify all reactions report the error
+    for reaction, result in [('reaction1', r1), ('reaction2', r2), ('reaction3', r3)]:
+        assert 'error' in result, f"{reaction} should have error"
+        assert 'No pristine structure found' in result['error'], \
+            f"{reaction} error should mention missing pristine: {result['error']}"
+        assert result['surface_energies'] == {}, \
+            f"{reaction} should have empty surface_energies"
