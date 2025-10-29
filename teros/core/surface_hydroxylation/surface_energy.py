@@ -29,7 +29,7 @@ def _get_formula_dict(structure):
     return formula_dict
 
 
-def analyze_composition(slab_structure, bulk_structure):
+def analyze_composition(slab_structure, bulk_structure, pristine_structure=None):
     """
     Determine stoichiometry parameters (n, x, y) from slab composition.
 
@@ -40,9 +40,16 @@ def analyze_composition(slab_structure, bulk_structure):
         4. Calculate x from hydrogen count: x = n_h / 2
         5. Calculate y from oxygen deficit: y = (n_o_deficit + x) / 2
 
+    For non-stoichiometric surface slabs (e.g., (110) surfaces), provide
+    pristine_structure to use it as the oxygen reference instead of bulk
+    stoichiometry. This handles cases where the surface termination creates
+    an inherent oxygen excess/deficit.
+
     Args:
         slab_structure: AiiDA StructureData for modified surface
         bulk_structure: AiiDA StructureData for bulk unit cell
+        pristine_structure: Optional AiiDA StructureData for unmodified slab
+                          (use for non-stoichiometric surfaces)
 
     Returns:
         dict: {
@@ -50,7 +57,7 @@ def analyze_composition(slab_structure, bulk_structure):
             'x': int,              # OH groups added
             'y': int,              # Net O atoms removed
             'n_h': int,            # Total H atoms
-            'n_o_deficit': int,    # O deficit vs n×bulk
+            'n_o_deficit': int,    # O deficit vs reference
             'formulas': {
                 'bulk': str,
                 'slab': str
@@ -89,7 +96,13 @@ def analyze_composition(slab_structure, bulk_structure):
         raise ValueError(f"Number of H atoms must be even for H_{{2x}} formula, got n_h={n_h}")
 
     # Calculate oxygen deficit
-    expected_o = n * bulk_formula['O']
+    # For non-stoichiometric slabs, use pristine as reference
+    if pristine_structure is not None:
+        pristine_formula = _get_formula_dict(pristine_structure)
+        expected_o = pristine_formula['O']
+    else:
+        expected_o = n * bulk_formula['O']
+
     actual_o = slab_formula['O']
     n_o_deficit = expected_o - actual_o
 
@@ -456,23 +469,34 @@ def calculate_surface_energies(
     formation_energies = {}
     stoichiometry_data = {}
 
-    # Find pristine structure (x=0, y=0) for γ_0 reference
+    # Step 1: Identify pristine structure (no H atoms) for reference
+    # For non-stoichiometric slabs, we can't use x=0,y=0 because pristine
+    # itself may have oxygen excess/deficit vs bulk stoichiometry
     pristine_name = None
     for name, structure in structures_dict.items():
-        comp = analyze_composition(structure, bulk_structure)
-        stoichiometry_data[name] = comp
+        # Get H count directly without full analysis
+        formula_dict = _get_formula_dict(structure)
+        n_h = formula_dict.get('H', 0)
 
-        if comp['x'] == 0 and comp['y'] == 0:
+        if n_h == 0:
             pristine_name = name
+            break
 
     if pristine_name is None:
         raise ValueError(
-            "No pristine structure found (x=0, y=0). "
-            "Set include_empty=True in surface_params or ensure pristine slab is included."
+            "No pristine structure found (n_H=0). "
+            "Set include_empty=True in surface_params or ensure unmodified slab is included."
         )
 
-    # Calculate γ_0 (pristine surface energy)
+    # Step 2: Analyze all structures using pristine as oxygen reference
     pristine_structure = structures_dict[pristine_name]
+
+    for name, structure in structures_dict.items():
+        # Analyze composition using pristine as reference for non-stoichiometric slabs
+        comp = analyze_composition(structure, bulk_structure, pristine_structure)
+        stoichiometry_data[name] = comp
+
+    # Calculate γ_0 (pristine surface energy)
     pristine_comp = stoichiometry_data[pristine_name]
     pristine_area = get_surface_area(pristine_structure)
 
