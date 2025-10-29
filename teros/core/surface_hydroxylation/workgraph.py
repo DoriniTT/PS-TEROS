@@ -12,7 +12,7 @@ from .tasks import (
     extract_statistics,
 )
 from .relaxations import relax_slabs_with_semaphore
-from .surface_energy_workgraph import create_surface_energy_task
+from .surface_energy_workgraph import create_surface_energy_task, calculate_all_surface_energies
 
 
 @task.graph(outputs=[
@@ -654,6 +654,35 @@ def build_surface_hydroxylation_workgraph(
 
     # Set the workflow name
     wg.name = name
+
+    # Surface energy calculations (if enabled)
+    if calculate_surface_energies:
+        # Add surface energy calculation task
+        # Connect directly to the WorkGraph outputs
+        se_task = wg.add_task(
+            calculate_all_surface_energies,
+            name='surface_energy_calc',
+            structures_dict=wg.outputs['structures'].value,
+            energies_dict=wg.outputs['energies'].value,
+            bulk_structure=wg.outputs['bulk_structure'].value,
+            bulk_energy=wg.outputs['bulk_energy'].value,
+            temperature=298.0,
+            pressures={'H2O': 0.023, 'O2': 0.21, 'H2': 1.0},
+        )
+
+        # Expose outputs
+        wg.outputs.new(
+            'surface_energies_reaction1',
+            value=se_task.outputs.reaction1_results
+        )
+        wg.outputs.new(
+            'surface_energies_reaction2',
+            value=se_task.outputs.reaction2_results
+        )
+        wg.outputs.new(
+            'surface_energies_reaction3',
+            value=se_task.outputs.reaction3_results
+        )
 
     return wg
 
