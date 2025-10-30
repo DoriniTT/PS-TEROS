@@ -1,7 +1,8 @@
 """WorkGraph integration for surface energy calculations."""
 import typing as t
+from aiida import orm
 from aiida.orm import Dict, Dict as AiidaDict
-from aiida_workgraph import task, namespace
+from aiida_workgraph import task, namespace, dynamic
 
 
 def _calculate_all_surface_energies_impl(
@@ -52,7 +53,8 @@ def _calculate_all_surface_energies_impl(
     results = {}
     for reaction_num in [1, 2, 3]:
         try:
-            results[f'reaction{reaction_num}_results'] = AiidaDict(dict=calculate_surface_energies(
+            # Return unwrapped dict - @task.graph namespace annotation handles wrapping
+            results[f'reaction{reaction_num}_results'] = calculate_surface_energies(
                 structures_dict=converted_structures,
                 energies_dict=energies_dict,
                 bulk_structure=bulk_structure,
@@ -60,32 +62,94 @@ def _calculate_all_surface_energies_impl(
                 temperature=temperature,
                 pressures=pressures,
                 which_reaction=reaction_num,
-            ))
+            )
         except Exception as e:
             # Log error but continue with other reactions
-            results[f'reaction{reaction_num}_results'] = AiidaDict(dict={
+            results[f'reaction{reaction_num}_results'] = {
                 'error': str(e),
                 'surface_energies': {},
                 'formation_energies': {},
                 'stoichiometry': {},
                 'reference_data': {},
-            })
+            }
 
     return results
 
 
-@task()
+@task.calcfunction
+def calculate_surface_energy_single_reaction(
+    structure_pks: orm.Dict,
+    energies_dict: orm.Dict,
+    bulk_structure: orm.StructureData,
+    bulk_energy: orm.Float,
+    temperature: orm.Float,
+    pressures: orm.Dict,
+    reaction_number: orm.Int,
+) -> orm.Dict:
+    """
+    Calculate surface energy for a single reaction (calcfunction for provenance).
+
+    Args:
+        structure_pks: Dict node with {name: structure_pk}
+        energies_dict: Dict node with {name: energy_value}
+        bulk_structure: StructureData for bulk
+        bulk_energy: Float for bulk energy
+        temperature: Float for temperature in K
+        pressures: Dict of partial pressures
+        reaction_number: Int (1, 2, or 3)
+
+    Returns:
+        Dict node with surface energy results for the specified reaction
+    """
+    from teros.core.surface_hydroxylation import calculate_surface_energies
+
+    # Load structures from PKs
+    pks_dict = structure_pks.get_dict()
+    structures_loaded = {}
+    for name, pk in pks_dict.items():
+        structures_loaded[name] = orm.load_node(pk)
+
+    # Extract values from orm nodes
+    energies_plain = energies_dict.get_dict()
+    temperature_value = temperature.value
+    pressures_plain = pressures.get_dict()
+    bulk_energy_value = bulk_energy.value
+    reaction_num = reaction_number.value
+
+    try:
+        result = calculate_surface_energies(
+            structures_dict=structures_loaded,
+            energies_dict=energies_plain,
+            bulk_structure=bulk_structure,
+            bulk_energy=bulk_energy_value,
+            temperature=temperature_value,
+            pressures=pressures_plain,
+            which_reaction=reaction_num,
+        )
+        return orm.Dict(dict=result)
+    except Exception as e:
+        # Return error dict if calculation fails
+        return orm.Dict(dict={
+            'error': str(e),
+            'surface_energies': {},
+            'formation_energies': {},
+            'stoichiometry': {},
+            'reference_data': {},
+        })
+
+
+@task.graph
 def calculate_all_surface_energies(
-    structures_dict,
-    energies_dict,
-    bulk_structure,
-    bulk_energy,
-    temperature,
-    pressures,
+    structures_dict: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
+    energies_dict: t.Annotated[dict[str, orm.Float], dynamic(orm.Float)],
+    bulk_structure: orm.StructureData,
+    bulk_energy: orm.Float,
+    temperature: orm.Float,
+    pressures: orm.Dict,
 ) -> t.Annotated[dict, namespace(
-    reaction1_results=Dict,
-    reaction2_results=Dict,
-    reaction3_results=Dict,
+    reaction1_results=orm.Dict,
+    reaction2_results=orm.Dict,
+    reaction3_results=orm.Dict,
 )]:
     """
     Calculate surface energies for all 3 reactions (WorkGraph task).
@@ -104,14 +168,58 @@ def calculate_all_surface_energies(
             - reaction2_results
             - reaction3_results
     """
-    return _calculate_all_surface_energies_impl(
-        structures_dict=structures_dict,
-        energies_dict=energies_dict,
+    # Convert dynamic namespace structures to dict of PKs (JSON-serializable)
+    structure_pks_dict = {}
+    for key, structure in structures_dict.items():
+        structure_pks_dict[key] = structure.pk
+
+    # Convert energies to plain dict with values
+    energies_as_dict = {}
+    for key, energy in energies_dict.items():
+        energies_as_dict[key] = energy.value
+
+    # Wrap in orm.Dict for calcfunction
+    structure_pks_node = orm.Dict(dict=structure_pks_dict)
+    energies_dict_node = orm.Dict(dict=energies_as_dict)
+
+    # Call calcfunction for each reaction and extract result with .result
+    # Following the pattern from thermodynamics.py and slabs.py
+    reaction1 = calculate_surface_energy_single_reaction(
+        structure_pks=structure_pks_node,
+        energies_dict=energies_dict_node,
         bulk_structure=bulk_structure,
         bulk_energy=bulk_energy,
         temperature=temperature,
         pressures=pressures,
-    )
+        reaction_number=orm.Int(1),
+    ).result
+
+    reaction2 = calculate_surface_energy_single_reaction(
+        structure_pks=structure_pks_node,
+        energies_dict=energies_dict_node,
+        bulk_structure=bulk_structure,
+        bulk_energy=bulk_energy,
+        temperature=temperature,
+        pressures=pressures,
+        reaction_number=orm.Int(2),
+    ).result
+
+    reaction3 = calculate_surface_energy_single_reaction(
+        structure_pks=structure_pks_node,
+        energies_dict=energies_dict_node,
+        bulk_structure=bulk_structure,
+        bulk_energy=bulk_energy,
+        temperature=temperature,
+        pressures=pressures,
+        reaction_number=orm.Int(3),
+    ).result
+
+    # Return plain dict containing orm.Dict nodes - namespace annotation handles wrapping
+    return {
+        'reaction1_results': reaction1,
+        'reaction2_results': reaction2,
+        'reaction3_results': reaction3,
+    }
 
 
 def create_surface_energy_task(

@@ -197,6 +197,40 @@ def analyze_composition_general(slab_structure, pristine_structure):
     }
 
 
+# Internal helper functions (not @calcfunction) for use within other functions
+def _calc_delta_g_general_reaction1_internal(e_modified, e_pristine, n_h2o, n_o2, delta_mu_h2o, delta_mu_o2):
+    """Internal helper: Calculate ΔG for Reaction 1 (H2O/O2). Uses plain floats."""
+    delta_g = (
+        e_modified -
+        e_pristine -
+        n_h2o * delta_mu_h2o +
+        n_o2 * delta_mu_o2
+    )
+    return delta_g
+
+
+def _calc_delta_g_general_reaction2_internal(e_modified, e_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_h2o):
+    """Internal helper: Calculate ΔG for Reaction 2 (H2/H2O). Uses plain floats."""
+    delta_g = (
+        e_modified -
+        e_pristine -
+        n_h2o * delta_mu_h2 +
+        (n_o2 - 0.5 * n_h2o) * delta_mu_h2o
+    )
+    return delta_g
+
+
+def _calc_delta_g_general_reaction3_internal(e_modified, e_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_o2):
+    """Internal helper: Calculate ΔG for Reaction 3 (H2/O2). Uses plain floats."""
+    delta_g = (
+        e_modified -
+        e_pristine -
+        n_h2o * delta_mu_h2 +
+        (n_o2 - 0.5 * n_h2o) * delta_mu_o2
+    )
+    return delta_g
+
+
 @calcfunction
 def calc_delta_g_general_reaction1(E_modified, E_pristine, n_h2o, n_o2, delta_mu_h2o, delta_mu_o2):
     """
@@ -659,15 +693,12 @@ def calculate_surface_energies_general(
     # Step 3: Calculate formation energies
     formation_energies = {}
 
-    # Select reaction functions
+    # Select reaction functions (use internal helpers to avoid @calcfunction nesting)
     if which_reaction == 1:
-        calc_delta_g_func = calc_delta_g_general_reaction1
         required_species = ['H2O', 'O2']
     elif which_reaction == 2:
-        calc_delta_g_func = calc_delta_g_general_reaction2
         required_species = ['H2', 'H2O']
     elif which_reaction == 3:
-        calc_delta_g_func = calc_delta_g_general_reaction3
         required_species = ['H2', 'O2']
     else:
         raise ValueError(f"which_reaction must be 1, 2, or 3, got {which_reaction}")
@@ -677,48 +708,60 @@ def calculate_surface_energies_general(
         if species not in mu_corrections:
             raise ValueError(f"Reaction {which_reaction} requires {species} pressure, but it was not provided")
 
-    # Calculate ΔG for each structure
+    # Extract plain float values for calculations
+    # energies_dict values can be Float nodes or plain floats
+    def get_value(val):
+        return val.value if hasattr(val, 'value') else val
+
+    pristine_energy_val = get_value(pristine_energy)
+
+    # Calculate ΔG for each structure using internal helper functions
     for name, comp in composition_changes.items():
+        e_modified = get_value(energies_dict[name])
+
         if which_reaction == 1:
-            delta_g = calc_delta_g_func(
-                E_modified=energies_dict[name],
-                E_pristine=pristine_energy,
-                n_h2o=Float(comp['n_h2o']),
-                n_o2=Float(comp['n_o2']),
-                delta_mu_h2o=Float(mu_corrections['H2O']),
-                delta_mu_o2=Float(mu_corrections['O2']),
+            delta_g = _calc_delta_g_general_reaction1_internal(
+                e_modified=e_modified,
+                e_pristine=pristine_energy_val,
+                n_h2o=comp['n_h2o'],
+                n_o2=comp['n_o2'],
+                delta_mu_h2o=mu_corrections['H2O'],
+                delta_mu_o2=mu_corrections['O2'],
             )
         elif which_reaction == 2:
-            delta_g = calc_delta_g_func(
-                E_modified=energies_dict[name],
-                E_pristine=pristine_energy,
-                n_h2o=Float(comp['n_h2o']),
-                n_o2=Float(comp['n_o2']),
-                delta_mu_h2=Float(mu_corrections['H2']),
-                delta_mu_h2o=Float(mu_corrections['H2O']),
+            delta_g = _calc_delta_g_general_reaction2_internal(
+                e_modified=e_modified,
+                e_pristine=pristine_energy_val,
+                n_h2o=comp['n_h2o'],
+                n_o2=comp['n_o2'],
+                delta_mu_h2=mu_corrections['H2'],
+                delta_mu_h2o=mu_corrections['H2O'],
             )
         else:  # reaction 3
-            delta_g = calc_delta_g_func(
-                E_modified=energies_dict[name],
-                E_pristine=pristine_energy,
-                n_h2o=Float(comp['n_h2o']),
-                n_o2=Float(comp['n_o2']),
-                delta_mu_h2=Float(mu_corrections['H2']),
-                delta_mu_o2=Float(mu_corrections['O2']),
+            delta_g = _calc_delta_g_general_reaction3_internal(
+                e_modified=e_modified,
+                e_pristine=pristine_energy_val,
+                n_h2o=comp['n_h2o'],
+                n_o2=comp['n_o2'],
+                delta_mu_h2=mu_corrections['H2'],
+                delta_mu_o2=mu_corrections['O2'],
             )
 
-        formation_energies[name] = delta_g.value
+        formation_energies[name] = delta_g
 
     # Step 4: Calculate surface energies
     surface_energies = {}
     for name, structure in structures_dict.items():
         area = get_surface_area(structure)
-        delta_g = Float(formation_energies[name])
+        delta_g_value = formation_energies[name]
 
         # γ = ΔG / (2A)
         # Note: No pristine correction needed - ΔG is already relative to pristine!
-        gamma_value = calc_gamma_s(delta_g, area).value
-        surface_energies[name] = gamma_value
+        # Calculate directly to avoid calling @calcfunction from within @task
+        # Conversion: eV to J/m²
+        J_PER_EV = 1.602176634e-19  # J/eV
+        gamma_j_m2 = (delta_g_value * J_PER_EV) / (2 * area)  # J/m²
+        surface_energies[name] = gamma_j_m2
 
     return {
         'surface_energies': surface_energies,
@@ -731,7 +774,7 @@ def calculate_surface_energies_general(
             'mu_corrections': mu_corrections,
             'reference_name': pristine_name,
             'reference_H_count': int(min_h),
-            'E_reference': pristine_energy.value,
+            'E_reference': pristine_energy_val,
         }
     }
 
@@ -785,6 +828,11 @@ def calculate_surface_energies(
     Raises:
         ValueError: If no pristine structure found or if required pressure missing
     """
+    # DEBUG: Print to confirm this function is being called
+    print("=" * 80)
+    print("DEBUG: calculate_surface_energies (OLD) called - redirecting to general version")
+    print("=" * 80)
+
     # Try using general approach instead
     return calculate_surface_energies_general(
         structures_dict=structures_dict,

@@ -15,18 +15,7 @@ from .relaxations import relax_slabs_with_semaphore
 from .surface_energy_workgraph import create_surface_energy_task, calculate_all_surface_energies
 
 
-@task.graph(outputs=[
-    'manifest',
-    'structures',
-    'energies',
-    'bulk_structure',
-    'bulk_energy',
-    'pristine_structure',
-    'pristine_energy',
-    'surface_energies_reaction1',
-    'surface_energies_reaction2',
-    'surface_energies_reaction3',
-])
+@task.graph
 def SurfaceHydroxylationWorkGraph(
     structure: orm.StructureData,
     surface_params: dict,
@@ -40,7 +29,18 @@ def SurfaceHydroxylationWorkGraph(
     fix_elements: t.List[str] = None,
     structure_specific_builder_inputs: dict = None,
     calculate_surface_energies: bool = True,
-) -> dict:
+) -> t.Annotated[dict, namespace(**{
+    'manifest': orm.Dict,
+    'structures': dynamic(orm.StructureData),
+    'energies': dynamic(orm.Float),
+    'bulk_structure': orm.StructureData,
+    'bulk_energy': orm.Float,
+    'pristine_structure': orm.StructureData,
+    'pristine_energy': orm.Float,
+    'surface_energies_reaction1': orm.Dict,
+    'surface_energies_reaction2': orm.Dict,
+    'surface_energies_reaction3': orm.Dict,
+})]:
     """
     Main workflow for surface hydroxylation studies.
 
@@ -241,40 +241,41 @@ def SurfaceHydroxylationWorkGraph(
     )
 
     # Calculate surface energies (if enabled)
+    # With @task.graph, namespace outputs are directly accessible
     if calculate_surface_energies:
         se_results = calculate_all_surface_energies(
             structures_dict=relax_outputs.structures,
             energies_dict=relax_outputs.energies,
             bulk_structure=bulk_vasp.structure,
-            bulk_energy=bulk_energy,
-            temperature=298.0,
-            pressures={'H2O': 0.023, 'O2': 0.21, 'H2': 1.0},
+            bulk_energy=bulk_energy.result,
+            temperature=orm.Float(298.0),
+            pressures=orm.Dict(dict={'H2O': 0.023, 'O2': 0.21, 'H2': 1.0}),
         )
-        reaction1 = se_results.reaction1_results
-        reaction2 = se_results.reaction2_results
-        reaction3 = se_results.reaction3_results
-    else:
-        # Provide empty dicts if disabled
-        reaction1 = {}
-        reaction2 = {}
-        reaction3 = {}
 
-    # Return raw outputs
-    # Note: Result organization (successful/failed/statistics) must be done
-    # in post-processing due to WorkGraph namespace serialization limitations.
-    # Use the organize_hydroxylation_results() helper function after workflow completion.
-    return {
-        'manifest': gen_outputs.manifest,
-        'structures': relax_outputs.structures,
-        'energies': relax_outputs.energies,
-        'bulk_structure': bulk_vasp.structure,
-        'bulk_energy': bulk_energy,
-        'pristine_structure': pristine_vasp.structure,
-        'pristine_energy': pristine_energy,
-        'surface_energies_reaction1': reaction1,
-        'surface_energies_reaction2': reaction2,
-        'surface_energies_reaction3': reaction3,
-    }
+        # Return outputs including surface energies
+        return {
+            'manifest': gen_outputs.manifest,
+            'structures': relax_outputs.structures,
+            'energies': relax_outputs.energies,
+            'bulk_structure': bulk_vasp.structure,
+            'bulk_energy': bulk_energy.result,
+            'pristine_structure': pristine_vasp.structure,
+            'pristine_energy': pristine_energy.result,
+            'surface_energies_reaction1': se_results.reaction1_results,
+            'surface_energies_reaction2': se_results.reaction2_results,
+            'surface_energies_reaction3': se_results.reaction3_results,
+        }
+    else:
+        # Return outputs without surface energies
+        return {
+            'manifest': gen_outputs.manifest,
+            'structures': relax_outputs.structures,
+            'energies': relax_outputs.energies,
+            'bulk_structure': bulk_vasp.structure,
+            'bulk_energy': bulk_energy.result,
+            'pristine_structure': pristine_vasp.structure,
+            'pristine_energy': pristine_energy.result,
+        }
 
 
 def build_surface_hydroxylation_workgraph(
@@ -766,3 +767,50 @@ def organize_hydroxylation_results(workflow_node):
         },
         'reference_data': reference_data,
     }
+
+
+def get_surface_energy_results(workflow_node):
+    """
+    Extract surface energy calculation results from a completed workflow.
+
+    Due to WorkGraph namespace forwarding limitations, surface energy results
+    from the calculate_all_surface_energies task are not directly exposed as
+    workflow outputs. This helper function retrieves them from the called task.
+
+    Args:
+        workflow_node: Completed WorkGraph node (orm.WorkChainNode or WorkGraphNode)
+
+    Returns:
+        dict with keys:
+            - 'reaction1_results': Dict - Surface energies for H2O/O2 reaction
+            - 'reaction2_results': Dict - Surface energies for H2/H2O reaction
+            - 'reaction3_results': Dict - Surface energies for H2/O2 reaction
+            - 'task_pk': int - PK of the surface energy calculation task
+
+        Returns None if surface energy calculations were not performed.
+
+    Example:
+        >>> from aiida import orm
+        >>> from teros.core.surface_hydroxylation import get_surface_energy_results
+        >>>
+        >>> wf = orm.load_node(12345)  # Your workflow PK
+        >>> results = get_surface_energy_results(wf)
+        >>>
+        >>> if results:
+        >>>     print("Surface energies (Reaction 1 - H2O/O2):")
+        >>>     for name, gamma in results['reaction1_results']['surface_energies'].items():
+        >>>         print(f"  {name}: {gamma:.3f} J/m²")
+    """
+    # Find the calculate_all_surface_energies task in called nodes
+    for called in workflow_node.called:
+        if 'calculate_all_surface_energies' in called.process_label:
+            # Access the namespace outputs
+            return {
+                'reaction1_results': called.outputs.result.reaction1_results.get_dict(),
+                'reaction2_results': called.outputs.result.reaction2_results.get_dict(),
+                'reaction3_results': called.outputs.result.reaction3_results.get_dict(),
+                'task_pk': called.pk,
+            }
+
+    # No surface energy calculations found
+    return None
