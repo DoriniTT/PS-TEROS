@@ -131,10 +131,9 @@ def build_custom_calculation_workgraph(
             )
             structure_tasks.append(structure_task)
 
-        # Set WorkGraph outputs (lists)
-        wg.add_output('energies', [t.outputs.result for t in energy_tasks])
-        wg.add_output('structures', [t.outputs.result for t in structure_tasks])
-        wg.add_output('misc', [t.outputs.misc for t in vasp_tasks])
+        # For multiple structures, outputs are accessed via task names
+        # (WorkGraph doesn't support dynamic list outputs with plain functions)
+        # Users can access: wg.tasks['vasp_calc_0'], wg.tasks['extract_energy_0'], etc.
 
     return wg
 
@@ -208,12 +207,30 @@ def get_custom_results(workgraph):
         results['energies'] = workgraph.outputs.energy.value
         results['structures'] = workgraph.outputs.structure
         results['misc'] = workgraph.outputs.misc.get_dict()
-    elif hasattr(workgraph.outputs, 'energies'):
-        # Multiple structures
-        results['energies'] = [e.value for e in workgraph.outputs.energies]
-        results['structures'] = list(workgraph.outputs.structures)
-        results['misc'] = [m.get_dict() for m in workgraph.outputs.misc]
     else:
-        raise ValueError("WorkGraph does not have expected outputs (energy/energies)")
+        # Multiple structures - access via task outputs
+        i = 0
+        energies = []
+        structures = []
+        misc_list = []
+
+        # Find all energy extraction tasks
+        while f'extract_energy_{i}' in workgraph.tasks:
+            energy_task = workgraph.tasks[f'extract_energy_{i}']
+            structure_task = workgraph.tasks[f'extract_structure_{i}']
+            vasp_task = workgraph.tasks[f'vasp_calc_{i}']
+
+            # Access outputs from completed tasks
+            energies.append(energy_task.outputs['result'].value)
+            structures.append(structure_task.outputs['result'].value)
+            misc_list.append(vasp_task.outputs['misc'].value.get_dict())
+            i += 1
+
+        if not energies:
+            raise ValueError("WorkGraph does not have expected outputs (energy or extract_energy_0 tasks)")
+
+        results['energies'] = energies
+        results['structures'] = structures
+        results['misc'] = misc_list
 
     return results
