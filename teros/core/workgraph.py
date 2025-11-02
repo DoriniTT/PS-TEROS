@@ -951,7 +951,7 @@ def build_core_workgraph(
     # ========================================================================
     # WORKFLOW PRESET RESOLUTION
     # ========================================================================
-    
+
     # Check for deprecated old-style API usage
     check_old_style_api(
         workflow_preset,

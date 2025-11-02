@@ -47,19 +47,19 @@ def main():
 
     # Code configuration
     code_label = 'VASP-6.5.0@bohr-new'
-    potential_family = 'PBE.64'
+    potential_family = 'PBE'
 
     # Common VASP parameters
     vasp_params = {
         'PREC': 'Accurate',
-        'ENCUT': 520,
-        'EDIFF': 1e-6,
+        'ENCUT': 420,
+        'EDIFF': 1e-4,
         'ISMEAR': 0,
         'SIGMA': 0.05,
         'IBRION': 2,
         'ISIF': 3,
         'NSW': 100,
-        'EDIFFG': -0.01,
+        'EDIFFG': -0.1,
         'ALGO': 'Normal',
         'LREAL': 'Auto',
         'LWAVE': False,
@@ -91,7 +91,7 @@ def main():
         'C': (None, 'Unlimited', 'No limit (full parallel)'),
     }
 
-    max_concurrent_jobs, mode_name, description = mode_map.get(mode, mode_map['B'])
+    max_concurrent_jobs, mode_name, description = mode_map.get(mode, mode_map['A'])
 
     print(f"\n4. Building workgraph...")
     print(f"   Mode: {mode_name}")
@@ -104,7 +104,8 @@ def main():
 
         # Enable slab generation + relaxation
         relax_slabs=True,
-        miller_indices=[(1, 0, 0), (1, 1, 0)],
+        miller_indices=[(1, 0, 0)],
+        #miller_indices=[(1, 0, 0), (1, 1, 0)],
         min_slab_thickness=10.0,
         min_vacuum_thickness=15.0,
 
