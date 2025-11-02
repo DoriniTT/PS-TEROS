@@ -128,16 +128,30 @@ def surface_thermodynamics_serial_workgraph(
         compute_thermodynamics: Whether to compute thermodynamics
         thermodynamics_sampling: Number of chemical potential sampling points
         compute_relaxation_energy: Whether to compute relaxation energy
-        input_slabs: Optional pre-generated slabs dict
+        input_slabs: REQUIRED. Pre-generated slabs as dict of slab_id -> StructureData.
+                     Dynamic generation not yet supported in serial mode.
 
     Returns:
-        Dictionary of outputs
+        Dictionary of outputs including:
+        - slab_structures: The input_slabs dict (passed through)
+        - bulk_energy, bulk_structure: Bulk calculation results
+        - relaxed_slabs, slab_energies: Slab calculation results (if relax_slabs=True)
+        - unrelaxed_slab_energies: SCF energies for all slabs
+        - surface_energies: Thermodynamic surface energies (if compute_thermodynamics=True)
+        - formation_enthalpy, oxide_type, reference_energies: Thermodynamic properties
     """
     # Create WorkGraph instance
     wg = WorkGraph(name="surface_thermodynamics_serial")
 
-    # Load code
-    code = orm.load_code(code_label)
+    # Load code with validation
+    try:
+        code = orm.load_code(code_label)
+    except Exception as e:
+        raise ValueError(
+            f"Code '{code_label}' not found or not accessible. "
+            f"Use 'verdi code list' to see available codes. "
+            f"Error: {str(e)}"
+        )
 
     # Set default parameters
     if bulk_parameters is None:
@@ -309,36 +323,22 @@ def surface_thermodynamics_serial_workgraph(
     # PHASE 3: Slab generation
     # =========================================================================
 
-    if input_slabs:
-        # Use provided slabs
-        slab_structures = input_slabs
-    else:
-        # Generate slabs
-        slab_gen_node = wg.add_task(
-            generate_slab_structures,
-            name="generate_slabs",
-            bulk_structure=bulk_node.outputs.structure,
-            miller_indices=orm.List(list=miller_indices or [[1,0,0], [1,1,0], [1,1,1]]),
-            min_slab_thickness=orm.Float(min_slab_thickness),
-            min_vacuum_thickness=orm.Float(min_vacuum_thickness),
-            lll_reduce=orm.Bool(lll_reduce),
-            center_slab=orm.Bool(center_slab),
-            symmetrize=orm.Bool(symmetrize),
-            primitive=orm.Bool(primitive),
-            in_unit_planes=orm.Bool(in_unit_planes),
-            max_normal_search=orm.Int(max_normal_search) if max_normal_search else None,
-        )
-        slab_structures = slab_gen_node.outputs.slabs
-
-    # For direct node addition, we need to handle slabs as a known dict
-    # In practice, we'll need to wait for slab generation or use input_slabs
-    # For this implementation, let's assume input_slabs is provided as a dict
+    # NOTE: Currently only pre-generated slabs (input_slabs) are supported.
+    # Dynamic slab generation requires waiting for the bulk relaxation to complete
+    # before generating slabs, which would require a two-stage workflow execution.
+    # For now, users must provide input_slabs as a dictionary.
 
     if not input_slabs:
-        raise NotImplementedError(
-            "Dynamic slab generation not yet supported in serial mode. "
-            "Please provide input_slabs as a dictionary."
+        raise ValueError(
+            "input_slabs is required. Dynamic slab generation is not yet supported "
+            "in serial mode. Please provide input_slabs as a dictionary of "
+            "slab_id -> StructureData. To generate slabs, use the "
+            "generate_slab_structures function separately and pass the result "
+            "as input_slabs."
         )
+
+    # Use provided slabs
+    slab_structures = input_slabs
 
     # =========================================================================
     # PHASE 4: Slab calculations
