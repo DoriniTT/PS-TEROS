@@ -317,6 +317,28 @@ This gives you the convenience of presets with the flexibility of fine-grained c
 
 ---
 
+## Concurrency Control
+
+All workflow builders accept a `max_concurrent_jobs` parameter to control how many VASP calculations run simultaneously:
+
+```python
+wg = build_core_workgraph(
+    workflow_preset='surface_thermodynamics',
+    max_concurrent_jobs=4,  # Default: max 4 VASP jobs at once
+    # ... other parameters
+)
+```
+
+**Values:**
+- `1`: Serial mode (one VASP at a time)
+- `4`: Default (moderate concurrency)
+- `8+`: Higher concurrency for larger clusters
+- `None`: Unlimited (full parallel)
+
+See [CONCURRENCY_CONTROL.md](./CONCURRENCY_CONTROL.md) for details.
+
+---
+
 ## Advanced Usage
 
 ### Custom Workflow Configuration

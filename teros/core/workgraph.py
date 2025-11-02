@@ -659,6 +659,7 @@ def build_core_workgraph(
     adsorption_structure_specific_relax_builder_inputs: dict = None,
     adsorption_structure_specific_scf_builder_inputs: dict = None,
     adsorption_structure_component_specific_scf_builder_inputs: dict = None,
+    max_concurrent_jobs: int = 4,  # NEW: Limit concurrent VASP calculations (None = unlimited)
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -950,7 +951,7 @@ def build_core_workgraph(
     # ========================================================================
     # WORKFLOW PRESET RESOLUTION
     # ========================================================================
-    
+
     # Check for deprecated old-style API usage
     check_old_style_api(
         workflow_preset,
@@ -1821,6 +1822,10 @@ def build_core_workgraph(
     # Set the name
     wg.name = name
 
+    # CONCURRENCY CONTROL: Limit how many VASP calculations run simultaneously
+    if max_concurrent_jobs is not None:
+        wg.max_number_jobs = max_concurrent_jobs
+
     return wg
 
 
@@ -1873,6 +1878,7 @@ def build_core_workgraph_with_map(
     slab_bands_parameters: dict = None,  # NEW
     slab_bands_options: dict = None,  # NEW
     slab_band_settings: dict = None,  # NEW
+    max_concurrent_jobs: int = 4,  # NEW: Limit concurrent VASP calculations (None = unlimited)
     name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
@@ -1945,6 +1951,7 @@ def build_core_workgraph_with_map(
         slab_bands_parameters=slab_bands_parameters,  # NEW
         slab_bands_options=slab_bands_options,  # NEW
         slab_band_settings=slab_band_settings,  # NEW
+        max_concurrent_jobs=max_concurrent_jobs,  # NEW
         name=name,
     )
 
