@@ -1878,6 +1878,7 @@ def build_core_workgraph_with_map(
     slab_bands_parameters: dict = None,  # NEW
     slab_bands_options: dict = None,  # NEW
     slab_band_settings: dict = None,  # NEW
+    max_concurrent_jobs: int = 4,  # NEW: Limit concurrent VASP calculations (None = unlimited)
     name: str = 'FormationEnthalpy_ScatterGather',
 ) -> WorkGraph:
     """
@@ -1950,6 +1951,7 @@ def build_core_workgraph_with_map(
         slab_bands_parameters=slab_bands_parameters,  # NEW
         slab_bands_options=slab_bands_options,  # NEW
         slab_band_settings=slab_band_settings,  # NEW
+        max_concurrent_jobs=max_concurrent_jobs,  # NEW
         name=name,
     )
 
