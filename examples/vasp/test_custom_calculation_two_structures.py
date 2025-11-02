@@ -93,7 +93,7 @@ def main():
 
     # Load AiiDA profile
     print("\n1. Loading AiiDA profile...")
-    load_profile(profile='psteros')
+    load_profile(profile='presto')
     print("   ✓ Profile loaded: psteros")
 
     # Check daemon
@@ -132,8 +132,8 @@ def main():
     print("\n4. Defining VASP builder inputs for each structure...")
 
     # Code configuration (same for both)
-    code_label = 'VASP-6.4.1@cluster02'
-    potential_family = 'PBE.54'
+    code_label = 'VASP-6.5.0@bohr-new'
+    potential_family = 'PBE'
 
     # Structure 1: Fast relaxation (Ag2O)
     print("   Structure 0 (Ag2O): Fast relaxation with ALGO=Fast")
@@ -141,7 +141,7 @@ def main():
         'parameters': {
             'incar': {
                 'PREC': 'Accurate',
-                'ENCUT': 500,           # Standard cutoff
+                'ENCUT': 400,           # Standard cutoff
                 'EDIFF': 1e-5,          # Standard convergence
                 'ISMEAR': 0,            # Gaussian smearing
                 'SIGMA': 0.05,
@@ -153,16 +153,17 @@ def main():
                 'ISIF': 2,              # Relax ions only
                 'NSW': 100,             # Max ionic steps
                 'IBRION': 2,            # CG relaxation
-                'EDIFFG': -0.02,        # Force convergence
+                'EDIFFG': -0.05,        # Force convergence
             }
         },
         'options': {
             'resources': {
                 'num_machines': 1,
-                'num_cores_per_machine': 24,
+                'num_cores_per_machine': 40,
             },
+            'queue_name': 'par40',
         },
-        'kpoints_spacing': 0.3,
+        'kpoints_spacing': 1,
         'potential_family': potential_family,
         'potential_mapping': {'Ag': 'Ag', 'O': 'O'},
         'clean_workdir': True,
@@ -174,28 +175,28 @@ def main():
         'parameters': {
             'incar': {
                 'PREC': 'Accurate',
-                'ENCUT': 600,           # Higher cutoff
-                'EDIFF': 1e-6,          # Tighter convergence
+                'ENCUT': 350,           # Higher cutoff
+                'EDIFF': 1e-4,          # Tighter convergence
                 'ISMEAR': 0,
                 'SIGMA': 0.02,          # Smaller smearing
                 'ALGO': 'Normal',       # More stable algorithm
-                'LREAL': False,         # Reciprocal space (more accurate)
+                'LREAL': 'Auto',         # Reciprocal space (more accurate)
                 'LWAVE': False,
                 'LCHARG': False,
-                'NCORE': 6,
                 'ISIF': 2,
                 'NSW': 200,             # More ionic steps
                 'IBRION': 2,
-                'EDIFFG': -0.01,        # Tighter forces
+                'EDIFFG': -0.1,        # Tighter forces
             }
         },
         'options': {
             'resources': {
                 'num_machines': 1,
-                'num_cores_per_machine': 24,
+                'num_cores_per_machine': 40,
             },
+            'queue_name': 'par40'
         },
-        'kpoints_spacing': 0.25,        # Denser k-points
+        'kpoints_spacing': 1,        # Denser k-points
         'potential_family': potential_family,
         'potential_mapping': {'Ag': 'Ag', 'P': 'P', 'O': 'O'},
         'clean_workdir': True,
