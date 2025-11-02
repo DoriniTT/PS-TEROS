@@ -659,6 +659,7 @@ def build_core_workgraph(
     adsorption_structure_specific_relax_builder_inputs: dict = None,
     adsorption_structure_specific_scf_builder_inputs: dict = None,
     adsorption_structure_component_specific_scf_builder_inputs: dict = None,
+    max_concurrent_jobs: int = 4,  # NEW: Limit concurrent VASP calculations (None = unlimited)
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -1820,6 +1821,10 @@ def build_core_workgraph(
 
     # Set the name
     wg.name = name
+
+    # CONCURRENCY CONTROL: Limit how many VASP calculations run simultaneously
+    if max_concurrent_jobs is not None:
+        wg.max_number_jobs = max_concurrent_jobs
 
     return wg
 
