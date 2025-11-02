@@ -178,8 +178,17 @@ def _prepare_builder_inputs(builder_inputs):
         else:
             prepared['settings'] = builder_inputs['settings']
 
-    # Copy scalar values directly
-    for key in ('kpoints_spacing', 'potential_family', 'clean_workdir'):
+    # Handle kpoints_spacing - ensure it's a float
+    if 'kpoints_spacing' in builder_inputs:
+        kps = builder_inputs['kpoints_spacing']
+        # Keep as plain Python float (don't wrap in orm.Float)
+        if isinstance(kps, (int, float)):
+            prepared['kpoints_spacing'] = float(kps)
+        else:
+            prepared['kpoints_spacing'] = kps
+
+    # Copy string/bool values directly
+    for key in ('potential_family', 'clean_workdir'):
         if key in builder_inputs:
             prepared[key] = builder_inputs[key]
 
