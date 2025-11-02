@@ -30,3 +30,22 @@ def extract_total_energy(misc: orm.Dict) -> orm.Float:
     # If no recognized key found, raise error with available keys
     available = ', '.join(sorted(energy_dict.keys()))
     raise ValueError(f'Unable to find total energy in misc output. Available keys: {available}')
+
+
+@task.calcfunction
+def extract_relaxed_structure(misc: orm.Dict) -> orm.StructureData:
+    """
+    Extract relaxed structure from VASP misc output.
+
+    Args:
+        misc: VASP misc output Dict containing structure data
+
+    Returns:
+        Relaxed structure as StructureData
+    """
+    misc_dict = misc.get_dict()
+
+    if 'structure' not in misc_dict:
+        raise ValueError(f"No 'structure' key found in misc output. Available keys: {list(misc_dict.keys())}")
+
+    return misc_dict['structure']
