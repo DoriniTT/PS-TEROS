@@ -293,6 +293,7 @@ def build_surface_hydroxylation_workgraph(
     fix_thickness: float = 0.0,
     fix_elements: t.List[str] = None,
     structure_specific_builder_inputs: dict = None,
+    max_concurrent_jobs: int = 4,  # NEW: Limit concurrent VASP calculations (None = unlimited)
     name: str = 'SurfaceHydroxylation',
     # NEW: Surface energy calculation control
     calculate_surface_energies: bool = True,
@@ -682,6 +683,10 @@ def build_surface_hydroxylation_workgraph(
 
     # Set the workflow name
     wg.name = name
+
+    # CONCURRENCY CONTROL: Limit how many VASP calculations run simultaneously
+    if max_concurrent_jobs is not None:
+        wg.max_number_jobs = max_concurrent_jobs
 
     return wg
 
