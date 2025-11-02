@@ -33,7 +33,7 @@ def main():
 
     # Load AiiDA profile
     print("\n1. Loading AiiDA profile...")
-    load_profile(profile='psteros')
+    load_profile(profile='presto')
     print("   ✓ Profile loaded")
 
     # Setup paths
@@ -46,8 +46,8 @@ def main():
     print(f"   Oxygen: {structures_dir}/O2.cif")
 
     # Code configuration
-    code_label = 'VASP-6.4.1@cluster02'
-    potential_family = 'PBE'
+    code_label = 'VASP-6.5.0@bohr-new'
+    potential_family = 'PBE.64'
 
     # Common VASP parameters
     vasp_params = {
@@ -72,8 +72,9 @@ def main():
     common_options = {
         'resources': {
             'num_machines': 1,
-            'num_cores_per_machine': 24,
+            'num_cores_per_machine': 40,
         },
+        'queue_name': 'par40',
     }
 
     # Choose mode
