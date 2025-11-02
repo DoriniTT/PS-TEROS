@@ -78,8 +78,63 @@ def build_custom_calculation_workgraph(
         wg.add_output('structure', structure_task.outputs.result)
         wg.add_output('misc', vasp_task.outputs.misc)
     else:
-        # Multiple structures - implement in next task
-        raise NotImplementedError("Multiple structure support not yet implemented")
+        # Multiple structures workflow
+        structures = structure  # Rename for clarity
+
+        # Handle builder_inputs: single dict or list of dicts
+        if isinstance(builder_inputs, dict):
+            # Same builder inputs for all structures
+            builder_inputs_list = [builder_inputs] * len(structures)
+        elif isinstance(builder_inputs, list):
+            # Different builder inputs for each structure
+            if len(builder_inputs) != len(structures):
+                raise ValueError(
+                    f"builder_inputs list length ({len(builder_inputs)}) must match "
+                    f"structures list length ({len(structures)})"
+                )
+            builder_inputs_list = builder_inputs
+        else:
+            raise TypeError("builder_inputs must be dict or list of dicts")
+
+        # Create VaspTask for each structure
+        vasp_tasks = []
+        energy_tasks = []
+        structure_tasks = []
+
+        for i, (struct, inputs) in enumerate(zip(structures, builder_inputs_list)):
+            # Prepare builder inputs
+            prepared_inputs = _prepare_builder_inputs(inputs)
+
+            # Add VaspTask
+            vasp_task = wg.add_task(
+                VaspTask,
+                name=f'vasp_calc_{i}',
+                structure=struct,
+                code=code,
+                **prepared_inputs
+            )
+            vasp_tasks.append(vasp_task)
+
+            # Extract energy
+            energy_task = wg.add_task(
+                extract_total_energy,
+                name=f'extract_energy_{i}',
+                misc=vasp_task.outputs.misc
+            )
+            energy_tasks.append(energy_task)
+
+            # Extract structure
+            structure_task = wg.add_task(
+                extract_relaxed_structure,
+                name=f'extract_structure_{i}',
+                misc=vasp_task.outputs.misc
+            )
+            structure_tasks.append(structure_task)
+
+        # Set WorkGraph outputs (lists)
+        wg.add_output('energies', [t.outputs.result for t in energy_tasks])
+        wg.add_output('structures', [t.outputs.result for t in structure_tasks])
+        wg.add_output('misc', [t.outputs.misc for t in vasp_tasks])
 
     return wg
 
