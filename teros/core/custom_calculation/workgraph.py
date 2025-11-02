@@ -195,6 +195,25 @@ def get_custom_results(workgraph):
         workgraph: Completed WorkGraph from build_custom_calculation_workgraph
 
     Returns:
-        dict with energies, structures, misc outputs
+        dict with:
+            - energies: list of floats or single float
+            - structures: list of StructureData or single StructureData
+            - misc: list of dicts or single dict
     """
-    raise NotImplementedError("Function not yet implemented - placeholder for Task 1")
+    results = {}
+
+    # Check if single or multiple structure workflow
+    if hasattr(workgraph.outputs, 'energy'):
+        # Single structure
+        results['energies'] = workgraph.outputs.energy.value
+        results['structures'] = workgraph.outputs.structure
+        results['misc'] = workgraph.outputs.misc.get_dict()
+    elif hasattr(workgraph.outputs, 'energies'):
+        # Multiple structures
+        results['energies'] = [e.value for e in workgraph.outputs.energies]
+        results['structures'] = list(workgraph.outputs.structures)
+        results['misc'] = [m.get_dict() for m in workgraph.outputs.misc]
+    else:
+        raise ValueError("WorkGraph does not have expected outputs (energy/energies)")
+
+    return results
