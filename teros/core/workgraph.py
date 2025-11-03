@@ -128,6 +128,8 @@ def core_workgraph(
     slab_kpoints_spacing: float = None,
     slab_relax_builder_inputs: dict = None,
     slab_scf_builder_inputs: dict = None,
+    structure_specific_relax_builder_inputs: dict = None,
+    structure_specific_scf_builder_inputs: dict = None,
     lll_reduce: bool = True,
     center_slab: bool = True,
     symmetrize: bool = True,
