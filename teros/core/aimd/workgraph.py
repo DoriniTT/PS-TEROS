@@ -10,6 +10,48 @@ from .utils import (
 from .tasks import create_supercell
 
 
+def _get_builder_for_structure_stage(
+    struct_name: str,
+    stage_idx: int,
+    base_builder: dict,
+    structure_overrides: dict,
+    stage_overrides: dict,
+    matrix_overrides: dict,
+) -> dict:
+    """
+    Merge builder inputs for specific (structure, stage) combination.
+
+    Priority: matrix > stage > structure > base
+
+    Args:
+        struct_name: Structure name
+        stage_idx: Stage index (0-based)
+        base_builder: Default builder inputs
+        structure_overrides: Per-structure overrides
+        stage_overrides: Per-stage overrides
+        matrix_overrides: Per-(structure,stage) overrides
+
+    Returns:
+        Merged builder inputs for this specific combination
+    """
+    result = base_builder.copy()
+
+    # Apply structure override
+    if struct_name in structure_overrides:
+        result = merge_builder_inputs(result, structure_overrides[struct_name])
+
+    # Apply stage override
+    if stage_idx in stage_overrides:
+        result = merge_builder_inputs(result, stage_overrides[stage_idx])
+
+    # Apply matrix override
+    matrix_key = (struct_name, stage_idx)
+    if matrix_key in matrix_overrides:
+        result = merge_builder_inputs(result, matrix_overrides[matrix_key])
+
+    return result
+
+
 def build_aimd_workgraph(
     structures: dict[str, t.Union[orm.StructureData, int]],
     aimd_stages: list[dict],
@@ -113,6 +155,65 @@ def build_aimd_workgraph(
         else:
             prepared_structures[struct_name] = struct
 
-    # TODO: Stage loop implementation in next task
+    # 2. Run sequential AIMD stages
+    from teros.core.aimd import aimd_single_stage_scatter
+
+    stage_results = {}
+    current_structures = prepared_structures
+    current_remote_folders = None
+
+    for stage_idx, stage_config in enumerate(aimd_stages):
+        temperature = stage_config['temperature']
+        steps = stage_config['steps']
+
+        # Build merged builder inputs for each structure in this stage
+        # Note: We need to pass same parameters to all structures in one scatter call,
+        # but aimd_single_stage_scatter expects uniform parameters.
+        # For now, use base builder_inputs (per-structure customization requires
+        # calling aimd_single_stage_scatter separately per structure or modifying it)
+
+        # Load code
+        code = orm.load_code(code_label)
+
+        # Prepare AIMD parameters from builder_inputs
+        # Extract base AIMD INCAR parameters
+        if 'parameters' in builder_inputs and 'incar' in builder_inputs['parameters']:
+            aimd_base_params = builder_inputs['parameters']['incar'].copy()
+        else:
+            aimd_base_params = {}
+
+        # Create stage task
+        stage_task = wg.add_task(
+            aimd_single_stage_scatter,
+            slabs=current_structures,
+            temperature=temperature,
+            steps=steps,
+            code=code,
+            aimd_parameters=aimd_base_params,
+            potential_family=builder_inputs.get('potential_family', 'PBE'),
+            potential_mapping=builder_inputs.get('potential_mapping', {}),
+            options=builder_inputs.get('options', {}),
+            kpoints_spacing=builder_inputs.get('kpoints_spacing', 0.5),
+            clean_workdir=builder_inputs.get('clean_workdir', False),
+            restart_folders=current_remote_folders if current_remote_folders else {},
+            max_number_jobs=max_concurrent_jobs,
+            name=f'stage_{stage_idx}_aimd',
+        )
+
+        # Store results for this stage
+        stage_results[stage_idx] = {
+            'structures': stage_task.outputs.structures,
+            'energies': stage_task.outputs.energies,
+            'remote_folders': stage_task.outputs.remote_folders,
+        }
+
+        # Update for next stage
+        current_structures = stage_task.outputs.structures
+        current_remote_folders = stage_task.outputs.remote_folders
+
+    # 3. Set workgraph outputs
+    wg.add_output('results', stage_results)
+    if supercell_outputs:
+        wg.add_output('supercells', supercell_outputs)
 
     return wg
