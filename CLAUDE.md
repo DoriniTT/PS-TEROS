@@ -8,7 +8,7 @@ This is a comprehensive guide for developing and working with the **PS-TEROS** c
 
 * **Before you begin**
 
-Make sure that you are in the 'psteros' profile in AiiDA by doing 'verdi profile set-default psteros', then do 'verdi status' to check if everything is working fine.
+Make sure that you are in the 'presto' profile in AiiDA by doing 'verdi profile set-default presto', then do 'verdi status' to check if everything is working fine.
 If the daemon is not running, you can start it by doing 'verdi daemon start'.
 
 * **How the PS-TEROS is organized**
@@ -29,22 +29,33 @@ Folders:
 
   **When running tests**
 
-  Use the VASP-6.4.1@cluster02 code. It uses a cluster with 24 processors which have these information:
-PK                       42941
-UUID                     6bb827ad-8615-430c-8231-9267c68d67ff
+  Use the VASP6.5.0@cluster02 code. It uses a cluster with 24 processors which have these information:
+-----------------------  --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+PK                       122432
+UUID                     699ca05a-6901-429f-a5ee-6fe21edd9db7
 Type                     core.code.installed
-Pk                       42941
-Uuid                     6bb827ad-8615-430c-8231-9267c68d67ff
+Pk                       122432
+Uuid                     699ca05a-6901-429f-a5ee-6fe21edd9db7
 Node type                data.core.code.installed.InstalledCode.
-Label                    VASP-6.4.1
-Description              VASP 6.4.1
-Attributes               {'with_mpi': None, 'append_text': '', 'input_plugin': 'vasp.vasp', 'prepend_text': 'module load vasp\n', 'use_double_quotes': False, 'filepath_executable': '/usr/sw/vasp.6.4.1/bin/vasp_std', 'wrap_cmdline_params': False}
-Computer                 cluster06 (umsl06), pk: 6
+Process type
+Repository metadata      {}
+Ctime                    2025-11-03 07:48:43.086994-03:00
+Mtime                    2025-11-03 07:48:43.120913-03:00
+Label                    VASP6.5.0
+Description              VASP 6.5.0
+Attributes               {'with_mpi': None, 'append_text': '', 'input_plugin': 'vasp.vasp', 'prepend_text': '. /home/umsl02/Programs/spack/share/spack/setup-env.sh', 'use_double_quotes': False, 'filepath_executable': '/usr/local/bin/vasp_std', 'wrap_cmdline_params': False}
+Extras                   {'hidden': False, '_aiida_hash': 'a0bfbc12e319d46a026a97fd3f0e9216ac7b6bc6febb106eb6c8f273cb93c576'}
+Computer                 cluster02 (umsl02), pk: 95
+User                     aiida@localhost
+Source
 Default calc job plugin  vasp.vasp
-Prepend text             module load vasp
+Use double quotes        False
+With mpi
+Prepend text             . /home/umsl02/Programs/spack/share/spack/setup-env.sh
 Append text
-Filepath executable      /usr/sw/vasp.6.4.1/bin/vasp_std
-
+Filepath executable      /usr/local/bin/vasp_std
+-----------------------  --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  
   - It do not have a queue.
   - Use the num_cores_per_machine=24, like this:
   options = {
@@ -52,9 +63,6 @@ Filepath executable      /usr/sw/vasp.6.4.1/bin/vasp_std
         'num_machines': 1,
         'num_cores_per_machine': 24, 
     },
-    # Optional settings:
-    # 'prepend_text': 'module load vasp/6.4.2',  # Commands before VASP
-    # 'custom_scheduler_commands': '#SBATCH --constraint=haswell',
 }
 
 * **Python binary**
@@ -100,17 +108,7 @@ The main development branch is located at:
 /home/thiagotd/git/PS-TEROS
 ```
 
-For each new feature or update to the PS-TEROS code, create a dedicated worktree branch. This ensures that each feature is isolated and can be tested independently before merging.
-
-```bash
-git worktree add ../worktree/PS-TEROS/<feature_name> <feature_branch>
-```
-
-Then move into the new branch directory:
-
-```bash
-cd ../worktree/PS-TEROS/<feature_name>
-```
+For each new feature or update to the PS-TEROS code, create a dedicated folder in the /home/thiagotd/git/PS-TEROS/teros/experimental path. This ensures that each feature is isolated and can be tested independently before merging.
 
 You will perform all feature development in this directory.
 
@@ -131,6 +129,7 @@ Your implementation is considered correct and ready to merge when:
 
 * The main node returns a `[0]`, indicating successful completion.
 * The feature you implemented appears correctly in the main node output and behaves as expected.
+* The calculations may take some time, so use 'sleep' bash command to wait until you clearly see the modification that we are implemeted work correctly when checking the calculation with 'verdi process show <PK>' or 'verdi process report <PK>'.
 
 ---
 
@@ -150,23 +149,6 @@ Then return to the `develop` branch:
 ```bash
 cd /home/thiagotd/git/PS-TEROS
 ```
-
-And merge your feature branch:
-
-```bash
-git merge <feature_branch>
-```
-
----
-
-### Handling Merge Conflicts
-
-If conflicts occur, **stop immediately** so they can be reviewed.
-You may resolve simple conflicts yourself (e.g., cache files, `__init__.py`, etc.), but for more complex cases, wait for a manual review.
-
-Do **not delete** the `<feature_branch>` after merging.
-A final validation will be performed on the `develop` branch to ensure that the integration works as intended.
-
 ---
 
 ## Documentation
