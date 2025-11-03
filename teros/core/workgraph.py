@@ -96,6 +96,10 @@ def core_workgraph(
     structures_dir: str = None,
     bulk_name: str = None,
     code_label: str = None,
+    bulk_code_label: str = None,
+    metal_code_label: str = None,
+    nonmetal_code_label: str = None,
+    oxygen_code_label: str = None,
     potential_family: str = None,
     bulk_potential_mapping: dict = None,
     kpoints_spacing: float = 0.4,
@@ -249,8 +253,15 @@ def core_workgraph(
     Note: Electronic properties outputs (bulk_bands, bulk_dos, bulk_electronic_properties_misc)
           are added in build_core_workgraph when compute_electronic_properties_bulk=True
     """
-    # Load the code
+    # Load the codes
+    # Slab code (main code)
     code = orm.load_code(code_label)
+
+    # Reference codes (use specific codes if provided, otherwise fall back to main code)
+    bulk_code = orm.load_code(bulk_code_label) if bulk_code_label else code
+    metal_code = orm.load_code(metal_code_label) if metal_code_label else code
+    nonmetal_code = orm.load_code(nonmetal_code_label) if nonmetal_code_label else code
+    oxygen_code = orm.load_code(oxygen_code_label) if oxygen_code_label else code
 
     # Get VASP workchain and wrap it as a task
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
@@ -267,7 +278,7 @@ def core_workgraph(
 
         bulk_vasp = VaspTask(
             structure=bulk_struct,
-            code=code,
+            code=bulk_code,
             parameters={'incar': bulk_parameters},
             options=bulk_options,
             kpoints_spacing=kpoints_spacing,
@@ -290,7 +301,7 @@ def core_workgraph(
 
         metal_vasp = VaspTask(
             structure=metal_struct,
-            code=code,
+            code=metal_code,
             parameters={'incar': metal_parameters},
             options=metal_options,
             kpoints_spacing=kpoints_spacing,
@@ -308,7 +319,7 @@ def core_workgraph(
 
             nonmetal_vasp = VaspTask(
                 structure=nonmetal_struct,
-                code=code,
+                code=nonmetal_code,
                 parameters={'incar': nonmetal_parameters},
                 options=nonmetal_options,
                 kpoints_spacing=kpoints_spacing,
@@ -329,7 +340,7 @@ def core_workgraph(
 
         oxygen_vasp = VaspTask(
             structure=oxygen_struct,
-            code=code,
+            code=oxygen_code,
             parameters={'incar': oxygen_parameters},
             options=oxygen_options,
             kpoints_spacing=kpoints_spacing,
@@ -580,6 +591,10 @@ def build_core_workgraph(
     code_label: str = 'VASP-VTST-6.4.3@bohr',
     calculator: str = 'vasp',  # NEW: 'vasp' or 'cp2k'
     aimd_code_label: str = None,  # NEW: Optional separate code for AIMD
+    bulk_code_label: str = None,  # NEW: Optional separate code for bulk calculations
+    metal_code_label: str = None,  # NEW: Optional separate code for metal reference
+    nonmetal_code_label: str = None,  # NEW: Optional separate code for nonmetal reference
+    oxygen_code_label: str = None,  # NEW: Optional separate code for oxygen reference
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
     kpoints_spacing: float = 0.4,
@@ -712,6 +727,15 @@ def build_core_workgraph(
         structures_dir: Directory containing structure files
         bulk_name: Filename of bulk structure (e.g., 'ag3po4.cif')
         code_label: VASP code label in AiiDA. Default: 'VASP-VTST-6.4.3@bohr'
+                   Used for slab calculations and as fallback for references.
+        bulk_code_label: Optional separate VASP code for bulk calculations.
+                        Default: None (uses code_label)
+        metal_code_label: Optional separate VASP code for metal reference.
+                         Default: None (uses code_label)
+        nonmetal_code_label: Optional separate VASP code for nonmetal reference.
+                            Default: None (uses code_label)
+        oxygen_code_label: Optional separate VASP code for oxygen reference.
+                          Default: None (uses code_label)
         potential_family: Potential family name. Default: 'PBE'
         bulk_potential_mapping: Element to potential mapping for bulk (e.g., {'Ag': 'Ag', 'P': 'P', 'O': 'O'})
         kpoints_spacing: K-points spacing in A^-1 * 2pi. Default: 0.3
@@ -1169,6 +1193,10 @@ def build_core_workgraph(
         structures_dir=structures_dir,
         bulk_name=bulk_name,
         code_label=code_label,
+        bulk_code_label=bulk_code_label,
+        metal_code_label=metal_code_label,
+        nonmetal_code_label=nonmetal_code_label,
+        oxygen_code_label=oxygen_code_label,
         potential_family=potential_family,
         bulk_potential_mapping=bulk_potential_mapping or {},
         kpoints_spacing=kpoints_spacing,
