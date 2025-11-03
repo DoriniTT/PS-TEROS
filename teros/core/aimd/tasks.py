@@ -7,22 +7,21 @@ from aiida_workgraph import task
 def create_supercell(
     structure: orm.StructureData,
     spec: list[int]
-) -> orm.StructureData:
+):
     """
     Create supercell using pymatgen.
 
-    When running as AiiDA task, structure is automatically unpacked to ASE Atoms.
-    We convert ASE -> pymatgen -> supercell -> ASE -> StructureData.
+    When running as AiiDA PythonJob, structure is unpacked to ASE Atoms.
+    We return ASE Atoms, which pythonjob automatically converts to StructureData.
 
     Args:
         structure: Input structure (unpacked to ASE Atoms in execution)
         spec: [nx, ny, nz] supercell dimensions
 
     Returns:
-        Supercell StructureData
+        ASE Atoms object (auto-converted to StructureData by pythonjob)
     """
     from pymatgen.io.ase import AseAtomsAdaptor
-    from aiida import orm
 
     # When running in AiiDA, structure is unpacked to ASE Atoms
     # Convert ASE -> pymatgen
@@ -32,8 +31,8 @@ def create_supercell(
     # Create supercell
     pmg_supercell = pmg_struct * spec
 
-    # Convert back: pymatgen -> ASE -> StructureData
+    # Convert back: pymatgen -> ASE
+    # PythonJob will automatically convert ASE Atoms to StructureData
     ase_supercell = adaptor.get_atoms(pmg_supercell)
-    supercell_data = orm.StructureData(ase=ase_supercell)
 
-    return supercell_data
+    return ase_supercell
