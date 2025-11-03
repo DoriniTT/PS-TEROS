@@ -183,7 +183,7 @@ def aimd_single_stage_scatter(
     # Scatter: create AIMD task for each slab (runs in parallel)
     for slab_label, slab_structure in slabs.items():
         # Prepare parameters for this stage
-        stage_params = prepare_aimd_parameters(aimd_parameters, temperature, steps)
+        stage_params = prepare_aimd_parameters(base_aimd_parameters, temperature, steps)
 
         # Build VASP inputs
         vasp_inputs = {
