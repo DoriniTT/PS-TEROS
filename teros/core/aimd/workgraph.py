@@ -73,16 +73,25 @@ def build_aimd_workgraph(
         code_label: VASP code label (e.g., 'VASP6.5.0@cluster02')
         builder_inputs: Default builder config for all (structure, stage) combinations
         supercell_specs: {structure_name: [nx, ny, nz]} - optional supercell per structure
-        structure_overrides: {structure_name: builder_inputs} - override per structure
-        stage_overrides: {stage_idx: builder_inputs} - override per stage (0-indexed)
-        matrix_overrides: {(structure_name, stage_idx): builder_inputs} - specific overrides
+        structure_overrides: NOT IMPLEMENTED - reserved for future use
+        stage_overrides: NOT IMPLEMENTED - reserved for future use
+        matrix_overrides: NOT IMPLEMENTED - reserved for future use
         max_concurrent_jobs: Limit parallel VASP calculations (None = unlimited)
         name: WorkGraph name
 
     Returns:
         WorkGraph ready to submit
 
-    Override priority: matrix_overrides > stage_overrides > structure_overrides > builder_inputs
+    CURRENT LIMITATIONS:
+        The structure_overrides, stage_overrides, and matrix_overrides parameters
+        are accepted but NOT FUNCTIONAL in this version. All structures in all stages
+        use the same builder_inputs.
+
+        This is because aimd_single_stage_scatter() currently accepts a single
+        aimd_parameters dict for all structures, not per-structure parameters.
+
+        To implement full override support, aimd_single_stage_scatter() must be
+        modified to accept per-structure builder configurations.
 
     Example:
         wg = build_aimd_workgraph(
@@ -156,7 +165,8 @@ def build_aimd_workgraph(
             prepared_structures[struct_name] = struct
 
     # 2. Run sequential AIMD stages
-    from teros.core.aimd import aimd_single_stage_scatter
+    # Import here to avoid circular import (aimd_single_stage_scatter is in parent aimd.py)
+    from . import aimd_single_stage_scatter
 
     stage_results = {}
     current_structures = prepared_structures
@@ -166,11 +176,14 @@ def build_aimd_workgraph(
         temperature = stage_config['temperature']
         steps = stage_config['steps']
 
-        # Build merged builder inputs for each structure in this stage
-        # Note: We need to pass same parameters to all structures in one scatter call,
-        # but aimd_single_stage_scatter expects uniform parameters.
-        # For now, use base builder_inputs (per-structure customization requires
-        # calling aimd_single_stage_scatter separately per structure or modifying it)
+        # TODO: Implement per-structure override system
+        # Currently, all structures use the same builder_inputs.
+        # To implement overrides, need to either:
+        #   1. Modify aimd_single_stage_scatter to accept per-structure parameters, OR
+        #   2. Call aimd_single_stage_scatter separately for each structure
+        #
+        # The helper function _get_builder_for_structure_stage() is ready to use
+        # once the underlying scatter function supports per-structure configuration.
 
         # Load code
         code = orm.load_code(code_label)
