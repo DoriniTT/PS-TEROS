@@ -100,6 +100,7 @@ def core_workgraph(
     metal_code_label: str = None,
     nonmetal_code_label: str = None,
     oxygen_code_label: str = None,
+    slab_code_label: str = None,
     potential_family: str = None,
     bulk_potential_mapping: dict = None,
     kpoints_spacing: float = 0.4,
@@ -125,6 +126,8 @@ def core_workgraph(
     slab_options: dict = None,
     slab_potential_mapping: dict = None,
     slab_kpoints_spacing: float = None,
+    slab_relax_builder_inputs: dict = None,
+    slab_scf_builder_inputs: dict = None,
     lll_reduce: bool = True,
     center_slab: bool = True,
     symmetrize: bool = True,
@@ -254,7 +257,7 @@ def core_workgraph(
           are added in build_core_workgraph when compute_electronic_properties_bulk=True
     """
     # Load the codes
-    # Slab code (main code)
+    # Main code (fallback for all)
     code = orm.load_code(code_label)
 
     # Reference codes (use specific codes if provided, otherwise fall back to main code)
@@ -262,6 +265,7 @@ def core_workgraph(
     metal_code = orm.load_code(metal_code_label) if metal_code_label else code
     nonmetal_code = orm.load_code(nonmetal_code_label) if nonmetal_code_label else code
     oxygen_code = orm.load_code(oxygen_code_label) if oxygen_code_label else code
+    slab_code = orm.load_code(slab_code_label) if slab_code_label else code
 
     # Get VASP workchain and wrap it as a task
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
@@ -429,7 +433,7 @@ def core_workgraph(
         if compute_relaxation_energy:
             scf_outputs = scf_slabs_scatter(
                 slabs=slab_namespace,
-                code=code,
+                code=slab_code,  # Use slab_code
                 potential_family=potential_family,
                 potential_mapping=slab_pot_map,
                 parameters=slab_params,
@@ -437,6 +441,7 @@ def core_workgraph(
                 kpoints_spacing=slab_kpts,
                 clean_workdir=clean_workdir,
                 max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
+                scf_builder_inputs=slab_scf_builder_inputs,  # NEW
             )
             unrelaxed_slab_energies_output = scf_outputs.energies
             unrelaxed_slab_remote_output = scf_outputs.remote_folders
@@ -444,7 +449,7 @@ def core_workgraph(
         # ALWAYS: Relax slabs
         relaxation_outputs = relax_slabs_scatter(
             slabs=slab_namespace,
-            code=code,
+            code=slab_code,  # Use slab_code
             potential_family=potential_family,
             potential_mapping=slab_pot_map,
             parameters=slab_params,
@@ -452,6 +457,7 @@ def core_workgraph(
             kpoints_spacing=slab_kpts,
             clean_workdir=clean_workdir,
             max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
+            relax_builder_inputs=slab_relax_builder_inputs,  # NEW
         )
 
         relaxed_slabs_output = relaxation_outputs.relaxed_structures
@@ -595,6 +601,7 @@ def build_core_workgraph(
     metal_code_label: str = None,  # NEW: Optional separate code for metal reference
     nonmetal_code_label: str = None,  # NEW: Optional separate code for nonmetal reference
     oxygen_code_label: str = None,  # NEW: Optional separate code for oxygen reference
+    slab_code_label: str = None,  # NEW: Optional separate code for slab calculations
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
     kpoints_spacing: float = 0.4,
@@ -620,6 +627,9 @@ def build_core_workgraph(
     slab_options: dict = None,
     slab_potential_mapping: dict = None,
     slab_kpoints_spacing: float = None,
+    # NEW: Slab builder inputs (full control over VASP builder)
+    slab_relax_builder_inputs: dict = None,  # Builder inputs for slab relaxation
+    slab_scf_builder_inputs: dict = None,  # Builder inputs for slab SCF (unrelaxed)
     lll_reduce: bool = True,
     center_slab: bool = True,
     symmetrize: bool = True,
@@ -736,6 +746,8 @@ def build_core_workgraph(
                             Default: None (uses code_label)
         oxygen_code_label: Optional separate VASP code for oxygen reference.
                           Default: None (uses code_label)
+        slab_code_label: Optional separate VASP code for slab calculations.
+                        Default: None (uses code_label)
         potential_family: Potential family name. Default: 'PBE'
         bulk_potential_mapping: Element to potential mapping for bulk (e.g., {'Ag': 'Ag', 'P': 'P', 'O': 'O'})
         kpoints_spacing: K-points spacing in A^-1 * 2pi. Default: 0.3
@@ -763,6 +775,14 @@ def build_core_workgraph(
         slab_options: Scheduler options for slabs. Default: None (uses bulk_options)
         slab_potential_mapping: Potential mapping for slabs. Default: None (uses bulk_potential_mapping)
         slab_kpoints_spacing: K-points spacing for slabs. Default: None (uses kpoints_spacing)
+        slab_relax_builder_inputs: Dict of builder parameters for slab relaxation (full control).
+                                  Format: {'parameters': {'incar': {...}}, 'options': {...}, 'kpoints_spacing': 0.2, ...}
+                                  If provided, overrides slab_parameters, slab_options, slab_kpoints_spacing.
+                                  Default: None
+        slab_scf_builder_inputs: Dict of builder parameters for slab SCF (unrelaxed energy, full control).
+                                Format: {'parameters': {'incar': {...}}, 'options': {...}, 'kpoints_spacing': 0.2, ...}
+                                If provided, overrides slab_parameters, slab_options, slab_kpoints_spacing.
+                                Default: None
 
         relax_slabs: Relax generated slabs. Default: None (controlled by preset)
         compute_thermodynamics: Compute surface energies (requires metal_name and oxygen_name). Default: None (controlled by preset)
@@ -1197,6 +1217,7 @@ def build_core_workgraph(
         metal_code_label=metal_code_label,
         nonmetal_code_label=nonmetal_code_label,
         oxygen_code_label=oxygen_code_label,
+        slab_code_label=slab_code_label,
         potential_family=potential_family,
         bulk_potential_mapping=bulk_potential_mapping or {},
         kpoints_spacing=kpoints_spacing,
@@ -1222,6 +1243,8 @@ def build_core_workgraph(
         slab_options=slab_options,
         slab_potential_mapping=slab_potential_mapping,
         slab_kpoints_spacing=slab_kpoints_spacing,
+        slab_relax_builder_inputs=slab_relax_builder_inputs,
+        slab_scf_builder_inputs=slab_scf_builder_inputs,
         lll_reduce=lll_reduce,
         center_slab=center_slab,
         symmetrize=symmetrize,
@@ -1273,8 +1296,8 @@ def build_core_workgraph(
         from teros.core.thermodynamics import identify_oxide_type, compute_surface_energies_scatter
         from aiida.orm import Code, load_code
 
-        # Get code
-        code = load_code(code_label)
+        # Get code (use slab_code_label if provided, otherwise code_label)
+        code = load_code(slab_code_label if slab_code_label else code_label)
 
         # Get parameters
         slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
@@ -1367,7 +1390,7 @@ def build_core_workgraph(
                 scf_slabs_scatter,
                 name='scf_slabs_scatter',
                 slabs=input_slabs,
-                code=code,
+                code=slab_code,  # Use slab_code
                 potential_family=potential_family,
                 potential_mapping=slab_pot_map,
                 parameters=slab_params,
@@ -1375,12 +1398,13 @@ def build_core_workgraph(
                 kpoints_spacing=slab_kpts,
                 clean_workdir=clean_workdir,
                 max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
+                scf_builder_inputs=slab_scf_builder_inputs,  # NEW
             )
 
             # Step 2: Add relaxation task
             scatter_task_inputs = {
                 'slabs': input_slabs,
-                'code': code,
+                'code': slab_code,  # Use slab_code
                 'potential_family': potential_family,
                 'potential_mapping': slab_pot_map,
                 'parameters': slab_params,
@@ -1388,6 +1412,7 @@ def build_core_workgraph(
                 'kpoints_spacing': slab_kpts,
                 'clean_workdir': clean_workdir,
                 'max_number_jobs': orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
+                'relax_builder_inputs': slab_relax_builder_inputs,  # NEW
             }
 
             scatter_task = wg.add_task(
@@ -1973,6 +1998,8 @@ def build_core_workgraph_with_map(
         slab_options=slab_options,
         slab_potential_mapping=slab_potential_mapping,
         slab_kpoints_spacing=slab_kpoints_spacing,
+        slab_relax_builder_inputs=slab_relax_builder_inputs,
+        slab_scf_builder_inputs=slab_scf_builder_inputs,
         lll_reduce=lll_reduce,
         center_slab=center_slab,
         symmetrize=symmetrize,

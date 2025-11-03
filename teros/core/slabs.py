@@ -377,6 +377,8 @@ def scf_slabs_scatter(
     kpoints_spacing: float | None = None,
     clean_workdir: bool = True,
     max_number_jobs: int = None,
+    # NEW: Builder inputs (full control over VASP builder)
+    scf_builder_inputs: dict | None = None,
 ) -> t.Annotated[dict, namespace(energies=dynamic(orm.Float), remote_folders=dynamic(orm.RemoteData))]:
     """
     Scatter-gather phase: perform SCF calculations on unrelaxed slab structures in parallel.
@@ -390,11 +392,16 @@ def scf_slabs_scatter(
         code: AiiDA code for VASP
         potential_family: Pseudopotential family
         potential_mapping: Element to potential mapping
-        parameters: VASP parameters (NSW and IBRION will be overridden)
-        options: Computation resources
-        kpoints_spacing: K-points spacing (optional)
+        parameters: VASP parameters (old-style, NSW and IBRION will be overridden)
+        options: Computation resources (old-style)
+        kpoints_spacing: K-points spacing (optional, old-style)
         clean_workdir: Whether to clean remote directories
         max_number_jobs: Maximum number of concurrent VASP calculations (optional)
+        scf_builder_inputs: Dict of builder parameters for full control over VASP.
+                           Format: {'parameters': {'incar': {...}}, 'options': {...}, 'kpoints_spacing': 0.2, ...}
+                           NSW and IBRION will be overridden to 0 and -1 respectively.
+                           If provided, overrides parameters, options, kpoints_spacing.
+                           Default: None
 
     Returns:
         Dictionary with energies and remote_folders namespaces
@@ -413,25 +420,40 @@ def scf_slabs_scatter(
     energies_ns: dict[str, orm.Float] = {}
     remote_folders: dict[str, orm.RemoteData] = {}
 
+    # NEW: Use builder_inputs if provided (full control), otherwise use old-style params
+    if scf_builder_inputs is not None:
+        # New-style: extract from builder_inputs
+        actual_params = scf_builder_inputs.get('parameters', {'incar': dict(parameters)})
+        if 'incar' not in actual_params:
+            # Assume the dict IS the INCAR
+            actual_params = {'incar': actual_params}
+        actual_options = scf_builder_inputs.get('options', dict(options))
+        actual_kpoints = scf_builder_inputs.get('kpoints_spacing', kpoints_spacing)
+    else:
+        # Old-style: use provided params
+        actual_params = {'incar': dict(parameters)}
+        actual_options = dict(options)
+        actual_kpoints = kpoints_spacing
+
     # Scatter: create independent SCF tasks for each slab (runs in parallel)
     for label, structure in slabs.items():
         # Create SCF parameters by overriding NSW and IBRION
-        scf_params = dict(parameters)
+        scf_params = dict(actual_params['incar'])
         scf_params['NSW'] = 0
         scf_params['IBRION'] = -1
-        
+
         inputs: dict[str, t.Any] = {
             'structure': structure,
             'code': code,
             'parameters': {'incar': scf_params},
-            'options': dict(options),
+            'options': actual_options,
             'potential_family': potential_family,
             'potential_mapping': dict(potential_mapping),
             'clean_workdir': clean_workdir,
             'settings': orm.Dict(dict=get_settings()),
         }
-        if kpoints_spacing is not None:
-            inputs['kpoints_spacing'] = kpoints_spacing
+        if actual_kpoints is not None:
+            inputs['kpoints_spacing'] = actual_kpoints
         
         scf_calc = scf_task_cls(**inputs)
         energies_ns[label] = extract_total_energy(energies=scf_calc.misc).result
@@ -456,6 +478,8 @@ def relax_slabs_scatter(
     clean_workdir: bool = True,
     restart_folders: dict = None,
     max_number_jobs: int = None,
+    # NEW: Builder inputs (full control over VASP builder)
+    relax_builder_inputs: dict | None = None,
 ) -> t.Annotated[dict, namespace(relaxed_structures=dynamic(orm.StructureData), energies=dynamic(orm.Float), remote_folders=dynamic(orm.RemoteData))]:
     """
     Scatter-gather phase: relax each slab structure in parallel.
@@ -470,14 +494,18 @@ def relax_slabs_scatter(
         code: AiiDA code for VASP
         potential_family: Pseudopotential family
         potential_mapping: Element to potential mapping
-        parameters: VASP parameters
-        options: Computation resources
-        kpoints_spacing: K-points spacing (optional)
+        parameters: VASP parameters (old-style, for backward compat)
+        options: Computation resources (old-style, for backward compat)
+        kpoints_spacing: K-points spacing (optional, old-style)
         clean_workdir: Whether to clean remote directories
         restart_folders: Dictionary of RemoteData nodes for restarting calculations (optional).
                         Keys must match slab labels (e.g., 'term_0', 'term_1').
                         If provided, calculations will restart from these remote folders.
         max_number_jobs: Maximum number of concurrent VASP calculations (optional)
+        relax_builder_inputs: Dict of builder parameters for full control over VASP.
+                             Format: {'parameters': {'incar': {...}}, 'options': {...}, 'kpoints_spacing': 0.2, ...}
+                             If provided, overrides parameters, options, kpoints_spacing.
+                             Default: None
 
     Returns:
         Dictionary with relaxed_structures, energies, and remote_folders namespaces
@@ -497,20 +525,35 @@ def relax_slabs_scatter(
     energies_ns: dict[str, orm.Float] = {}
     remote_folders: dict[str, orm.RemoteData] = {}
 
+    # NEW: Use builder_inputs if provided (full control), otherwise use old-style params
+    if relax_builder_inputs is not None:
+        # New-style: extract from builder_inputs
+        actual_params = relax_builder_inputs.get('parameters', {'incar': dict(parameters)})
+        if 'incar' not in actual_params:
+            # Assume the dict IS the INCAR
+            actual_params = {'incar': actual_params}
+        actual_options = relax_builder_inputs.get('options', dict(options))
+        actual_kpoints = relax_builder_inputs.get('kpoints_spacing', kpoints_spacing)
+    else:
+        # Old-style: use provided params
+        actual_params = {'incar': dict(parameters)}
+        actual_options = dict(options)
+        actual_kpoints = kpoints_spacing
+
     # Scatter: create independent tasks for each slab (runs in parallel)
     for label, structure in slabs.items():
         inputs: dict[str, t.Any] = {
             'structure': structure,
             'code': code,
-            'parameters': {'incar': dict(parameters)},
-            'options': dict(options),
+            'parameters': actual_params,
+            'options': actual_options,
             'potential_family': potential_family,
             'potential_mapping': dict(potential_mapping),
             'clean_workdir': clean_workdir,
             'settings': orm.Dict(dict=get_settings()),
         }
-        if kpoints_spacing is not None:
-            inputs['kpoints_spacing'] = kpoints_spacing
+        if actual_kpoints is not None:
+            inputs['kpoints_spacing'] = actual_kpoints
         
         # Add restart_folder if provided for this slab
         if restart_folders is not None and label in restart_folders:
