@@ -14,7 +14,8 @@ def test_create_supercell_basic():
     structure = orm.StructureData(ase=atoms)
 
     # Create 2x2x1 supercell
-    supercell = create_supercell._callable(structure, [2, 2, 1])
+    # Pass ASE Atoms (simulating how AiiDA unpacks StructureData)
+    supercell = create_supercell._callable(structure.get_ase(), [2, 2, 1])
 
     # Check result
     assert isinstance(supercell, orm.StructureData)
@@ -33,6 +34,6 @@ def test_create_supercell_3x3x2():
     atoms = bulk('Fe', 'bcc', a=2.87)
     structure = orm.StructureData(ase=atoms)
 
-    supercell = create_supercell._callable(structure, [3, 3, 2])
+    supercell = create_supercell._callable(structure.get_ase(), [3, 3, 2])
 
     assert len(supercell.sites) == len(structure.sites) * 18  # 3*3*2

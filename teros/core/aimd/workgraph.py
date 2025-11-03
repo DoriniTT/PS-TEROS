@@ -170,7 +170,7 @@ def build_aimd_workgraph(
 
     stage_results = {}
     current_structures = prepared_structures
-    current_remote_folders = None
+    current_remote_folders = {}  # Empty dict, will be populated after first stage
 
     for stage_idx, stage_config in enumerate(aimd_stages):
         temperature = stage_config['temperature']
@@ -208,25 +208,18 @@ def build_aimd_workgraph(
             options=builder_inputs.get('options', {}),
             kpoints_spacing=builder_inputs.get('kpoints_spacing', 0.5),
             clean_workdir=builder_inputs.get('clean_workdir', False),
-            restart_folders=current_remote_folders if current_remote_folders else {},
+            restart_folders=current_remote_folders,  # Empty {} on first stage, Socket on later stages
             max_number_jobs=max_concurrent_jobs,
             name=f'stage_{stage_idx}_aimd',
         )
-
-        # Store results for this stage
-        stage_results[stage_idx] = {
-            'structures': stage_task.outputs.structures,
-            'energies': stage_task.outputs.energies,
-            'remote_folders': stage_task.outputs.remote_folders,
-        }
 
         # Update for next stage
         current_structures = stage_task.outputs.structures
         current_remote_folders = stage_task.outputs.remote_folders
 
-    # 3. Set workgraph outputs
-    wg.add_output('results', stage_results)
-    if supercell_outputs:
-        wg.add_output('supercells', supercell_outputs)
+    # Note: We don't expose outputs explicitly because they're nested dicts of Sockets
+    # Users can access results through the WorkGraph node after completion:
+    #   wg_node = orm.load_node(wg.pk)
+    #   results = wg_node.outputs
 
     return wg

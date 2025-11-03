@@ -40,7 +40,7 @@ def main():
 
     # Load AiiDA profile
     print("\n1. Loading AiiDA profile...")
-    load_profile(profile='psteros')
+    load_profile(profile='presto')
     print("   ✓ Profile loaded")
 
     # Setup paths
@@ -60,8 +60,8 @@ def main():
     print(f"     - Structure 1: {len(ag_structure1.sites)} atoms")
     print(f"     - Structure 2: {len(ag_structure2.sites)} atoms")
 
-    # Code configuration
-    code_label = 'VASP6.5.0@cluster02'
+    # Code configuration (use the code with 24 processors from cluster02)
+    code_label = 'VASP6.5.0@cluster02'  # No dash between VASP and version
     potential_family = 'PBE'
 
     print(f"\n3. VASP configuration:")
