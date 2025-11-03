@@ -90,3 +90,40 @@ def merge_builder_inputs(base: dict, override: dict) -> dict:
             result[key] = deepcopy(value)
 
     return result
+
+
+def organize_aimd_results(node) -> dict:
+    """
+    Organize AIMD workflow results into user-friendly format.
+
+    Args:
+        node: Completed WorkGraph node
+
+    Returns:
+        {
+            'summary': {
+                'total_structures': int,
+                'total_stages': int,
+                'successful': int,
+                'failed': int,
+            },
+            'results': {
+                structure_name: [
+                    {
+                        'stage': 0,
+                        'temperature': float,
+                        'steps': int,
+                        'energy': float,
+                        'structure_pk': int,
+                        'trajectory_pk': int,
+                    },
+                    ...
+                ]
+            },
+            'failed_calculations': [
+                {'structure': str, 'stage': int, 'error': str},
+            ],
+        }
+    """
+    # TODO: Implementation in next task
+    pass
