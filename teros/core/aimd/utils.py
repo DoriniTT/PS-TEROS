@@ -1,4 +1,5 @@
 """Utility functions for AIMD module."""
+from copy import deepcopy
 
 
 def validate_stage_sequence(stages: list[dict]) -> None:
@@ -56,3 +57,36 @@ def validate_supercell_spec(spec: list[int]) -> None:
                 f"Supercell spec elements must be positive integers, "
                 f"element {idx} is {val}"
             )
+
+
+def merge_builder_inputs(base: dict, override: dict) -> dict:
+    """
+    Deep merge override into base builder inputs.
+
+    Nested dicts are recursively merged.
+    Non-dict values in override replace base values.
+    Returns new dict (base and override unchanged).
+
+    Args:
+        base: Base builder inputs
+        override: Override builder inputs
+
+    Returns:
+        Merged builder inputs
+
+    Example:
+        base = {'parameters': {'incar': {'ENCUT': 400, 'PREC': 'Normal'}}}
+        override = {'parameters': {'incar': {'ENCUT': 500}}}
+        result = {'parameters': {'incar': {'ENCUT': 500, 'PREC': 'Normal'}}}
+    """
+    result = deepcopy(base)
+
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            # Both are dicts: recursively merge
+            result[key] = merge_builder_inputs(result[key], value)
+        else:
+            # Override wins
+            result[key] = deepcopy(value)
+
+    return result
