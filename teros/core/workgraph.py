@@ -1657,7 +1657,7 @@ def build_core_workgraph(
 
         # Import appropriate scatter function based on calculator
         if calculator == 'vasp':
-            from teros.core.aimd import aimd_single_stage_scatter
+            from teros.core.aimd_functions import aimd_single_stage_scatter
             aimd_scatter_func = aimd_single_stage_scatter
         elif calculator == 'cp2k':
             from teros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k

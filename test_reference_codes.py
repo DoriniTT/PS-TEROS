@@ -69,12 +69,13 @@ def main():
     }
 
     # Build workgraph with separate codes
-    print("\n3. Building workgraph with separate reference codes...")
-    print("   Slab code:     VASP-6.5.0@lovelace-par128 (128 cores)")
+    print("\n3. Building workgraph with separate codes for all calculations...")
+    print("   Default code:  VASP-6.5.0@lovelace-par128")
     print("   Bulk code:     VASP-6.5.0@bohr-new (40 cores)")
     print("   Metal code:    VASP-6.5.0@bohr-new (40 cores)")
     print("   Nonmetal code: VASP-6.5.0@bohr-new (40 cores)")
     print("   Oxygen code:   VASP-6.5.0@bohr-new (40 cores)")
+    print("   Slab code:     VASP-6.5.0@lovelace-par128 (128 cores)")
 
     try:
         wg = build_core_workgraph(
@@ -91,12 +92,13 @@ def main():
             nonmetal_name='p_black.cif',
             oxygen_name='o2.cif',
 
-            # NEW: Separate code labels for references
-            code_label='VASP-6.5.0@lovelace-par128',  # Slabs
+            # NEW: Separate code labels for all calculations
+            code_label='VASP-6.5.0@lovelace-par128',  # Default
             bulk_code_label='VASP-6.5.0@bohr-new',    # Bulk
             metal_code_label='VASP-6.5.0@bohr-new',   # Metal
             nonmetal_code_label='VASP-6.5.0@bohr-new', # Nonmetal
             oxygen_code_label='VASP-6.5.0@bohr-new',  # Oxygen
+            slab_code_label='VASP-6.5.0@lovelace-par128',  # Slabs
 
             potential_family='PBE',
             kpoints_spacing=0.04,

@@ -6,8 +6,8 @@ This module provides standalone AIMD functionality with full control over:
 - Restart chaining between stages
 - Concurrency control with max_concurrent_jobs
 
-NOTE: This package (aimd/) coexists with teros.core.aimd module (aimd.py).
-      aimd_single_stage_scatter must be imported directly from parent where needed.
+NOTE: This package reuses aimd_single_stage_scatter from teros.core.aimd_functions
+      for compatibility with the main workflow system.
 """
 
 # Import from the standalone module

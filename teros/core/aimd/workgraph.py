@@ -165,19 +165,8 @@ def build_aimd_workgraph(
             prepared_structures[struct_name] = struct
 
     # 2. Run sequential AIMD stages
-    # Import aimd_single_stage_scatter from parent aimd.py module
-    # Due to naming conflict (aimd.py vs aimd/ package), we load it explicitly
-    import sys
-    from pathlib import Path
-    import importlib.util
-
-    # Load parent aimd.py module with importable name
-    aimd_file_path = Path(__file__).parent.parent / 'aimd.py'
-    spec = importlib.util.spec_from_file_location('teros.core.aimd_module', str(aimd_file_path))
-    aimd_module = importlib.util.module_from_spec(spec)
-    sys.modules['teros.core.aimd_module'] = aimd_module  # Register in sys.modules for serialization
-    spec.loader.exec_module(aimd_module)
-    aimd_single_stage_scatter = aimd_module.aimd_single_stage_scatter
+    # Import aimd_single_stage_scatter from parent aimd_functions module
+    from teros.core.aimd_functions import aimd_single_stage_scatter
 
     stage_results = {}
     current_structures = prepared_structures
