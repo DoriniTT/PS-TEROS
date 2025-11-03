@@ -442,6 +442,7 @@ def core_workgraph(
                 clean_workdir=clean_workdir,
                 max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
                 scf_builder_inputs=slab_scf_builder_inputs,  # NEW
+                structure_specific_scf_builder_inputs=structure_specific_scf_builder_inputs,  # NEW
             )
             unrelaxed_slab_energies_output = scf_outputs.energies
             unrelaxed_slab_remote_output = scf_outputs.remote_folders
@@ -458,6 +459,7 @@ def core_workgraph(
             clean_workdir=clean_workdir,
             max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
             relax_builder_inputs=slab_relax_builder_inputs,  # NEW
+            structure_specific_relax_builder_inputs=structure_specific_relax_builder_inputs,  # NEW
         )
 
         relaxed_slabs_output = relaxation_outputs.relaxed_structures
@@ -630,6 +632,8 @@ def build_core_workgraph(
     # NEW: Slab builder inputs (full control over VASP builder)
     slab_relax_builder_inputs: dict = None,  # Builder inputs for slab relaxation
     slab_scf_builder_inputs: dict = None,  # Builder inputs for slab SCF (unrelaxed)
+    structure_specific_relax_builder_inputs: dict = None,  # Per-slab overrides for relaxation
+    structure_specific_scf_builder_inputs: dict = None,  # Per-slab overrides for SCF
     lll_reduce: bool = True,
     center_slab: bool = True,
     symmetrize: bool = True,
@@ -1399,6 +1403,7 @@ def build_core_workgraph(
                 clean_workdir=clean_workdir,
                 max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
                 scf_builder_inputs=slab_scf_builder_inputs,  # NEW
+                structure_specific_scf_builder_inputs=structure_specific_scf_builder_inputs,  # NEW
             )
 
             # Step 2: Add relaxation task
@@ -1413,6 +1418,7 @@ def build_core_workgraph(
                 'clean_workdir': clean_workdir,
                 'max_number_jobs': orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
                 'relax_builder_inputs': slab_relax_builder_inputs,  # NEW
+                'structure_specific_relax_builder_inputs': structure_specific_relax_builder_inputs,  # NEW
             }
 
             scatter_task = wg.add_task(

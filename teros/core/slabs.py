@@ -5,6 +5,7 @@ This module provides functions to generate surface slabs from bulk structures
 using Pymatgen's SlabGenerator with scatter-gather pattern for parallel relaxation.
 """
 
+import copy
 import typing as t
 from aiida import orm
 from aiida.plugins import WorkflowFactory
@@ -12,6 +13,39 @@ from aiida_workgraph import task, namespace, dynamic
 from pymatgen.core.surface import SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+
+
+def deep_merge_dicts(base: dict, override: dict) -> dict:
+    """
+    Deep merge override dict into base dict.
+
+    For nested dicts, recursively merges. For other values, override replaces base.
+
+    Args:
+        base: Base dictionary
+        override: Override dictionary (values take precedence)
+
+    Returns:
+        Merged dictionary
+
+    Example:
+        >>> base = {'a': 1, 'b': {'c': 2, 'd': 3}}
+        >>> override = {'b': {'c': 99}, 'e': 5}
+        >>> result = deep_merge_dicts(base, override)
+        >>> result
+        {'a': 1, 'b': {'c': 99, 'd': 3}, 'e': 5}
+    """
+    result = copy.deepcopy(base)
+
+    for key, value in override.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            # Recursively merge nested dicts
+            result[key] = deep_merge_dicts(result[key], value)
+        else:
+            # Override value
+            result[key] = copy.deepcopy(value)
+
+    return result
 
 
 def extract_restart_folders_from_node(node_pk: int) -> dict[str, orm.RemoteData]:
@@ -379,6 +413,7 @@ def scf_slabs_scatter(
     max_number_jobs: int = None,
     # NEW: Builder inputs (full control over VASP builder)
     scf_builder_inputs: dict | None = None,
+    structure_specific_scf_builder_inputs: dict | None = None,
 ) -> t.Annotated[dict, namespace(energies=dynamic(orm.Float), remote_folders=dynamic(orm.RemoteData))]:
     """
     Scatter-gather phase: perform SCF calculations on unrelaxed slab structures in parallel.
@@ -402,6 +437,13 @@ def scf_slabs_scatter(
                            NSW and IBRION will be overridden to 0 and -1 respectively.
                            If provided, overrides parameters, options, kpoints_spacing.
                            Default: None
+        structure_specific_scf_builder_inputs: Per-slab overrides for SCF calculations (NEW)
+                                              Dict mapping slab indices to builder dicts
+                                              Uses deep merge - only specified parameters are overridden
+                                              Format: {0: {'parameters': {'incar': {'ALGO': 'Normal'}}},
+                                                       1: {'parameters': {'incar': {'ALGO': 'Fast'}}}, ...}
+                                              Example: Override ALGO for term_0 and term_1
+                                              Default: None
 
     Returns:
         Dictionary with energies and remote_folders namespaces
@@ -416,46 +458,67 @@ def scf_slabs_scatter(
 
     vasp_wc = WorkflowFactory('vasp.v2.vasp')
     scf_task_cls = task(vasp_wc)
-    
+
     energies_ns: dict[str, orm.Float] = {}
     remote_folders: dict[str, orm.RemoteData] = {}
 
-    # NEW: Use builder_inputs if provided (full control), otherwise use old-style params
+    # Build default SCF builder inputs (base for all slabs)
     if scf_builder_inputs is not None:
-        # New-style: extract from builder_inputs
-        actual_params = scf_builder_inputs.get('parameters', {'incar': dict(parameters)})
-        if 'incar' not in actual_params:
-            # Assume the dict IS the INCAR
-            actual_params = {'incar': actual_params}
-        actual_options = scf_builder_inputs.get('options', dict(options))
-        actual_kpoints = scf_builder_inputs.get('kpoints_spacing', kpoints_spacing)
+        # New-style: use builder_inputs as base
+        default_scf_builder = copy.deepcopy(scf_builder_inputs)
     else:
-        # Old-style: use provided params
-        actual_params = {'incar': dict(parameters)}
-        actual_options = dict(options)
-        actual_kpoints = kpoints_spacing
-
-    # Scatter: create independent SCF tasks for each slab (runs in parallel)
-    for label, structure in slabs.items():
-        # Create SCF parameters by overriding NSW and IBRION
-        scf_params = dict(actual_params['incar'])
-        scf_params['NSW'] = 0
-        scf_params['IBRION'] = -1
-
-        inputs: dict[str, t.Any] = {
-            'structure': structure,
-            'code': code,
-            'parameters': {'incar': scf_params},
-            'options': actual_options,
+        # Old-style: construct from parameters/options
+        default_scf_builder = {
+            'parameters': {'incar': dict(parameters)},
+            'options': dict(options),
             'potential_family': potential_family,
             'potential_mapping': dict(potential_mapping),
             'clean_workdir': clean_workdir,
             'settings': orm.Dict(dict=get_settings()),
         }
-        if actual_kpoints is not None:
-            inputs['kpoints_spacing'] = actual_kpoints
-        
-        scf_calc = scf_task_cls(**inputs)
+        if kpoints_spacing is not None:
+            default_scf_builder['kpoints_spacing'] = kpoints_spacing
+
+    # Create index mapping: label -> index (term_0 -> 0, term_1 -> 1, etc.)
+    label_to_index = {label: idx for idx, label in enumerate(slabs.keys())}
+
+    # Convert structure_specific keys from int to str for lookup
+    structure_specific_scf = {}
+    if structure_specific_scf_builder_inputs is not None:
+        for idx_key, override in structure_specific_scf_builder_inputs.items():
+            # Accept both int and str keys
+            str_key = str(idx_key)
+            structure_specific_scf[str_key] = override
+
+    # Scatter: create independent SCF tasks for each slab (runs in parallel)
+    for label, structure in slabs.items():
+        # Get slab index
+        idx = label_to_index[label]
+        idx_str = str(idx)
+
+        # Deep merge slab-specific overrides if they exist
+        if idx_str in structure_specific_scf:
+            scf_inputs = deep_merge_dicts(
+                default_scf_builder,
+                structure_specific_scf[idx_str]
+            )
+        else:
+            scf_inputs = copy.deepcopy(default_scf_builder)
+
+        # Always set structure and code (override any user-provided values)
+        scf_inputs['structure'] = structure
+        scf_inputs['code'] = code
+
+        # Force SCF calculation (NSW=0, IBRION=-1)
+        # This must come after deep merge to ensure it's always set
+        if 'parameters' not in scf_inputs:
+            scf_inputs['parameters'] = {'incar': {}}
+        if 'incar' not in scf_inputs['parameters']:
+            scf_inputs['parameters']['incar'] = {}
+        scf_inputs['parameters']['incar']['NSW'] = 0
+        scf_inputs['parameters']['incar']['IBRION'] = -1
+
+        scf_calc = scf_task_cls(**scf_inputs)
         energies_ns[label] = extract_total_energy(energies=scf_calc.misc).result
         remote_folders[label] = scf_calc.remote_folder
 
@@ -480,6 +543,7 @@ def relax_slabs_scatter(
     max_number_jobs: int = None,
     # NEW: Builder inputs (full control over VASP builder)
     relax_builder_inputs: dict | None = None,
+    structure_specific_relax_builder_inputs: dict | None = None,
 ) -> t.Annotated[dict, namespace(relaxed_structures=dynamic(orm.StructureData), energies=dynamic(orm.Float), remote_folders=dynamic(orm.RemoteData))]:
     """
     Scatter-gather phase: relax each slab structure in parallel.
@@ -506,6 +570,13 @@ def relax_slabs_scatter(
                              Format: {'parameters': {'incar': {...}}, 'options': {...}, 'kpoints_spacing': 0.2, ...}
                              If provided, overrides parameters, options, kpoints_spacing.
                              Default: None
+        structure_specific_relax_builder_inputs: Per-slab overrides for relaxation (NEW)
+                                                 Dict mapping slab indices to builder dicts
+                                                 Uses deep merge - only specified parameters are overridden
+                                                 Format: {0: {'parameters': {'incar': {'ALGO': 'Normal'}}},
+                                                          1: {'parameters': {'incar': {'ALGO': 'Fast'}}}, ...}
+                                                 Example: Override ALGO for term_0 and term_1
+                                                 Default: None
 
     Returns:
         Dictionary with relaxed_structures, energies, and remote_folders namespaces
@@ -520,46 +591,63 @@ def relax_slabs_scatter(
 
     vasp_wc = WorkflowFactory('vasp.v2.vasp')
     relax_task_cls = task(vasp_wc)
-    
+
     relaxed: dict[str, orm.StructureData] = {}
     energies_ns: dict[str, orm.Float] = {}
     remote_folders: dict[str, orm.RemoteData] = {}
 
-    # NEW: Use builder_inputs if provided (full control), otherwise use old-style params
+    # Build default relax builder inputs (base for all slabs)
     if relax_builder_inputs is not None:
-        # New-style: extract from builder_inputs
-        actual_params = relax_builder_inputs.get('parameters', {'incar': dict(parameters)})
-        if 'incar' not in actual_params:
-            # Assume the dict IS the INCAR
-            actual_params = {'incar': actual_params}
-        actual_options = relax_builder_inputs.get('options', dict(options))
-        actual_kpoints = relax_builder_inputs.get('kpoints_spacing', kpoints_spacing)
+        # New-style: use builder_inputs as base
+        default_relax_builder = copy.deepcopy(relax_builder_inputs)
     else:
-        # Old-style: use provided params
-        actual_params = {'incar': dict(parameters)}
-        actual_options = dict(options)
-        actual_kpoints = kpoints_spacing
-
-    # Scatter: create independent tasks for each slab (runs in parallel)
-    for label, structure in slabs.items():
-        inputs: dict[str, t.Any] = {
-            'structure': structure,
-            'code': code,
-            'parameters': actual_params,
-            'options': actual_options,
+        # Old-style: construct from parameters/options
+        default_relax_builder = {
+            'parameters': {'incar': dict(parameters)},
+            'options': dict(options),
             'potential_family': potential_family,
             'potential_mapping': dict(potential_mapping),
             'clean_workdir': clean_workdir,
             'settings': orm.Dict(dict=get_settings()),
         }
-        if actual_kpoints is not None:
-            inputs['kpoints_spacing'] = actual_kpoints
-        
+        if kpoints_spacing is not None:
+            default_relax_builder['kpoints_spacing'] = kpoints_spacing
+
+    # Create index mapping: label -> index (term_0 -> 0, term_1 -> 1, etc.)
+    label_to_index = {label: idx for idx, label in enumerate(slabs.keys())}
+
+    # Convert structure_specific keys from int to str for lookup
+    structure_specific_relax = {}
+    if structure_specific_relax_builder_inputs is not None:
+        for idx_key, override in structure_specific_relax_builder_inputs.items():
+            # Accept both int and str keys
+            str_key = str(idx_key)
+            structure_specific_relax[str_key] = override
+
+    # Scatter: create independent tasks for each slab (runs in parallel)
+    for label, structure in slabs.items():
+        # Get slab index
+        idx = label_to_index[label]
+        idx_str = str(idx)
+
+        # Deep merge slab-specific overrides if they exist
+        if idx_str in structure_specific_relax:
+            relax_inputs = deep_merge_dicts(
+                default_relax_builder,
+                structure_specific_relax[idx_str]
+            )
+        else:
+            relax_inputs = copy.deepcopy(default_relax_builder)
+
+        # Always set structure and code (override any user-provided values)
+        relax_inputs['structure'] = structure
+        relax_inputs['code'] = code
+
         # Add restart_folder if provided for this slab
         if restart_folders is not None and label in restart_folders:
-            inputs['restart_folder'] = restart_folders[label]
-        
-        relaxation = relax_task_cls(**inputs)
+            relax_inputs['restart_folder'] = restart_folders[label]
+
+        relaxation = relax_task_cls(**relax_inputs)
         relaxed[label] = relaxation.structure
         energies_ns[label] = extract_total_energy(energies=relaxation.misc).result
         remote_folders[label] = relaxation.remote_folder
