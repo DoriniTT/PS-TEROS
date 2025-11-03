@@ -25,3 +25,34 @@ def validate_stage_sequence(stages: list[dict]) -> None:
                 f"Stage {idx} missing required key 'steps'. "
                 f"Each stage must contain {{'temperature': K, 'steps': N}}"
             )
+
+
+def validate_supercell_spec(spec: list[int]) -> None:
+    """
+    Validate supercell specification.
+
+    Args:
+        spec: [nx, ny, nz] supercell dimensions
+
+    Raises:
+        ValueError: If spec not valid 3D integer list with positive values
+    """
+    if not isinstance(spec, list):
+        raise ValueError(f"Supercell spec must be a list, got {type(spec).__name__}")
+
+    if len(spec) != 3:
+        raise ValueError(
+            f"Supercell spec must be a 3-element list [nx, ny, nz], got {len(spec)} elements"
+        )
+
+    for idx, val in enumerate(spec):
+        if not isinstance(val, int):
+            raise ValueError(
+                f"Supercell spec elements must be positive integers, "
+                f"element {idx} is {type(val).__name__}"
+            )
+        if val <= 0:
+            raise ValueError(
+                f"Supercell spec elements must be positive integers, "
+                f"element {idx} is {val}"
+            )

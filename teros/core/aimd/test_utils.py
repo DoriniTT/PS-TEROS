@@ -1,6 +1,6 @@
 """Tests for AIMD utils."""
 import pytest
-from teros.core.aimd.utils import validate_stage_sequence
+from teros.core.aimd.utils import validate_stage_sequence, validate_supercell_spec
 
 
 def test_validate_stage_sequence_valid():
@@ -30,3 +30,32 @@ def test_validate_stage_sequence_empty():
     """Empty stage list raises ValueError."""
     with pytest.raises(ValueError, match="at least one stage"):
         validate_stage_sequence([])
+
+
+def test_validate_supercell_spec_valid():
+    """Valid supercell spec passes."""
+    validate_supercell_spec([2, 2, 1])  # Should not raise
+
+
+def test_validate_supercell_spec_not_list():
+    """Non-list spec raises ValueError."""
+    with pytest.raises(ValueError, match="must be a list"):
+        validate_supercell_spec((2, 2, 1))
+
+
+def test_validate_supercell_spec_wrong_length():
+    """Wrong length raises ValueError."""
+    with pytest.raises(ValueError, match="must be a 3-element list"):
+        validate_supercell_spec([2, 2])
+
+
+def test_validate_supercell_spec_non_integer():
+    """Non-integer element raises ValueError."""
+    with pytest.raises(ValueError, match="must be positive integers"):
+        validate_supercell_spec([2, 2.5, 1])
+
+
+def test_validate_supercell_spec_non_positive():
+    """Non-positive integer raises ValueError."""
+    with pytest.raises(ValueError, match="must be positive integers"):
+        validate_supercell_spec([2, 0, 1])
