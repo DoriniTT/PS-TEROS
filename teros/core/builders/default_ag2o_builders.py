@@ -21,8 +21,8 @@ Example usage:
     >>> # Override specific parameters
     >>> defaults['miller_indices'] = [1, 1, 0]  # (110) surface
     >>> 
-    >>> # Use with build_core_workgraph_with_map
-    >>> wg = build_core_workgraph_with_map(**defaults, name="Ag2O")
+    >>> # Use with build_core_workgraph
+    >>> wg = build_core_workgraph(**defaults, name="Ag2O")
 """
 
 from copy import deepcopy
@@ -87,22 +87,22 @@ def get_ag2o_defaults(
     
     Args:
         structures_dir (str, optional): Path to directory containing structure files.
-            If not provided, must be set before using with build_core_workgraph_with_map.
+            If not provided, must be set before using with build_core_workgraph.
         code_label (str, optional): VASP code label (e.g., "VASP-VTST-6.4.3@bohr").
-            If not provided, must be set before using with build_core_workgraph_with_map.
+            If not provided, must be set before using with build_core_workgraph.
         potential_family (str, optional): Potential family name (e.g., "PBE").
-            If not provided, must be set before using with build_core_workgraph_with_map.
+            If not provided, must be set before using with build_core_workgraph.
         **overrides: Any parameter to override. Will be deep-merged with defaults.
             Example: bulk_parameters={'ENCUT': 600}, miller_indices=[1,1,0]
             
     Returns:
         dict: Complete builder parameters dictionary that can be unpacked with **
-            into build_core_workgraph_with_map().
-            
+            into build_core_workgraph().
+
     Example:
         >>> from teros.core.builders.default_ag2o_builders import get_ag2o_defaults
-        >>> from teros.core.workgraph import build_core_workgraph_with_map
-        >>> 
+        >>> from teros.core.workgraph import build_core_workgraph
+        >>>
         >>> # Get defaults
         >>> defaults = get_ag2o_defaults(
         ...     structures_dir="/home/user/structures",
@@ -112,9 +112,9 @@ def get_ag2o_defaults(
         ...     bulk_parameters={'ENCUT': 600},
         ...     miller_indices=[1, 1, 0]  # (110) surface
         ... )
-        >>> 
+        >>>
         >>> # Use with workgraph builder (slab will be generated automatically)
-        >>> wg = build_core_workgraph_with_map(
+        >>> wg = build_core_workgraph(
         ...     **defaults,
         ...     name="Ag2O_100_surface"
         ... )

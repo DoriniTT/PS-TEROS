@@ -123,7 +123,7 @@ For precise control over surface structures:
 ```python
 from aiida.orm import load_node, StructureData
 from ase.io import read
-from teros.core.workgraph import build_core_workgraph_with_map
+from teros.core.workgraph import build_core_workgraph
 
 # Load pre-generated slab structures
 slabs = {
@@ -133,7 +133,7 @@ slabs = {
 }
 
 # Create workgraph with manual slabs
-wg = build_core_workgraph_with_map(
+wg = build_core_workgraph(
     **defaults,
     input_slabs=slabs,  # Provide pre-generated slabs
     # Miller indices not required when using input_slabs
