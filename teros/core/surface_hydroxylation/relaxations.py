@@ -86,6 +86,7 @@ def relax_slabs_with_semaphore(
     fix_thickness: float = 0.0,
     fix_elements: t.List[str] = None,
     structure_specific_builder_inputs: dict = None,
+    max_number_jobs: int = None,
 ) -> t.Annotated[dict, namespace(**{
     'structures': dynamic(orm.StructureData),
     'energies': dynamic(orm.Float),
@@ -129,6 +130,10 @@ def relax_slabs_with_semaphore(
                               other parameters (potential_mapping, options, etc.) from default builder.
                      Structures not listed (e.g., 1, 3) will use the default builder_inputs.
                      Default: None (use default builder_inputs for all)
+        max_number_jobs: Optional - Maximum number of concurrent VASP calculations.
+                     Default: None (unlimited concurrency for selected structures)
+                     Note: This controls HOW MANY calculations run concurrently from the
+                     selected batch (max_parallel). Use this for cluster concurrency limits.
 
     Returns:
         Dictionary with namespace outputs:
@@ -144,6 +149,14 @@ def relax_slabs_with_semaphore(
         Uses vasp.v2.vasp workflow plugin.
         All calculations run in parallel (scatter-gather pattern).
     """
+    from aiida_workgraph import get_current_graph
+
+    # Set max_number_jobs on this workgraph to control concurrency
+    if max_number_jobs is not None:
+        wg = get_current_graph()
+        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        wg.max_number_jobs = max_jobs_value
+
     # Get VASP workchain
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
     VaspTask = task(VaspWorkChain)

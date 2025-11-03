@@ -246,6 +246,7 @@ def scf_relax_and_calculate_relaxation_energy(
     kpoints_spacing: float | None = None,
     clean_workdir: bool = True,
     restart_folders: dict = None,
+    max_number_jobs: int = None,
 ) -> t.Annotated[dict, namespace(
     unrelaxed_energies=dynamic(orm.Float),
     unrelaxed_remote_folders=dynamic(orm.RemoteData),
@@ -272,7 +273,8 @@ def scf_relax_and_calculate_relaxation_energy(
         kpoints_spacing: K-points spacing (optional)
         clean_workdir: Whether to clean remote directories
         restart_folders: Dictionary of RemoteData for restarting relaxations (optional)
-    
+        max_number_jobs: Maximum number of concurrent VASP calculations (optional)
+
     Returns:
         Dictionary with all outputs:
         - unrelaxed_energies: Energies from SCF
@@ -282,6 +284,14 @@ def scf_relax_and_calculate_relaxation_energy(
         - relaxed_remote_folders: RemoteData from relaxation
         - relaxation_energies: E_relaxed - E_unrelaxed
     """
+    from aiida_workgraph import get_current_graph
+
+    # Set max_number_jobs on this workgraph to control concurrency
+    if max_number_jobs is not None:
+        wg = get_current_graph()
+        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        wg.max_number_jobs = max_jobs_value
+
     vasp_wc = WorkflowFactory('vasp.v2.vasp')
     vasp_task_cls = task(vasp_wc)
     
@@ -366,14 +376,15 @@ def scf_slabs_scatter(
     options: t.Mapping[str, t.Any],
     kpoints_spacing: float | None = None,
     clean_workdir: bool = True,
+    max_number_jobs: int = None,
 ) -> t.Annotated[dict, namespace(energies=dynamic(orm.Float), remote_folders=dynamic(orm.RemoteData))]:
     """
     Scatter-gather phase: perform SCF calculations on unrelaxed slab structures in parallel.
-    
+
     This task graph performs single-point energy calculations (NSW=0, IBRION=-1)
     on unrelaxed slab structures to obtain the initial energy before relaxation.
     This is needed for calculating relaxation energies.
-    
+
     Args:
         slabs: Dictionary of slab structures (unrelaxed)
         code: AiiDA code for VASP
@@ -383,10 +394,19 @@ def scf_slabs_scatter(
         options: Computation resources
         kpoints_spacing: K-points spacing (optional)
         clean_workdir: Whether to clean remote directories
-    
+        max_number_jobs: Maximum number of concurrent VASP calculations (optional)
+
     Returns:
         Dictionary with energies and remote_folders namespaces
     """
+    from aiida_workgraph import get_current_graph
+
+    # Set max_number_jobs on this workgraph to control concurrency
+    if max_number_jobs is not None:
+        wg = get_current_graph()
+        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        wg.max_number_jobs = max_jobs_value
+
     vasp_wc = WorkflowFactory('vasp.v2.vasp')
     scf_task_cls = task(vasp_wc)
     
@@ -435,15 +455,16 @@ def relax_slabs_scatter(
     kpoints_spacing: float | None = None,
     clean_workdir: bool = True,
     restart_folders: dict = None,
+    max_number_jobs: int = None,
 ) -> t.Annotated[dict, namespace(relaxed_structures=dynamic(orm.StructureData), energies=dynamic(orm.Float), remote_folders=dynamic(orm.RemoteData))]:
     """
     Scatter-gather phase: relax each slab structure in parallel.
-    
+
     This task graph iterates over the input slabs dictionary and creates
     independent relaxation tasks that run in parallel. The loop wrapping
     is necessary because slabs is a future output that isn't available
     at graph construction time.
-    
+
     Args:
         slabs: Dictionary of slab structures to relax
         code: AiiDA code for VASP
@@ -454,12 +475,21 @@ def relax_slabs_scatter(
         kpoints_spacing: K-points spacing (optional)
         clean_workdir: Whether to clean remote directories
         restart_folders: Dictionary of RemoteData nodes for restarting calculations (optional).
-                        Keys must match slab labels (e.g., 'term_0', 'term_1'). 
+                        Keys must match slab labels (e.g., 'term_0', 'term_1').
                         If provided, calculations will restart from these remote folders.
-    
+        max_number_jobs: Maximum number of concurrent VASP calculations (optional)
+
     Returns:
         Dictionary with relaxed_structures, energies, and remote_folders namespaces
     """
+    from aiida_workgraph import get_current_graph
+
+    # Set max_number_jobs on this workgraph to control concurrency
+    if max_number_jobs is not None:
+        wg = get_current_graph()
+        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        wg.max_number_jobs = max_jobs_value
+
     vasp_wc = WorkflowFactory('vasp.v2.vasp')
     relax_task_cls = task(vasp_wc)
     
@@ -562,6 +592,7 @@ def calculate_electronic_properties_slabs_scatter(
     default_bands_parameters: t.Mapping[str, t.Any] = None,
     default_bands_options: t.Mapping[str, t.Any] = None,
     default_band_settings: t.Mapping[str, t.Any] = None,
+    max_number_jobs: int = None,
 ) -> t.Annotated[dict, namespace(
     slab_bands=dynamic(orm.BandsData),
     slab_dos=dynamic(orm.ArrayData),
@@ -590,6 +621,7 @@ def calculate_electronic_properties_slabs_scatter(
         default_bands_parameters: Default parameters (fallback)
         default_bands_options: Default scheduler options (fallback)
         default_band_settings: Default band settings (fallback)
+        max_number_jobs: Maximum number of concurrent VASP calculations (None = unlimited)
 
     Returns:
         Dictionary with four namespaces:
@@ -612,6 +644,13 @@ def calculate_electronic_properties_slabs_scatter(
         ... )
     """
     from aiida.plugins import WorkflowFactory
+    from aiida_workgraph import get_current_graph
+
+    # Set max_number_jobs on this workgraph to control concurrency
+    if max_number_jobs is not None:
+        wg = get_current_graph()
+        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        wg.max_number_jobs = max_jobs_value
 
     # Get BandsWorkChain and wrap as task
     BandsWorkChain = WorkflowFactory('vasp.v2.bands')

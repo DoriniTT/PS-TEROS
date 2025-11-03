@@ -117,6 +117,9 @@ def main():
         slab_parameters=slab_params,
         slab_options=common_options,
         slab_kpoints_spacing=0.4,
+        # Concurrency control (limits simultaneous VASP calculations)
+        max_concurrent_jobs=4,  # Default: 4 concurrent calculations
+
         
         name='Step03_SlabRelaxation_Ag2O_100',
     )

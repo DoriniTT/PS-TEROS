@@ -76,19 +76,22 @@ def main():
     # Build workgraph using preset
     wg = build_core_workgraph(
         workflow_preset='bulk_only',
-        
+
         structures_dir=structures_dir,
         bulk_name='ag2o.cif',
-        
+
         code_label=code_label,
         potential_family=potential_family,
         kpoints_spacing=0.4,
         clean_workdir=False,
-        
+
         bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
         bulk_parameters=bulk_parameters,
         bulk_options=bulk_options,
-        
+
+        # Concurrency control (limits simultaneous VASP calculations)
+        max_concurrent_jobs=4,  # Default: 4 concurrent calculations
+
         name='Step01_BulkOnly_Ag2O',
     )
     

@@ -131,6 +131,7 @@ def aimd_single_stage_scatter(
     kpoints_spacing: float,
     clean_workdir: bool,
     restart_folders: t.Annotated[dict[str, orm.RemoteData], dynamic(orm.RemoteData)] = {},
+    max_number_jobs: int = None,
 ) -> t.Annotated[dict, namespace(structures=dynamic(orm.StructureData), remote_folders=dynamic(orm.RemoteData), energies=dynamic(orm.Float))]:
     """
     Run single AIMD stage on all slabs in parallel using scatter-gather pattern.
@@ -150,6 +151,7 @@ def aimd_single_stage_scatter(
         kpoints_spacing: K-points spacing
         clean_workdir: Whether to clean work directory
         restart_folders: Optional dict of RemoteData for restart (from previous stage)
+        max_number_jobs: Maximum number of concurrent VASP calculations (None = unlimited)
 
     Returns:
         Dictionary with outputs per slab:
@@ -157,6 +159,14 @@ def aimd_single_stage_scatter(
             - remote_folders: RemoteData nodes for potential next stage restart
             - energies: Total energies from this stage
     """
+    from aiida_workgraph import get_current_graph
+
+    # Set max_number_jobs on this workgraph to control concurrency
+    if max_number_jobs is not None:
+        wg = get_current_graph()
+        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        wg.max_number_jobs = max_jobs_value
+
     # Get VASP workchain
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
     VaspTask = task(VaspWorkChain)

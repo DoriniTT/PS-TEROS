@@ -129,6 +129,9 @@ def main():
         slab_bands_parameters=slab_elec_defaults,
         slab_bands_options=common_options,
         slab_band_settings=slab_elec_defaults['band_settings'],
+        # Concurrency control (limits simultaneous VASP calculations)
+        max_concurrent_jobs=4,  # Default: 4 concurrent calculations
+
         
         name='Step09_ElectronicStructure_BulkAndSlabs_Ag2O_111',
     )

@@ -64,13 +64,26 @@ wg = build_core_workgraph(
 
 ---
 
-## Available in These Functions
+## Available in These Modules
 
+The `max_concurrent_jobs` feature is supported across **all PS-TEROS workflow modules**:
+
+### Core Workflows
 1. `build_core_workgraph()` - Main surface thermodynamics workflow
 2. `build_core_workgraph_with_map()` - Variant with mapping
-3. `build_surface_hydroxylation_workgraph()` - Hydroxylation module
 
-All three functions accept `max_concurrent_jobs: int = 4` parameter.
+### AIMD (Molecular Dynamics)
+3. `aimd_single_stage_scatter()` - VASP AIMD simulations
+4. `aimd_single_stage_scatter_cp2k()` - CP2K AIMD simulations
+
+### Surface Modification
+5. `build_surface_hydroxylation_workgraph()` - Hydroxylation module
+6. `relax_slabs_with_semaphore()` - Hydroxylation relaxations (supports both `max_parallel` for batch limiting and `max_number_jobs` for concurrency control)
+
+### Custom Calculations
+7. `build_custom_calculation_workgraph()` - Custom VASP calculations
+
+All functions accept `max_concurrent_jobs` (or `max_number_jobs` for low-level functions) to control VASP calculation concurrency.
 
 ---
 
@@ -201,11 +214,69 @@ Benefits:
 
 ---
 
+## Implementation Details
+
+### Nested Sub-Workgraphs Support ✅
+
+**As of v2.1.0**, `max_concurrent_jobs` now works correctly with nested sub-workgraphs!
+
+The implementation uses the `get_current_graph()` API from AiiDA WorkGraph to propagate the concurrency limit through all nesting levels.
+
+#### How It Works
+
+```python
+from aiida_workgraph import get_current_graph
+
+@task.graph
+def relax_slabs_scatter(slabs, ..., max_number_jobs: int = None):
+    """Nested workgraph that respects concurrency limits."""
+
+    # Get the current workgraph and set max_number_jobs on it
+    if max_number_jobs is not None:
+        wg = get_current_graph()
+        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        wg.max_number_jobs = max_jobs_value
+
+    # Create VASP tasks - they will respect the limit
+    for slab in slabs:
+        vasp = VaspWorkChain(...)
+    return results
+```
+
+#### Parameter Propagation Chain
+
+```
+build_core_workgraph(max_concurrent_jobs=2)
+    ↓
+core_workgraph(max_concurrent_jobs=2)
+    ↓
+relax_slabs_scatter(max_number_jobs=orm.Int(2))
+    ↓
+Sets wg.max_number_jobs = 2 via get_current_graph()
+    ↓
+All nested VASP calculations respect the limit ✅
+```
+
+#### Verified Behavior
+
+With `max_concurrent_jobs=2` and 3 slab structures:
+- ✅ First 2 VASP calculations start immediately
+- ✅ Third calculation waits in queue
+- ✅ Third calculation starts when first slot opens
+- ✅ Never exceeds the specified limit
+
+**Test Example:** See `examples/vasp/step_17_test_max_concurrent_jobs.py`
+
+**Verification:** See `examples/vasp/VERIFICATION_MAX_CONCURRENT_JOBS.md`
+
+---
+
 ## References
 
 - [WorkGraph Limit Concurrent Jobs](https://aiida-workgraph.readthedocs.io/en/latest/howto/autogen/limit_concurrent.html)
 - [PS-TEROS Workflow Presets Guide](./WORKFLOW_PRESETS_GUIDE.md)
+- [Serial Preset Documentation](./SERIAL_PRESET_EXPERIMENTAL.md)
 
 ---
 
-**Last Updated:** 2025-11-02
+**Last Updated:** 2025-11-03 (v2.2.0 - Extended to all modules: AIMD, custom calculations, hydroxylation)

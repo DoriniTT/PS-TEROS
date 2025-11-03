@@ -122,6 +122,9 @@ def main():
         oxygen_potential_mapping={'O': 'O'},
         oxygen_parameters=vasp_params_o2.copy(),
         oxygen_options=common_options,
+        # Concurrency control (limits simultaneous VASP calculations)
+        max_concurrent_jobs=4,  # Default: 4 concurrent calculations
+
         
         name='Step02_FormationEnthalpy_Ag2O',
     )

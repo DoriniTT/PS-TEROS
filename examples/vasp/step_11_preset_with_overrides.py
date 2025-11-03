@@ -137,6 +137,9 @@ def main():
         
         # Thermodynamics sampling
         thermodynamics_sampling=100,
+        # Concurrency control (limits simultaneous VASP calculations)
+        max_concurrent_jobs=4,  # Default: 4 concurrent calculations
+
         
         name='Step11_PresetWithOverrides_Ag2O_111',
     )

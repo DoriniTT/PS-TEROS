@@ -102,6 +102,9 @@ def main():
         bands_parameters=elec_defaults,
         bands_options=common_options,
         band_settings=elec_defaults['band_settings'],
+        # Concurrency control (limits simultaneous VASP calculations)
+        max_concurrent_jobs=4,  # Default: 4 concurrent calculations
+
         
         name='Step06_ElectronicProperties_Ag2O',
     )

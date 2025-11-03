@@ -279,6 +279,9 @@ def main():
         # NEW FEATURE: Structure-specific builder inputs (optional)
         adsorption_structure_specific_relax_builder_inputs=structure_specific_relax,
         adsorption_structure_specific_scf_builder_inputs=structure_specific_scf,
+        # Concurrency control (limits simultaneous VASP calculations)
+        max_concurrent_jobs=4,  # Default: 4 concurrent calculations
+
 
         name='Step12_AdsorptionEnergy_Ag_OH',
     )

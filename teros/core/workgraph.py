@@ -165,6 +165,8 @@ def core_workgraph(
     adsorption_structure_specific_relax_builder_inputs: dict = None,
     adsorption_structure_specific_scf_builder_inputs: dict = None,
     adsorption_structure_component_specific_scf_builder_inputs: dict = None,
+    # Concurrency control
+    max_concurrent_jobs: int = None,
     # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
@@ -423,6 +425,7 @@ def core_workgraph(
                 options=slab_opts,
                 kpoints_spacing=slab_kpts,
                 clean_workdir=clean_workdir,
+                max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
             )
             unrelaxed_slab_energies_output = scf_outputs.energies
             unrelaxed_slab_remote_output = scf_outputs.remote_folders
@@ -437,6 +440,7 @@ def core_workgraph(
             options=slab_opts,
             kpoints_spacing=slab_kpts,
             clean_workdir=clean_workdir,
+            max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
         )
 
         relaxed_slabs_output = relaxation_outputs.relaxed_structures
@@ -524,6 +528,7 @@ def core_workgraph(
             default_bands_parameters=default_params,
             default_bands_options=default_opts,
             default_band_settings=default_settings,
+            max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
         )
         
         # Collect outputs
@@ -1230,6 +1235,7 @@ def build_core_workgraph(
         adsorption_structure_specific_relax_builder_inputs=adsorption_structure_specific_relax_builder_inputs,  # NEW
         adsorption_structure_specific_scf_builder_inputs=adsorption_structure_specific_scf_builder_inputs,  # NEW
         adsorption_structure_component_specific_scf_builder_inputs=adsorption_structure_component_specific_scf_builder_inputs,  # NEW
+        max_concurrent_jobs=max_concurrent_jobs,  # NEW
         # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 
@@ -1340,6 +1346,7 @@ def build_core_workgraph(
                 options=slab_opts,
                 kpoints_spacing=slab_kpts,
                 clean_workdir=clean_workdir,
+                max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
             )
 
             # Step 2: Add relaxation task
@@ -1352,6 +1359,7 @@ def build_core_workgraph(
                 'options': slab_opts,
                 'kpoints_spacing': slab_kpts,
                 'clean_workdir': clean_workdir,
+                'max_number_jobs': orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
             }
 
             scatter_task = wg.add_task(
@@ -1482,6 +1490,7 @@ def build_core_workgraph(
             default_bands_parameters=default_params,
             default_bands_options=default_opts,
             default_band_settings=default_settings,
+            max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
         )
 
         # Connect outputs
@@ -1676,6 +1685,7 @@ def build_core_workgraph(
                     'kpoints_spacing': aimd_kpts,
                     'clean_workdir': clean_workdir,
                     'restart_folders': current_remotes,
+                    'max_number_jobs': orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
                 }
             elif calculator == 'cp2k':
                 stage_inputs = {
@@ -1689,6 +1699,7 @@ def build_core_workgraph(
                     'options': aimd_opts,  # Pass scheduler options directly
                     'clean_workdir': clean_workdir,
                     'restart_folders': current_remotes,
+                    'max_number_jobs': orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
                 }
 
                 # Add fixed atoms for CP2K
@@ -1804,6 +1815,9 @@ def build_core_workgraph(
             fix_type=adsorption_fix_type,
             fix_thickness=adsorption_fix_thickness,
             fix_elements=adsorption_fix_elements,
+
+            # Concurrency control
+            max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
         )
 
         # Connect outputs

@@ -132,6 +132,9 @@ def main():
         aimd_options=common_options,
         aimd_potential_mapping={'Ag': 'Ag', 'O': 'O'},
         aimd_kpoints_spacing=0.5,  # Coarser for AIMD
+        # Concurrency control (limits simultaneous VASP calculations)
+        max_concurrent_jobs=4,  # Default: 4 concurrent calculations
+
         
         name='Step07_AIMD_Ag2O_111',
     )

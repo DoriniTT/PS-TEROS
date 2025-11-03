@@ -11,13 +11,14 @@ VaspWorkChain = WorkflowFactory('vasp.vasp')
 def build_scf_slabs_nodes(
     wg,
     slabs: dict[str, orm.StructureData],
-    code: orm.Code,
-    potential_family: str,
-    potential_mapping: dict,
-    kpoints_spacing: float,
-    parameters: dict,
-    options: dict,
+    code: orm.Code = None,
+    potential_family: str = None,
+    potential_mapping: dict = None,
+    kpoints_spacing: float = None,
+    parameters: dict = None,
+    options: dict = None,
     clean_workdir: bool = False,
+    builders: dict = None,  # Optional dict of {slab_id: builder_dict}
 ) -> dict[str, t.Any]:
     """
     Add VASP SCF (single-point) calculation nodes for each slab.
@@ -25,13 +26,14 @@ def build_scf_slabs_nodes(
     Args:
         wg: WorkGraph instance to add nodes to
         slabs: Dictionary of {slab_id: StructureData}
-        code: VASP code
-        potential_family: Potential family name
-        potential_mapping: Element to potential mapping
-        kpoints_spacing: K-points spacing
-        parameters: VASP INCAR parameters
-        options: Computer options
-        clean_workdir: Whether to clean working directory
+        code: VASP code (not needed if using builders)
+        potential_family: Potential family name (not needed if using builders)
+        potential_mapping: Element to potential mapping (not needed if using builders)
+        kpoints_spacing: K-points spacing (not needed if using builders)
+        parameters: VASP INCAR parameters (not needed if using builders)
+        options: Computer options (not needed if using builders)
+        clean_workdir: Whether to clean working directory (not needed if using builders)
+        builders: Optional dict of {slab_id: builder_dict} for full control
 
     Returns:
         Dictionary of {slab_id: vasp_task_node}
@@ -41,24 +43,33 @@ def build_scf_slabs_nodes(
     scf_nodes = {}
 
     for slab_id, slab_structure in slabs.items():
-        # Prepare parameters
-        vasp_params = prepare_vasp_parameters(
-            base_parameters=parameters,
-            code=code,
-            potential_family=potential_family,
-            potential_mapping=potential_mapping,
-            kpoints_spacing=kpoints_spacing,
-            options=options,
-            clean_workdir=clean_workdir,
-        )
+        if builders and slab_id in builders:
+            # Use provided builder for this slab
+            scf_nodes[slab_id] = wg.add_task(
+                VaspWorkChain,
+                name=f"scf_slab_{slab_id}",
+                structure=slab_structure,
+                **builders[slab_id],
+            )
+        else:
+            # Use standard parameter preparation
+            vasp_params = prepare_vasp_parameters(
+                base_parameters=parameters,
+                code=code,
+                potential_family=potential_family,
+                potential_mapping=potential_mapping,
+                kpoints_spacing=kpoints_spacing,
+                options=options,
+                clean_workdir=clean_workdir,
+            )
 
-        # Add VASP SCF node
-        scf_nodes[slab_id] = wg.add_task(
-            VaspWorkChain,
-            name=f"scf_slab_{slab_id}",
-            structure=slab_structure,
-            **vasp_params,
-        )
+            # Add VASP SCF node
+            scf_nodes[slab_id] = wg.add_task(
+                VaspWorkChain,
+                name=f"scf_slab_{slab_id}",
+                structure=slab_structure,
+                **vasp_params,
+            )
 
     return scf_nodes
 
@@ -66,13 +77,14 @@ def build_scf_slabs_nodes(
 def build_relax_slabs_nodes(
     wg,
     slabs: dict[str, orm.StructureData],
-    code: orm.Code,
-    potential_family: str,
-    potential_mapping: dict,
-    kpoints_spacing: float,
-    parameters: dict,
-    options: dict,
+    code: orm.Code = None,
+    potential_family: str = None,
+    potential_mapping: dict = None,
+    kpoints_spacing: float = None,
+    parameters: dict = None,
+    options: dict = None,
     clean_workdir: bool = False,
+    builders: dict = None,  # Optional dict of {slab_id: builder_dict}
 ) -> dict[str, t.Any]:
     """
     Add VASP relaxation nodes for each slab.
@@ -80,13 +92,14 @@ def build_relax_slabs_nodes(
     Args:
         wg: WorkGraph instance to add nodes to
         slabs: Dictionary of {slab_id: StructureData}
-        code: VASP code
-        potential_family: Potential family name
-        potential_mapping: Element to potential mapping
-        kpoints_spacing: K-points spacing
-        parameters: VASP INCAR parameters
-        options: Computer options
-        clean_workdir: Whether to clean working directory
+        code: VASP code (not needed if using builders)
+        potential_family: Potential family name (not needed if using builders)
+        potential_mapping: Element to potential mapping (not needed if using builders)
+        kpoints_spacing: K-points spacing (not needed if using builders)
+        parameters: VASP INCAR parameters (not needed if using builders)
+        options: Computer options (not needed if using builders)
+        clean_workdir: Whether to clean working directory (not needed if using builders)
+        builders: Optional dict of {slab_id: builder_dict} for full control
 
     Returns:
         Dictionary of {slab_id: vasp_task_node}
@@ -96,24 +109,33 @@ def build_relax_slabs_nodes(
     relax_nodes = {}
 
     for slab_id, slab_structure in slabs.items():
-        # Prepare parameters
-        vasp_params = prepare_vasp_parameters(
-            base_parameters=parameters,
-            code=code,
-            potential_family=potential_family,
-            potential_mapping=potential_mapping,
-            kpoints_spacing=kpoints_spacing,
-            options=options,
-            clean_workdir=clean_workdir,
-        )
+        if builders and slab_id in builders:
+            # Use provided builder for this slab
+            relax_nodes[slab_id] = wg.add_task(
+                VaspWorkChain,
+                name=f"relax_slab_{slab_id}",
+                structure=slab_structure,
+                **builders[slab_id],
+            )
+        else:
+            # Use standard parameter preparation
+            vasp_params = prepare_vasp_parameters(
+                base_parameters=parameters,
+                code=code,
+                potential_family=potential_family,
+                potential_mapping=potential_mapping,
+                kpoints_spacing=kpoints_spacing,
+                options=options,
+                clean_workdir=clean_workdir,
+            )
 
-        # Add VASP relax node
-        relax_nodes[slab_id] = wg.add_task(
-            VaspWorkChain,
-            name=f"relax_slab_{slab_id}",
-            structure=slab_structure,
-            **vasp_params,
-        )
+            # Add VASP relax node
+            relax_nodes[slab_id] = wg.add_task(
+                VaspWorkChain,
+                name=f"relax_slab_{slab_id}",
+                structure=slab_structure,
+                **vasp_params,
+            )
 
     return relax_nodes
 
@@ -143,7 +165,7 @@ def build_energy_extraction_nodes(
         energy_nodes[slab_id] = wg.add_task(
             extract_total_energy,
             name=f"extract_energy_{node_type}_{slab_id}",
-            misc=vasp_node.outputs.misc,
+            energies=vasp_node.outputs.misc,
         )
 
     return energy_nodes

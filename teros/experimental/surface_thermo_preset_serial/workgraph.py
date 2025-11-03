@@ -3,7 +3,7 @@
 import typing as t
 from aiida import orm
 from aiida.plugins import WorkflowFactory
-from aiida_workgraph import task, WorkGraph
+from aiida_workgraph import task, WorkGraph, namespace, dynamic
 from ase.io import read
 
 from teros.core.slabs import generate_slab_structures, extract_total_energy
@@ -30,15 +30,201 @@ from .utils import (
 VaspWorkChain = WorkflowFactory('vasp.vasp')
 
 
-@task.graph(outputs=[
-    'bulk_energy', 'bulk_structure',
-    'metal_energy', 'oxygen_energy', 'nonmetal_energy',
-    'metal_structure', 'oxygen_structure', 'nonmetal_structure',
-    'formation_enthalpy', 'reference_energies',
-    'slab_structures', 'relaxed_slabs',
-    'slab_energies', 'unrelaxed_slab_energies', 'relaxation_energies',
-    'surface_energies', 'oxide_type',
-])
+@task.calcfunction
+def generate_multiple_miller_slabs(
+    bulk_structure: orm.StructureData,
+    miller_indices_list: orm.List,
+    min_slab_thickness: orm.Float,
+    min_vacuum_thickness: orm.Float,
+    lll_reduce: orm.Bool,
+    center_slab: orm.Bool,
+    symmetrize: orm.Bool,
+    primitive: orm.Bool,
+    in_unit_planes: orm.Bool,
+    max_normal_search: orm.Int,
+) -> t.Annotated[dict, namespace(slabs=dynamic(orm.StructureData))]:
+    """
+    Generate slab structures for multiple Miller indices from a bulk structure.
+
+    This function generates slabs for each Miller index in the provided list,
+    naming them as slab_{h}{k}{l}_term_{n}.
+
+    Args:
+        bulk_structure: Relaxed bulk structure
+        miller_indices_list: List of Miller indices, e.g., [[1,0,0], [1,1,0]]
+        min_slab_thickness: Minimum slab thickness in Angstroms
+        min_vacuum_thickness: Minimum vacuum thickness in Angstroms
+        lll_reduce: Whether to reduce with LLL algorithm
+        center_slab: Whether to center slab in cell
+        symmetrize: Whether to generate symmetric terminations
+        primitive: Whether to use primitive cell
+        in_unit_planes: Whether thickness in unit planes
+        max_normal_search: Max search for surface normal
+
+    Returns:
+        Dict with 'slabs' key containing all generated slabs
+    """
+    from pymatgen.io.ase import AseAtomsAdaptor
+    from pymatgen.core.surface import SlabGenerator
+    from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+
+    adaptor = AseAtomsAdaptor()
+    ase_structure = bulk_structure.get_ase()
+    pymatgen_structure = adaptor.get_structure(ase_structure)
+
+    if primitive.value:
+        analyzer = SpacegroupAnalyzer(pymatgen_structure)
+        pymatgen_structure = analyzer.get_primitive_standard_structure()
+
+    all_slabs = {}
+
+    for miller in miller_indices_list.get_list():
+        miller_str = ''.join(map(str, miller))
+
+        generator = SlabGenerator(
+            pymatgen_structure,
+            miller,
+            min_slab_thickness.value,
+            min_vacuum_thickness.value,
+            center_slab=center_slab.value,
+            in_unit_planes=in_unit_planes.value if in_unit_planes else False,
+            max_normal_search=max_normal_search.value if max_normal_search else None,
+            lll_reduce=lll_reduce.value,
+        )
+
+        slabs = generator.get_slabs(symmetrize=symmetrize.value)
+
+        for index, slab in enumerate(slabs):
+            orthogonal_slab = slab.get_orthogonal_c_slab()
+            ase_slab = adaptor.get_atoms(orthogonal_slab)
+            slab_id = f"slab_{miller_str}_term_{index}"
+            all_slabs[slab_id] = orm.StructureData(ase=ase_slab)
+
+    return {'slabs': all_slabs}
+
+
+def generate_slabs_from_relaxed_bulk_workgraph(
+    structures_dir: str,
+    bulk_name: str,
+    code_label: str,
+    potential_family: str,
+    bulk_potential_mapping: dict = None,
+    kpoints_spacing: float = 0.4,
+    bulk_parameters: dict = None,
+    bulk_options: dict = None,
+    clean_workdir: bool = False,
+    bulk_builder: dict = None,
+    # Slab generation parameters
+    miller_indices: list = None,
+    min_slab_thickness: float = 18.0,
+    min_vacuum_thickness: float = 15.0,
+    lll_reduce: bool = True,
+    center_slab: bool = True,
+    symmetrize: bool = True,
+    primitive: bool = True,
+    in_unit_planes: bool = False,
+    max_normal_search: int = None,
+):
+    """
+    Preliminary workflow: Relax bulk structure and generate slabs.
+
+    This is Stage 1 of the two-stage workflow. It:
+    1. Relaxes the bulk structure
+    2. Generates slabs from the relaxed bulk structure
+    3. Returns the generated slabs as outputs
+
+    The returned slabs can then be used as input_slabs for the main
+    surface_thermodynamics_serial_workgraph.
+
+    Args:
+        structures_dir: Directory containing structure files
+        bulk_name: Bulk structure filename
+        code_label: VASP code label
+        potential_family: Potential family name
+        bulk_potential_mapping: Element to potential mapping for bulk
+        kpoints_spacing: K-points spacing for bulk
+        bulk_parameters: VASP parameters for bulk
+        bulk_options: Computer options for bulk
+        clean_workdir: Whether to clean working directory
+        bulk_builder: Full builder dictionary for bulk (optional)
+        miller_indices: List of Miller indices to generate slabs
+        min_slab_thickness: Minimum slab thickness (Angstroms)
+        min_vacuum_thickness: Minimum vacuum thickness (Angstroms)
+        lll_reduce: Whether to LLL reduce slab
+        center_slab: Whether to center slab in cell
+        symmetrize: Whether to symmetrize slab
+        primitive: Whether to use primitive slab
+        in_unit_planes: Whether Miller indices are in unit planes
+        max_normal_search: Maximum normal search range
+
+    Returns:
+        WorkGraph that outputs the generated slabs
+    """
+    from pathlib import Path
+    from ase.io import read
+
+    wg = WorkGraph("generate_slabs_from_relaxed_bulk")
+
+    # Load bulk structure
+    structure_path = Path(structures_dir) / bulk_name
+    bulk_ase = read(str(structure_path))
+    bulk_structure = orm.StructureData(ase=bulk_ase)
+
+    # Phase 1: Bulk relaxation
+    if bulk_builder:
+        bulk_node = wg.add_task(
+            VaspWorkChain,
+            name="bulk_relax",
+            structure=bulk_structure,
+            **bulk_builder,
+        )
+    else:
+        # Load code
+        code = orm.load_code(code_label)
+
+        # Prepare parameters
+        bulk_params = create_default_bulk_parameters()
+        bulk_vasp_params = prepare_vasp_parameters(
+            base_parameters=bulk_parameters or bulk_params,
+            code=code,
+            potential_family=potential_family,
+            potential_mapping=bulk_potential_mapping or {},
+            kpoints_spacing=kpoints_spacing,
+            options=bulk_options,
+            clean_workdir=clean_workdir,
+        )
+        bulk_node = wg.add_task(
+            VaspWorkChain,
+            name="bulk_relax",
+            structure=bulk_structure,
+            **bulk_vasp_params,
+        )
+
+    # Phase 2: Generate slabs from relaxed bulk
+    slab_gen_node = wg.add_task(
+        generate_multiple_miller_slabs,
+        name="generate_slabs",
+        bulk_structure=bulk_node.outputs.structure,  # Relaxed bulk
+        miller_indices_list=orm.List(miller_indices),
+        min_slab_thickness=orm.Float(min_slab_thickness),
+        min_vacuum_thickness=orm.Float(min_vacuum_thickness),
+        lll_reduce=orm.Bool(lll_reduce),
+        center_slab=orm.Bool(center_slab),
+        symmetrize=orm.Bool(symmetrize),
+        primitive=orm.Bool(primitive),
+        in_unit_planes=orm.Bool(in_unit_planes),
+        max_normal_search=orm.Int(max_normal_search) if max_normal_search else orm.Int(1),
+    )
+
+    # Set workgraph outputs
+    wg.outputs = {
+        'slabs': slab_gen_node.outputs.slabs,
+        'relaxed_bulk': bulk_node.outputs.structure,
+    }
+
+    return wg
+
+
 def surface_thermodynamics_serial_workgraph(
     structures_dir: str = None,
     bulk_name: str = None,
@@ -82,12 +268,22 @@ def surface_thermodynamics_serial_workgraph(
     thermodynamics_sampling: int = 100,
     compute_relaxation_energy: bool = True,
     input_slabs: dict = None,
+    # Builder dictionaries for full control (optional)
+    bulk_builder: dict = None,
+    metal_builder: dict = None,
+    oxygen_builder: dict = None,
+    nonmetal_builder: dict = None,
+    slab_scf_builders: dict = None,  # Dict of {slab_id: builder}
+    slab_relax_builders: dict = None,  # Dict of {slab_id: builder}
 ):
     """
     Serial surface thermodynamics workflow with flat graph structure.
 
     All VASP calculation nodes are added directly to the main graph,
     allowing max_concurrent_jobs to control concurrent execution.
+
+    When decorated with @task.graph, the workgraph is created automatically by the decorator.
+    This function should define the workflow logic and return outputs.
 
     Args:
         structures_dir: Directory containing structure files
@@ -170,28 +366,38 @@ def surface_thermodynamics_serial_workgraph(
     bulk_structure = orm.StructureData(ase=read(bulk_filepath))
 
     # Add bulk relaxation node
-    bulk_vasp_params = prepare_vasp_parameters(
-        base_parameters=bulk_parameters,
-        code=code,
-        potential_family=potential_family,
-        potential_mapping=bulk_potential_mapping,
-        kpoints_spacing=kpoints_spacing,
-        options=bulk_options,
-        clean_workdir=clean_workdir,
-    )
+    if bulk_builder:
+        # Use provided builder for full control
+        bulk_node = wg.add_task(
+            VaspWorkChain,
+            name="bulk_relax",
+            structure=bulk_structure,
+            **bulk_builder,
+        )
+    else:
+        # Use standard parameter preparation
+        bulk_vasp_params = prepare_vasp_parameters(
+            base_parameters=bulk_parameters,
+            code=code,
+            potential_family=potential_family,
+            potential_mapping=bulk_potential_mapping,
+            kpoints_spacing=kpoints_spacing,
+            options=bulk_options,
+            clean_workdir=clean_workdir,
+        )
 
-    bulk_node = wg.add_task(
-        VaspWorkChain,
-        name="bulk_relax",
-        structure=bulk_structure,
-        **bulk_vasp_params,
-    )
+        bulk_node = wg.add_task(
+            VaspWorkChain,
+            name="bulk_relax",
+            structure=bulk_structure,
+            **bulk_vasp_params,
+        )
 
     # Extract bulk energy
     bulk_energy_node = wg.add_task(
         extract_total_energy,
         name="extract_bulk_energy",
-        misc=bulk_node.outputs.misc,
+        energies=bulk_node.outputs.misc,
     )
 
     # =========================================================================
@@ -207,27 +413,37 @@ def surface_thermodynamics_serial_workgraph(
             metal_filepath = f"{structures_dir}/{metal_name}"
             metal_structure = orm.StructureData(ase=read(metal_filepath))
 
-            metal_vasp_params = prepare_vasp_parameters(
-                base_parameters=metal_parameters or bulk_parameters,
-                code=code,
-                potential_family=potential_family,
-                potential_mapping=metal_potential_mapping or bulk_potential_mapping,
-                kpoints_spacing=kpoints_spacing,
-                options=metal_options or bulk_options,
-                clean_workdir=clean_workdir,
-            )
+            if metal_builder:
+                # Use provided builder
+                reference_nodes['metal'] = wg.add_task(
+                    VaspWorkChain,
+                    name="metal_relax",
+                    structure=metal_structure,
+                    **metal_builder,
+                )
+            else:
+                # Use standard parameter preparation
+                metal_vasp_params = prepare_vasp_parameters(
+                    base_parameters=metal_parameters or bulk_parameters,
+                    code=code,
+                    potential_family=potential_family,
+                    potential_mapping=metal_potential_mapping or bulk_potential_mapping,
+                    kpoints_spacing=kpoints_spacing,
+                    options=metal_options or bulk_options,
+                    clean_workdir=clean_workdir,
+                )
 
-            reference_nodes['metal'] = wg.add_task(
-                VaspWorkChain,
-                name="metal_relax",
-                structure=metal_structure,
-                **metal_vasp_params,
-            )
+                reference_nodes['metal'] = wg.add_task(
+                    VaspWorkChain,
+                    name="metal_relax",
+                    structure=metal_structure,
+                    **metal_vasp_params,
+                )
 
             reference_energy_nodes['metal'] = wg.add_task(
                 extract_total_energy,
                 name="extract_metal_energy",
-                misc=reference_nodes['metal'].outputs.misc,
+                energies=reference_nodes['metal'].outputs.misc,
             )
 
         # Oxygen reference
@@ -235,27 +451,37 @@ def surface_thermodynamics_serial_workgraph(
             oxygen_filepath = f"{structures_dir}/{oxygen_name}"
             oxygen_structure = orm.StructureData(ase=read(oxygen_filepath))
 
-            oxygen_vasp_params = prepare_vasp_parameters(
-                base_parameters=oxygen_parameters or bulk_parameters,
-                code=code,
-                potential_family=potential_family,
-                potential_mapping=oxygen_potential_mapping or bulk_potential_mapping,
-                kpoints_spacing=kpoints_spacing,
-                options=oxygen_options or bulk_options,
-                clean_workdir=clean_workdir,
-            )
+            if oxygen_builder:
+                # Use provided builder
+                reference_nodes['oxygen'] = wg.add_task(
+                    VaspWorkChain,
+                    name="oxygen_relax",
+                    structure=oxygen_structure,
+                    **oxygen_builder,
+                )
+            else:
+                # Use standard parameter preparation
+                oxygen_vasp_params = prepare_vasp_parameters(
+                    base_parameters=oxygen_parameters or bulk_parameters,
+                    code=code,
+                    potential_family=potential_family,
+                    potential_mapping=oxygen_potential_mapping or bulk_potential_mapping,
+                    kpoints_spacing=kpoints_spacing,
+                    options=oxygen_options or bulk_options,
+                    clean_workdir=clean_workdir,
+                )
 
-            reference_nodes['oxygen'] = wg.add_task(
-                VaspWorkChain,
-                name="oxygen_relax",
-                structure=oxygen_structure,
-                **oxygen_vasp_params,
-            )
+                reference_nodes['oxygen'] = wg.add_task(
+                    VaspWorkChain,
+                    name="oxygen_relax",
+                    structure=oxygen_structure,
+                    **oxygen_vasp_params,
+                )
 
             reference_energy_nodes['oxygen'] = wg.add_task(
                 extract_total_energy,
                 name="extract_oxygen_energy",
-                misc=reference_nodes['oxygen'].outputs.misc,
+                energies=reference_nodes['oxygen'].outputs.misc,
             )
 
         # Optional nonmetal reference
@@ -263,35 +489,68 @@ def surface_thermodynamics_serial_workgraph(
             nonmetal_filepath = f"{structures_dir}/{nonmetal_name}"
             nonmetal_structure = orm.StructureData(ase=read(nonmetal_filepath))
 
-            nonmetal_vasp_params = prepare_vasp_parameters(
-                base_parameters=nonmetal_parameters or bulk_parameters,
-                code=code,
-                potential_family=potential_family,
-                potential_mapping=nonmetal_potential_mapping or bulk_potential_mapping,
-                kpoints_spacing=kpoints_spacing,
-                options=nonmetal_options or bulk_options,
-                clean_workdir=clean_workdir,
-            )
+            if nonmetal_builder:
+                # Use provided builder
+                reference_nodes['nonmetal'] = wg.add_task(
+                    VaspWorkChain,
+                    name="nonmetal_relax",
+                    structure=nonmetal_structure,
+                    **nonmetal_builder,
+                )
+            else:
+                # Use standard parameter preparation
+                nonmetal_vasp_params = prepare_vasp_parameters(
+                    base_parameters=nonmetal_parameters or bulk_parameters,
+                    code=code,
+                    potential_family=potential_family,
+                    potential_mapping=nonmetal_potential_mapping or bulk_potential_mapping,
+                    kpoints_spacing=kpoints_spacing,
+                    options=nonmetal_options or bulk_options,
+                    clean_workdir=clean_workdir,
+                )
 
-            reference_nodes['nonmetal'] = wg.add_task(
-                VaspWorkChain,
-                name="nonmetal_relax",
-                structure=nonmetal_structure,
-                **nonmetal_vasp_params,
-            )
+                reference_nodes['nonmetal'] = wg.add_task(
+                    VaspWorkChain,
+                    name="nonmetal_relax",
+                    structure=nonmetal_structure,
+                    **nonmetal_vasp_params,
+                )
 
             reference_energy_nodes['nonmetal'] = wg.add_task(
                 extract_total_energy,
                 name="extract_nonmetal_energy",
-                misc=reference_nodes['nonmetal'].outputs.misc,
+                energies=reference_nodes['nonmetal'].outputs.misc,
             )
 
     # =========================================================================
-    # Prepare reference energies dict
+    # Calculate formation enthalpy
     # =========================================================================
 
     if compute_thermodynamics:
-        # Build reference energies dict
+        # For binary oxides, use metal as dummy for nonmetal if not provided
+        nonmetal_structure_out = (
+            reference_nodes['nonmetal'].outputs.structure if 'nonmetal' in reference_nodes
+            else reference_nodes['metal'].outputs.structure
+        )
+        nonmetal_energy_out = (
+            reference_energy_nodes['nonmetal'].outputs.result if 'nonmetal' in reference_energy_nodes
+            else reference_energy_nodes['metal'].outputs.result
+        )
+
+        formation_enthalpy_node = wg.add_task(
+            calculate_formation_enthalpy,
+            name="formation_enthalpy",
+            bulk_structure=bulk_node.outputs.structure,
+            bulk_energy=bulk_energy_node.outputs.result,
+            metal_structure=reference_nodes['metal'].outputs.structure,
+            metal_energy=reference_energy_nodes['metal'].outputs.result,
+            oxygen_structure=reference_nodes['oxygen'].outputs.structure,
+            oxygen_energy=reference_energy_nodes['oxygen'].outputs.result,
+            nonmetal_structure=nonmetal_structure_out,
+            nonmetal_energy=nonmetal_energy_out,
+        )
+
+        # Build reference energies dictionary
         reference_energies_node = wg.add_task(
             build_reference_energies_dict,
             name="build_reference_energies",
@@ -303,15 +562,6 @@ def surface_thermodynamics_serial_workgraph(
             nonmetal_structure=reference_nodes.get('nonmetal').outputs.structure if 'nonmetal' in reference_nodes else None,
         )
 
-        # Calculate formation enthalpy
-        formation_enthalpy_node = wg.add_task(
-            calculate_formation_enthalpy,
-            name="formation_enthalpy",
-            bulk_structure=bulk_node.outputs.structure,
-            bulk_energy=bulk_energy_node.outputs.result,
-            reference_energies=reference_energies_node.outputs.result,
-        )
-
         # Identify oxide type
         oxide_type_node = wg.add_task(
             identify_oxide_type,
@@ -320,79 +570,146 @@ def surface_thermodynamics_serial_workgraph(
         )
 
     # =========================================================================
-    # PHASE 3: Slab generation
+    # PHASE 3: Slab generation from RELAXED bulk
     # =========================================================================
 
-    # NOTE: Currently only pre-generated slabs (input_slabs) are supported.
-    # Dynamic slab generation requires waiting for the bulk relaxation to complete
-    # before generating slabs, which would require a two-stage workflow execution.
-    # For now, users must provide input_slabs as a dictionary.
+    # Three modes: pre-provided slabs, generate from relaxed bulk, or generate from input bulk
+    slab_gen_node = None
+    expected_slab_ids = []
 
-    if not input_slabs:
+    if input_slabs:
+        # Mode 1: Use pre-provided slabs (no slab generation needed)
+        expected_slab_ids = list(input_slabs.keys())
+
+    elif miller_indices:
+        # Mode 2: Generate slabs from RELAXED bulk structure
+        # This waits for bulk relaxation to complete, then generates slabs at runtime
+
+        slab_gen_node = wg.add_task(
+            generate_multiple_miller_slabs,
+            name="generate_slabs_from_relaxed_bulk",
+            bulk_structure=bulk_node.outputs.structure,  # Relaxed bulk!
+            miller_indices_list=orm.List(miller_indices),
+            min_slab_thickness=orm.Float(min_slab_thickness),
+            min_vacuum_thickness=orm.Float(min_vacuum_thickness),
+            lll_reduce=orm.Bool(lll_reduce),
+            center_slab=orm.Bool(center_slab),
+            symmetrize=orm.Bool(symmetrize),
+            primitive=orm.Bool(primitive),
+            in_unit_planes=orm.Bool(in_unit_planes),
+            max_normal_search=orm.Int(max_normal_search) if max_normal_search else orm.Int(1),
+        )
+
+        # Pre-allocate expected slab IDs based on miller_indices
+        # Assume max 20 terminations per Miller index (conservative estimate)
+        # Can be increased if needed for complex structures
+        max_terminations_per_miller = 20
+        for miller in miller_indices:
+            miller_str = ''.join(map(str, miller))
+            for term_idx in range(max_terminations_per_miller):
+                expected_slab_ids.append(f"slab_{miller_str}_term_{term_idx}")
+    else:
         raise ValueError(
-            "input_slabs is required. Dynamic slab generation is not yet supported "
-            "in serial mode. Please provide input_slabs as a dictionary of "
-            "slab_id -> StructureData. To generate slabs, use the "
-            "generate_slab_structures function separately and pass the result "
-            "as input_slabs."
+            "Either input_slabs or miller_indices must be provided. "
+            "Provide input_slabs as a dict of {slab_id: StructureData}, "
+            "OR provide miller_indices as a list of tuples like [(1,0,0), (1,1,0)]"
         )
 
-    # Use provided slabs
-    slab_structures = input_slabs
-
     # =========================================================================
-    # PHASE 4: Slab calculations
+    # PHASE 4: Slab calculations (SCF and Relaxation)
     # =========================================================================
 
-    # Build SCF (unrelaxed) nodes
+    scf_nodes = {}
+    relax_nodes = {}
+    unrelaxed_energy_nodes = {}
+    relaxed_energy_nodes = {}
+
+    # Create VASP tasks for each expected slab
     scf_params = create_default_scf_parameters()
-    scf_nodes = build_scf_slabs_nodes(
-        wg=wg,
-        slabs=input_slabs,
-        code=code,
-        potential_family=potential_family,
-        potential_mapping=slab_potential_mapping or bulk_potential_mapping,
-        kpoints_spacing=slab_kpoints_spacing,
-        parameters=scf_params,
-        options=slab_options or bulk_options,
-        clean_workdir=clean_workdir,
-    )
 
-    # Extract unrelaxed energies
-    unrelaxed_energy_nodes = build_energy_extraction_nodes(
-        wg=wg,
-        vasp_nodes=scf_nodes,
-        node_type="scf",
-    )
+    for slab_id in expected_slab_ids:
+        # Determine slab structure source
+        if input_slabs:
+            # Mode 1: Use pre-provided slab
+            slab_structure = input_slabs[slab_id]
+        else:
+            # Mode 2: Use dynamically generated slab from calcfunction output
+            # The output namespace is: slab_gen_node.outputs.slabs.<slab_id>
+            slab_structure = getattr(slab_gen_node.outputs.slabs, slab_id)
 
-    # Build relaxation nodes (if requested)
-    if relax_slabs:
-        relax_nodes = build_relax_slabs_nodes(
-            wg=wg,
-            slabs=input_slabs,
-            code=code,
-            potential_family=potential_family,
-            potential_mapping=slab_potential_mapping or bulk_potential_mapping,
-            kpoints_spacing=slab_kpoints_spacing,
-            parameters=slab_parameters,
-            options=slab_options or bulk_options,
-            clean_workdir=clean_workdir,
-        )
-
-        # Extract relaxed energies
-        relaxed_energy_nodes = build_energy_extraction_nodes(
-            wg=wg,
-            vasp_nodes=relax_nodes,
-            node_type="relaxed",
-        )
-
-        # Calculate relaxation energies (if requested)
-        if compute_relaxation_energy:
-            relaxation_energy_nodes = build_relaxation_energy_nodes(
-                wg=wg,
-                unrelaxed_energies=unrelaxed_energy_nodes,
-                relaxed_energies=relaxed_energy_nodes,
+        # SCF calculation
+        if slab_scf_builders and slab_id in slab_scf_builders:
+            scf_nodes[slab_id] = wg.add_task(
+                VaspWorkChain,
+                name=f"scf_slab_{slab_id}",
+                structure=slab_structure,
+                **slab_scf_builders[slab_id],
             )
+        else:
+            scf_vasp_params = prepare_vasp_parameters(
+                base_parameters=scf_params,
+                code=code,
+                potential_family=potential_family,
+                potential_mapping=slab_potential_mapping or bulk_potential_mapping,
+                kpoints_spacing=slab_kpoints_spacing,
+                options=slab_options or bulk_options,
+                clean_workdir=clean_workdir,
+            )
+            scf_nodes[slab_id] = wg.add_task(
+                VaspWorkChain,
+                name=f"scf_slab_{slab_id}",
+                structure=slab_structure,
+                **scf_vasp_params,
+            )
+
+        # Extract SCF energy
+        unrelaxed_energy_nodes[slab_id] = wg.add_task(
+            extract_total_energy,
+            name=f"extract_scf_energy_{slab_id}",
+            energies=scf_nodes[slab_id].outputs.misc,
+        )
+
+        # Relaxation calculation (if requested)
+        if relax_slabs:
+            if slab_relax_builders and slab_id in slab_relax_builders:
+                relax_nodes[slab_id] = wg.add_task(
+                    VaspWorkChain,
+                    name=f"relax_slab_{slab_id}",
+                    structure=slab_structure,
+                    **slab_relax_builders[slab_id],
+                )
+            else:
+                relax_vasp_params = prepare_vasp_parameters(
+                    base_parameters=slab_parameters,
+                    code=code,
+                    potential_family=potential_family,
+                    potential_mapping=slab_potential_mapping or bulk_potential_mapping,
+                    kpoints_spacing=slab_kpoints_spacing,
+                    options=slab_options or bulk_options,
+                    clean_workdir=clean_workdir,
+                )
+                relax_nodes[slab_id] = wg.add_task(
+                    VaspWorkChain,
+                    name=f"relax_slab_{slab_id}",
+                    structure=slab_structure,
+                    **relax_vasp_params,
+                )
+
+            # Extract relaxation energy
+            relaxed_energy_nodes[slab_id] = wg.add_task(
+                extract_total_energy,
+                name=f"extract_relaxed_energy_{slab_id}",
+                energies=relax_nodes[slab_id].outputs.misc,
+            )
+
+    # Calculate relaxation energies (if requested)
+    relaxation_energy_nodes = {}
+    if relax_slabs and compute_relaxation_energy:
+        relaxation_energy_nodes = build_relaxation_energy_nodes(
+            wg=wg,
+            unrelaxed_energies=unrelaxed_energy_nodes,
+            relaxed_energies=relaxed_energy_nodes,
+        )
 
     # =========================================================================
     # PHASE 5: Thermodynamics calculations
@@ -402,12 +719,20 @@ def surface_thermodynamics_serial_workgraph(
         # Use relaxed energies if available, otherwise SCF energies
         energy_nodes_for_thermo = relaxed_energy_nodes if relax_slabs else unrelaxed_energy_nodes
 
+        # Build slab structures dict for thermodynamics
+        slab_structures_for_thermo = {}
+        for slab_id in expected_slab_ids:
+            if input_slabs:
+                slab_structures_for_thermo[slab_id] = input_slabs[slab_id]
+            else:
+                slab_structures_for_thermo[slab_id] = getattr(slab_gen_node.outputs.slabs, slab_id)
+
         # Build surface energy nodes
         surface_energy_nodes = build_surface_energy_nodes(
             wg=wg,
             bulk_structure=bulk_node.outputs.structure,
             bulk_energy=bulk_energy_node.outputs.result,
-            slab_structures=input_slabs,
+            slab_structures=slab_structures_for_thermo,
             slab_energies=energy_nodes_for_thermo,
             reference_energies=reference_energies_node.outputs.result,
             formation_enthalpy=formation_enthalpy_node.outputs.result,
@@ -433,16 +758,29 @@ def surface_thermodynamics_serial_workgraph(
     outputs = {
         'bulk_energy': bulk_energy_node.outputs.result,
         'bulk_structure': bulk_node.outputs.structure,
-        'slab_structures': input_slabs,
     }
 
+    # Note: slab_structures are inputs, not outputs, so we don't return them
+    # The input_slabs dict is available from the workgraph's execution context
+
     if compute_thermodynamics:
-        outputs['metal_energy'] = reference_energy_nodes.get('metal').outputs.result if 'metal' in reference_energy_nodes else None
-        outputs['oxygen_energy'] = reference_energy_nodes.get('oxygen').outputs.result if 'oxygen' in reference_energy_nodes else None
-        outputs['nonmetal_energy'] = reference_energy_nodes.get('nonmetal').outputs.result if 'nonmetal' in reference_energy_nodes else None
-        outputs['metal_structure'] = reference_nodes.get('metal').outputs.structure if 'metal' in reference_nodes else None
-        outputs['oxygen_structure'] = reference_nodes.get('oxygen').outputs.structure if 'oxygen' in reference_nodes else None
-        outputs['nonmetal_structure'] = reference_nodes.get('nonmetal').outputs.structure if 'nonmetal' in reference_nodes else None
+        # Add reference energies (only if they exist)
+        if 'metal' in reference_energy_nodes:
+            outputs['metal_energy'] = reference_energy_nodes['metal'].outputs.result
+        if 'oxygen' in reference_energy_nodes:
+            outputs['oxygen_energy'] = reference_energy_nodes['oxygen'].outputs.result
+        if 'nonmetal' in reference_energy_nodes:
+            outputs['nonmetal_energy'] = reference_energy_nodes['nonmetal'].outputs.result
+
+        # Add reference structures (only if they exist)
+        if 'metal' in reference_nodes:
+            outputs['metal_structure'] = reference_nodes['metal'].outputs.structure
+        if 'oxygen' in reference_nodes:
+            outputs['oxygen_structure'] = reference_nodes['oxygen'].outputs.structure
+        if 'nonmetal' in reference_nodes:
+            outputs['nonmetal_structure'] = reference_nodes['nonmetal'].outputs.structure
+
+        # Add thermodynamics results
         outputs['formation_enthalpy'] = formation_enthalpy_node.outputs.result
         outputs['reference_energies'] = reference_energies_node.outputs.result
         outputs['oxide_type'] = oxide_type_node.outputs.result
@@ -474,7 +812,10 @@ def surface_thermodynamics_serial_workgraph(
             for slab_id, node in relaxation_energy_nodes.items()
         }
 
-    return outputs
+    # Set workgraph outputs
+    wg.outputs = outputs
+
+    return wg
 
 
 @task.calcfunction

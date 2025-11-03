@@ -11,7 +11,8 @@ def build_custom_calculation_workgraph(
     structure,
     code_label,
     builder_inputs,
-    name='custom_calc'
+    name='custom_calc',
+    max_concurrent_jobs=None
 ):
     """
     Build a WorkGraph for custom VASP calculations.
@@ -28,6 +29,8 @@ def build_custom_calculation_workgraph(
             - clean_workdir: bool
             - settings: Dict (optional)
         name: str, WorkGraph name
+        max_concurrent_jobs: int, optional - Maximum number of concurrent VASP calculations
+                           (only applies to multiple structure workflows). Default: None (unlimited)
 
     Returns:
         WorkGraph ready to submit
@@ -41,6 +44,10 @@ def build_custom_calculation_workgraph(
 
     # Create WorkGraph
     wg = WorkGraph(name=name)
+
+    # Set max_number_jobs if specified (for concurrency control)
+    if max_concurrent_jobs is not None:
+        wg.max_number_jobs = max_concurrent_jobs
 
     # Detect single vs multiple structures
     is_single = isinstance(structure, orm.StructureData)

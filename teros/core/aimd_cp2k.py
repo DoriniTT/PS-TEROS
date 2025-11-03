@@ -32,6 +32,7 @@ def aimd_single_stage_scatter_cp2k(
     fix_type: str = None,
     fix_thickness: float = 0.0,
     fix_elements: list = None,
+    max_number_jobs: int = None,
 ) -> t.Annotated[dict, namespace(
     structures=dynamic(orm.StructureData),
     remote_folders=dynamic(orm.RemoteData),
@@ -61,6 +62,7 @@ def aimd_single_stage_scatter_cp2k(
         fix_type: Optional - for dynamic calculation: 'bottom', 'top', 'center'
         fix_thickness: Optional - for dynamic calculation: thickness in Angstroms
         fix_elements: Optional - for dynamic calculation: list of element symbols
+        max_number_jobs: Maximum number of concurrent CP2K calculations (None = unlimited)
 
     Returns:
         Dictionary with outputs per slab:
@@ -70,8 +72,15 @@ def aimd_single_stage_scatter_cp2k(
             - trajectories: Trajectory data from MD
             - retrieved: Retrieved folder data
     """
+    from aiida_workgraph import get_current_graph
     from teros.core.builders.aimd_builder_cp2k import prepare_aimd_parameters_cp2k
     from teros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters, get_fixed_atoms_list
+
+    # Set max_number_jobs on this workgraph to control concurrency
+    if max_number_jobs is not None:
+        wg = get_current_graph()
+        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        wg.max_number_jobs = max_jobs_value
 
     # Get CP2K workchain
     Cp2kWorkChain = WorkflowFactory('cp2k.base')

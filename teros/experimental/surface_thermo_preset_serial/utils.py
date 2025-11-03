@@ -29,7 +29,7 @@ def prepare_vasp_parameters(
     """
     params = {
         'code': code,
-        'parameters': orm.Dict(dict=base_parameters),
+        'parameters': orm.Dict(dict={'incar': base_parameters}),
         'potential_family': orm.Str(potential_family),
         'potential_mapping': orm.Dict(dict=potential_mapping),
         'options': orm.Dict(dict=options or {}),

@@ -54,6 +54,7 @@ def build_surface_energy_nodes(
             slab_structure=slab_structure,
             slab_energy=slab_energies[slab_id].outputs.result,
             reference_energies=reference_energies,
+            formation_enthalpy=formation_enthalpy,
             sampling=orm.Int(sampling),
         )
 

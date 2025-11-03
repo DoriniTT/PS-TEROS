@@ -335,7 +335,9 @@ wg = build_core_workgraph(
 - `8+`: Higher concurrency for larger clusters
 - `None`: Unlimited (full parallel)
 
-See [CONCURRENCY_CONTROL.md](./CONCURRENCY_CONTROL.md) for details.
+**✨ New in v2.1.0:** Now works correctly with nested sub-workgraphs! The concurrency limit is properly propagated through all nesting levels.
+
+See [CONCURRENCY_CONTROL.md](./CONCURRENCY_CONTROL.md) for details and verification examples.
 
 ---
 
@@ -502,6 +504,70 @@ compute_cleavage=False,  # Disable this feature
 ### Q: What happens if I don't specify a preset?
 
 **A:** The system defaults to `surface_thermodynamics`. If you set individual flags without a preset, you'll see a deprecation warning.
+
+---
+
+## Experimental Presets
+
+⚠️ **EXPERIMENTAL: Use with Caution**
+
+### Serial Surface Thermodynamics (Experimental)
+
+**Module:** `teros.experimental.surface_thermo_preset_serial`
+
+**Status:** In active development, API may change
+
+**Purpose:** Flat-graph architecture where `max_number_jobs` controls all VASP calculations.
+
+**Why:** The standard preset uses nested sub-workgraphs. Setting `max_number_jobs` on the main graph does not propagate to nested graphs, causing all VASP jobs to submit simultaneously.
+
+**Key Difference:**
+
+| Standard Preset | Serial Preset (Experimental) |
+|----------------|------------------------------|
+| Nested sub-workgraphs | Flat single-level graph |
+| `max_number_jobs` limited effect | `max_number_jobs` controls all VASP |
+| Dynamic slab generation | Pre-generated slabs required |
+
+**Usage:**
+
+```python
+from teros.experimental.surface_thermo_preset_serial import (
+    surface_thermodynamics_serial_workgraph
+)
+
+# Pre-generate slabs first
+slabs_dict = {
+    'slab_100': orm.StructureData(...),
+    'slab_110': orm.StructureData(...),
+}
+
+# Build workgraph
+wg = surface_thermodynamics_serial_workgraph(
+    input_slabs=slabs_dict,  # Required
+    structures_dir='structures',
+    bulk_name='ag2o.cif',
+    metal_name='Ag.cif',
+    oxygen_name='O2.cif',
+    # ... other parameters
+)
+
+# Set concurrency limit (now works!)
+wg.max_number_jobs = 2
+
+# Submit
+wg.submit()
+```
+
+**Limitations:**
+- Pre-generated slabs required (no dynamic generation)
+- Experimental status (API may change)
+- Limited production testing
+
+**Documentation:**
+- Full guide: `docs/SERIAL_PRESET_EXPERIMENTAL.md`
+- Example: `examples/vasp/step_16_surface_thermodynamics_serial.py`
+- Module README: `teros/experimental/surface_thermo_preset_serial/README.md`
 
 ---
 

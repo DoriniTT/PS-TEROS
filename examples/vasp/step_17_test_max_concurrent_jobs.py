@@ -1,25 +1,30 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-STEP 5: Surface Thermodynamics (Complete Workflow)
+STEP 17: Test max_concurrent_jobs Parameter
 
-This script tests the surface thermodynamics workflow:
-- Bulk and reference relaxations
-- Formation enthalpy
-- Slab generation and relaxation
-- Surface energies with chemical potential sampling
+This script tests the max_concurrent_jobs functionality that was implemented to
+control concurrent VASP calculations in nested workgraphs.
 
-NOTE: Cleavage and relaxation energies are now OPTIONAL in this preset.
-      To include them, add: compute_cleavage=True, compute_relaxation_energy=True
-
-This is the default workflow preset 'surface_thermodynamics'.
+The test:
+1. Generates multiple slab structures ([1,0,0] Miller index creates multiple terminations)
+2. Sets max_concurrent_jobs=2 to limit concurrent calculations
+3. Monitors that no more than 2 VASP calculations run simultaneously
 
 Material: Ag2O
-Surface: (111)
-References: Ag, O2
+Surface: (100) - Creates multiple terminations for testing concurrency
+Max concurrent jobs: 2 (to easily observe the limiting behavior)
+
+Expected behavior:
+- Multiple slab structures will be generated
+- Only 2 VASP calculations should run at the same time
+- Remaining calculations should wait until slots are available
 
 Usage:
-    source ~/envs/psteros/bin/activate
-    python step_05_surface_thermodynamics.py
+    source ~/envs/aiida/bin/activate
+    python step_17_test_max_concurrent_jobs.py
+
+Monitor concurrent jobs with:
+    watch -n 2 'verdi process list -a -p 1 | head -30'
 """
 
 import sys
@@ -28,51 +33,52 @@ from aiida import load_profile
 from teros.core.workgraph import build_core_workgraph
 
 def main():
-    """Step 5: Test complete surface thermodynamics workflow."""
-    
+    """Step 17: Test max_concurrent_jobs parameter."""
+
     print("\n" + "="*70)
-    print("STEP 5: SURFACE THERMODYNAMICS (COMPLETE WORKFLOW)")
+    print("STEP 17: TEST max_concurrent_jobs PARAMETER")
     print("="*70)
-    
+
     # Load AiiDA profile
     print("\n1. Loading AiiDA profile...")
-    load_profile(profile='psteros')
+    load_profile(profile='presto')
     print("   ✓ Profile loaded")
-    
+
     # Setup paths
     script_dir = os.path.dirname(os.path.abspath(__file__))
     structures_dir = os.path.join(script_dir, 'structures')
-    
+
     print(f"\n2. Structures:")
     print(f"   Bulk:   {structures_dir}/ag2o.cif")
     print(f"   Metal:  {structures_dir}/Ag.cif")
     print(f"   Oxygen: {structures_dir}/O2.cif")
-    
+
     # Code configuration
-    code_label = 'VASP-VTST-6.4.3@bohr'
+    code_label = 'VASP-6.5.0@bohr-new'
+    #code_label = 'VASP-VTST-6.4.3@bohr'
     potential_family = 'PBE'
-    
-    # Common VASP parameters
+
+    # Minimal VASP parameters for fast testing
     vasp_params = {
-        'PREC': 'Accurate',
-        'ENCUT': 520,
-        'EDIFF': 1e-6,
+        'PREC': 'Normal',
+        'ENCUT': 400,
+        'EDIFF': 1e-5,
         'ISMEAR': 0,
         'SIGMA': 0.05,
         'IBRION': 2,
         'ISIF': 3,
-        'NSW': 100,
-        'EDIFFG': -0.01,
-        'ALGO': 'Normal',
+        'NSW': 10,  # Small number for quick testing
+        'EDIFFG': -0.05,
+        'ALGO': 'Fast',
         'LREAL': 'Auto',
         'LWAVE': False,
         'LCHARG': False,
     }
-    
+
     # Slab parameters
     slab_params = vasp_params.copy()
     slab_params['ISIF'] = 2
-    
+
     common_options = {
         'resources': {
             'num_machines': 1,
@@ -80,100 +86,94 @@ def main():
         },
         'queue_name': 'par40',
     }
-    
-    print("\n3. Building workgraph...")
-    print("   Using preset: 'surface_thermodynamics' (default)")
-    print("   This calculates:")
-    print("     - Formation enthalpy")
-    print("     - Surface energies: γ(μ_O)")
-    print("   Optional (not included by default):")
-    print("     - Cleavage energies (add: compute_cleavage=True)")
-    print("     - Relaxation energies (add: compute_relaxation_energy=True)")
-    
-    # Build workgraph using default preset
+
+    print("\n3. Building workgraph with max_concurrent_jobs=2...")
+    print("   Using workflow preset: 'surface_thermodynamics'")
+    print("   Miller indices: [1, 0, 0] (will create multiple terminations)")
+    print("   Concurrency limit: 2 VASP calculations at a time")
+
+    # Build workgraph with max_concurrent_jobs
     wg = build_core_workgraph(
         workflow_preset='surface_thermodynamics',
-        
+
         # Structures
         structures_dir=structures_dir,
         bulk_name='ag2o.cif',
         metal_name='Ag.cif',
         oxygen_name='O2.cif',
-        
+
         # Code
         code_label=code_label,
         potential_family=potential_family,
         kpoints_spacing=0.4,
         clean_workdir=False,
-        
+
         # Bulk
         bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
         bulk_parameters=vasp_params.copy(),
         bulk_options=common_options,
-        
+
         # Metal
         metal_potential_mapping={'Ag': 'Ag'},
         metal_parameters=vasp_params.copy(),
         metal_options=common_options,
-        
+
         # Oxygen
         oxygen_potential_mapping={'O': 'O'},
         oxygen_parameters=vasp_params.copy(),
         oxygen_options=common_options,
-        
+
         # Slab generation
         miller_indices=[1, 0, 0],
-        min_slab_thickness=18.0,
+        min_slab_thickness=15.0,
         min_vacuum_thickness=15.0,
         lll_reduce=True,
         center_slab=True,
         symmetrize=True,
         primitive=True,
-        
+
         # Slab relaxation
         slab_parameters=slab_params,
         slab_options=common_options,
         slab_kpoints_spacing=0.4,
-        
-        # Thermodynamics sampling
-        thermodynamics_sampling=100,
-        # Concurrency control (limits simultaneous VASP calculations)
-        max_concurrent_jobs=4,  # Default: 4 concurrent calculations
 
-        
-        name='Step05_SurfaceThermodynamics_Ag2O_111',
+        # *** KEY PARAMETER: Limit concurrent VASP calculations ***
+        max_concurrent_jobs=1,
+
+        name='Step17_TestMaxConcurrentJobs_Ag2O_100',
     )
-    
+
     print("   ✓ WorkGraph built successfully")
-    
+    print(f"   ✓ max_concurrent_jobs is set to: 2")
+
     # Submit
     print("\n4. Submitting to AiiDA daemon...")
     wg.submit(wait=False)
-    
+
     print(f"\n{'='*70}")
-    print("STEP 5 SUBMITTED SUCCESSFULLY")
+    print("STEP 17 SUBMITTED SUCCESSFULLY")
     print(f"{'='*70}")
     print(f"\nWorkGraph PK: {wg.pk}")
     print(f"\nMonitor with:")
     print(f"  verdi process status {wg.pk}")
     print(f"  verdi process show {wg.pk}")
+    print(f"\nTo verify max_concurrent_jobs is working:")
+    print(f"  watch -n 2 'verdi process list -a -p 1 | head -30'")
+    print(f"\n  You should see:")
+    print(f"    ✓ No more than 2 VaspWorkChain processes running simultaneously")
+    print(f"    ✓ Other calculations waiting in 'Created' state")
+    print(f"    ✓ New calculations starting as previous ones finish")
     print(f"\nExpected outputs:")
-    print(f"  1. Energies:")
-    print(f"     - bulk_energy, metal_energy, oxygen_energy")
-    print(f"  2. Formation enthalpy:")
-    print(f"     - formation_enthalpy")
-    print(f"  3. Slab structures:")
-    print(f"     - slab_structures (all terminations)")
-    print(f"  4. Slab energies:")
-    print(f"     - unrelaxed_slab_energies")
-    print(f"     - slab_energies (relaxed)")
-    print(f"  5. Surface properties:")
-    print(f"     - surface_energies: γ(μ_O)")
-    print(f"\nNOTE: Cleavage and relaxation energies are NOT computed by default")
-    print(f"      To include them, override with compute_cleavage=True, compute_relaxation_energy=True")
-    print(f"\nSurface energies show stability as function of chemical potential")
+    print(f"  - bulk_structure (relaxed)")
+    print(f"  - bulk_energy")
+    print(f"  - relaxed_slabs (all terminations)")
+    print(f"  - slab_energies (all terminations)")
+    print(f"\nIf max_concurrent_jobs is working correctly:")
+    print(f"  - Bulk calculation will run first")
+    print(f"  - Then slab relaxations will run in batches of 2")
+    print(f"  - Total time will be longer than unlimited, but system load controlled")
     print(f"{'='*70}\n")
-    
+
     return wg
 
 

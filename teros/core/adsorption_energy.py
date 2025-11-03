@@ -580,6 +580,9 @@ def compute_adsorption_energies_scatter(
     fix_type: str | None = None,
     fix_thickness: float = 0.0,
     fix_elements: list[str] | None = None,
+
+    # Concurrency control
+    max_number_jobs: int = None,
 ) -> t.Annotated[dict, namespace(
     relaxed_complete_structures=dynamic(orm.StructureData),
     separated_structures=dynamic(dict),
@@ -643,6 +646,8 @@ def compute_adsorption_energies_scatter(
         fix_thickness: Thickness in Angstrom for fixing region
         fix_elements: Optional list of elements to fix (None = all elements)
 
+        max_number_jobs: Maximum number of concurrent VASP calculations (None = unlimited)
+
     Returns:
         Dictionary with namespaces:
         - relaxed_complete_structures: Relaxed structures (empty if relax=False)
@@ -669,6 +674,14 @@ def compute_adsorption_energies_scatter(
         ...     kpoints_spacing=0.6,
         ... )
     """
+    from aiida_workgraph import get_current_graph
+
+    # Set max_number_jobs on this workgraph to control concurrency
+    if max_number_jobs is not None:
+        wg = get_current_graph()
+        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        wg.max_number_jobs = max_jobs_value
+
     # Validate inputs
     if structures.keys() != adsorbate_formulas.keys():
         raise ValueError(
