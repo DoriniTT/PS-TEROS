@@ -124,13 +124,14 @@ def aimd_single_stage_scatter(
     temperature: float,
     steps: int,
     code: orm.Code,
-    aimd_parameters: dict,
+    base_aimd_parameters: dict,
     potential_family: str,
     potential_mapping: dict,
     options: dict,
     kpoints_spacing: float,
     clean_workdir: bool,
     restart_folders: t.Annotated[dict[str, orm.RemoteData], dynamic(orm.RemoteData)] = {},
+    structure_aimd_overrides: dict[str, dict] = None,
     max_number_jobs: int = None,
 ) -> t.Annotated[dict, namespace(structures=dynamic(orm.StructureData), remote_folders=dynamic(orm.RemoteData), energies=dynamic(orm.Float))]:
     """
@@ -144,13 +145,17 @@ def aimd_single_stage_scatter(
         temperature: Target temperature in K
         steps: Number of MD steps for this stage
         code: VASP code
-        aimd_parameters: Base AIMD INCAR parameters (IBRION=0, MDALGO, etc.)
+        base_aimd_parameters: Base AIMD INCAR parameters (IBRION=0, MDALGO, etc.)
+                             Applied to all structures by default
         potential_family: Potential family name
         potential_mapping: Element to potential mapping
         options: Scheduler options
         kpoints_spacing: K-points spacing
         clean_workdir: Whether to clean work directory
         restart_folders: Optional dict of RemoteData for restart (from previous stage)
+        structure_aimd_overrides: Optional per-structure INCAR overrides.
+                                 Format: {structure_name: {INCAR_key: value}}
+                                 Missing structures use base_aimd_parameters.
         max_number_jobs: Maximum number of concurrent VASP calculations (None = unlimited)
 
     Returns:
