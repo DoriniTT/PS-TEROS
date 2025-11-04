@@ -176,24 +176,44 @@ def build_aimd_workgraph(
         temperature = stage_config['temperature']
         steps = stage_config['steps']
 
-        # TODO: Implement per-structure override system
-        # Currently, all structures use the same builder_inputs.
-        # To implement overrides, need to either:
-        #   1. Modify aimd_single_stage_scatter to accept per-structure parameters, OR
-        #   2. Call aimd_single_stage_scatter separately for each structure
-        #
-        # The helper function _get_builder_for_structure_stage() is ready to use
-        # once the underlying scatter function supports per-structure configuration.
+        # Build per-structure INCAR overrides for this stage
+        structure_incar_overrides = {}
+
+        for struct_name in prepared_structures:
+            # Start with empty override
+            override = {}
+
+            # Apply structure-level override (if exists)
+            if structure_overrides and struct_name in structure_overrides:
+                struct_override = structure_overrides[struct_name]
+                if 'parameters' in struct_override and 'incar' in struct_override['parameters']:
+                    override.update(struct_override['parameters']['incar'])
+
+            # Apply stage-level override (if exists)
+            if stage_overrides and stage_idx in stage_overrides:
+                stage_override = stage_overrides[stage_idx]
+                if 'parameters' in stage_override and 'incar' in stage_override['parameters']:
+                    override.update(stage_override['parameters']['incar'])
+
+            # Apply matrix-level override (highest priority)
+            matrix_key = (struct_name, stage_idx)
+            if matrix_overrides and matrix_key in matrix_overrides:
+                matrix_override = matrix_overrides[matrix_key]
+                if 'parameters' in matrix_override and 'incar' in matrix_override['parameters']:
+                    override.update(matrix_override['parameters']['incar'])
+
+            # Only add to dict if we have actual overrides
+            if override:
+                structure_incar_overrides[struct_name] = override
+
+        # Extract base INCAR from builder_inputs
+        if 'parameters' in builder_inputs and 'incar' in builder_inputs['parameters']:
+            base_incar = builder_inputs['parameters']['incar'].copy()
+        else:
+            base_incar = {}
 
         # Load code
         code = orm.load_code(code_label)
-
-        # Prepare AIMD parameters from builder_inputs
-        # Extract base AIMD INCAR parameters
-        if 'parameters' in builder_inputs and 'incar' in builder_inputs['parameters']:
-            aimd_base_params = builder_inputs['parameters']['incar'].copy()
-        else:
-            aimd_base_params = {}
 
         # Create stage task
         stage_task = wg.add_task(
@@ -202,13 +222,14 @@ def build_aimd_workgraph(
             temperature=temperature,
             steps=steps,
             code=code,
-            aimd_parameters=aimd_base_params,
+            base_aimd_parameters=base_incar,
+            structure_aimd_overrides=structure_incar_overrides if structure_incar_overrides else None,
             potential_family=builder_inputs.get('potential_family', 'PBE'),
             potential_mapping=builder_inputs.get('potential_mapping', {}),
             options=builder_inputs.get('options', {}),
             kpoints_spacing=builder_inputs.get('kpoints_spacing', 0.5),
             clean_workdir=builder_inputs.get('clean_workdir', False),
-            restart_folders=current_remote_folders,  # Empty {} on first stage, Socket on later stages
+            restart_folders=current_remote_folders,
             max_number_jobs=max_concurrent_jobs,
             name=f'stage_{stage_idx}_aimd',
         )
