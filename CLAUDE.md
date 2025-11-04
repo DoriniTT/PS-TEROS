@@ -29,41 +29,42 @@ Folders:
 
   **When running tests**
 
-  Use the VASP6.5.0@cluster02 code. It uses a cluster with 24 processors which have these information:
------------------------  --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-PK                       122432
-UUID                     699ca05a-6901-429f-a5ee-6fe21edd9db7
+  Use the VASP6.5.1@cluster02 code. It uses a cluster with 24 processors which have these information:
+
+PK                       124130
+UUID                     2cc402ca-891e-4844-b84b-bacec1df2c0e
 Type                     core.code.installed
-Pk                       122432
-Uuid                     699ca05a-6901-429f-a5ee-6fe21edd9db7
+Pk                       124130
+Uuid                     2cc402ca-891e-4844-b84b-bacec1df2c0e
 Node type                data.core.code.installed.InstalledCode.
 Process type
 Repository metadata      {}
-Ctime                    2025-11-03 07:48:43.086994-03:00
-Mtime                    2025-11-03 07:48:43.120913-03:00
-Label                    VASP6.5.0
-Description              VASP 6.5.0
-Attributes               {'with_mpi': None, 'append_text': '', 'input_plugin': 'vasp.vasp', 'prepend_text': '. /home/umsl02/Programs/spack/share/spack/setup-env.sh', 'use_double_quotes': False, 'filepath_executable': '/usr/local/bin/vasp_std', 'wrap_cmdline_params': False}
-Extras                   {'hidden': False, '_aiida_hash': 'a0bfbc12e319d46a026a97fd3f0e9216ac7b6bc6febb106eb6c8f273cb93c576'}
-Computer                 cluster02 (umsl02), pk: 95
+Ctime                    2025-11-03 20:51:03.443188-03:00
+Mtime                    2025-11-03 20:51:03.482991-03:00
+Label                    VASP-6.5.1
+Description              VASP 6.5.1
+Attributes               {'with_mpi': None, 'append_text': '', 'input_plugin': 'vasp.vasp', 'prepend_text': 'source /home/umsl02/Programs/load-vasp-6.5.1.sh\n', 'use_double_quotes': False, 'filepath_executable': '/home/umsl02/Programs/spack/opt/spack/linux-skylake/vasp-6.5.1-mxw7wmvghgvg3vkknylaqrvminkn6gwj/bin/vasp_std', 'wrap_cmdline_params': False}
+Extras                   {'hidden': False, '_aiida_hash': 'de588cba661946ef235a7dcc48dec3e415862c107fd8318074f63dc7152f869c'}
+Computer                 cluster02 (umsl02), pk: 97
 User                     aiida@localhost
 Source
 Default calc job plugin  vasp.vasp
 Use double quotes        False
 With mpi
-Prepend text             . /home/umsl02/Programs/spack/share/spack/setup-env.sh
+Prepend text             source /home/umsl02/Programs/load-vasp-6.5.1.sh
 Append text
-Filepath executable      /usr/local/bin/vasp_std
------------------------  --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  
-  - It do not have a queue.
-  - Use the num_cores_per_machine=24, like this:
-  options = {
+Filepath executable      /home/umsl02/Programs/spack/opt/spack/linux-skylake/vasp-6.5.1-mxw7wmvghgvg3vkknylaqrvminkn6gwj/bin/vasp_std
+
+It do not have a queue.
+Use the num_cores_per_machine=24, like this:
+options = {
     'resources': {
         'num_machines': 1,
         'num_cores_per_machine': 24, 
     },
 }
+Keep in mind that it can only launch one calculation at a time, so you MUST set max_concurrent_jobs=1 in the workgraph.
+When correcting errors, dont forget to kill the main workgraph (and all its sub nodes) node with verdi process kill <WORKGRAPH_PK>. In addition, it will not kill the calculation in the cluster02, so you need to manually run ssh cluster02 killall vasp_std. After this you may run the test script again.
 
 * **Python binary**
 
@@ -74,7 +75,7 @@ Filepath executable      /usr/local/bin/vasp_std
 * **Launch workflow**
 
   ```bash
-  source ~/envs/aiida/bin/activate && /home/thiagotd/envs/aiida/bin/python /home/thiagotd/git/PS-TEROS/examples/vasp/update_psteros/psteros_vasp.py
+  source ~/envs/aiida/bin/activate && /home/thiagotd/envs/aiida/bin/python /home/thiagotd/git/PS-TEROS/examples/vasp/step_x_example.py
   ```
 
 * **Wait for results**: Use `sleep 15` (or more) before analyzing nodes
@@ -91,12 +92,6 @@ Filepath executable      /usr/local/bin/vasp_std
   ```bash
   find . -type d -name __pycache__ -exec rm -rf {} + && find . -name "*.pyc" -delete
   ```
-
----
-
-## GitHub Workflow
-
-After you successfully implement and test a new feature, you may add, commit, and merge it into the **`develop`** branch. Below is the recommended workflow.
 
 ---
 
@@ -131,24 +126,6 @@ Your implementation is considered correct and ready to merge when:
 * The feature you implemented appears correctly in the main node output and behaves as expected.
 * The calculations may take some time, so use 'sleep' bash command to wait until you clearly see the modification that we are implemeted work correctly when checking the calculation with 'verdi process show <PK>' or 'verdi process report <PK>'.
 
----
-
-### Committing and Pushing Changes
-
-Once the above criteria are met, you can commit and push your changes:
-
-```bash
-git add -A
-git commit -m "Describe the feature or fix clearly."
-git pull
-git push
-```
-
-Then return to the `develop` branch:
-
-```bash
-cd /home/thiagotd/git/PS-TEROS
-```
 ---
 
 ## Documentation

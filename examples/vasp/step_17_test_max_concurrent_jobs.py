@@ -54,8 +54,8 @@ def main():
     print(f"   Oxygen: {structures_dir}/O2.cif")
 
     # Code configuration
-    code_label = 'VASP-6.5.0@bohr-new'
-    #code_label = 'VASP-VTST-6.4.3@bohr'
+    #code_label = 'VASP-6.5.0@bohr-new'
+    code_label = 'VASP-6.5.1@cluster02'
     potential_family = 'PBE'
 
     # Minimal VASP parameters for fast testing
@@ -82,9 +82,8 @@ def main():
     common_options = {
         'resources': {
             'num_machines': 1,
-            'num_cores_per_machine': 40,
+            'num_cores_per_machine': 24,
         },
-        'queue_name': 'par40',
     }
 
     print("\n3. Building workgraph with max_concurrent_jobs=2...")
