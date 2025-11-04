@@ -145,8 +145,7 @@ def _aimd_single_stage_scatter_impl(
 @task.graph
 def aimd_single_stage_scatter(
     slabs: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
-    temperature: float,
-    steps: int,
+    stage_config: dict,
     code: orm.Code,
     base_aimd_parameters: dict,
     potential_family: str,
@@ -161,15 +160,15 @@ def aimd_single_stage_scatter(
     """
     Run single AIMD stage on all slabs in parallel using scatter-gather pattern.
 
-    This function handles ONE temperature/timestep stage for all slabs.
+    This function handles ONE AIMD stage for all slabs.
     Call it multiple times sequentially to build multi-stage AIMD workflows.
 
     Args:
         slabs: Dictionary of slab structures to run AIMD on
-        temperature: Target temperature in K
-        steps: Number of MD steps for this stage
+        stage_config: Stage AIMD configuration dict with TEBEG, NSW (required)
+                     and TEEND, POTIM, MDALGO, SMASS (optional)
         code: VASP code
-        base_aimd_parameters: Base AIMD INCAR parameters (IBRION=0, MDALGO, etc.)
+        base_aimd_parameters: Base AIMD INCAR parameters
                              Applied to all structures by default
         potential_family: Potential family name
         potential_mapping: Element to potential mapping
@@ -206,22 +205,22 @@ def aimd_single_stage_scatter(
 
     # Scatter: create AIMD task for each slab (runs in parallel)
     for slab_label, slab_structure in slabs.items():
-        # Merge base parameters with structure-specific overrides
+        # Step 1: Apply stage AIMD parameters to base
+        stage_params = prepare_aimd_parameters(base_aimd_parameters, stage_config)
+
+        # Step 2: Merge with structure-specific overrides
         if structure_aimd_overrides and slab_label in structure_aimd_overrides:
             # Shallow merge: structure overrides take precedence
-            merged_params = {**base_aimd_parameters, **structure_aimd_overrides[slab_label]}
+            merged_params = {**stage_params, **structure_aimd_overrides[slab_label]}
         else:
-            # No override for this structure, use base
-            merged_params = base_aimd_parameters
-
-        # Prepare parameters for this stage
-        stage_params = prepare_aimd_parameters(merged_params, temperature, steps)
+            # No override for this structure
+            merged_params = stage_params
 
         # Build VASP inputs
         vasp_inputs = {
             'structure': slab_structure,
             'code': code,
-            'parameters': {'incar': stage_params},
+            'parameters': {'incar': merged_params},
             'options': dict(options),
             'potential_family': potential_family,
             'potential_mapping': dict(potential_mapping),
