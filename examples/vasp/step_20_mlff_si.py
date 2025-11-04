@@ -1,13 +1,19 @@
 #!/home/thiagotd/envs/aiida/bin/python
 """
-STEP 20: MLFF with Silicon Bulk
+STEP 20: MLFF Training with Silicon
 
-Tests basic MLFF workflow: Training → Production
-Uses simple Si bulk structure for fast testing.
+Simple MLFF training workflow based on VASP Liquid Si example.
+Trains ML force field on-the-fly during MD simulation.
 
 Workflow:
-- Stage 0: Train MLFF (20 steps for quick test)
-- Stage 1: Production run with ML forces (50 steps)
+  Stage 0: Training (ML_ISTART=0)
+    - VASP runs DFT+MD
+    - ML model learns on-the-fly
+    - Generates ML_AB (training data) and ML_FFN (model)
+
+Optional Stage 1: Production (ML_ISTART=2)
+    - Uses trained ML model
+    - Much faster than DFT
 """
 
 import sys
@@ -19,7 +25,7 @@ from ase.io import read
 
 def main():
     print("\n" + "="*70)
-    print("STEP 20: MLFF with Silicon Bulk")
+    print("STEP 20: MLFF Training with Silicon")
     print("="*70)
 
     # Load profile
@@ -31,94 +37,53 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     si_cif = os.path.join(script_dir, 'structures', 'Si.cif')
 
-    print(f"\n2. Loading Si structure: {si_cif}")
+    print(f"\n2. Loading structure: {si_cif}")
     si_ase = read(si_cif)
     si_structure = orm.StructureData(ase=si_ase)
-    print(f"   ✓ Loaded: {len(si_structure.sites)} atoms")
+    print(f"   ✓ {len(si_structure.sites)} atoms")
 
-    # Code configuration
-    code_label = 'VASP6.5.0@cluster02'
-    potential_family = 'PBE'
+    print(f"\n3. MLFF configuration:")
+    print(f"   Training: 100 MD steps with ML learning")
+    print(f"   Temperature: 300 K")
+    print(f"   Code: VASP6.5.0@cluster02")
 
-    print(f"\n3. VASP configuration:")
-    print(f"   Code: {code_label}")
-    print(f"   Potential: {potential_family}")
-
-    # Builder inputs
-    builder_inputs = {
-        'parameters': {
-            'incar': {
-                # DFT settings
-                'PREC': 'Normal',
-                'ENCUT': 400,
-                'EDIFF': 1e-5,
-                'ISMEAR': 0,
-                'SIGMA': 0.05,
-                'ALGO': 'Normal',
-                'LREAL': 'Auto',
-
-                # MD settings
-                'IBRION': 0,      # MD
-                'MDALGO': 2,      # Nosé-Hoover
-                'POTIM': 1.0,     # 1 fs timestep
-                'SMASS': 0.0,
-
-                # Output
-                'LWAVE': True,    # Required for restart
-                'LCHARG': True,
-            }
-        },
-        'kpoints_spacing': 0.5,
-        'potential_family': potential_family,
-        'potential_mapping': {'Si': 'Si'},
-        'options': {
-            'resources': {
-                'num_machines': 1,
-                'num_cores_per_machine': 24,
-            },
-        },
-        'clean_workdir': False,  # Keep ML files!
-    }
-
-    print("\n4. MLFF configuration:")
-    print("   Training: 20 steps (DFT+ML)")
-    print("   Production: 50 steps (pure ML)")
-    print("   Temperature: 300 K")
-
-    # Build MLFF workgraph
-    print("\n5. Building MLFF workgraph...")
+    # Build MLFF workgraph (training only)
+    print("\n4. Building workgraph...")
     wg = build_mlff_workgraph(
         structures={'si_bulk': si_structure},
-        training_steps=20,      # Short for testing
-        production_steps=50,
-        temperature=300,
-        code_label=code_label,
-        builder_inputs=builder_inputs,
-        name='MLFF_Si_Test',
+        training_steps=100,         # Train for 100 steps
+        temperature=300,            # 300 K
+        code_label='VASP6.5.0@cluster02',
+        potential_family='PBE',
+        potential_mapping={'Si': 'Si'},
+        # Optional: Add production stage
+        # production_steps=500,     # Uncomment to add ML production run
     )
-    print("   ✓ WorkGraph built")
+    print("   ✓ WorkGraph created")
 
-    print("\n6. Expected workflow:")
-    print("   Stage 0: Training (20 steps, ~10 min)")
-    print("     → Generates ML_AB, ML_FFN")
-    print("   Stage 1: Production (50 steps, ~2 min)")
-    print("     → Uses ML forces (should be faster)")
+    print("\n5. Workflow stages:")
+    print("   Stage 0: Training (ML_ISTART=0)")
+    print("     - DFT+MD with on-the-fly ML learning")
+    print("     - Generates ML_AB and ML_FFN files")
+    print("     - ~50 minutes estimated")
 
     # Submit
-    print("\n7. Submitting...")
+    print("\n6. Submitting...")
     wg.submit(wait=False)
 
     print(f"\n{'='*70}")
-    print("SUBMITTED SUCCESSFULLY")
+    print("SUBMITTED")
     print(f"{'='*70}")
     print(f"\nWorkGraph PK: {wg.pk}")
     print(f"\nMonitor:")
     print(f"  verdi process status {wg.pk}")
     print(f"  verdi process show {wg.pk}")
-    print(f"\nCritical checks:")
-    print(f"  1. Stage 0 completes (check for ML_ABN, ML_FFN)")
-    print(f"  2. Stage 1 finds ML files (check OUTCAR for 'reading ML_FFN')")
-    print(f"  3. Stage 1 faster than Stage 0")
+    print(f"\nAfter completion, check for ML files:")
+    print(f"  - ML_ABN: Training data")
+    print(f"  - ML_FFN: Trained neural network")
+    print(f"  - ML_LOGFILE: Training log with errors")
+    print(f"\nTo add production stage:")
+    print(f"  Uncomment 'production_steps=500' in the script")
     print(f"{'='*70}\n")
 
     return wg

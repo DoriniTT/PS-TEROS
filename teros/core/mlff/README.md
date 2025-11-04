@@ -1,6 +1,8 @@
 # MLFF Module
 
-Machine Learning Force Field workflows for PS-TEROS using VASP.
+Machine Learning Force Field workflows for VASP.
+
+Based on VASP Liquid Si MLFF example.
 
 ## Quick Start
 
@@ -10,43 +12,27 @@ from aiida import orm, load_profile
 from ase.io import read
 
 load_profile('presto')
-
 structure = orm.StructureData(ase=read('Si.cif'))
 
-builder_inputs = {
-    'parameters': {
-        'incar': {
-            'PREC': 'Normal',
-            'ENCUT': 400,
-            'EDIFF': 1e-5,
-            'ISMEAR': 0,
-            'SIGMA': 0.05,
-            'IBRION': 0,
-            'MDALGO': 2,
-            'POTIM': 1.0,
-            'LWAVE': True,
-            'LCHARG': True,
-        }
-    },
-    'kpoints_spacing': 0.5,
-    'potential_family': 'PBE',
-    'potential_mapping': {'Si': 'Si'},
-    'options': {
-        'resources': {
-            'num_machines': 1,
-            'num_cores_per_machine': 24,
-        },
-    },
-    'clean_workdir': False,
-}
-
+# Training only (simplest)
 wg = build_mlff_workgraph(
-    structures={'si_bulk': structure},
-    training_steps=200,
-    production_steps=5000,
+    structures={'si': structure},
+    training_steps=100,
     temperature=300,
     code_label='VASP6.5.0@cluster02',
-    builder_inputs=builder_inputs,
+    potential_family='PBE',
+    potential_mapping={'Si': 'Si'},
+)
+
+# Training + Production
+wg = build_mlff_workgraph(
+    structures={'si': structure},
+    training_steps=100,
+    production_steps=1000,  # ML-driven MD
+    temperature=300,
+    code_label='VASP6.5.0@cluster02',
+    potential_family='PBE',
+    potential_mapping={'Si': 'Si'},
 )
 
 wg.submit(wait=False)
@@ -54,35 +40,53 @@ wg.submit(wait=False)
 
 ## Workflow
 
-```
-Stage 0: Training (ML_ISTART=0)
-  - DFT+ML learning for N steps
-  - Generates ML_AB, ML_FFN
-  ↓
-Stage 1: Production (ML_ISTART=2)
-  - Pure ML predictions
-  - 10-100x faster than DFT
+**Training (ML_ISTART=0)**:
+- DFT+MD with on-the-fly ML learning
+- VASP trains neural network automatically
+- Generates: ML_AB (data), ML_FFN (model), ML_LOGFILE (log)
+
+**Production (ML_ISTART=2, optional)**:
+- Pure ML predictions (no DFT!)
+- 10-100x faster than DFT
+- Uses ML_FFN from training
+
+## Key Features
+
+- **Simple API**: Just specify steps and temperature
+- **Good defaults**: INCAR settings from VASP examples
+- **Optional production**: Add production_steps if needed
+- **Reuses AIMD**: Built on existing PS-TEROS infrastructure
+
+## Parameters
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| structures | Yes | - | Dict of structures |
+| training_steps | Yes | - | NSW for training |
+| temperature | Yes | - | Temperature in K |
+| code_label | Yes | - | VASP code |
+| potential_family | Yes | - | Potential family |
+| potential_mapping | Yes | - | Element mapping |
+| production_steps | No | None | NSW for production |
+| kpoints_spacing | No | 0.5 | K-points spacing |
+| encut | No | 400 | Energy cutoff (eV) |
+| prec | No | 'Normal' | VASP precision |
+| options | No | cluster02 | Scheduler options |
+
+## Examples
+
+Training only (start here):
+```bash
+python examples/vasp/step_20_mlff_si.py
 ```
 
 ## Files
 
-- `workgraph.py` - Main `build_mlff_workgraph()` function
-- `__init__.py` - Module exports
-
-## Implementation Status
-
-**Phase 1 (Current)**:
-- Basic two-stage workflow (training → production)
-- Reuses existing AIMD infrastructure
-- Simple API with minimal parameters
-
-**Phase 2 (Future)**:
-- Refinement stage support (ML_ISTART=1)
-- Validation utilities
-- ML model quality checking
-- Multi-stage temperature annealing
+- `workgraph.py` - Main function
+- `README.md` - This file
+- `IMPLEMENTATION_PLAN.md` - Development roadmap
 
 ## See Also
 
-- Test script: `examples/vasp/step_XX_mlff_si.py`
-- Planning docs: `teros/experimental/mlff_module/`
+- VASP Wiki: Liquid Si - MLFF
+- Planning: `teros/experimental/mlff_module/`
