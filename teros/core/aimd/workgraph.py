@@ -5,51 +5,8 @@ from aiida_workgraph import WorkGraph
 from .utils import (
     validate_stage_sequence,
     validate_supercell_spec,
-    merge_builder_inputs,
 )
 from .tasks import create_supercell
-
-
-def _get_builder_for_structure_stage(
-    struct_name: str,
-    stage_idx: int,
-    base_builder: dict,
-    structure_overrides: dict,
-    stage_overrides: dict,
-    matrix_overrides: dict,
-) -> dict:
-    """
-    Merge builder inputs for specific (structure, stage) combination.
-
-    Priority: matrix > stage > structure > base
-
-    Args:
-        struct_name: Structure name
-        stage_idx: Stage index (0-based)
-        base_builder: Default builder inputs
-        structure_overrides: Per-structure overrides
-        stage_overrides: Per-stage overrides
-        matrix_overrides: Per-(structure,stage) overrides
-
-    Returns:
-        Merged builder inputs for this specific combination
-    """
-    result = base_builder.copy()
-
-    # Apply structure override
-    if struct_name in structure_overrides:
-        result = merge_builder_inputs(result, structure_overrides[struct_name])
-
-    # Apply stage override
-    if stage_idx in stage_overrides:
-        result = merge_builder_inputs(result, stage_overrides[stage_idx])
-
-    # Apply matrix override
-    matrix_key = (struct_name, stage_idx)
-    if matrix_key in matrix_overrides:
-        result = merge_builder_inputs(result, matrix_overrides[matrix_key])
-
-    return result
 
 
 def build_aimd_workgraph(
