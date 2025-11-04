@@ -182,8 +182,16 @@ def aimd_single_stage_scatter(
 
     # Scatter: create AIMD task for each slab (runs in parallel)
     for slab_label, slab_structure in slabs.items():
+        # Merge base parameters with structure-specific overrides
+        if structure_aimd_overrides and slab_label in structure_aimd_overrides:
+            # Shallow merge: structure overrides take precedence
+            merged_params = {**base_aimd_parameters, **structure_aimd_overrides[slab_label]}
+        else:
+            # No override for this structure, use base
+            merged_params = base_aimd_parameters
+
         # Prepare parameters for this stage
-        stage_params = prepare_aimd_parameters(base_aimd_parameters, temperature, steps)
+        stage_params = prepare_aimd_parameters(merged_params, temperature, steps)
 
         # Build VASP inputs
         vasp_inputs = {
