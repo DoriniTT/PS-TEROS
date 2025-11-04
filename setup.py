@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="teros",
-    version="0.1.0",
+    version="0.2.0",
     description="Ab Initio Atomistic Thermodynamics for Surface Energetics",
     author="Thiago T. Dorini",
     author_email="your.email@example.com",

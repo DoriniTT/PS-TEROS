@@ -9,6 +9,7 @@ The test:
 1. Generates multiple slab structures ([1,0,0] Miller index creates multiple terminations)
 2. Sets max_concurrent_jobs=2 to limit concurrent calculations
 3. Monitors that no more than 2 VASP calculations run simultaneously
+4. Computes cleavage and relaxation energies for generated slabs
 
 Material: Ag2O
 Surface: (100) - Creates multiple terminations for testing concurrency
@@ -18,6 +19,7 @@ Expected behavior:
 - Multiple slab structures will be generated
 - Only 2 VASP calculations should run at the same time
 - Remaining calculations should wait until slots are available
+- Cleavage and relaxation energies will be calculated
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -55,20 +57,21 @@ def main():
 
     # Code configuration
     #code_label = 'VASP-6.5.0@bohr-new'
-    code_label = 'VASP-6.5.1@cluster02'
+    code_label = 'VASP-6.5.1@cluster03'
+    #code_label = 'VASP-6.5.1@cluster02'  # Using cluster02 as per CLAUDE.md
     potential_family = 'PBE'
 
     # Minimal VASP parameters for fast testing
     vasp_params = {
         'PREC': 'Normal',
-        'ENCUT': 400,
+        'ENCUT': 420,
         'EDIFF': 1e-5,
         'ISMEAR': 0,
         'SIGMA': 0.05,
         'IBRION': 2,
-        'ISIF': 3,
+        'ISIF': 2,
         'NSW': 10,  # Small number for quick testing
-        'EDIFFG': -0.05,
+        'EDIFFG': -0.1,
         'ALGO': 'Fast',
         'LREAL': 'Auto',
         'LWAVE': False,
@@ -90,6 +93,7 @@ def main():
     print("   Using workflow preset: 'surface_thermodynamics'")
     print("   Miller indices: [1, 0, 0] (will create multiple terminations)")
     print("   Concurrency limit: 2 VASP calculations at a time")
+    print("   Computing: formation enthalpy, surface energies, cleavage energies, relaxation energies")
 
     # Build workgraph with max_concurrent_jobs
     wg = build_core_workgraph(
@@ -134,16 +138,20 @@ def main():
         # Slab relaxation
         slab_parameters=slab_params,
         slab_options=common_options,
-        slab_kpoints_spacing=0.4,
+        slab_kpoints_spacing=0.6,
 
         # *** KEY PARAMETER: Limit concurrent VASP calculations ***
         max_concurrent_jobs=1,
+
+        # Enable cleavage and relaxation energy calculations
+        compute_cleavage=True,
+        compute_relaxation_energy=True,
 
         name='Step17_TestMaxConcurrentJobs_Ag2O_100',
     )
 
     print("   ✓ WorkGraph built successfully")
-    print(f"   ✓ max_concurrent_jobs is set to: 2")
+    print(f"   ✓ max_concurrent_jobs is set to: 1")
 
     # Submit
     print("\n4. Submitting to AiiDA daemon...")
@@ -165,8 +173,14 @@ def main():
     print(f"\nExpected outputs:")
     print(f"  - bulk_structure (relaxed)")
     print(f"  - bulk_energy")
+    print(f"  - metal_energy, oxygen_energy")
+    print(f"  - formation_enthalpy")
     print(f"  - relaxed_slabs (all terminations)")
+    print(f"  - unrelaxed_slab_energies (all terminations)")
     print(f"  - slab_energies (all terminations)")
+    print(f"  - relaxation_energies (E_relaxed - E_unrelaxed for each slab)")
+    print(f"  - cleavage_energies (E_slab1 + E_slab2 - E_bulk for complementary pairs)")
+    print(f"  - surface_energies (γ as function of chemical potential)")
     print(f"\nIf max_concurrent_jobs is working correctly:")
     print(f"  - Bulk calculation will run first")
     print(f"  - Then slab relaxations will run in batches of 2")

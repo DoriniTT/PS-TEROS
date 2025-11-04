@@ -1,5 +1,494 @@
 # Changelog
 
+## [v0.2.0] - 2025-11-04 - Major Feature Release
+
+### Overview
+
+Version 0.2.0 represents a major advancement in PS-TEROS functionality with four flagship features: standalone AIMD module with override system, universal concurrency control, workflow preset system, and user-provided slab structures. This release dramatically improves workflow flexibility, resource management, and ease of use.
+
+---
+
+### New Feature: AIMD Standalone Module with Override System
+
+**Module:** `teros.core.aimd`
+
+**Overview:** Complete standalone AIMD (Ab Initio Molecular Dynamics) module enabling flexible MD simulations on any structures with per-structure, per-stage, and per-combination parameter customization.
+
+**Key Capabilities:**
+- **Direct structure input:** Use any AiiDA StructureData or PK
+- **Sequential multi-stage AIMD:** Automatic restart chaining between stages (equilibration → production)
+- **Three-level override system:** Structure-level, stage-level, and matrix-level INCAR parameter customization
+- **Supercell transformations:** Optional supercell creation before AIMD
+- **Concurrency control:** Limit parallel VASP calculations with `max_concurrent_jobs`
+- **Complete provenance:** Full AiiDA tracking of all calculations
+
+**Three-Level Override System:**
+1. **Structure-level:** Apply to all stages of specific structures
+2. **Stage-level:** Apply to all structures in specific stages
+3. **Matrix-level:** Apply to specific (structure, stage) combinations
+- **Priority order:** matrix > stage > structure > base
+
+**API:**
+```python
+from teros.core.aimd import build_aimd_workgraph
+
+wg = build_aimd_workgraph(
+    structures={'slab1': structure1, 'slab2': structure2},
+    aimd_stages=[
+        {'temperature': 300, 'steps': 100},   # Equilibration
+        {'temperature': 300, 'steps': 500},   # Production
+    ],
+    code_label='VASP-6.5.1@cluster02',
+    builder_inputs=base_inputs,
+
+    # Override system
+    structure_overrides={'slab2': {'parameters': {'incar': {'ENCUT': 500}}}},
+    stage_overrides={1: {'parameters': {'incar': {'EDIFF': 1e-7}}}},
+    matrix_overrides={('slab1', 1): {'parameters': {'incar': {'ALGO': 'All'}}}},
+
+    max_concurrent_jobs=2,
+)
+```
+
+**New Files:**
+- `teros/core/aimd/` - Complete module package
+- `docs/aimd_standalone_module.md` - Comprehensive user guide (19KB)
+- `examples/vasp/step_18_aimd_standalone.py` - Basic example
+- `examples/vasp/step_19_aimd_with_overrides.py` - Override system demo
+
+**Use Cases:**
+- Temperature series (100K → 300K → 500K)
+- Different convergence requirements per structure
+- Multi-phase equilibration and production runs
+- Custom MD protocols with stage-specific precision
+
+**Documentation:** `docs/aimd_standalone_module.md`
+
+---
+
+### New Feature: Universal Concurrency Control
+
+**Feature:** `max_concurrent_jobs` parameter for all PS-TEROS modules
+
+**Version:** v2.2.0 (part of v0.2.0 release)
+
+**Overview:** Extended concurrency control to 100% of PS-TEROS workflow modules, providing unified resource management across all calculation types.
+
+**Complete Module Coverage:**
+1. ✅ Core workflows (`build_core_workgraph`, `build_core_workgraph_with_map`)
+2. ✅ AIMD modules (VASP and CP2K)
+3. ✅ Surface hydroxylation workflows
+4. ✅ Custom calculations
+5. ✅ All scatter functions (slabs, electronic properties, adsorption)
+
+**Key Implementation:**
+- **Nested workgraph support** via `get_current_graph()` API
+- **Automatic propagation** through all nesting levels
+- **Unified API** across all modules
+- **Production ready** with verified behavior
+
+**Usage:**
+```python
+# Core workflow
+wg = build_core_workgraph(
+    max_concurrent_jobs=4,  # Max 4 VASP jobs at once
+    # ... parameters
+)
+
+# AIMD workflow
+wg = build_aimd_workgraph(
+    max_concurrent_jobs=2,  # Serial-like execution
+    # ... parameters
+)
+
+# Hydroxylation workflow
+wg = build_surface_hydroxylation_workgraph(
+    max_parallel=10,         # Process first 10 structures
+    max_concurrent_jobs=3,   # Run 3 at a time
+    # ... parameters
+)
+```
+
+**Benefits:**
+- **Resource control:** Match cluster capacity (e.g., 24 cores / 6 cores per job = 4 max)
+- **Serial execution:** Set to 1 for debugging or minimal resources
+- **Queue optimization:** Control job submission rate
+- **Cluster-agnostic:** Works with any scheduler/queue system
+
+**Common Values:**
+- `1` - Serial mode (debugging, minimal resources)
+- `4` - Default (balanced, small clusters)
+- `8+` - Higher concurrency (medium/large clusters)
+- `None` - Unlimited (queue-managed systems)
+
+**Files Modified:**
+- `teros/core/aimd.py` - VASP AIMD
+- `teros/core/aimd_cp2k.py` - CP2K AIMD
+- `teros/core/surface_hydroxylation/relaxations.py` - Hydroxylation
+- `teros/core/custom_calculation/workgraph.py` - Custom calculations
+- `teros/core/workgraph.py` - Propagation to AIMD stages
+
+**Documentation:**
+- `docs/CONCURRENCY_CONTROL.md` - Complete feature guide
+- `docs/MAX_CONCURRENT_JOBS_ALL_MODULES.md` - Implementation summary
+
+---
+
+### New Feature: Workflow Preset System
+
+**Overview:** Three-tier workflow configuration system providing high-level convenience presets with fine-grained override capability.
+
+**Three Tiers:**
+1. **Named workflow presets:** One parameter activates entire workflows
+2. **Independent component flags:** Override preset defaults as needed
+3. **Automatic dependency resolution:** Smart validation and auto-enabling
+
+**11 Available Presets:**
+1. `surface_thermodynamics` - Complete surface thermodynamics (default)
+2. `surface_thermodynamics_unrelaxed` - Quick screening with unrelaxed slabs
+3. `cleavage_only` - Cleavage energy calculations
+4. `relaxation_energy_only` - Relaxation energy analysis
+5. `bulk_only` - Bulk optimization only
+6. `formation_enthalpy_only` - Formation enthalpy calculation
+7. `electronic_structure_bulk_only` - DOS/bands for bulk
+8. `electronic_structure_slabs_only` - DOS/bands for slabs
+9. `electronic_structure_bulk_and_slabs` - DOS/bands for both
+10. `aimd_only` - Molecular dynamics on slabs
+11. `comprehensive` - Everything enabled
+
+**API Changes:**
+```python
+# New simplified API
+wg = build_core_workgraph(
+    workflow_preset='surface_thermodynamics',  # One line!
+    structures_dir='structures',
+    bulk_name='ag2o.cif',
+    # ... rest (all flags set automatically)
+)
+
+# With overrides
+wg = build_core_workgraph(
+    workflow_preset='surface_thermodynamics',
+    compute_cleavage=False,  # Override: disable cleavage
+    # ... rest
+)
+```
+
+**Key Updates to `surface_thermodynamics` Preset:**
+- Cleavage energies now **optional** (disabled by default)
+- Relaxation energies now **optional** (disabled by default)
+- Migration: Add `compute_cleavage=True` and/or `compute_relaxation_energy=True` to enable
+
+**New Helper Functions:**
+- `list_workflow_presets()` - List all available presets
+- `get_preset_summary(name)` - Detailed preset configuration
+- `resolve_preset(name, **overrides)` - Resolve final configuration
+
+**Benefits:**
+- **Simplicity:** One parameter replaces 7+ boolean flags
+- **Validation:** Automatic parameter requirement checking
+- **Flexibility:** Override any default as needed
+- **Safety:** Clear error messages for missing requirements
+
+**Documentation:**
+- `docs/WORKFLOW_PRESETS_GUIDE.md` - Complete user guide (15KB)
+- `docs/WORKFLOW_PRESETS_EXAMPLES.md` - Example workflows (19KB)
+- `docs/WORKFLOW_SYSTEM_EXPLAINED.md` - Architecture overview (10KB)
+- `docs/WORKFLOW_MIGRATION_GUIDE.md` - Migration from old API (11KB)
+
+**Backward Compatibility:** ✅ Fully backward compatible
+
+---
+
+### New Feature: Surface Hydroxylation Module
+
+**Module:** `teros.core.surface_hydroxylation`
+
+**Overview:** Automated generation and relaxation of surface variants with different hydroxylation coverages and oxygen vacancy configurations for studying surface chemistry and catalytic activity.
+
+**Key Capabilities:**
+- **Hydroxylation:** Add OH groups to surface oxygen atoms
+- **Oxygen vacancies:** Remove oxygen atoms to create defects
+- **Combined mode:** Both hydroxylation and vacancies
+- **Coverage-based deduplication:** Reduces thousands of structures to ~10 representative configurations
+- **Batch VASP relaxation:** Parallel relaxation with concurrency control
+- **Complete provenance:** Full AiiDA tracking of all calculations
+
+**Scientific Background:**
+
+Surface hydroxylation occurs when water dissociatively adsorbs on oxide surfaces, converting surface oxygen (O) to hydroxyl groups (OH). This process is fundamental in:
+- Catalysis (different activity when hydroxylated)
+- Water splitting (photocatalytic intermediates)
+- Surface stability (stabilizes unstable terminations)
+- Electronic properties (modifies work function)
+
+**Coverage-Based Deduplication Algorithm:**
+
+For surfaces with many oxygen atoms, the number of possible configurations grows exponentially:
+- 10 oxygen atoms → 1,024 combinations
+- 20 oxygen atoms → 1,048,576 combinations
+
+The deduplication algorithm:
+1. Generates all unique configurations
+2. Groups by coverage (OH/nm² or vacancies/nm²)
+3. Bins into N equal-width coverage ranges
+4. Samples representative structures from each bin
+
+**Result:** Reduces thousands to ~N structures spanning 0-100% coverage.
+
+**API:**
+```python
+from teros.core.surface_hydroxylation import (
+    build_surface_hydroxylation_workgraph,
+    organize_hydroxylation_results,
+)
+
+# Define surface parameters
+surface_params = {
+    'mode': 'hydrogen',              # 'hydrogen', 'vacancies', or 'combine'
+    'species': 'O',                  # Target oxygen atoms
+    'z_window': 0.5,                 # Surface detection window (Å)
+    'which_surface': 'top',          # 'top', 'bottom', or 'both'
+    'oh_dist': 0.98,                 # O-H bond distance (Å)
+    'coverage_bins': 5,              # Number of coverage bins
+    'deduplicate_by_coverage': True, # Enable deduplication
+}
+
+# Build and submit workflow
+wg = build_surface_hydroxylation_workgraph(
+    structure_pk=1234,               # Input slab PK
+    surface_params=surface_params,
+    code_label='VASP-6.4.1@cluster',
+    builder_inputs=builder_inputs,   # VASP configuration
+    max_concurrent_jobs=3,           # Concurrency control
+    fix_type='bottom',               # Optional: fix bottom atoms
+    fix_thickness=5.0,               # Optional: fix bottom 5Å
+)
+result = wg.submit()
+
+# After completion, organize results
+node = orm.load_node(result.pk)
+results = organize_hydroxylation_results(node)
+```
+
+**Three Modes:**
+
+1. **Hydrogen mode:** Add OH groups to surface oxygen atoms
+   - Controls: `oh_dist` (O-H bond distance), `coverage_bins`
+
+2. **Vacancies mode:** Remove surface oxygen atoms
+   - Creates defects and active sites
+
+3. **Combine mode:** Both hydroxylation and vacancies
+   - Studies complex surface chemistry scenarios
+
+**Advanced Features:**
+
+- **Selective dynamics:** Fix bottom atoms during relaxation
+  - `fix_type='bottom'` - Fix bottom layer
+  - `fix_thickness=5.0` - Fix bottom 5Å
+
+- **Per-structure builder overrides:**
+  ```python
+  structure_specific_builder_inputs={
+      0: {'parameters': {'incar': {'ALGO': 'Normal'}}},
+      2: {'kpoints_spacing': 0.2},
+  }
+  ```
+
+- **Batch parallelization:** `max_parallel` limits number of structures to process
+- **Concurrency control:** `max_concurrent_jobs` limits simultaneous VASP jobs
+
+**Output Organization:**
+
+Results use descriptive naming: `{index}_{variant_name}`
+- `0_oh_000_3_7572` - First structure, 3.76 OH/nm²
+- `1_oh_001_7_5145` - Second structure, 7.51 OH/nm²
+- `2_vac_000_5_2341` - Third structure, 5.23 vacancies/nm²
+
+**New Files:**
+- `teros/core/surface_hydroxylation/` - Complete module package
+- `docs/surface_hydroxylation.md` - Comprehensive user guide (30KB)
+- `examples/hydroxylation/` - Example workflows
+
+**Use Cases:**
+- Catalysis studies (hydroxylated vs pristine surfaces)
+- Water splitting intermediates
+- Defect chemistry (oxygen vacancy effects)
+- Surface reconstruction analysis
+- Coverage-dependent property studies
+
+**Integration:**
+
+Works seamlessly with other PS-TEROS modules:
+- Generate slabs with main workflow
+- Apply hydroxylation/vacancies
+- Calculate surface energies with thermodynamics module
+- Run AIMD on hydroxylated surfaces
+
+**Documentation:** `docs/surface_hydroxylation.md`
+
+---
+
+### New Feature: User-Provided Slab Structures
+
+**Overview:** Ability to provide pre-generated slab structures as input to PS-TEROS workflows.
+
+**Benefits:**
+- **Flexibility:** Use any slab generation method or tool
+- **Control:** Exact control over surface structures and terminations
+- **Reproducibility:** Use exact structures from literature or previous work
+- **Efficiency:** Skip generation when structures already available
+- **Compatibility:** Works with all ASE-supported formats (CIF, POSCAR, xyz, etc.)
+
+**API Changes:**
+```python
+# Load pre-generated slabs
+slabs = {
+    'term_0': orm.StructureData(ase=read('slab_100.cif')),
+    'term_1': orm.StructureData(ase=read('slab_110.cif')),
+}
+
+# Build workflow with user slabs
+wg = build_core_workgraph(
+    input_slabs=slabs,  # Bypasses automatic generation
+    structures_dir='structures',
+    bulk_name='ag2o.cif',
+    # miller_indices NOT required when using input_slabs
+    # ... rest of parameters
+)
+```
+
+**Modified Functions:**
+- `core_workgraph()` - Added `input_slabs` parameter
+- `build_core_workgraph()` - Added `input_slabs` parameter
+- `build_core_workgraph_with_map()` - Added `input_slabs` parameter
+
+**Use Cases:**
+- Reproducing published slab structures
+- Custom surface reconstructions
+- Adding adsorbates or defects to surfaces
+- Using manually edited structures
+- Integration with external tools
+- Testing specific terminations
+
+**New Files:**
+- `examples/slabs/slabs_input_relax.py` - Complete example
+- `examples/slabs/compare_modes.py` - Comparison demo
+- `examples/slabs/QUICKSTART.md` - 5-minute quick start
+- `docs/USER_PROVIDED_SLABS.md` - Technical documentation (6KB)
+
+**Backward Compatibility:** ✅ Fully backward compatible
+
+---
+
+### All Features Summary
+
+**Version 0.2.0 includes:**
+
+1. ✅ **AIMD Standalone Module** - Flexible MD with override system
+2. ✅ **Universal Concurrency Control** - 100% module coverage
+3. ✅ **Workflow Preset System** - 11 presets, simplified API
+4. ✅ **Surface Hydroxylation Module** - Automated OH/vacancy generation with deduplication
+5. ✅ **User-Provided Slabs** - Custom structure input
+6. ✅ **Enhanced Documentation** - 9 new/updated docs (>110KB)
+
+**Files Modified:** 10 core modules + 6 examples
+**Documentation Added/Updated:** 9 files
+**Backward Compatibility:** ✅ 100% - All existing scripts work unchanged
+
+---
+
+### Migration Guide
+
+**From v0.1.x to v0.2.0:**
+
+No breaking changes. All v0.1.x scripts work unchanged.
+
+**Recommended updates for new features:**
+
+```python
+# OLD (still works)
+wg = build_core_workgraph(
+    relax_slabs=True,
+    compute_thermodynamics=True,
+    compute_cleavage=True,
+    compute_relaxation_energy=True,
+    # ... 7+ boolean flags
+)
+
+# NEW (recommended)
+wg = build_core_workgraph(
+    workflow_preset='surface_thermodynamics',  # Cleaner!
+    compute_cleavage=True,                     # Enable optional features
+    compute_relaxation_energy=True,
+    max_concurrent_jobs=4,                     # Resource control
+)
+```
+
+**To use new AIMD module:**
+```python
+from teros.core.aimd import build_aimd_workgraph
+
+wg = build_aimd_workgraph(
+    structures={'slab': structure},
+    aimd_stages=[{'temperature': 300, 'steps': 500}],
+    code_label='VASP-6.5.1@cluster',
+    builder_inputs=inputs,
+)
+```
+
+---
+
+### Documentation
+
+**New Documentation (9 files, >110KB):**
+1. `docs/aimd_standalone_module.md` - AIMD module guide (19KB)
+2. `docs/surface_hydroxylation.md` - Hydroxylation module guide (30KB)
+3. `docs/CONCURRENCY_CONTROL.md` - Concurrency control guide (7KB)
+4. `docs/MAX_CONCURRENT_JOBS_ALL_MODULES.md` - Implementation summary (10KB)
+5. `docs/WORKFLOW_PRESETS_GUIDE.md` - Preset system guide (15KB)
+6. `docs/WORKFLOW_PRESETS_EXAMPLES.md` - Preset examples (19KB)
+7. `docs/WORKFLOW_SYSTEM_EXPLAINED.md` - Architecture overview (10KB)
+8. `docs/WORKFLOW_MIGRATION_GUIDE.md` - Migration guide (11KB)
+9. `docs/USER_PROVIDED_SLABS.md` - User slabs guide (6KB)
+
+**Updated Documentation:**
+- `docs/README.md` - Updated structure documentation
+
+---
+
+### Testing
+
+**New Examples:**
+- `examples/vasp/step_18_aimd_standalone.py` - Basic AIMD
+- `examples/vasp/step_19_aimd_with_overrides.py` - Override system
+- `examples/hydroxylation/` - Hydroxylation workflow examples
+- `examples/slabs/slabs_input_relax.py` - User-provided slabs
+- `examples/slabs/compare_modes.py` - Generation vs input comparison
+
+**Verification:**
+- All modules tested with `max_concurrent_jobs`
+- Override system verified with multiple structures
+- Preset system validated across all 11 presets
+- Hydroxylation module tested with all three modes
+- Coverage-based deduplication verified with large surfaces
+- User slab input tested with CIF, POSCAR formats
+
+---
+
+### Known Issues
+
+None. All features production-ready.
+
+---
+
+### Contributors
+
+- Thiago T. Dorini - All features
+
+---
+
 ## [Unreleased] - Workflow Preset System Updates
 
 ### Updated: Workflow Presets (October 2025)

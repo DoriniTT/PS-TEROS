@@ -8,7 +8,7 @@ the pythonic scatter-gather pattern for parallel execution.
 import typing as t
 from aiida import orm
 from aiida.plugins import WorkflowFactory
-from aiida_workgraph import task, WorkGraph, dynamic, namespace
+from aiida_workgraph import task, WorkGraph, dynamic, namespace, group
 from aiida.engine import submit
 from ase.io import read
 from teros.core.hf import calculate_formation_enthalpy
@@ -358,6 +358,14 @@ def core_workgraph(
 
         oxygen_energy = extract_total_energy(energies=oxygen_vasp.misc)
 
+        # ===== TASK DEPENDENCIES: Serial reference calculations =====
+        # Chain: Bulk >> Metal >> Nonmetal >> Oxygen
+        bulk_vasp >> metal_vasp
+        if nonmetal_name is not None:
+            metal_vasp >> nonmetal_vasp >> oxygen_vasp
+        else:
+            metal_vasp >> oxygen_vasp
+
         # ===== FORMATION ENTHALPY CALCULATION =====
         formation_hf = calculate_formation_enthalpy(
             bulk_structure=bulk_vasp.structure,
@@ -416,6 +424,17 @@ def core_workgraph(
             primitive=orm.Bool(primitive),
         ).slabs
 
+    # ===== TASK DEPENDENCIES: Create reference group for stage separation =====
+    # Group all reference calculations to chain to slab stage
+    if compute_formation_enthalpy:
+        if nonmetal_name is not None:
+            references = group(bulk_vasp, metal_vasp, nonmetal_vasp, oxygen_vasp)
+        else:
+            references = group(bulk_vasp, metal_vasp, oxygen_vasp)
+    else:
+        # Bulk-only mode
+        references = bulk_vasp if bulk_vasp is not None else None
+
     # ===== SLAB RELAXATION (OPTIONAL) =====
     relaxed_slabs_output = {}
     slab_energies_output = {}
@@ -449,6 +468,10 @@ def core_workgraph(
             unrelaxed_slab_energies_output = scf_outputs.energies
             unrelaxed_slab_remote_output = scf_outputs.remote_folders
 
+            # ===== TASK DEPENDENCIES: References >> SCF =====
+            if references is not None:
+                references >> scf_outputs
+
         # ALWAYS: Relax slabs
         relaxation_outputs = relax_slabs_scatter(
             slabs=slab_namespace,
@@ -463,6 +486,15 @@ def core_workgraph(
             relax_builder_inputs=slab_relax_builder_inputs,  # NEW
             structure_specific_relax_builder_inputs=structure_specific_relax_builder_inputs,  # NEW
         )
+
+        # ===== TASK DEPENDENCIES: SCF >> Relaxation or References >> Relaxation =====
+        if compute_relaxation_energy:
+            # Chain: SCF >> Relaxation
+            scf_outputs >> relaxation_outputs
+        else:
+            # Chain: References >> Relaxation (no SCF stage)
+            if references is not None:
+                references >> relaxation_outputs
 
         relaxed_slabs_output = relaxation_outputs.relaxed_structures
         slab_energies_output = relaxation_outputs.energies
