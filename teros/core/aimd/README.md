@@ -89,9 +89,9 @@ def build_aimd_workgraph(
     code_label: str,
     builder_inputs: dict,
     supercell_specs: dict[str, list[int]] = None,
-    structure_overrides: dict[str, dict] = None,      # NOT IMPLEMENTED
-    stage_overrides: dict[int, dict] = None,          # NOT IMPLEMENTED
-    matrix_overrides: dict[tuple, dict] = None,       # NOT IMPLEMENTED
+    structure_overrides: dict[str, dict] = None,
+    stage_overrides: dict[int, dict] = None,
+    matrix_overrides: dict[tuple, dict] = None,
     max_concurrent_jobs: int = None,
     name: str = 'AIMDWorkGraph',
 ) -> WorkGraph
@@ -131,16 +131,22 @@ def build_aimd_workgraph(
 - Applied once before first AIMD stage
 
 **structure_overrides** : `dict[str, dict]`, optional
-- **NOT IMPLEMENTED** - Reserved for future use
-- Intended: Override builder_inputs per structure
+- Override builder_inputs per structure (all stages)
+- Format: `{structure_name: {'parameters': {'incar': {...}}}}`
+- Example: `{'slab2': {'parameters': {'incar': {'ENCUT': 500}}}}`
+- See Override System section below
 
 **stage_overrides** : `dict[int, dict]`, optional
-- **NOT IMPLEMENTED** - Reserved for future use
-- Intended: Override builder_inputs per stage
+- Override builder_inputs per stage (all structures)
+- Format: `{stage_idx: {'parameters': {'incar': {...}}}}`
+- Example: `{1: {'parameters': {'incar': {'EDIFF': 1e-7}}}}`
+- See Override System section below
 
 **matrix_overrides** : `dict[tuple, dict]`, optional
-- **NOT IMPLEMENTED** - Reserved for future use
-- Intended: Override builder_inputs for specific (structure, stage) combinations
+- Override builder_inputs for specific (structure, stage) combinations
+- Format: `{(structure_name, stage_idx): {'parameters': {'incar': {...}}}}`
+- Example: `{('slab1', 1): {'parameters': {'incar': {'ALGO': 'All'}}}}`
+- See Override System section below
 
 **max_concurrent_jobs** : `int`, optional
 - Maximum number of concurrent VASP calculations
@@ -327,11 +333,18 @@ verdi process watch <PK>
 Unit tests are located in `test_*.py` files:
 
 ```bash
-pytest teros/core/aimd/test_utils.py -v  # Validation and merging
-pytest teros/core/aimd/test_tasks.py -v  # Supercell creation
+pytest teros/core/aimd/test_utils.py -v      # Validation and merging utilities
+pytest teros/core/aimd/test_tasks.py -v      # Supercell creation
+pytest teros/core/aimd/test_overrides.py -v  # Override system and priority
 ```
 
-Full workflow test:
+Run all tests:
+
+```bash
+pytest teros/core/aimd/test_*.py -v
+```
+
+Full workflow demonstration:
 
 ```bash
 python examples/vasp/step_18_aimd_standalone.py
@@ -345,8 +358,9 @@ teros/core/aimd/
 ├── workgraph.py          # Main entry: build_aimd_workgraph()
 ├── tasks.py              # WorkGraph tasks: create_supercell()
 ├── utils.py              # Validation and merging utilities
-├── test_utils.py         # Unit tests for utils
-├── test_tasks.py         # Unit tests for tasks
+├── test_utils.py         # Unit tests for validation and merging
+├── test_tasks.py         # Unit tests for supercell creation
+├── test_overrides.py     # Unit tests for override system
 └── README.md             # This file
 ```
 
@@ -374,4 +388,5 @@ This module is **independent** from `teros.core.workgraph.build_core_workgraph()
 
 - Design document: `docs/plans/2025-11-03-aimd-standalone-module-design.md`
 - Implementation plan: `docs/plans/2025-11-03-aimd-standalone-module.md`
+- Override implementation: `docs/plans/2025-11-03-aimd-override-implementation.md`
 - Example script: `examples/vasp/step_18_aimd_standalone.py`
