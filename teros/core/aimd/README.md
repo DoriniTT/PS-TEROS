@@ -173,17 +173,74 @@ stage_1_structures = wg_node.outputs.stage_1_structures
 supercell_struct1 = wg_node.outputs.supercell_struct1
 ```
 
-## Current Limitations
+## Override System
 
-### Override System Not Functional
+The override parameters (`structure_overrides`, `stage_overrides`, `matrix_overrides`)
+support **INCAR parameter customization**.
 
-The `structure_overrides`, `stage_overrides`, and `matrix_overrides` parameters are **not implemented** in this version. All structures in all stages use the same `builder_inputs`.
+### Supported Parameters
 
-**Reason**: The underlying `aimd_single_stage_scatter()` function currently accepts a single `aimd_parameters` dict for all structures, not per-structure parameters.
+Any VASP INCAR tag can be overridden:
+- `ENCUT`, `PREC`, `EDIFF`, `EDIFFG`
+- `ALGO`, `ISIF`, `IBRION`
+- `NCORE`, `KPAR`, `LREAL`
+- Any other INCAR setting
 
-**Workaround**: Use separate `build_aimd_workgraph()` calls for structures that need different parameters.
+### Not Supported
 
-**Future Implementation**: Requires modifying `aimd_single_stage_scatter()` to accept per-structure builder configurations.
+These builder inputs remain uniform across all structures:
+- `kpoints_spacing` - K-points grid density
+- `options` - Scheduler settings (num_cores, walltime, etc.)
+- `potential_mapping` - Element to pseudopotential mapping
+- `potential_family` - Pseudopotential family name
+
+**Workaround:** Use separate `build_aimd_workgraph()` calls for structures needing different kpoints/options.
+
+### Priority Order
+
+When multiple override levels are specified:
+1. **Matrix overrides** (highest): `{(structure_name, stage_idx): {...}}`
+2. **Stage overrides**: `{stage_idx: {...}}`
+3. **Structure overrides**: `{structure_name: {...}}`
+4. **Base parameters** (lowest): `builder_inputs['parameters']['incar']`
+
+### Example
+
+```python
+wg = build_aimd_workgraph(
+    structures={'slab1': s1, 'slab2': s2},
+    aimd_stages=[
+        {'temperature': 300, 'steps': 100},
+        {'temperature': 300, 'steps': 500},
+    ],
+    code_label='VASP6.5.0@cluster02',
+    builder_inputs={
+        'parameters': {'incar': {'ENCUT': 400, 'PREC': 'Normal'}},  # Base
+        # ... other parameters
+    },
+
+    # slab2 needs higher cutoff everywhere
+    structure_overrides={
+        'slab2': {'parameters': {'incar': {'ENCUT': 500}}}
+    },
+
+    # Stage 1 (production) needs tighter convergence
+    stage_overrides={
+        1: {'parameters': {'incar': {'EDIFF': 1e-7}}}
+    },
+
+    # slab1 + stage 1 needs special algorithm
+    matrix_overrides={
+        ('slab1', 1): {'parameters': {'incar': {'ALGO': 'All'}}}
+    },
+)
+```
+
+**Result:**
+- slab1, stage 0: `ENCUT=400, PREC=Normal` (base)
+- slab1, stage 1: `ENCUT=400, PREC=Normal, EDIFF=1e-7, ALGO=All` (stage + matrix)
+- slab2, stage 0: `ENCUT=500, PREC=Normal` (structure override)
+- slab2, stage 1: `ENCUT=500, PREC=Normal, EDIFF=1e-7` (structure + stage)
 
 ## Workflow Structure
 
