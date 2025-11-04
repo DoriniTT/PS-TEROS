@@ -28,29 +28,53 @@ def get_settings():
 
 def prepare_aimd_parameters(
     base_parameters: dict,
-    temperature: float,
-    steps: int
+    stage_config: dict
 ) -> dict:
     """
     Prepare INCAR parameters for a single AIMD stage.
 
-    Takes base AIMD parameters and injects stage-specific values:
-    - TEBEG and TEEND (both set to temperature for isothermal)
-    - NSW (number of MD steps for this stage)
+    Takes base AIMD parameters and injects stage-specific values from stage_config.
+    Required parameters: TEBEG, NSW
+    Optional parameters: TEEND (defaults to TEBEG), POTIM, MDALGO, SMASS
 
     Args:
         base_parameters: Base AIMD INCAR dict (IBRION=0, MDALGO, POTIM, etc.)
-        temperature: Target temperature in K
-        steps: Number of MD steps
+        stage_config: Dict with AIMD stage parameters (TEBEG, NSW required)
 
     Returns:
-        Complete INCAR dict for this stage
+        Complete INCAR dict for this AIMD stage
+
+    Raises:
+        ValueError: If TEBEG or NSW not in stage_config
     """
-    params = base_parameters.copy()
-    params['TEBEG'] = temperature
-    params['TEEND'] = temperature  # Isothermal
-    params['NSW'] = steps
-    return params
+    # Start with base parameters
+    aimd_incar = base_parameters.copy()
+
+    # Validate required parameters
+    if 'TEBEG' not in stage_config or 'NSW' not in stage_config:
+        raise ValueError("aimd_stages dict must contain 'TEBEG' and 'NSW' parameters")
+
+    # Extract required parameters
+    tebeg = stage_config['TEBEG']
+    nsw = stage_config['NSW']
+
+    # TEEND defaults to TEBEG (constant temperature MD)
+    teend = stage_config.get('TEEND', tebeg)
+
+    # Set temperature and steps
+    aimd_incar['TEBEG'] = tebeg
+    aimd_incar['TEEND'] = teend
+    aimd_incar['NSW'] = nsw
+
+    # Set optional AIMD parameters if provided (override base)
+    for param in ['POTIM', 'MDALGO', 'SMASS']:
+        if param in stage_config:
+            aimd_incar[param] = stage_config[param]
+
+    # Ensure IBRION=0 for MD mode
+    aimd_incar['IBRION'] = 0
+
+    return aimd_incar
 
 
 def _aimd_single_stage_scatter_impl(
