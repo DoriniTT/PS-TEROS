@@ -40,14 +40,18 @@ To build the documentation locally:
 - `source/history.rst`: Release history and changelog
 
 ### Module documentation (docs/)
+- `aimd_standalone_module.md`: AIMD standalone module with override system
 - `cleavage_energy.md`: Cleavage energy calculations
 - `surface_hydroxylation.md`: Surface hydroxylation and vacancy generation
+- `adsorption_energy_module.md`: Adsorption energy calculations
 - `USER_PROVIDED_SLABS.md`: Guide for using custom slab structures
 - `WORKFLOW_SYSTEM_EXPLAINED.md`: Overview of workflow system architecture
 - `WORKFLOW_PRESETS_GUIDE.md`: Guide to workflow presets
 - `WORKFLOW_PRESETS_EXAMPLES.md`: Examples of workflow presets
 - `WORKFLOW_MIGRATION_GUIDE.md`: Migration guide for updating workflows
 - `default_builders_guide.md`: Guide for using builder functions
+- `CONCURRENCY_CONTROL.md`: Concurrency control across workflows
+- `MAX_CONCURRENT_JOBS_ALL_MODULES.md`: Max concurrent jobs implementation
 
 ## Adding new documentation
 
