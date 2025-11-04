@@ -140,8 +140,12 @@ def build_aimd_workgraph(
     current_remote_folders = {}  # Empty dict, will be populated after first stage
 
     for stage_idx, stage_config in enumerate(aimd_stages):
-        temperature = stage_config['temperature']
-        steps = stage_config['steps']
+        # Validate required AIMD parameters
+        if 'TEBEG' not in stage_config or 'NSW' not in stage_config:
+            raise ValueError(
+                f"Stage {stage_idx}: aimd_stages must contain 'TEBEG' and 'NSW'. "
+                f"Got: {list(stage_config.keys())}"
+            )
 
         # Build per-structure INCAR overrides for this stage
         structure_incar_overrides = {}
@@ -186,11 +190,10 @@ def build_aimd_workgraph(
         stage_task = wg.add_task(
             aimd_single_stage_scatter,
             slabs=current_structures,
-            temperature=temperature,
-            steps=steps,
+            stage_config=stage_config,
             code=code,
             base_aimd_parameters=base_incar,
-            structure_aimd_overrides=structure_incar_overrides if structure_incar_overrides else None,
+            structure_aimd_overrides=structure_aimd_overrides if structure_aimd_overrides else None,
             potential_family=builder_inputs.get('potential_family', 'PBE'),
             potential_mapping=builder_inputs.get('potential_mapping', {}),
             options=builder_inputs.get('options', {}),
