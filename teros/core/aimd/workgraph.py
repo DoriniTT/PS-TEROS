@@ -30,25 +30,26 @@ def build_aimd_workgraph(
         code_label: VASP code label (e.g., 'VASP6.5.0@cluster02')
         builder_inputs: Default builder config for all (structure, stage) combinations
         supercell_specs: {structure_name: [nx, ny, nz]} - optional supercell per structure
-        structure_overrides: NOT IMPLEMENTED - reserved for future use
-        stage_overrides: NOT IMPLEMENTED - reserved for future use
-        matrix_overrides: NOT IMPLEMENTED - reserved for future use
+        structure_overrides: Per-structure builder overrides.
+                           Only 'parameters'/'incar' keys are applied.
+                           Other keys (kpoints, options, etc.) are ignored.
+                           Format: {structure_name: {'parameters': {'incar': {...}}}}
+        stage_overrides: Per-stage builder overrides (0-indexed).
+                        Only 'parameters'/'incar' keys are applied.
+                        Format: {stage_idx: {'parameters': {'incar': {...}}}}
+        matrix_overrides: Per-(structure, stage) builder overrides.
+                         Only 'parameters'/'incar' keys are applied.
+                         Format: {(structure_name, stage_idx): {'parameters': {'incar': {...}}}}
         max_concurrent_jobs: Limit parallel VASP calculations (None = unlimited)
         name: WorkGraph name
 
     Returns:
         WorkGraph ready to submit
 
-    CURRENT LIMITATIONS:
-        The structure_overrides, stage_overrides, and matrix_overrides parameters
-        are accepted but NOT FUNCTIONAL in this version. All structures in all stages
-        use the same builder_inputs.
+    Override priority: matrix_overrides > stage_overrides > structure_overrides > builder_inputs
 
-        This is because aimd_single_stage_scatter() currently accepts a single
-        aimd_parameters dict for all structures, not per-structure parameters.
-
-        To implement full override support, aimd_single_stage_scatter() must be
-        modified to accept per-structure builder configurations.
+    Note: Only INCAR parameters can be overridden. kpoints_spacing, options,
+          potential_mapping, and other builder inputs remain uniform across all structures.
 
     Example:
         wg = build_aimd_workgraph(
@@ -66,7 +67,16 @@ def build_aimd_workgraph(
                 'options': {'resources': {'num_machines': 1, 'num_cores_per_machine': 24}},
                 'clean_workdir': False,
             },
-            supercell_specs={'slab1': [2, 2, 1]},
+            # Optional overrides
+            structure_overrides={
+                'slab2': {'parameters': {'incar': {'ENCUT': 500}}}  # slab2 uses ENCUT=500
+            },
+            stage_overrides={
+                1: {'parameters': {'incar': {'PREC': 'Accurate'}}}  # stage 1 uses Accurate
+            },
+            matrix_overrides={
+                ('slab1', 1): {'parameters': {'incar': {'ALGO': 'Fast'}}}  # slab1+stage1 specific
+            },
             max_concurrent_jobs=4,
         )
     """
