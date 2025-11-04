@@ -61,15 +61,15 @@ def main():
     print(f"   Code: {code_label}")
     print(f"   Potential family: {potential_family}")
 
-    # AIMD stages
+    # AIMD stages using VASP-native parameter names
     print("\n4. AIMD configuration:")
     aimd_stages = [
-        {'temperature': 300, 'steps': 50},   # Equilibration
-        {'temperature': 300, 'steps': 100},  # Production
+        {'TEBEG': 300, 'NSW': 50},   # Equilibration
+        {'TEBEG': 300, 'NSW': 100},  # Production
     ]
 
     for i, stage in enumerate(aimd_stages):
-        print(f"   Stage {i}: {stage['temperature']} K, {stage['steps']} steps")
+        print(f"   Stage {i}: {stage['TEBEG']} K, {stage['NSW']} steps")
 
     # Base builder inputs
     builder_inputs = {
@@ -153,13 +153,17 @@ def main():
         # Base builder inputs
         builder_inputs=builder_inputs,
 
+        # Optional: Create supercells before AIMD
+        # Example: supercell_specs={'ag1': [2, 2, 1], 'ag2': [3, 3, 1]}
+        supercell_specs={'ag1': [2, 2, 1], 'ag2': [3, 3, 1]},
+
         # Override system (now functional!)
         structure_overrides=structure_overrides,
         stage_overrides=stage_overrides,
         matrix_overrides=matrix_overrides,
 
         # Concurrency control
-        max_concurrent_jobs=2,
+        max_concurrent_jobs=1,
 
         # Workgraph name
         name='Step19_AIMD_Overrides_Ag',

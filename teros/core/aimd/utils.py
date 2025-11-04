@@ -7,7 +7,7 @@ def validate_stage_sequence(stages: list[dict]) -> None:
     Validate AIMD stage sequence format.
 
     Args:
-        stages: List of stage dicts, each must contain 'temperature' and 'steps'
+        stages: List of stage dicts, each must contain 'TEBEG' and 'NSW'
 
     Raises:
         ValueError: If stages empty or missing required keys
@@ -16,15 +16,15 @@ def validate_stage_sequence(stages: list[dict]) -> None:
         raise ValueError("aimd_stages must contain at least one stage")
 
     for idx, stage in enumerate(stages):
-        if 'temperature' not in stage:
+        if 'TEBEG' not in stage:
             raise ValueError(
-                f"Stage {idx} missing required key 'temperature'. "
-                f"Each stage must contain {{'temperature': K, 'steps': N}}"
+                f"Stage {idx} missing required key 'TEBEG'. "
+                f"Each stage must contain {{'TEBEG': K, 'NSW': N}}"
             )
-        if 'steps' not in stage:
+        if 'NSW' not in stage:
             raise ValueError(
-                f"Stage {idx} missing required key 'steps'. "
-                f"Each stage must contain {{'temperature': K, 'steps': N}}"
+                f"Stage {idx} missing required key 'NSW'. "
+                f"Each stage must contain {{'TEBEG': K, 'NSW': N}}"
             )
 
 

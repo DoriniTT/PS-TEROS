@@ -1761,15 +1761,19 @@ def build_core_workgraph(
         stage_tasks = []
 
         for stage_idx, stage_config in enumerate(aimd_sequence):
-            stage_name = f"aimd_stage_{stage_idx:02d}_{stage_config['temperature']}K"
-            print(f"     Stage {stage_idx}: {stage_config['temperature']}K × {stage_config['steps']} steps")
+            # Get temperature for stage naming (support both old and new format temporarily)
+            stage_temp = stage_config.get('TEBEG', stage_config.get('temperature', 0))
+            stage_name = f"aimd_stage_{stage_idx:02d}_{stage_temp}K"
+
+            # Print stage info (support both old and new format temporarily)
+            stage_steps = stage_config.get('NSW', stage_config.get('steps', 0))
+            print(f"     Stage {stage_idx}: {stage_temp}K × {stage_steps} steps")
 
             # Build stage inputs based on calculator
             if calculator == 'vasp':
                 stage_inputs = {
                     'slabs': current_structures,
-                    'temperature': stage_config['temperature'],
-                    'steps': stage_config['steps'],
+                    'stage_config': stage_config,
                     'code': code,
                     'base_aimd_parameters': aimd_params,
                     'structure_aimd_overrides': None,

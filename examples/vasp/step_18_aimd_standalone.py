@@ -68,15 +68,15 @@ def main():
     print(f"   Code: {code_label}")
     print(f"   Potential family: {potential_family}")
 
-    # AIMD stages
+    # AIMD stages using VASP-native parameter names
     print("\n4. AIMD configuration:")
     aimd_stages = [
-        {'temperature': 300, 'steps': 50},   # Equilibration
-        {'temperature': 300, 'steps': 100},  # Production
+        {'TEBEG': 300, 'NSW': 50},   # Equilibration
+        {'TEBEG': 300, 'NSW': 100},  # Production
     ]
 
     for i, stage in enumerate(aimd_stages):
-        print(f"   Stage {i}: {stage['temperature']} K, {stage['steps']} steps")
+        print(f"   Stage {i}: {stage['TEBEG']} K, {stage['NSW']} steps")
 
     # Builder inputs (common for all structures and stages)
     builder_inputs = {
@@ -91,8 +91,8 @@ def main():
                 'ALGO': 'Normal',
                 'LREAL': 'Auto',
 
-                # AIMD settings (temperature and steps will be set by module)
-                'IBRION': 0,      # Molecular dynamics
+                # AIMD settings (TEBEG, NSW from aimd_stages; others can be overridden per stage)
+                'IBRION': 0,      # Molecular dynamics (always set by module)
                 'MDALGO': 2,      # Nosé-Hoover thermostat
                 'POTIM': 2.0,     # Time step in fs
                 'SMASS': 0.0,     # Nosé mass
@@ -138,9 +138,11 @@ def main():
         # Builder inputs (same for all)
         builder_inputs=builder_inputs,
 
-        # Optional: supercell for ag1 only
+        # Optional: Create supercells before AIMD
+        # Supercell transformations are applied before the first AIMD stage
+        # Format: {structure_name: [nx, ny, nz]} where nx, ny, nz are repetitions
         supercell_specs={
-            'ag1': [2, 2, 1],  # 2x2x1 supercell
+            'ag1': [2, 2, 1],  # 2x2x1 supercell for ag1 only
         },
 
         # Concurrency control

@@ -6,23 +6,23 @@ from teros.core.aimd.utils import validate_stage_sequence, validate_supercell_sp
 def test_validate_stage_sequence_valid():
     """Valid stage sequence passes."""
     stages = [
-        {'temperature': 300, 'steps': 100},
-        {'temperature': 500, 'steps': 200},
+        {'TEBEG': 300, 'NSW': 100},
+        {'TEBEG': 500, 'NSW': 200},
     ]
     validate_stage_sequence(stages)  # Should not raise
 
 
-def test_validate_stage_sequence_missing_temperature():
-    """Stage missing temperature raises ValueError."""
-    stages = [{'steps': 100}]
-    with pytest.raises(ValueError, match="missing required key 'temperature'"):
+def test_validate_stage_sequence_missing_tebeg():
+    """Stage missing TEBEG raises ValueError."""
+    stages = [{'NSW': 100}]
+    with pytest.raises(ValueError, match="missing required key 'TEBEG'"):
         validate_stage_sequence(stages)
 
 
-def test_validate_stage_sequence_missing_steps():
-    """Stage missing steps raises ValueError."""
-    stages = [{'temperature': 300}]
-    with pytest.raises(ValueError, match="missing required key 'steps'"):
+def test_validate_stage_sequence_missing_nsw():
+    """Stage missing NSW raises ValueError."""
+    stages = [{'TEBEG': 300}]
+    with pytest.raises(ValueError, match="missing required key 'NSW'"):
         validate_stage_sequence(stages)
 
 

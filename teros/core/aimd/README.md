@@ -25,10 +25,10 @@ load_profile('presto')
 structure1 = orm.StructureData(ase=read('structure1.cif'))
 structure2 = orm.StructureData(ase=read('structure2.cif'))
 
-# Define AIMD stages (sequential)
+# Define AIMD stages (sequential) using VASP-native parameter names
 aimd_stages = [
-    {'temperature': 300, 'steps': 50},   # Equilibration
-    {'temperature': 300, 'steps': 200},  # Production
+    {'TEBEG': 300, 'NSW': 50},   # Equilibration
+    {'TEBEG': 300, 'NSW': 200},  # Production
 ]
 
 # Builder inputs (VASP parameters)
@@ -105,9 +105,11 @@ def build_aimd_workgraph(
 - Example: `{'slab1': structure, 'slab2': 12345}`
 
 **aimd_stages** : `list[dict]`
-- Sequential AIMD stages
-- Each dict must contain: `{'temperature': K, 'steps': N}`
-- Example: `[{'temperature': 300, 'steps': 100}, {'temperature': 400, 'steps': 200}]`
+- Sequential AIMD stages using VASP-native parameter names
+- Required parameters: `TEBEG` (initial temperature K), `NSW` (MD steps)
+- Optional parameters: `TEEND` (final temperature, defaults to TEBEG), `POTIM` (timestep fs), `MDALGO` (thermostat), `SMASS` (Nosé mass)
+- Example: `[{'TEBEG': 300, 'NSW': 100}, {'TEBEG': 400, 'NSW': 200}]`
+- Temperature annealing: `[{'TEBEG': 300, 'TEEND': 500, 'NSW': 200}]`
 
 **code_label** : `str`
 - VASP code label from AiiDA
@@ -216,8 +218,8 @@ When multiple override levels are specified:
 wg = build_aimd_workgraph(
     structures={'slab1': s1, 'slab2': s2},
     aimd_stages=[
-        {'temperature': 300, 'steps': 100},
-        {'temperature': 300, 'steps': 500},
+        {'TEBEG': 300, 'NSW': 100},
+        {'TEBEG': 300, 'NSW': 500},
     ],
     code_label='VASP6.5.0@cluster02',
     builder_inputs={
@@ -275,8 +277,8 @@ The module creates the following task flow:
 wg = build_aimd_workgraph(
     structures={'my_slab': slab_structure},
     aimd_stages=[
-        {'temperature': 300, 'steps': 100},
-        {'temperature': 300, 'steps': 500},
+        {'TEBEG': 300, 'NSW': 100},
+        {'TEBEG': 300, 'NSW': 500},
     ],
     code_label='VASP6.5.0@cluster02',
     builder_inputs=base_config,
@@ -288,7 +290,7 @@ wg = build_aimd_workgraph(
 ```python
 wg = build_aimd_workgraph(
     structures={'small_slab': structure},
-    aimd_stages=[{'temperature': 300, 'steps': 200}],
+    aimd_stages=[{'TEBEG': 300, 'NSW': 200}],
     code_label='VASP6.5.0@cluster02',
     builder_inputs=base_config,
     supercell_specs={'small_slab': [3, 3, 1]},  # Create 3x3x1 supercell
@@ -305,7 +307,7 @@ wg = build_aimd_workgraph(
         'slab3': structure3,
         'slab4': structure4,
     },
-    aimd_stages=[{'temperature': 400, 'steps': 300}],
+    aimd_stages=[{'TEBEG': 400, 'NSW': 300}],
     code_label='VASP6.5.0@cluster02',
     builder_inputs=base_config,
     max_concurrent_jobs=2,  # Only 2 VASP jobs run at once

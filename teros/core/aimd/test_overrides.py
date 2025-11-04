@@ -33,7 +33,7 @@ def test_structure_overrides():
     # Build workgraph
     wg = build_aimd_workgraph(
         structures={'struct1': struct1, 'struct2': struct2},
-        aimd_stages=[{'temperature': 300, 'steps': 10}],
+        aimd_stages=[{'TEBEG': 300, 'NSW': 10}],
         code_label='VASP-6.5.1@cluster02',
         builder_inputs=builder_inputs,
         structure_overrides=structure_overrides,
@@ -70,8 +70,8 @@ def test_stage_overrides():
     wg = build_aimd_workgraph(
         structures={'struct': struct},
         aimd_stages=[
-            {'temperature': 300, 'steps': 10},
-            {'temperature': 300, 'steps': 20},
+            {'TEBEG': 300, 'NSW': 10},
+            {'TEBEG': 300, 'NSW': 20},
         ],
         code_label='VASP-6.5.1@cluster02',
         builder_inputs=builder_inputs,
@@ -107,7 +107,7 @@ def test_matrix_overrides():
 
     wg = build_aimd_workgraph(
         structures={'struct1': struct1, 'struct2': struct2},
-        aimd_stages=[{'temperature': 300, 'steps': 10}],
+        aimd_stages=[{'TEBEG': 300, 'NSW': 10}],
         code_label='VASP-6.5.1@cluster02',
         builder_inputs=builder_inputs,
         matrix_overrides=matrix_overrides,
@@ -138,7 +138,7 @@ def test_override_priority():
 
     wg = build_aimd_workgraph(
         structures={'struct': struct},
-        aimd_stages=[{'temperature': 300, 'steps': 10}],
+        aimd_stages=[{'TEBEG': 300, 'NSW': 10}],
         code_label='VASP-6.5.1@cluster02',
         builder_inputs=builder_inputs,
         structure_overrides=structure_overrides,

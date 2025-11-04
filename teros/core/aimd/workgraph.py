@@ -26,7 +26,10 @@ def build_aimd_workgraph(
 
     Args:
         structures: {name: StructureData or PK} - input structures
-        aimd_stages: [{'temperature': K, 'steps': N}, ...] - sequential stages
+        aimd_stages: [{'TEBEG': K, 'NSW': N, ...}, ...] - sequential AIMD stages with VASP INCAR parameters
+                     Required: TEBEG (initial temperature), NSW (MD steps)
+                     Optional: TEEND (final temperature, defaults to TEBEG), POTIM (timestep fs),
+                              MDALGO (thermostat algorithm), SMASS (Nosé mass parameter)
         code_label: VASP code label (e.g., 'VASP6.5.0@cluster02')
         builder_inputs: Default builder config for all (structure, stage) combinations
         supercell_specs: {structure_name: [nx, ny, nz]} - optional supercell per structure
@@ -55,8 +58,8 @@ def build_aimd_workgraph(
         wg = build_aimd_workgraph(
             structures={'slab1': structure1, 'slab2': pk2},
             aimd_stages=[
-                {'temperature': 300, 'steps': 100},
-                {'temperature': 300, 'steps': 500},
+                {'TEBEG': 300, 'NSW': 100, 'POTIM': 2.0},
+                {'TEBEG': 300, 'NSW': 500, 'POTIM': 1.5},
             ],
             code_label='VASP6.5.0@cluster02',
             builder_inputs={
@@ -123,7 +126,7 @@ def build_aimd_workgraph(
             sc_task = wg.add_task(
                 create_supercell,
                 structure=struct,
-                spec=supercell_specs[struct_name],
+                spec=orm.List(list=supercell_specs[struct_name]),
                 name=f'create_supercell_{struct_name}',
             )
             prepared_structures[struct_name] = sc_task.outputs.result
@@ -193,7 +196,7 @@ def build_aimd_workgraph(
             stage_config=stage_config,
             code=code,
             base_aimd_parameters=base_incar,
-            structure_aimd_overrides=structure_aimd_overrides if structure_aimd_overrides else None,
+            structure_aimd_overrides=structure_incar_overrides if structure_incar_overrides else None,
             potential_family=builder_inputs.get('potential_family', 'PBE'),
             potential_mapping=builder_inputs.get('potential_mapping', {}),
             options=builder_inputs.get('options', {}),

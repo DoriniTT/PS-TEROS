@@ -86,10 +86,10 @@ load_profile('presto')
 # Load structure
 structure = orm.StructureData(ase=read('my_slab.cif'))
 
-# Define AIMD stages
+# Define AIMD stages using VASP-native parameter names
 aimd_stages = [
-    {'temperature': 300, 'steps': 100},   # Equilibration
-    {'temperature': 300, 'steps': 500},   # Production
+    {'TEBEG': 300, 'NSW': 100},   # Equilibration
+    {'TEBEG': 300, 'NSW': 500},   # Production
 ]
 
 # Builder inputs (VASP parameters)
@@ -167,8 +167,8 @@ These builder inputs remain **uniform** across all structures:
 wg = build_aimd_workgraph(
     structures={'slab1': s1, 'slab2': s2},
     aimd_stages=[
-        {'temperature': 300, 'steps': 100},   # Stage 0
-        {'temperature': 300, 'steps': 500},   # Stage 1
+        {'TEBEG': 300, 'NSW': 100},   # Stage 0
+        {'TEBEG': 300, 'NSW': 500},   # Stage 1
     ],
     code_label='VASP-6.5.1@cluster02',
     builder_inputs={
@@ -339,9 +339,11 @@ def build_aimd_workgraph(
 - Example: `{'slab1': structure, 'slab2': 12345}`
 
 **aimd_stages** : `list[dict]`
-- Sequential AIMD stages
-- Each dict must contain: `{'temperature': K, 'steps': N}`
-- Example: `[{'temperature': 300, 'steps': 100}, {'temperature': 400, 'steps': 200}]`
+- Sequential AIMD stages using VASP-native parameter names
+- Required: `TEBEG` (initial temperature K), `NSW` (MD steps)
+- Optional: `TEEND` (final temperature, defaults to TEBEG), `POTIM` (timestep fs), `MDALGO` (thermostat), `SMASS` (Nosé mass)
+- Example: `[{'TEBEG': 300, 'NSW': 100}, {'TEBEG': 400, 'NSW': 200}]`
+- Temperature annealing: `[{'TEBEG': 300, 'TEEND': 500, 'NSW': 200}]`
 
 **code_label** : `str`
 - VASP code label from AiiDA
