@@ -176,6 +176,7 @@ def core_workgraph(
     adsorption_structure_component_specific_scf_builder_inputs: dict = None,
     # Concurrency control
     max_concurrent_jobs: int = None,
+    max_concurrent_jobs_slabs: int = None,  # NEW: Specific limit for slab calculations
     # Note: Electronic properties parameters removed - handled in build_core_workgraph
 ):
     """
@@ -461,7 +462,7 @@ def core_workgraph(
                 options=slab_opts,
                 kpoints_spacing=slab_kpts,
                 clean_workdir=clean_workdir,
-                max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
+                max_number_jobs=orm.Int(max_concurrent_jobs_slabs) if max_concurrent_jobs_slabs is not None else (orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None),
                 scf_builder_inputs=slab_scf_builder_inputs,  # NEW
                 structure_specific_scf_builder_inputs=structure_specific_scf_builder_inputs,  # NEW
             )
@@ -482,7 +483,7 @@ def core_workgraph(
             options=slab_opts,
             kpoints_spacing=slab_kpts,
             clean_workdir=clean_workdir,
-            max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
+            max_number_jobs=orm.Int(max_concurrent_jobs_slabs) if max_concurrent_jobs_slabs is not None else (orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None),
             relax_builder_inputs=slab_relax_builder_inputs,  # NEW
             structure_specific_relax_builder_inputs=structure_specific_relax_builder_inputs,  # NEW
         )
@@ -581,7 +582,7 @@ def core_workgraph(
             default_bands_parameters=default_params,
             default_bands_options=default_opts,
             default_band_settings=default_settings,
-            max_number_jobs=orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
+            max_number_jobs=orm.Int(max_concurrent_jobs_slabs) if max_concurrent_jobs_slabs is not None else (orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None),
         )
         
         # Collect outputs
