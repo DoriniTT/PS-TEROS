@@ -361,11 +361,8 @@ def core_workgraph(
 
         # ===== TASK DEPENDENCIES: Serial reference calculations =====
         # Chain: Bulk >> Metal >> Nonmetal >> Oxygen
-        bulk_vasp >> metal_vasp
-        if nonmetal_name is not None:
-            metal_vasp >> nonmetal_vasp >> oxygen_vasp
-        else:
-            metal_vasp >> oxygen_vasp
+        # ===== TASK DEPENDENCIES: Serial reference calculations REMOVED =====
+        # References can now run in parallel
 
         # ===== FORMATION ENTHALPY CALCULATION =====
         formation_hf = calculate_formation_enthalpy(
@@ -729,6 +726,7 @@ def build_core_workgraph(
     adsorption_structure_specific_scf_builder_inputs: dict = None,
     adsorption_structure_component_specific_scf_builder_inputs: dict = None,
     max_concurrent_jobs: int = 4,  # NEW: Limit concurrent VASP calculations (None = unlimited)
+    max_concurrent_jobs_slabs: int = None, # NEW: Limit concurrent VASP calculations for slabs (None = unlimited)
     name: str = 'FormationEnthalpy',
 ):
     """
@@ -1326,6 +1324,7 @@ def build_core_workgraph(
         adsorption_structure_specific_scf_builder_inputs=adsorption_structure_specific_scf_builder_inputs,  # NEW
         adsorption_structure_component_specific_scf_builder_inputs=adsorption_structure_component_specific_scf_builder_inputs,  # NEW
         max_concurrent_jobs=max_concurrent_jobs,  # NEW
+        max_concurrent_jobs_slabs=max_concurrent_jobs_slabs, # NEW
         # Note: Electronic properties are handled manually below, not passed to core_workgraph
     )
 

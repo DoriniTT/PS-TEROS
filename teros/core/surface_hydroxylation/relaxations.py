@@ -81,7 +81,7 @@ def relax_slabs_with_semaphore(
     structures: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
     code_pk: int,
     builder_inputs: dict,
-    max_parallel: int,
+    max_batch_size: int,
     fix_type: str = None,
     fix_thickness: float = 0.0,
     fix_elements: t.List[str] = None,
@@ -100,12 +100,12 @@ def relax_slabs_with_semaphore(
 
     PARALLELIZATION APPROACH:
     This implementation uses a simple batch approach: it processes only the first
-    max_parallel structures from the input. This allows manual control over how
+    max_batch_size structures from the input. This allows manual control over how
     many calculations run at once.
 
     Example workflow:
-    1. Generate 15 structures, set max_parallel=5 → relaxes structures 0-4
-    2. After completion, set max_parallel=10 → structures 0-4 already done, relaxes 5-9
+    1. Generate 15 structures, set max_batch_size=5 → relaxes structures 0-4
+    2. After completion, set max_batch_size=10 → structures 0-4 already done, relaxes 5-9
     3. Repeat until all structures are processed
 
     Args:
@@ -114,7 +114,7 @@ def relax_slabs_with_semaphore(
         builder_inputs: Complete builder configuration dict for vasp.v2.vasp WorkChain.
             Must contain all builder parameters (see workgraph.py for details).
             The 'code' and 'structure' keys will be set automatically for each structure.
-        max_parallel: Maximum number of structures to process (limits to first N structures)
+        max_batch_size: Maximum number of structures to process (limits to first N structures)
         fix_type: Where to fix atoms ('bottom'/'top'/'center'/None). Default: None (no fixing)
         fix_thickness: Thickness in Angstroms for fixing region. Default: 0.0
         fix_elements: Optional list of element symbols to fix (e.g., ['Ag', 'O']).
@@ -133,7 +133,7 @@ def relax_slabs_with_semaphore(
         max_number_jobs: Optional - Maximum number of concurrent VASP calculations.
                      Default: None (unlimited concurrency for selected structures)
                      Note: This controls HOW MANY calculations run concurrently from the
-                     selected batch (max_parallel). Use this for cluster concurrency limits.
+                     selected batch (max_batch_size). Use this for cluster concurrency limits.
 
     Returns:
         Dictionary with namespace outputs:
@@ -168,12 +168,12 @@ def relax_slabs_with_semaphore(
     structures_out = {}
     energies_out = {}
 
-    # SIMPLE BATCH APPROACH: Only process first max_parallel structures
+    # SIMPLE BATCH APPROACH: Only process first max_batch_size structures
     # structures is a dict with descriptive keys: '0_oh_000_3.7572', '1_oh_001_7.5145', etc.
     # Sort keys by extracting the numeric prefix to ensure consistent ordering
     sorted_keys = sorted(structures.keys(), key=lambda k: int(k.split('_')[0]))
-    # Extract value from max_parallel if it's an AiiDA node
-    limit = max_parallel.value if hasattr(max_parallel, 'value') else int(max_parallel)
+    # Extract value from max_batch_size if it's an AiiDA node
+    limit = max_batch_size.value if hasattr(max_batch_size, 'value') else int(max_batch_size)
     selected_keys = sorted_keys[:limit]
 
     # Process selected structures

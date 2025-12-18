@@ -1,10 +1,13 @@
 """WorkGraph builder for custom VASP calculations."""
 
+import typing as t
+
 from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import WorkGraph, task
 
-from .tasks import extract_total_energy, extract_relaxed_structure
+from .tasks import extract_total_energy
+from ..fixed_atoms import get_fixed_atoms_list
 
 
 def build_custom_calculation_workgraph(
@@ -12,7 +15,10 @@ def build_custom_calculation_workgraph(
     code_label,
     builder_inputs,
     name='custom_calc',
-    max_concurrent_jobs=None
+    max_concurrent_jobs=None,
+    fix_type: str = None,
+    fix_thickness: float = 0.0,
+    fix_elements: t.List[str] = None,
 ):
     """
     Build a WorkGraph for custom VASP calculations.
@@ -31,6 +37,10 @@ def build_custom_calculation_workgraph(
         name: str, WorkGraph name
         max_concurrent_jobs: int, optional - Maximum number of concurrent VASP calculations
                            (only applies to multiple structure workflows). Default: None (unlimited)
+        fix_type: Where to fix atoms ('bottom'/'top'/'center'/None). Default: None (no fixing)
+        fix_thickness: Thickness in Angstroms for fixing region. Default: 0.0
+        fix_elements: Optional list of element symbols to fix (e.g., ['Ag', 'O']).
+                     If None, all elements in the region are fixed. Default: None
 
     Returns:
         WorkGraph ready to submit
@@ -55,7 +65,9 @@ def build_custom_calculation_workgraph(
     if is_single:
         # Single structure workflow
         # Prepare builder inputs (convert plain dicts to AiiDA types)
-        prepared_inputs = _prepare_builder_inputs(builder_inputs)
+        prepared_inputs = _prepare_builder_inputs(
+            builder_inputs, structure, fix_type, fix_thickness, fix_elements
+        )
 
         # Add VaspTask
         vasp_task = wg.add_task(
@@ -73,17 +85,11 @@ def build_custom_calculation_workgraph(
             misc=vasp_task.outputs.misc
         )
 
-        # Extract structure
-        structure_task = wg.add_task(
-            extract_relaxed_structure,
-            name='extract_structure',
-            misc=vasp_task.outputs.misc
-        )
-
-        # Set WorkGraph outputs
-        wg.add_output('energy', energy_task.outputs.result)
-        wg.add_output('structure', structure_task.outputs.result)
-        wg.add_output('misc', vasp_task.outputs.misc)
+        # Set WorkGraph outputs (use 'any' socket type identifier)
+        # Note: structure comes directly from VaspWorkChain, not via a calcfunction
+        wg.add_output('any', 'energy', from_socket=energy_task.outputs.result)
+        wg.add_output('any', 'structure', from_socket=vasp_task.outputs.structure)
+        wg.add_output('any', 'misc', from_socket=vasp_task.outputs.misc)
     else:
         # Multiple structures workflow
         structures = structure  # Rename for clarity
@@ -110,7 +116,9 @@ def build_custom_calculation_workgraph(
 
         for i, (struct, inputs) in enumerate(zip(structures, builder_inputs_list)):
             # Prepare builder inputs
-            prepared_inputs = _prepare_builder_inputs(inputs)
+            prepared_inputs = _prepare_builder_inputs(
+                inputs, struct, fix_type, fix_thickness, fix_elements
+            )
 
             # Add VaspTask
             vasp_task = wg.add_task(
@@ -130,13 +138,8 @@ def build_custom_calculation_workgraph(
             )
             energy_tasks.append(energy_task)
 
-            # Extract structure
-            structure_task = wg.add_task(
-                extract_relaxed_structure,
-                name=f'extract_structure_{i}',
-                misc=vasp_task.outputs.misc
-            )
-            structure_tasks.append(structure_task)
+            # Structure comes directly from VaspWorkChain output
+            # (no need for extract_structure calcfunction)
 
         # For multiple structures, outputs are accessed via task names
         # (WorkGraph doesn't support dynamic list outputs with plain functions)
@@ -145,12 +148,24 @@ def build_custom_calculation_workgraph(
     return wg
 
 
-def _prepare_builder_inputs(builder_inputs):
+def _prepare_builder_inputs(
+    builder_inputs,
+    structure: orm.StructureData = None,
+    fix_type: str = None,
+    fix_thickness: float = 0.0,
+    fix_elements: t.List[str] = None,
+):
     """
     Prepare builder inputs by converting plain dicts to AiiDA types.
 
+    Also applies selective dynamics if fix_type is specified.
+
     Args:
         builder_inputs: dict with VASP builder parameters
+        structure: StructureData to apply selective dynamics to (optional)
+        fix_type: Where to fix atoms ('bottom'/'top'/'center'/None)
+        fix_thickness: Thickness in Angstroms for fixing region
+        fix_elements: Optional list of element symbols to fix
 
     Returns:
         dict with AiiDA-compatible types
@@ -199,6 +214,33 @@ def _prepare_builder_inputs(builder_inputs):
         if key in builder_inputs:
             prepared[key] = builder_inputs[key]
 
+    # Apply selective dynamics if fix_type is specified
+    if structure is not None and fix_type is not None and fix_thickness > 0.0:
+        # Get list of atoms to fix (1-based indices)
+        fixed_atoms_list = get_fixed_atoms_list(
+            structure=structure,
+            fix_type=fix_type,
+            fix_thickness=fix_thickness,
+            fix_elements=fix_elements,
+        )
+
+        if fixed_atoms_list:
+            # Create positions_dof array for selective dynamics
+            # True = relax, False = fix
+            num_atoms = len(structure.sites)
+            positions_dof = []
+
+            for i in range(1, num_atoms + 1):  # 1-based indexing
+                if i in fixed_atoms_list:
+                    positions_dof.append([False, False, False])  # Fix atom
+                else:
+                    positions_dof.append([True, True, True])  # Relax atom
+
+            # Add selective dynamics to VASP inputs
+            prepared['dynamics'] = orm.Dict(dict={
+                'positions_dof': positions_dof
+            })
+
     return prepared
 
 
@@ -233,12 +275,12 @@ def get_custom_results(workgraph):
         # Find all energy extraction tasks
         while f'extract_energy_{i}' in workgraph.tasks:
             energy_task = workgraph.tasks[f'extract_energy_{i}']
-            structure_task = workgraph.tasks[f'extract_structure_{i}']
             vasp_task = workgraph.tasks[f'vasp_calc_{i}']
 
             # Access outputs from completed tasks
+            # Structure comes directly from vasp_task (no extract_structure calcfunction)
             energies.append(energy_task.outputs['result'].value)
-            structures.append(structure_task.outputs['result'].value)
+            structures.append(vasp_task.outputs['structure'].value)
             misc_list.append(vasp_task.outputs['misc'].value.get_dict())
             i += 1
 
