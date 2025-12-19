@@ -16,10 +16,8 @@ import numpy as np
 from aiida import orm
 from aiida_workgraph import task, dynamic
 
-
 # Conversion factor: 1 eV/Ų = 16.0218 J/m²
 EV_PER_A2_TO_J_PER_M2 = 16.0218
-
 
 @task.calcfunction
 def calculate_metal_surface_energy(
