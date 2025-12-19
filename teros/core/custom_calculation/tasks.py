@@ -33,19 +33,18 @@ def extract_total_energy(misc: orm.Dict) -> orm.Float:
 
 
 @task.calcfunction
-def extract_relaxed_structure(misc: orm.Dict) -> orm.StructureData:
+def extract_relaxed_structure(structure: orm.StructureData) -> orm.StructureData:
     """
-    Extract relaxed structure from VASP misc output.
+    Pass through relaxed structure from VASP output.
+
+    In aiida-vasp, the relaxed structure is output directly as 'structure'
+    (StructureData), not inside the 'misc' Dict.
 
     Args:
-        misc: VASP misc output Dict containing structure data
+        structure: VASP output StructureData (relaxed structure)
 
     Returns:
-        Relaxed structure as StructureData
+        The same StructureData (for WorkGraph compatibility)
     """
-    misc_dict = misc.get_dict()
+    return structure
 
-    if 'structure' not in misc_dict:
-        raise ValueError(f"No 'structure' key found in misc output. Available keys: {list(misc_dict.keys())}")
-
-    return misc_dict['structure']

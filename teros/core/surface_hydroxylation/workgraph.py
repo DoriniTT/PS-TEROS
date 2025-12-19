@@ -23,7 +23,8 @@ def SurfaceHydroxylationWorkGraph(
     builder_inputs: dict,
     bulk_structure: orm.StructureData,
     bulk_builder_inputs: dict,
-    max_parallel_jobs: int = 2,
+    max_batch_size: int = 2,
+    max_concurrent_jobs: int = None,
     fix_type: str = None,
     fix_thickness: float = 0.0,
     fix_elements: t.List[str] = None,
@@ -77,7 +78,7 @@ def SurfaceHydroxylationWorkGraph(
                        Required for surface energy calculations per Section S2.
         bulk_builder_inputs: VASP parameters for bulk relaxation (dict). Must include
                             ISIF=3 for cell relaxation. Same format as builder_inputs.
-        max_parallel_jobs: Number of structures to process in this run (default: 2)
+        max_batch_size: Number of structures to process in this run (default: 2)
                           Uses simple batch approach: processes first N structures only
         fix_type: Where to fix atoms ('bottom'/'top'/'center'/None). Default: None (no fixing)
         fix_thickness: Thickness in Angstroms for fixing region. Default: 0.0
@@ -141,7 +142,7 @@ def SurfaceHydroxylationWorkGraph(
         ...     code=code,
         ...     vasp_config=vasp_config,
         ...     options=options,
-        ...     max_parallel_jobs=3,
+        ...     max_batch_size=3,
         ... )
         >>> wg.submit()
     """
@@ -190,6 +191,7 @@ def SurfaceHydroxylationWorkGraph(
 
     # =========================================================================
     # Task 0.5: Pristine Slab Relaxation (NEW)
+    # SEQUENTIAL: This task depends on bulk_energy which creates implicit wait
     # =========================================================================
 
     # Prepare settings for pristine slab
@@ -218,6 +220,9 @@ def SurfaceHydroxylationWorkGraph(
         clean_workdir=orm.Bool(builder_inputs.get('clean_workdir', False)),
     )
 
+    # Add explicit dependency: pristine waits for bulk to complete
+    bulk_vasp >> pristine_vasp
+
     pristine_energy = extract_total_energy_from_misc(misc=pristine_vasp.misc)
 
     # Task 1: Generate surface structure variants
@@ -227,18 +232,21 @@ def SurfaceHydroxylationWorkGraph(
         params=surface_params,
     )
 
-    # Task 2: Relax all generated structures in parallel
-    # Pass structures dict from generate_structures
+    # Task 2: Relax all generated structures
+    # max_concurrent_jobs controls how many run at once (set to 1 for sequential)
     relax_outputs = relax_slabs_with_semaphore(
         structures=gen_outputs.structures,
         code_pk=code.pk,
         builder_inputs=builder_inputs,
-        max_parallel=max_parallel_jobs,
+        max_batch_size=max_batch_size,
         fix_type=fix_type,
         fix_thickness=fix_thickness,
         fix_elements=fix_elements,
         structure_specific_builder_inputs=structure_specific_builder_inputs,
+        max_number_jobs=max_concurrent_jobs,
     )
+    # Add explicit dependency: relax_slabs waits for pristine to complete
+    pristine_vasp >> relax_outputs
 
     # Calculate surface energies (if enabled)
     # With @task.graph, namespace outputs are directly accessible
@@ -288,7 +296,7 @@ def build_surface_hydroxylation_workgraph(
     bulk_structure_pk: int = None,
     bulk_cif_path: str = None,
     bulk_builder_inputs: dict = None,
-    max_parallel_jobs: int = 2,
+    max_batch_size: int = 2,
     fix_type: str = None,
     fix_thickness: float = 0.0,
     fix_elements: t.List[str] = None,
@@ -362,7 +370,7 @@ def build_surface_hydroxylation_workgraph(
                     'options': {'resources': {...}, 'queue_name': 'normal'},
                     'clean_workdir': False,
                 }
-        max_parallel_jobs: Number of structures to process in this run (default 2).
+        max_batch_size: Number of structures to process in this run (default 2).
                           Uses simple batch approach: processes first N structures only.
                           Increase this value in subsequent runs to process more structures.
         fix_type: Where to fix atoms ('bottom'/'top'/'center'/None). Default: None (no fixing)
@@ -431,7 +439,7 @@ def build_surface_hydroxylation_workgraph(
         ...     code_label='vasp@cluster',
         ...     vasp_config=vasp_config,
         ...     options=options,
-        ...     max_parallel_jobs=3,
+        ...     max_batch_size=3,
         ... )
         >>> wg.submit()
     """
@@ -595,14 +603,16 @@ def build_surface_hydroxylation_workgraph(
     # Validate ISIF=3 for user-provided bulk_builder_inputs (CRITICAL)
     else:
         # User provided bulk_builder_inputs - validate ISIF=3
-        isif_value = bulk_builder_inputs.get('parameters', {}).get('incar', {}).get('ISIF')
+        incar = bulk_builder_inputs.get('parameters', {}).get('incar', {})
+        isif_value = incar.get('ISIF') if 'ISIF' in incar else incar.get('isif')
+        
         if isif_value != 3:
             raise ValueError(
                 f"bulk_builder_inputs MUST include ISIF=3 for cell relaxation.\n"
                 f"Found: ISIF={isif_value}\n\n"
                 f"Bulk reference calculations require full cell relaxation (ISIF=3).\n"
                 f"This is critical for accurate surface energy calculations per Section S2.\n\n"
-                f"Fix: bulk_builder_inputs['parameters']['incar']['ISIF'] = 3"
+                f"Fix: bulk_builder_inputs['parameters']['incar']['isif'] = 3"
             )
 
     # Set defaults for optional parameters
@@ -673,7 +683,8 @@ def build_surface_hydroxylation_workgraph(
         builder_inputs=builder_inputs,
         bulk_structure=bulk_structure,
         bulk_builder_inputs=bulk_builder_inputs,
-        max_parallel_jobs=max_parallel_jobs,
+        max_batch_size=max_batch_size,
+        max_concurrent_jobs=max_concurrent_jobs,
         fix_type=fix_type,
         fix_thickness=fix_thickness,
         fix_elements=fix_elements,
@@ -684,7 +695,8 @@ def build_surface_hydroxylation_workgraph(
     # Set the workflow name
     wg.name = name
 
-    # CONCURRENCY CONTROL: Limit how many VASP calculations run simultaneously
+    # CONCURRENCY CONTROL on top-level WorkGraph
+    # The inner relax_slabs_with_semaphore also gets max_concurrent_jobs via max_number_jobs param
     if max_concurrent_jobs is not None:
         wg.max_number_jobs = max_concurrent_jobs
 
