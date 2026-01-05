@@ -155,13 +155,13 @@ def metal_surface_energy_single_hkl(
     # Bulk inputs (already relaxed!)
     bulk_structure: orm.StructureData = None,
     bulk_energy: orm.Float = None,
-    
+
     # VASP configuration
     code: orm.Code = None,
     potential_family: str = 'PBE',
     potential_mapping: dict = None,
     clean_workdir: bool = False,
-    
+
     # Slab generation - single Miller index
     miller_indices: list = None,
     min_slab_thickness: float = 15.0,
@@ -170,14 +170,17 @@ def metal_surface_energy_single_hkl(
     center_slab: bool = True,
     symmetrize: bool = True,
     primitive: bool = True,
-    
+
     # Slab relaxation parameters
     slab_parameters: dict = None,
     slab_options: dict = None,
     slab_kpoints_spacing: float = None,
-    
+
     # Concurrency
     max_concurrent_jobs: int = None,
+
+    # Sequential execution - creates data dependency for chaining tasks
+    wait_for: orm.Data = None,
 ):
     """
     Slab generation and relaxation for a SINGLE Miller index.
@@ -365,7 +368,10 @@ def build_metal_surface_energy_workgraph(
     
     # To collect surface energy outputs for consolidation
     gather_inputs = {}
-    
+
+    # Track previous task for sequential chaining
+    previous_hkl_task = None
+
     # ===== ADD TASK FOR EACH MILLER INDEX =====
     for miller in miller_indices:
         # Normalize to list of ints
@@ -374,10 +380,9 @@ def build_metal_surface_energy_workgraph(
         miller_list = [int(m) for m in miller]
         hkl_key = miller_to_key(miller_list)
         task_name = f'surface_{hkl_key}'
-        
-        hkl_task = wg.add_task(
-            metal_surface_energy_single_hkl,
-            name=task_name,
+
+        # Build task kwargs - optionally include wait_for for sequential chaining
+        task_kwargs = dict(
             bulk_structure=bulk_task.outputs.structure,
             bulk_energy=bulk_energy_task.outputs.result,
             code=code,
@@ -396,15 +401,28 @@ def build_metal_surface_energy_workgraph(
             slab_kpoints_spacing=slab_kpts,
             max_concurrent_jobs=max_concurrent_jobs,
         )
-        
+
+        # Chain Miller index tasks sequentially to respect max_concurrent_jobs=1
+        # Each HKL task waits for the previous one via data dependency
+        if previous_hkl_task is not None:
+            task_kwargs['wait_for'] = previous_hkl_task.outputs.surface_energies
+
+        hkl_task = wg.add_task(
+            metal_surface_energy_single_hkl,
+            name=task_name,
+            **task_kwargs,
+        )
+
         # Chain: Bulk energy >> HKL task
         wg.add_link(bulk_energy_task.outputs.result, hkl_task.inputs.bulk_energy)
-        
+
+        previous_hkl_task = hkl_task
+
         # Expose individual outputs
         setattr(wg.outputs, f'relaxed_slabs_{hkl_key}', hkl_task.outputs.relaxed_slabs)
         setattr(wg.outputs, f'slab_energies_{hkl_key}', hkl_task.outputs.slab_energies)
         setattr(wg.outputs, f'slab_structures_{hkl_key}', hkl_task.outputs.slab_structures)
-        
+
         # Collect for gathered output
         gather_inputs[f'surface_energies_{hkl_key}'] = hkl_task.outputs.surface_energies
     

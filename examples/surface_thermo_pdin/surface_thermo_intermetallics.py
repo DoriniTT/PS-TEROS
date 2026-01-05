@@ -44,23 +44,23 @@ def main():
     print(f"\n2. Structure:")
     print(f"   Bulk:   {bulk_structure_path}")
 
-    # Code configuration - using cluster02
-    code_label = 'VASP-6.5.1@cluster02'
+    # Code configuration - using localwork
+    code_label = 'VASP-6.5.1@localwork'
     potential_family = 'PBE'
 
     # VASP parameters for intermetallics
     # Note: ISMEAR=1 (Methfessel-Paxton) is recommended for metals/intermetallics
     bulk_parameters = {
         'prec': 'Accurate',
-        'encut': 500,
-        'ediff': 1e-6,
+        'encut': 250,
+        'ediff': 1e-5,
         'ismear': 1,      # Methfessel-Paxton for metals
         'sigma': 0.2,     # Smearing width
         'ibrion': 2,
         'isif': 3,        # Full relaxation for bulk
-        'nsw': 100,
-        'ediffg': -0.01,
-        'algo': 'Normal',
+        'nsw': 1000,
+        'ediffg': -0.1,
+        'algo': 'Fast',
         'lreal': 'Auto',
         'lwave': False,
         'lcharg': False,
@@ -70,11 +70,11 @@ def main():
     slab_parameters = bulk_parameters.copy()
     slab_parameters['isif'] = 2  # Fix cell, relax ions
 
-    # Scheduler options for cluster02 (24 cores per machine)
+    # Scheduler options for 16 cores per machine
     common_options = {
         'resources': {
             'num_machines': 1,
-            'num_cores_per_machine': 24,
+            'num_mpiprocs_per_machine': 8,
         },
     }
 
@@ -83,7 +83,6 @@ def main():
     miller_indices = [
         [1, 1, 0],  # Most stable for B2
         [1, 0, 0],  # Second most stable
-        [1, 1, 1],  # Third
     ]
 
     print(f"\n3. Miller indices: {miller_indices}")
@@ -100,7 +99,7 @@ def main():
         code_label=code_label,
         potential_family=potential_family,
         potential_mapping={'Pd': 'Pd', 'In': 'In'},  # Map both elements!
-        kpoints_spacing=0.03,
+        kpoints_spacing=0.04,
         clean_workdir=False,
 
         # Bulk parameters
@@ -109,8 +108,8 @@ def main():
 
         # Slab generation - ALL Miller indices!
         miller_indices=miller_indices,
-        min_slab_thickness=20.0,
-        min_vacuum_thickness=20.0,
+        min_slab_thickness=12.0,
+        min_vacuum_thickness=15.0,
         lll_reduce=True,
         center_slab=True,
         symmetrize=True,  # Important for stoichiometric surfaces!
@@ -119,7 +118,7 @@ def main():
         # Slab relaxation
         slab_parameters=slab_parameters,
         slab_options=common_options,
-        slab_kpoints_spacing=0.04,
+        slab_kpoints_spacing=0.08,
 
         # Concurrency control - cluster02 can only run one calculation at a time
         max_concurrent_jobs=1,
