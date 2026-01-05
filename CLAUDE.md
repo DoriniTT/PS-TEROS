@@ -1,6 +1,6 @@
 # PS-TEROS Developer Guide
 
-A comprehensive guide for developing and working with **PS-TEROS** (Python Surface Thermodynamics for Energy-Related Oxide Systems) using **AiiDA** and **AiiDA-WorkGraph**.
+A comprehensive guide for developing and working with **PS-TEROS** (Predicting Stability of TERminations of Oxide Surfaces) using **AiiDA** and **AiiDA-WorkGraph**.
 
 ---
 
@@ -467,7 +467,7 @@ def build_my_module_workgraph(
 
     Args:
         structure_path: Path to CIF/POSCAR file
-        code_label: AiiDA code label (e.g., 'VASP-6.5.1@cluster02')
+        code_label: AiiDA code label (e.g., 'VASP-6.5.1@localwork')
         builder_inputs: VASP configuration dictionary
         name: Workflow name
         max_concurrent_jobs: Maximum concurrent VASP calculations
@@ -478,7 +478,7 @@ def build_my_module_workgraph(
     Example:
         >>> wg = build_my_module_workgraph(
         ...     structure_path='/path/to/structure.cif',
-        ...     code_label='VASP-6.5.1@cluster02',
+        ...     code_label='VASP-6.5.1@localwork',
         ...     builder_inputs={...},
         ... )
         >>> wg.submit(wait=False)
@@ -571,9 +571,9 @@ def main():
 
     wg = build_my_module_workgraph(
         structure_path='structures/ag2o.cif',
-        code_label='VASP-6.5.1@cluster02',
+        code_label='VASP-6.5.1@localwork',
         builder_inputs=builder_inputs,
-        max_concurrent_jobs=1,  # IMPORTANT for cluster02
+        max_concurrent_jobs=1,  # IMPORTANT for localwork
     )
 
     wg.submit(wait=False)
@@ -820,19 +820,20 @@ verdi node graph generate <PK>
 
 ### Test Cluster Configuration
 
-For testing, use `VASP-6.5.1@cluster02`:
+For testing, use `VASP-6.5.1@localwork`:
 
 ```python
-code_label = 'VASP-6.5.1@cluster02'
+code_label = 'VASP-6.5.1@localwork'
 
 options = {
     'resources': {
         'num_machines': 1,
-        'num_cores_per_machine': 24,  # cluster02 has 24 cores
+        'num_mpiprocs_per_machine': 16,
     },
 }
+builder.metadata.options.max_wallclock_seconds = 3 * 3600  # Lets limit the calculations to 3 hour. This may be fine because we will use this cluster mainly to do testing.
 
-# CRITICAL: cluster02 can only run ONE job at a time
+# CRITICAL: the local work computer can only run ONE job at a time
 max_concurrent_jobs = 1
 ```
 
@@ -885,8 +886,8 @@ Your implementation is ready to merge when:
    # Kill stuck processes
    verdi process kill <PK>
 
-   # Kill VASP on remote (if needed)
-   ssh cluster02 killall vasp_std
+   # Kill VASP on current computer when testing (if needed)
+   killall vasp_std
 
    # Restart daemon
    verdi daemon restart
@@ -1075,7 +1076,7 @@ verdi calcjob outputcat <PK>
 
 # Control
 verdi process kill <PK>
-ssh cluster02 killall vasp_std
+killall vasp_std
 ```
 
 ---
