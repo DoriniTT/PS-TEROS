@@ -35,6 +35,7 @@ from teros.core.surface_energy.surface_energy import (
     calculate_metal_surface_energy,
     calculate_bulk_energy_per_atom,
 )
+from teros.core.surface_energy.wulff import generate_wulff_shape_data
 
 
 def load_structure_from_file(filepath: str) -> orm.StructureData:
@@ -230,18 +231,18 @@ def build_metal_surface_energy_workgraph(
     # Structure input (file path or StructureData)
     bulk_structure_path: str = None,
     bulk_structure: orm.StructureData = None,
-    
+
     # VASP configuration
     code_label: str = 'VASP-VTST-6.4.3@bohr',
     potential_family: str = 'PBE',
     potential_mapping: dict = None,
     kpoints_spacing: float = 0.4,
     clean_workdir: bool = False,
-    
+
     # Bulk parameters
     bulk_parameters: dict = None,
     bulk_options: dict = None,
-    
+
     # Slab generation - multiple Miller indices!
     miller_indices: list = None,  # List of Miller indices: [[1,1,1], [1,0,0], [1,1,0]]
     min_slab_thickness: float = 15.0,
@@ -250,15 +251,18 @@ def build_metal_surface_energy_workgraph(
     center_slab: bool = True,
     symmetrize: bool = True,
     primitive: bool = True,
-    
+
     # Slab relaxation
     slab_parameters: dict = None,
     slab_options: dict = None,
     slab_kpoints_spacing: float = None,
-    
+
     # Concurrency
     max_concurrent_jobs: int = 4,
-    
+
+    # Wulff shape generation
+    generate_wulff_shape: bool = False,
+
     # Workflow name
     name: str = 'MetalSurfaceEnergy',
 ) -> WorkGraph:
@@ -291,11 +295,14 @@ def build_metal_surface_energy_workgraph(
         slab_options: Scheduler options for slab calculations
         slab_kpoints_spacing: K-points spacing for slabs
         max_concurrent_jobs: Maximum concurrent VASP calculations
+        generate_wulff_shape: If True, generate Wulff shape visualization and data
+            after surface energy calculations complete. Creates PDF plot, text
+            report, and standalone Python script for plot customization.
         name: Name for the WorkGraph
-        
+
     Returns:
         WorkGraph ready for submission
-        
+
     Outputs (accessible via task names):
         - bulk_relax: VaspWorkChain with bulk relaxation results
         - bulk_energy: extract_total_energy result
@@ -303,6 +310,14 @@ def build_metal_surface_energy_workgraph(
         - surface_energies: Dict containing consolidated results for ALL orientations
         - relaxed_slabs_hkl_XXX: Per-orientation slab structures
         - slab_energies_hkl_XXX: Per-orientation slab energies
+
+    Additional outputs when generate_wulff_shape=True:
+        - wulff_data: Dict with Wulff shape properties (weighted surface energy,
+            anisotropy, shape factor, area fractions, etc.)
+        - wulff_plot_pdf: SinglefileData with PDF visualization
+        - wulff_report_txt: SinglefileData with detailed text report
+        - wulff_script_py: SinglefileData with standalone Python script for
+            customizing the plot without rerunning the workflow
     """
     # Validate inputs
     if bulk_structure_path is None and bulk_structure is None:
@@ -414,17 +429,32 @@ def build_metal_surface_energy_workgraph(
         name='gather_surface_energies',
         **gather_inputs
     )
-    
+
     # Expose consolidated output
     wg.outputs.surface_energies = gather_task.outputs.result
-    
+
+    # ===== OPTIONAL WULFF SHAPE GENERATION =====
+    if generate_wulff_shape:
+        wulff_task = wg.add_task(
+            generate_wulff_shape_data,
+            name='wulff_shape',
+            surface_energies=gather_task.outputs.result,
+            bulk_structure=bulk_task.outputs.structure,
+        )
+
+        # Expose Wulff shape outputs
+        wg.outputs.wulff_data = wulff_task.outputs.wulff_data
+        wg.outputs.wulff_plot_pdf = wulff_task.outputs.wulff_plot_pdf
+        wg.outputs.wulff_report_txt = wulff_task.outputs.wulff_report_txt
+        wg.outputs.wulff_script_py = wulff_task.outputs.wulff_script_py
+
     # Expose bulk outputs
     wg.outputs.bulk_energy = bulk_energy_task.outputs.result
     wg.outputs.bulk_energy_per_atom = bulk_energy_per_atom_task.outputs.result
     wg.outputs.bulk_structure = bulk_task.outputs.structure
-    
+
     # Set concurrency limit
     if max_concurrent_jobs is not None:
         wg.max_number_jobs = max_concurrent_jobs
-    
+
     return wg

@@ -19,6 +19,11 @@ Supported materials:
 For stoichiometric and symmetric surfaces, no chemical potential dependencies
 are needed. For non-stoichiometric surfaces, use the oxide thermodynamics
 approach instead.
+
+Wulff Shape Generation:
+The module also supports Wulff shape visualization, which shows the equilibrium
+crystal shape based on the computed surface energies. Enable with
+`generate_wulff_shape=True` in build_metal_surface_energy_workgraph().
 """
 
 from .surface_energy import (
@@ -29,9 +34,20 @@ from .surface_energy import (
 
 from .workgraph import build_metal_surface_energy_workgraph
 
+from .wulff import (
+    generate_wulff_shape_data,
+    select_lowest_energy_terminations,
+    create_wulff_shape,
+)
+
 __all__ = [
+    # Surface energy calculations
     'calculate_metal_surface_energy',
     'compute_metal_surface_energies_scatter',
     'identify_compound_type',
     'build_metal_surface_energy_workgraph',
+    # Wulff shape generation
+    'generate_wulff_shape_data',
+    'select_lowest_energy_terminations',
+    'create_wulff_shape',
 ]
