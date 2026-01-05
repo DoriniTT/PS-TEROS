@@ -1,5 +1,191 @@
 # Changelog
 
+## [v0.3.0] - 2026-01-05 - Metal Surface Energy Module
+
+### Overview
+
+Version 0.3.0 introduces a dedicated module for computing surface energies of **elemental metals** (Au, Ag, Cu, Pt, etc.) using a simplified thermodynamic formula. This release also includes improvements to the surface hydroxylation module and custom calculation workflows.
+
+---
+
+### New Feature: Metal Surface Energy Module
+
+**Module:** `teros.core.metal_surface_energy`
+
+**Overview:** Computes surface energies for pure metals using the simple formula:
+
+$$\gamma = \frac{E_{\text{slab}} - N \cdot E_{\text{bulk}}^{\text{atom}}}{2A}$$
+
+This is much simpler than oxide thermodynamics since there are no chemical potential dependencies for pure metals.
+
+**Key Capabilities:**
+- **Multiple Miller indices in one workflow:** Calculate (111), (100), (110) surfaces simultaneously
+- **Automatic bulk-to-slab reference:** Single bulk calculation shared across all orientations
+- **Proper metal parameters:** Designed for Methfessel-Paxton smearing (`ISMEAR=1`)
+- **Concurrency control:** `max_concurrent_jobs` parameter for resource management
+- **Complete provenance:** Full AiiDA tracking of all calculations
+
+**API:**
+```python
+from teros.core.metal_surface_energy import build_metal_surface_energy_workgraph
+
+wg = build_metal_surface_energy_workgraph(
+    bulk_structure_path='/path/to/au.cif',
+    code_label='VASP-6.5.1@cluster',
+    potential_family='PBE',
+    potential_mapping={'Au': 'Au'},
+
+    # Multiple orientations in one workflow
+    miller_indices=[[1,1,1], [1,0,0], [1,1,0]],
+
+    # Slab parameters
+    min_slab_thickness=20.0,
+    min_vacuum_thickness=20.0,
+
+    # VASP parameters for metals
+    bulk_parameters={
+        'ismear': 1,      # Methfessel-Paxton for metals
+        'sigma': 0.2,
+        'isif': 3,        # Full relaxation for bulk
+        # ...
+    },
+
+    max_concurrent_jobs=4,
+    name='Au_surface_energy',
+)
+wg.submit(wait=False)
+```
+
+**Workflow Architecture:**
+```
+WorkGraph<MetalSurfaceEnergy>
+├── bulk_relax (VaspWorkChain)     ← Runs ONCE, shared by all orientations
+├── bulk_energy
+├── bulk_energy_per_atom
+├── surface_hkl_111                ← Per-orientation sub-workflows
+│   ├── generate_slab_structures
+│   ├── relax_slabs_scatter
+│   └── compute_surface_energies
+├── surface_hkl_100
+├── surface_hkl_110
+└── gather_surface_energies        ← Consolidates all results
+```
+
+**Output:** `surface_energies` Dict with results in eV/Ų and J/m² for each orientation.
+
+**New Files:**
+- `teros/core/metal_surface_energy/` - Complete module package
+  - `__init__.py` - Module exports
+  - `surface_energy.py` - Core calcfunctions
+  - `workgraph.py` - WorkGraph builder
+  - `README.md` - Module documentation
+- `docs/metal_surface_energy.md` - Comprehensive user guide
+- `examples/surface_thermo_gold/` - Working example for FCC Au
+
+**Use Cases:**
+- Noble metals (Au, Ag, Pt, Pd)
+- Transition metals (Cu, Ni, Fe)
+- Wulff construction input (equilibrium crystal shape)
+- Surface energy comparisons across orientations
+
+**Documentation:** `docs/metal_surface_energy.md`, `teros/core/metal_surface_energy/README.md`
+
+---
+
+### Improved: Surface Hydroxylation Module
+
+**Changes:**
+- **Renamed parameter:** `max_parallel_jobs` → `max_batch_size` for clarity
+- **Added concurrency control:** New `max_concurrent_jobs` parameter to limit simultaneous VASP jobs
+- **Fixed execution order:** Added explicit dependencies to ensure sequential execution:
+  - Bulk calculation → Pristine slab relaxation → Variant relaxations
+- **Improved ISIF validation:** Now accepts both uppercase `ISIF` and lowercase `isif` keys
+
+**API Changes:**
+```python
+# OLD
+wg = build_surface_hydroxylation_workgraph(
+    max_parallel_jobs=3,  # Renamed
+    # ...
+)
+
+# NEW
+wg = build_surface_hydroxylation_workgraph(
+    max_batch_size=3,           # Number of structures to process
+    max_concurrent_jobs=1,      # How many VASP jobs run simultaneously
+    # ...
+)
+```
+
+**Modified Files:**
+- `teros/core/surface_hydroxylation/workgraph.py`
+- `teros/core/surface_hydroxylation/relaxations.py`
+
+---
+
+### Improved: Custom Calculation Module
+
+**Changes:**
+- **Added selective dynamics support:** New parameters for fixing atoms during relaxation
+- **Simplified structure output:** Structure now comes directly from VaspWorkChain output (removed intermediate calcfunction)
+- **Fixed output socket syntax:** Updated to new aiida-workgraph API
+
+**New Parameters:**
+```python
+wg = build_custom_calculation_workgraph(
+    structure=structure,
+    code_label=code_label,
+    builder_inputs=builder_inputs,
+
+    # NEW: Selective dynamics
+    fix_type='bottom',        # 'bottom'/'top'/'center'/None
+    fix_thickness=5.0,        # Fix bottom 5Å
+    fix_elements=['Ag', 'O'], # Optional: only fix these elements
+)
+```
+
+**Modified Files:**
+- `teros/core/custom_calculation/workgraph.py`
+- `teros/core/custom_calculation/tasks.py`
+
+---
+
+### Other Changes
+
+**Core module exports:**
+- Added `calculate_metal_surface_energy` and `build_metal_surface_energy_workgraph` to `teros.core.__init__.py`
+
+**Repository cleanup:**
+- Removed `.worktree` tracking files
+- Removed `LICENCE.md` (superseded by repository license)
+
+---
+
+### Expected Surface Energies (PBE Reference)
+
+| Metal | (111) J/m² | (100) J/m² | (110) J/m² |
+|-------|------------|------------|------------|
+| Au    | ~0.8       | ~0.9       | ~1.3       |
+| Ag    | ~0.6       | ~0.7       | ~0.9       |
+| Cu    | ~1.3       | ~1.5       | ~1.6       |
+| Pt    | ~1.5       | ~1.9       | ~2.0       |
+
+---
+
+### Backward Compatibility
+
+✅ **Fully backward compatible** with the following notes:
+- `max_parallel_jobs` in surface hydroxylation module renamed to `max_batch_size` (update scripts accordingly)
+- All other existing scripts work without modification
+
+---
+
+### Contributors
+
+- Thiago T. Dorini - All features
+
+---
+
 ## [v0.2.0] - 2025-11-04 - Major Feature Release
 
 ### Overview
