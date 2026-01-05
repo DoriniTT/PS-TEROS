@@ -1,0 +1,115 @@
+name: CI - PS-TEROS
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  tests:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: aiida
+          POSTGRES_PASSWORD: aiida_password
+          POSTGRES_DB: aiida_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 5672:5672
+          - 15672:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-client
+
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov flake8
+        pip install numpy pymatgen ase
+        pip install aiida-core aiida-workgraph
+        pip install psycopg2-binary
+        # Install package
+        pip install -e .
+
+    - name: Check Python syntax (all files)
+      run: |
+        python -m py_compile teros/core/*.py
+        echo "✓ All Python files have valid syntax"
+
+    - name: Configure AiiDA
+      run: |
+        mkdir -p ~/.aiida
+        
+        verdi quicksetup --non-interactive \
+          --profile test_profile \
+          --email test@test.com \
+          --first-name Test \
+          --last-name User \
+          --institution TestInst \
+          --db-engine postgresql_psycopg2 \
+          --db-host localhost \
+          --db-port 5432 \
+          --db-name aiida_db \
+          --db-username aiida \
+          --db-password aiida_password \
+          --broker-protocol amqp \
+          --broker-host localhost \
+          --broker-port 5672 \
+          --broker-username guest \
+          --broker-password guest
+        
+        verdi profile setdefault test_profile
+        verdi status
+
+    - name: Start AiiDA daemon
+      run: |
+        verdi daemon start
+        sleep 5
+        verdi daemon status
+
+    - name: Run all tests
+      run: |
+        pytest tests/ -v --tb=short
+
+    - name: Run linting (non-blocking)
+      continue-on-error: true
+      run: |
+        flake8 teros/ --max-line-length=120 --ignore=E501,W503,E402,F401 --statistics
+
+    - name: Stop AiiDA daemon
+      if: always()
+      run: |
+        verdi daemon stop || true

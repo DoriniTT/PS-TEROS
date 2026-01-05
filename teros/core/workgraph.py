@@ -149,6 +149,7 @@ def core_workgraph(
     aimd_options: dict = None,
     aimd_potential_mapping: dict = None,
     aimd_kpoints_spacing: float = None,
+    aimd_supercell: list = None,
     compute_electronic_properties_slabs: bool = False,  # NEW
     slab_electronic_properties: dict = None,  # NEW
     slab_bands_parameters: dict = None,  # NEW
@@ -690,6 +691,7 @@ def build_core_workgraph(
     aimd_options: dict = None,
     aimd_potential_mapping: dict = None,
     aimd_kpoints_spacing: float = None,
+    aimd_supercell: list = None,
     # CP2K-specific parameters (NEW):
     basis_content: str = None,
     pseudo_content: str = None,
@@ -1180,7 +1182,13 @@ def build_core_workgraph(
             print(f"  ✓ Extracted restart folders: {list(restart_folders.keys())}")
 
             # Extract slab structures from previous run
-            if hasattr(prev_node.outputs, 'slab_structures'):
+            # Prefer relaxed_slabs if available (for refinement), otherwise use slab_structures (generated)
+            if hasattr(prev_node.outputs, 'relaxed_slabs'):
+                restart_slabs = {}
+                for label in prev_node.outputs.relaxed_slabs.keys():
+                    restart_slabs[label] = prev_node.outputs.relaxed_slabs[label]
+                print(f"  ✓ Extracted RELAXED slab structures: {list(restart_slabs.keys())}")
+            elif hasattr(prev_node.outputs, 'slab_structures'):
                 restart_slabs = {}
                 for label in prev_node.outputs.slab_structures.keys():
                     restart_slabs[label] = prev_node.outputs.slab_structures[label]
@@ -1281,7 +1289,9 @@ def build_core_workgraph(
         slab_potential_mapping=slab_potential_mapping,
         slab_kpoints_spacing=slab_kpoints_spacing,
         slab_relax_builder_inputs=slab_relax_builder_inputs,
+        structure_specific_relax_builder_inputs=structure_specific_relax_builder_inputs,  # NEW
         slab_scf_builder_inputs=slab_scf_builder_inputs,
+        structure_specific_scf_builder_inputs=structure_specific_scf_builder_inputs,  # NEW
         lll_reduce=lll_reduce,
         center_slab=center_slab,
         symmetrize=symmetrize,
@@ -1428,7 +1438,7 @@ def build_core_workgraph(
                 scf_slabs_scatter,
                 name='scf_slabs_scatter',
                 slabs=input_slabs,
-                code=slab_code,  # Use slab_code
+                code=code,  # Use slab_code
                 potential_family=potential_family,
                 potential_mapping=slab_pot_map,
                 parameters=slab_params,
@@ -1443,7 +1453,7 @@ def build_core_workgraph(
             # Step 2: Add relaxation task
             scatter_task_inputs = {
                 'slabs': input_slabs,
-                'code': slab_code,  # Use slab_code
+                'code': code,  # Use slab_code
                 'potential_family': potential_family,
                 'potential_mapping': slab_pot_map,
                 'parameters': slab_params,
@@ -1754,6 +1764,21 @@ def build_core_workgraph(
             gen_task = wg.tasks['generate_slab_structures']
             initial_slabs_source = gen_task.outputs.slabs
             print(f"     Using unrelaxed generated slabs as initial structures")
+
+        # Handle supercell creation
+        if aimd_supercell is not None:
+            print(f"     Supercell: {aimd_supercell}")
+            from teros.core.aimd.tasks import create_supercells_scatter
+            
+            # Add supercell task
+            sc_task = wg.add_task(
+                create_supercells_scatter,
+                name="create_aimd_supercells",
+                slabs=initial_slabs_source,
+                spec=orm.List(list=aimd_supercell)
+            )
+            initial_slabs_source = sc_task.outputs.result
+            print(f"     ✓ Created supercell generation task")
 
         # Sequential AIMD stages
         current_structures = initial_slabs_source

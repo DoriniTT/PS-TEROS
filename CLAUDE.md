@@ -1,8 +1,7 @@
 # PS-TEROS Developer Guide
 
 A comprehensive guide for developing and working with **PS-TEROS** (Predicting Stability of TERminations of Oxide Surfaces) using **AiiDA** and **AiiDA-WorkGraph**.
-
----
+This is a comprehensive guide for developing and working with the **PS-TEROS** code using **AiiDA**, **AiiDA-WorkGraph**, and **AiiDA-VASP**.
 
 ## Table of Contents
 
@@ -1078,7 +1077,3 @@ verdi calcjob outputcat <PK>
 verdi process kill <PK>
 killall vasp_std
 ```
-
----
-
-*Last updated: 2026-01-05*

@@ -15,6 +15,28 @@ from .relaxations import relax_slabs_with_semaphore
 from .surface_energy_workgraph import create_surface_energy_task, calculate_all_surface_energies
 
 
+def get_remote_folder(structure: orm.StructureData) -> orm.RemoteData:
+    """
+    Retrieve the remote_folder from the calculation that created the structure.
+    This is a plain Python helper, not a task, to avoid provenance locking issues.
+    """
+    if not structure.creator:
+        return None
+    
+    # Check if creator has remote_folder output
+    if 'remote_folder' in structure.creator.outputs:
+        return structure.creator.outputs.remote_folder
+    
+    return None
+
+@task.calcfunction
+def clone_dict_node(node: orm.Dict) -> orm.Dict:
+    """
+    Clones a Dict node to a new Dict node.
+    Used to bring an existing Dict into the graph's provenance as a new output.
+    """
+    return orm.Dict(dict=node.get_dict())
+
 @task.graph
 def SurfaceHydroxylationWorkGraph(
     structure: orm.StructureData,
@@ -30,6 +52,7 @@ def SurfaceHydroxylationWorkGraph(
     fix_elements: t.List[str] = None,
     structure_specific_builder_inputs: dict = None,
     calculate_surface_energies: bool = True,
+    restart_from_pk: int = None,
 ) -> t.Annotated[dict, namespace(**{
     'manifest': orm.Dict,
     'structures': dynamic(orm.StructureData),
@@ -44,122 +67,34 @@ def SurfaceHydroxylationWorkGraph(
 })]:
     """
     Main workflow for surface hydroxylation studies.
-
-    This WorkGraph orchestrates the complete hydroxylation workflow:
-    1. Generate surface structure variants (hydroxylation/vacancies) from input slab
-    2. Relax all variants in parallel with semaphore-based concurrency control
-    3. Collect and organize results
-
-    Args:
-        structure: Input relaxed slab structure (StructureData)
-        surface_params: Parameters for surface_modes.py (dict with keys):
-            - mode: str ('vacancies'/'hydrogen'/'combine')
-            - species: str (default 'O')
-            - z_window: float (default 0.5)
-            - which_surface: str ('top'/'bottom'/'both')
-            - oh_dist: float (default 0.98)
-            - include_empty: bool (default False)
-            - supercell: list[int] or None
-            - deduplicate_by_coverage: bool
-            - coverage_bins: int or None
-        code: AiiDA Code for VASP (InstalledCode)
-        builder_inputs: Complete builder configuration (dict) for vasp.v2.vasp WorkChain.
-            This dict should contain ALL builder parameters as you would set them directly:
-            - parameters: Dict with nested 'incar' dict containing VASP tags
-            - kpoints_spacing: Float (or provide 'kpoints' KpointsData)
-            - potential_family: Str (e.g., 'PBE', 'PBE.54')
-            - potential_mapping: Dict or orm.Dict (element->potential mapping)
-            - options: Dict or orm.Dict (scheduler options: resources, queue, walltime)
-            - settings: Dict or orm.Dict (parser settings, optional)
-            - dynamics: Dict (selective dynamics, optional - will be added automatically if fix_type is set)
-            - clean_workdir: Bool (default: False)
-            Note: 'code' and 'structure' will be set automatically by the workflow
-        bulk_structure: Bulk crystal structure for reference calculations (StructureData).
-                       Required for surface energy calculations per Section S2.
-        bulk_builder_inputs: VASP parameters for bulk relaxation (dict). Must include
-                            ISIF=3 for cell relaxation. Same format as builder_inputs.
-        max_batch_size: Number of structures to process in this run (default: 2)
-                          Uses simple batch approach: processes first N structures only
-        fix_type: Where to fix atoms ('bottom'/'top'/'center'/None). Default: None (no fixing)
-        fix_thickness: Thickness in Angstroms for fixing region. Default: 0.0
-        fix_elements: Optional list of element symbols to fix (e.g., ['Ag', 'O']).
-                     If None, all elements in the region are fixed. Default: None
-        structure_specific_builder_inputs: Optional dict to override builder_inputs for specific
-                     structure indices. Keys are integer indices (0, 1, 2, ...) corresponding to
-                     generated structures. Values are PARTIAL builder_inputs dicts that will be
-                     MERGED into the default builder_inputs. You only need to specify the parameters
-                     you want to override.
-                     Example: {0: {'parameters': {'incar': {'ALGO': 'Normal'}}},
-                              2: {'kpoints_spacing': 0.2, 'options': {'resources': {...}}}}
-                     Structure 0 will use ALGO='Normal' with all other default parameters.
-                     Structure 2 will use kpoints_spacing=0.2 and custom resources with all other defaults.
-                     Structures 1, 3, etc. will use the complete default builder_inputs.
-                     Default: None (use default builder_inputs for all)
-
-    Returns:
-        Dictionary with outputs:
-            - manifest: Dict with surface_modes metadata
-            - successful_relaxations: Dict with list of successful results
-                Each result: {name, structure_pk, energy, coverage, metadata}
-            - failed_relaxations: Dict with list of failed results
-                Each result: {name, coverage, exit_status, error_message}
-            - statistics: Dict with {total, succeeded, failed} counts
-
-    Example:
-        >>> from aiida import orm
-        >>> from teros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph
-        >>>
-        >>> # Load relaxed slab structure
-        >>> structure = orm.load_node(1234)
-        >>> code = orm.load_code('vasp@cluster')
-        >>>
-        >>> # Define parameters
-        >>> surface_params = {
-        ...     'mode': 'hydrogen',
-        ...     'species': 'O',
-        ...     'coverage_bins': 5,
-        ... }
-        >>> vasp_config = {
-        ...     'parameters': {
-        ...         'PREC': 'Accurate',
-        ...         'ENCUT': 520,
-        ...         'EDIFF': 1e-6,
-        ...         'ISIF': 2,
-        ...         'NSW': 200,
-        ...         'IBRION': 2,
-        ...         'EDIFFG': -0.02,
-        ...     },
-        ...     'kpoints_spacing': 0.3,
-        ...     'potential_family': 'PBE',
-        ...     'clean_workdir': False,
-        ... }
-        >>> options = {'resources': {'num_machines': 1}}
-        >>>
-        >>> # Create and submit workflow
-        >>> wg = SurfaceHydroxylationWorkGraph(
-        ...     structure=structure,
-        ...     surface_params=surface_params,
-        ...     code=code,
-        ...     vasp_config=vasp_config,
-        ...     options=options,
-        ...     max_batch_size=3,
-        ... )
-        >>> wg.submit()
+    ...
     """
-
+    
     # Convert inputs to AiiDA nodes if needed
     if not isinstance(surface_params, orm.Dict):
         surface_params = orm.Dict(dict=surface_params)
 
+    # Initialize variables for flow control
+    use_restart = False
+    prev_node = None
+    
+    if restart_from_pk is not None:
+        # Check if it's a valid PK
+        pk_val = restart_from_pk.value if hasattr(restart_from_pk, 'value') else restart_from_pk
+        if pk_val:
+            prev_node = orm.load_node(pk_val)
+            use_restart = True
+            print(f"   Using restart from workflow PK: {pk_val}")
+
     # =========================================================================
-    # Task 0: Bulk Relaxation (NEW)
+    # Task 0: Bulk Relaxation
     # =========================================================================
     from aiida.plugins import WorkflowFactory
 
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
     VaspTask = task(VaspWorkChain)
 
-    # Prepare settings with parser configuration
+    # Prepare settings
     bulk_settings = bulk_builder_inputs.get('settings', {})
     if not bulk_settings:
         bulk_settings = {
@@ -172,29 +107,47 @@ def SurfaceHydroxylationWorkGraph(
     if not isinstance(bulk_settings, orm.Dict):
         bulk_settings = orm.Dict(dict=bulk_settings)
 
-    # Create bulk relaxation task
-    bulk_vasp = VaspTask(
-        structure=bulk_structure,
-        code=code,
-        parameters=orm.Dict(dict=bulk_builder_inputs['parameters']),
-        kpoints_spacing=orm.Float(bulk_builder_inputs.get('kpoints_spacing', 0.5)),
-        potential_family=orm.Str(bulk_builder_inputs['potential_family']),
-        potential_mapping=orm.Dict(dict=bulk_builder_inputs.get('potential_mapping', {})),
-        options=orm.Dict(dict=bulk_builder_inputs['options']),
-        settings=bulk_settings,
-        clean_workdir=orm.Bool(bulk_builder_inputs.get('clean_workdir', False)),
-    )
+    if use_restart:
+        # Restart Bulk
+        bulk_input_structure = prev_node.outputs.bulk_structure
+        # Direct Python call to get existing RemoteData node
+        bulk_restart_folder = get_remote_folder(bulk_input_structure)
+        
+        bulk_vasp = VaspTask(
+            structure=bulk_input_structure,
+            code=code,
+            parameters=orm.Dict(dict=bulk_builder_inputs['parameters']),
+            kpoints_spacing=orm.Float(bulk_builder_inputs.get('kpoints_spacing', 0.5)),
+            potential_family=orm.Str(bulk_builder_inputs['potential_family']),
+            potential_mapping=orm.Dict(dict=bulk_builder_inputs.get('potential_mapping', {})),
+            options=orm.Dict(dict=bulk_builder_inputs['options']),
+            settings=bulk_settings,
+            clean_workdir=orm.Bool(bulk_builder_inputs.get('clean_workdir', False)),
+            restart_folder=bulk_restart_folder,
+        )
+    else:
+        # Standard Bulk
+        bulk_vasp = VaspTask(
+            structure=bulk_structure,
+            code=code,
+            parameters=orm.Dict(dict=bulk_builder_inputs['parameters']),
+            kpoints_spacing=orm.Float(bulk_builder_inputs.get('kpoints_spacing', 0.5)),
+            potential_family=orm.Str(bulk_builder_inputs['potential_family']),
+            potential_mapping=orm.Dict(dict=bulk_builder_inputs.get('potential_mapping', {})),
+            options=orm.Dict(dict=bulk_builder_inputs['options']),
+            settings=bulk_settings,
+            clean_workdir=orm.Bool(bulk_builder_inputs.get('clean_workdir', False)),
+        )
 
     # Extract energy from bulk relaxation
     from .utils import extract_total_energy_from_misc
     bulk_energy = extract_total_energy_from_misc(misc=bulk_vasp.misc)
 
     # =========================================================================
-    # Task 0.5: Pristine Slab Relaxation (NEW)
-    # SEQUENTIAL: This task depends on bulk_energy which creates implicit wait
+    # Task 0.5: Pristine Slab Relaxation
     # =========================================================================
 
-    # Prepare settings for pristine slab
+    # Prepare settings
     pristine_settings = builder_inputs.get('settings', {})
     if not pristine_settings:
         pristine_settings = {
@@ -207,49 +160,109 @@ def SurfaceHydroxylationWorkGraph(
     if not isinstance(pristine_settings, orm.Dict):
         pristine_settings = orm.Dict(dict=pristine_settings)
 
-    # Create pristine slab relaxation task
-    pristine_vasp = VaspTask(
-        structure=structure,  # Use input slab structure
-        code=code,
-        parameters=orm.Dict(dict=builder_inputs['parameters']),
-        kpoints_spacing=orm.Float(builder_inputs.get('kpoints_spacing', 0.5)),
-        potential_family=orm.Str(builder_inputs['potential_family']),
-        potential_mapping=orm.Dict(dict=builder_inputs.get('potential_mapping', {})),
-        options=orm.Dict(dict=builder_inputs['options']),
-        settings=pristine_settings,
-        clean_workdir=orm.Bool(builder_inputs.get('clean_workdir', False)),
-    )
+    if use_restart:
+        # Restart Pristine
+        pristine_input_structure = prev_node.outputs.pristine_structure
+        pristine_restart_folder = get_remote_folder(pristine_input_structure)
 
-    # Add explicit dependency: pristine waits for bulk to complete
+        pristine_vasp = VaspTask(
+            structure=pristine_input_structure,
+            code=code,
+            parameters=orm.Dict(dict=builder_inputs['parameters']),
+            kpoints_spacing=orm.Float(builder_inputs.get('kpoints_spacing', 0.5)),
+            potential_family=orm.Str(builder_inputs['potential_family']),
+            potential_mapping=orm.Dict(dict=builder_inputs.get('potential_mapping', {})),
+            options=orm.Dict(dict=builder_inputs['options']),
+            settings=pristine_settings,
+            clean_workdir=orm.Bool(builder_inputs.get('clean_workdir', False)),
+            restart_folder=pristine_restart_folder,
+        )
+    else:
+        # Standard Pristine
+        pristine_vasp = VaspTask(
+            structure=structure,
+            code=code,
+            parameters=orm.Dict(dict=builder_inputs['parameters']),
+            kpoints_spacing=orm.Float(builder_inputs.get('kpoints_spacing', 0.5)),
+            potential_family=orm.Str(builder_inputs['potential_family']),
+            potential_mapping=orm.Dict(dict=builder_inputs.get('potential_mapping', {})),
+            options=orm.Dict(dict=builder_inputs['options']),
+            settings=pristine_settings,
+            clean_workdir=orm.Bool(builder_inputs.get('clean_workdir', False)),
+        )
+
+    # Add explicit dependency
     bulk_vasp >> pristine_vasp
 
     pristine_energy = extract_total_energy_from_misc(misc=pristine_vasp.misc)
 
-    # Task 1: Generate surface structure variants
-    # Returns namespace with manifest (Dict) and structures (dynamic dict of StructureData)
-    gen_outputs = generate_structures(
-        structure=structure,
-        params=surface_params,
-    )
+    # =========================================================================
+    # Task 1 & 2: Surface Structures & Relaxation
+    # =========================================================================
+    
+    if use_restart:
+        # RESTART MODE
+        
+        # 1. Manifest
+        # Use clone_dict_node to create a NEW Dict node from the old one
+        manifest_task = clone_dict_node(prev_node.outputs.manifest)
+        manifest_out = manifest_task.result
+        
+        # 2. Structures & Restart Folders
+        structures_input = {}
+        restart_folders_map = {}
+        
+        prev_structures_dict = prev_node.outputs.structures
+        
+        for key in prev_structures_dict:
+             struct = prev_structures_dict[key]
+             structures_input[key] = struct
+             
+             # Get restart folder directly
+             remote = get_remote_folder(struct)
+             if remote:
+                 restart_folders_map[key] = remote
+        
+        # Call relax task
+        relax_outputs = relax_slabs_with_semaphore(
+            structures=structures_input,
+            code_pk=code.pk,
+            builder_inputs=builder_inputs,
+            max_batch_size=max_batch_size,
+            fix_type=fix_type,
+            fix_thickness=fix_thickness,
+            fix_elements=fix_elements,
+            structure_specific_builder_inputs=structure_specific_builder_inputs,
+            max_number_jobs=max_concurrent_jobs,
+            restart_folders=restart_folders_map,
+        )
+        
+    else:
+        # STANDARD MODE
+        gen_outputs = generate_structures(
+            structure=structure,
+            params=surface_params,
+        )
+        
+        manifest_out = gen_outputs.manifest
+        structures_input = gen_outputs.structures
 
-    # Task 2: Relax all generated structures
-    # max_concurrent_jobs controls how many run at once (set to 1 for sequential)
-    relax_outputs = relax_slabs_with_semaphore(
-        structures=gen_outputs.structures,
-        code_pk=code.pk,
-        builder_inputs=builder_inputs,
-        max_batch_size=max_batch_size,
-        fix_type=fix_type,
-        fix_thickness=fix_thickness,
-        fix_elements=fix_elements,
-        structure_specific_builder_inputs=structure_specific_builder_inputs,
-        max_number_jobs=max_concurrent_jobs,
-    )
-    # Add explicit dependency: relax_slabs waits for pristine to complete
+        relax_outputs = relax_slabs_with_semaphore(
+            structures=structures_input,
+            code_pk=code.pk,
+            builder_inputs=builder_inputs,
+            max_batch_size=max_batch_size,
+            fix_type=fix_type,
+            fix_thickness=fix_thickness,
+            fix_elements=fix_elements,
+            structure_specific_builder_inputs=structure_specific_builder_inputs,
+            max_number_jobs=max_concurrent_jobs,
+        )
+    
+    # Add explicit dependency
     pristine_vasp >> relax_outputs
 
-    # Calculate surface energies (if enabled)
-    # With @task.graph, namespace outputs are directly accessible
+    # Calculate surface energies
     if calculate_surface_energies:
         se_results = calculate_all_surface_energies(
             structures_dict=relax_outputs.structures,
@@ -260,9 +273,8 @@ def SurfaceHydroxylationWorkGraph(
             pressures=orm.Dict(dict={'H2O': 0.023, 'O2': 0.21, 'H2': 1.0}),
         )
 
-        # Return outputs including surface energies
         return {
-            'manifest': gen_outputs.manifest,
+            'manifest': manifest_out,
             'structures': relax_outputs.structures,
             'energies': relax_outputs.energies,
             'bulk_structure': bulk_vasp.structure,
@@ -274,9 +286,8 @@ def SurfaceHydroxylationWorkGraph(
             'surface_energies_reaction3': se_results.reaction3_results,
         }
     else:
-        # Return outputs without surface energies
         return {
-            'manifest': gen_outputs.manifest,
+            'manifest': manifest_out,
             'structures': relax_outputs.structures,
             'energies': relax_outputs.energies,
             'bulk_structure': bulk_vasp.structure,
@@ -305,6 +316,7 @@ def build_surface_hydroxylation_workgraph(
     name: str = 'SurfaceHydroxylation',
     # NEW: Surface energy calculation control
     calculate_surface_energies: bool = True,
+    restart_from_pk: int = None,
 ) -> WorkGraph:
     """
     Build a WorkGraph for surface hydroxylation/vacancy calculations.
@@ -395,6 +407,7 @@ def build_surface_hydroxylation_workgraph(
                      and exposes outputs: surface_energies_reaction1/2/3.
                      Set to False to disable surface energy calculations (v2 backward compat mode).
                      Default: True
+        restart_from_pk: PK of previous successful workflow to restart from (default: None).
 
     Returns:
         WorkGraph: Ready-to-submit workflow instance
@@ -690,6 +703,7 @@ def build_surface_hydroxylation_workgraph(
         fix_elements=fix_elements,
         structure_specific_builder_inputs=structure_specific_builder_inputs,
         calculate_surface_energies=calculate_surface_energies,
+        restart_from_pk=orm.Int(restart_from_pk) if restart_from_pk is not None else None,
     )
 
     # Set the workflow name

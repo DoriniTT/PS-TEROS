@@ -464,6 +464,8 @@ def scf_slabs_scatter(
 
     # Build default SCF builder inputs (base for all slabs)
     if scf_builder_inputs is not None:
+        if isinstance(scf_builder_inputs, orm.Dict):
+            scf_builder_inputs = scf_builder_inputs.get_dict()
         # New-style: use builder_inputs as base
         default_scf_builder = copy.deepcopy(scf_builder_inputs)
     else:
@@ -485,6 +487,8 @@ def scf_slabs_scatter(
     # Convert structure_specific keys from int to str for lookup
     structure_specific_scf = {}
     if structure_specific_scf_builder_inputs is not None:
+        if isinstance(structure_specific_scf_builder_inputs, orm.Dict):
+            structure_specific_scf_builder_inputs = structure_specific_scf_builder_inputs.get_dict()
         for idx_key, override in structure_specific_scf_builder_inputs.items():
             # Accept both int and str keys
             str_key = str(idx_key)
@@ -598,6 +602,8 @@ def relax_slabs_scatter(
 
     # Build default relax builder inputs (base for all slabs)
     if relax_builder_inputs is not None:
+        if isinstance(relax_builder_inputs, orm.Dict):
+            relax_builder_inputs = relax_builder_inputs.get_dict()
         # New-style: use builder_inputs as base
         default_relax_builder = copy.deepcopy(relax_builder_inputs)
     else:
@@ -619,6 +625,8 @@ def relax_slabs_scatter(
     # Convert structure_specific keys from int to str for lookup
     structure_specific_relax = {}
     if structure_specific_relax_builder_inputs is not None:
+        if isinstance(structure_specific_relax_builder_inputs, orm.Dict):
+            structure_specific_relax_builder_inputs = structure_specific_relax_builder_inputs.get_dict()
         for idx_key, override in structure_specific_relax_builder_inputs.items():
             # Accept both int and str keys
             str_key = str(idx_key)
