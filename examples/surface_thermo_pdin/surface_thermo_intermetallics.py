@@ -2,7 +2,7 @@
 """
 Intermetallic Surface Energy Calculation for PdIn (B2 structure)
 
-This script demonstrates the metal_surface_energy module for computing
+This script demonstrates the surface_energy module for computing
 surface energies of stoichiometric intermetallics using the simple formula:
 γ = (E_slab - N·E_bulk/atom) / (2A)
 
@@ -21,7 +21,7 @@ Usage:
 import sys
 import os
 from aiida import load_profile
-from teros.core.metal_surface_energy import build_metal_surface_energy_workgraph
+from teros.core.surface_energy import build_metal_surface_energy_workgraph
 
 
 def main():

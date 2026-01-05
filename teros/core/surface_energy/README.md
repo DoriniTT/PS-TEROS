@@ -39,7 +39,7 @@ Examples: PdIn, AuCu, NiAl, Cu3Au, TiAl, Ni3Al, etc.
 ## Module Structure
 
 ```
-metal_surface_energy/
+surface_energy/
 ├── __init__.py              # Module exports
 ├── surface_energy.py        # Surface energy calcfunctions
 ├── workgraph.py             # WorkGraph builder
@@ -108,7 +108,7 @@ WorkGraph<MetalSurfaceEnergy>
 
 ```python
 from aiida import load_profile
-from teros.core.metal_surface_energy import build_metal_surface_energy_workgraph
+from teros.core.surface_energy import build_metal_surface_energy_workgraph
 
 load_profile('myprofile')
 
@@ -148,7 +148,7 @@ print(f"Submitted: PK={wg.pk}")
 
 ```python
 from aiida import load_profile
-from teros.core.metal_surface_energy import build_metal_surface_energy_workgraph
+from teros.core.surface_energy import build_metal_surface_energy_workgraph
 
 load_profile('myprofile')
 

@@ -1,6 +1,6 @@
-# Metal Surface Energy Module
+# Surface Energy Module
 
-This module computes surface energies for **elemental metals** (Au, Ag, Cu, Pt, etc.) using a simple formula without chemical potential dependencies.
+This module computes surface energies for **elemental metals** (Au, Ag, Cu, Pt, etc.) and **stoichiometric intermetallics** (PdIn, AuCu, NiAl, etc.) using a simple formula without chemical potential dependencies.
 
 ## Formula
 
@@ -12,11 +12,13 @@ $$\gamma = \frac{E_{\text{slab}} - N \cdot E_{\text{bulk}}^{\text{atom}}}{2A}$$
 - $A$: Surface area (Å²)
 - Factor of 2: Two surfaces per slab
 
+This formula is valid for stoichiometric and symmetric surfaces where the slab composition matches the bulk stoichiometry.
+
 ## Quick Start
 
 ```python
 from aiida import load_profile
-from teros.core.metal_surface_energy import build_metal_surface_energy_workgraph
+from teros.core.surface_energy import build_metal_surface_energy_workgraph
 
 load_profile('myprofile')
 
@@ -25,14 +27,14 @@ wg = build_metal_surface_energy_workgraph(
     code_label='VASP-6.5.1@cluster',
     potential_family='PBE',
     potential_mapping={'Au': 'Au'},
-    
+
     # Multiple orientations in one workflow
     miller_indices=[[1,1,1], [1,0,0], [1,1,0]],
-    
+
     # Slab parameters
     min_slab_thickness=20.0,
     min_vacuum_thickness=20.0,
-    
+
     # VASP parameters
     bulk_parameters={
         'prec': 'Accurate',
@@ -44,7 +46,7 @@ wg = build_metal_surface_energy_workgraph(
         'nsw': 100,
         'ediffg': -0.01,
     },
-    
+
     name='Au_surface_energy',
 )
 
@@ -73,7 +75,7 @@ WorkGraph<MetalSurfaceEnergy>
 |-----------|-------------|---------|
 | `bulk_structure_path` | Path to bulk CIF file | `/path/to/au.cif` |
 | `miller_indices` | List of orientations | `[[1,1,1], [1,0,0]]` |
-| `potential_mapping` | Element to potential | `{'Au': 'Au'}` |
+| `potential_mapping` | Element to potential | `{'Au': 'Au'}` or `{'Pd': 'Pd', 'In': 'In'}` |
 | `min_slab_thickness` | Slab thickness (Å) | `20.0` |
 | `min_vacuum_thickness` | Vacuum gap (Å) | `20.0` |
 | `kpoints_spacing` | K-mesh spacing | `0.02` |
@@ -118,7 +120,10 @@ The `surface_energies` Dict:
             "gamma_J_m2": 0.77,
             "gamma_eV_A2": 0.048,
             "area_A2": 21.5,
-            "N_slab": 8
+            "N_slab": 8,
+            "compound_type": "elemental",
+            "formula": "Au",
+            "is_stoichiometric": true
         }
     },
     "hkl_100": { ... },
@@ -128,6 +133,7 @@ The `surface_energies` Dict:
 
 ## Expected Values (PBE)
 
+### Elemental Metals
 | Metal | (111) J/m² | (100) J/m² | (110) J/m² |
 |-------|------------|------------|------------|
 | Au    | ~0.8       | ~0.9       | ~1.3       |
@@ -135,14 +141,20 @@ The `surface_energies` Dict:
 | Cu    | ~1.3       | ~1.5       | ~1.6       |
 | Pt    | ~1.5       | ~1.9       | ~2.0       |
 
+### Intermetallics
+Surface energies for intermetallics vary widely (typically 0.5-2.5 J/m²) depending on:
+- Crystal structure (B2, L10, L12, etc.)
+- Element combination
+- Surface orientation and termination
+
 ## Comparison with Oxide Module
 
-| Feature | Metal Module | Oxide Thermodynamics |
-|---------|--------------|---------------------|
+| Feature | Surface Energy Module | Oxide Thermodynamics |
+|---------|----------------------|---------------------|
 | Formula | γ = (E_slab - N·E_bulk/atom)/(2A) | γ(Δμ_O, Δμ_M) |
 | Chemical potential | None | Required |
 | Reference calcs | None | O₂, metal refs |
-| Use case | Pure metals | Oxides (Ag₂O, WO₃, etc.) |
+| Use case | Metals & stoichiometric intermetallics | Oxides (Ag₂O, WO₃, etc.) |
 
 ## Files
 
@@ -155,3 +167,4 @@ The `surface_energies` Dict:
 - [Workflow Presets Guide](WORKFLOW_PRESETS_GUIDE.md)
 - [Adsorption Energy Module](adsorption_energy_module.md)
 - Example: `examples/surface_thermo_gold/surface_thermo_metals.py`
+- Example: `examples/surface_thermo_pdin/surface_thermo_intermetallics.py`
