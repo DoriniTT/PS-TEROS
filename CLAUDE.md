@@ -1,6 +1,6 @@
 # Working with PS-TEROS and AiiDA-WorkGraph
 
-This is a comprehensive guide for developing and working with the **PS-TEROS** code using **AiiDA** and **AiiDA-WorkGraph**.
+This is a comprehensive guide for developing and working with the **PS-TEROS** code using **AiiDA**, **AiiDA-WorkGraph**, and **AiiDA-VASP**.
 
 ---
 
@@ -38,6 +38,110 @@ Use `sleep 15` (or more) before analyzing nodes.
 ```bash
 verdi process show <PK>
 verdi process report <PK>
+```
+
+## Testing Configuration
+
+### Test Localhost (vasp-6.5.1-std@localhost)
+
+```
+Code Label: vasp-6.5.1-std@localhost
+PK: 20510
+Processors: 8
+Queue: None (no queue system)
+```
+
+```python
+options = {
+    'resources': {
+        'num_machines': 1,
+        'num_cores_per_machine': 8,
+    },
+}
+# IMPORTANT: Only one job at a time
+max_concurrent_jobs = 1
+```
+
+### Error Recovery
+
+When fixing errors, kill all processes:
+
+```bash
+# Kill AiiDA workflow
+verdi process kill <WORKGRAPH_PK>
+
+# Kill remote VASP processes
+killall vasp_std
+
+# Clear cache and restart daemon
+find . -type d -name __pycache__ -exec rm -rf {} +
+verdi daemon restart
+```
+
+---
+
+## Validation Checklist
+
+Before merging a new feature:
+
+- [ ] Main node returns exit code `[0]`
+- [ ] Feature outputs appear correctly in `verdi process show <PK>`
+- [ ] Test with low precision parameters (proper ENCUT, NSW, EDIFF, etc.)
+- [ ] No Python cache issues (run cache clear)
+- [ ] Example script follows naming convention `step_XX_feature_name.py`
+- [ ] Module exported in `__init__.py`
+- [ ] Documentation in example folder (if needed)
+
+---
+
+## Common Issues and Solutions
+
+| Issue | Solution |
+|-------|----------|
+| Import errors after changes | Run `verdi daemon restart` |
+| Tasks not running in parallel | Check `max_number_jobs` setting |
+| Serialization errors | Use AiiDA types (orm.Float, orm.Dict) not Python types |
+| Provenance cycles | Use `@task.graph` instead of `@task.calcfunction` for stored nodes |
+| Remote folder not cleaning | Set `clean_workdir=True` in builder inputs |
+
+---
+
+## Branch Management
+
+1. **Development**: Create feature folders in `teros/experimental/`
+2. **Testing**: Create test scripts in `examples/`
+3. **Integration**: Move validated code to `teros/core/`
+4. **Documentation**: Create docs alongside test scripts
+
+---
+
+## Useful Commands Reference
+
+```bash
+# Profile management
+verdi profile list
+verdi profile set-default presto
+
+# Process monitoring
+verdi process status <PK>
+verdi process show <PK>
+verdi process report <PK>
+verdi process kill <PK>
+
+# Node inspection
+verdi node show <PK>
+verdi data core.dict show <PK>
+verdi data core.structure show <PK>
+
+# Daemon management
+verdi daemon status
+verdi daemon start
+verdi daemon restart
+verdi daemon stop
+
+# Code information
+verdi code show <CODE_LABEL>
+verdi code list
 ```
 
 ### Clear Python cache
@@ -164,15 +268,15 @@ def my_calculation(
 ) -> orm.Dict:
     """
     Perform calculation on a single structure.
-    
+
     All inputs MUST be AiiDA data types (orm.StructureData, orm.Float, etc.)
     Return type MUST be AiiDA data type or dict annotation.
-    
+
     Args:
         structure: Input structure
         energy: Energy value
         parameters: Calculation parameters
-        
+
     Returns:
         Dictionary with results
     """
@@ -180,10 +284,10 @@ def my_calculation(
     struct_ase = structure.get_ase()
     energy_val = energy.value
     params = parameters.get_dict()
-    
+
     # Perform calculation
     result = {...}
-    
+
     # Return AiiDA Dict
     return orm.Dict(dict=result)
 
@@ -205,33 +309,33 @@ def my_scatter_function(
 )]:
     """
     Scatter-gather pattern for parallel processing.
-    
+
     Args:
         structures: Dynamic namespace of structures to process
         code: AiiDA code for calculations
         parameters: Calculation parameters
         options: Scheduler options
         max_number_jobs: Concurrency limit
-        
+
     Returns:
         Dictionary with output namespaces
     """
     from aiida.plugins import WorkflowFactory
     from aiida_workgraph import get_current_graph
-    
+
     # Set concurrency limit
     if max_number_jobs is not None:
         wg = get_current_graph()
         wg.max_number_jobs = max_number_jobs
-    
+
     # Load WorkChain
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
     vasp_task = task(VaspWorkChain)
-    
+
     # Output dictionaries
     results_dict: dict[str, orm.Dict] = {}
     energies_dict: dict[str, orm.Float] = {}
-    
+
     # Scatter: process each structure in parallel
     for label, structure in structures.items():
         # Build inputs
@@ -241,14 +345,14 @@ def my_scatter_function(
             'parameters': {'incar': dict(parameters)},
             'options': dict(options),
         }
-        
+
         # Create task
         calc = vasp_task(**calc_inputs)
-        
+
         # Collect outputs
         results_dict[label] = calc.misc
         energies_dict[label] = extract_energy(calc.misc).result
-    
+
     # Gather: return collected results
     return {
         'results': results_dict,
@@ -302,24 +406,24 @@ def main():
     print("\n" + "="*70)
     print("STEP XX: MY FEATURE")
     print("="*70)
-    
+
     load_profile(profile='psteros')
-    
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     structures_dir = os.path.join(script_dir, 'structures')
-    
+
     wg = build_core_workgraph(
         workflow_preset='my_preset',
         structures_dir=structures_dir,
         # ... parameters
         name='StepXX_MyFeature',
     )
-    
+
     wg.submit(wait=False)
-    
+
     print(f"WorkGraph PK: {wg.pk}")
     print(f"Monitor: verdi process status {wg.pk}")
-    
+
     return wg
 
 if __name__ == '__main__':
@@ -385,106 +489,3 @@ def deep_merge_dicts(base: dict, override: dict) -> dict:
 
 ---
 
-## Testing Configuration
-
-### Test Cluster (cluster02)
-
-```
-Code Label: VASP-6.5.1@cluster02
-PK: 124130
-Processors: 24
-Queue: None (no queue system)
-```
-
-```python
-options = {
-    'resources': {
-        'num_machines': 1,
-        'num_cores_per_machine': 24,
-    },
-}
-# IMPORTANT: Only one job at a time
-max_concurrent_jobs = 1
-```
-
-### Error Recovery
-
-When fixing errors, kill all processes:
-
-```bash
-# Kill AiiDA workflow
-verdi process kill <WORKGRAPH_PK>
-
-# Kill remote VASP processes
-ssh cluster02 killall vasp_std
-
-# Clear cache and restart daemon
-find . -type d -name __pycache__ -exec rm -rf {} +
-verdi daemon restart
-```
-
----
-
-## Validation Checklist
-
-Before merging a new feature:
-
-- [ ] Main node returns exit code `[0]`
-- [ ] Feature outputs appear correctly in `verdi process show <PK>`
-- [ ] Test with production-like parameters (proper ENCUT, NSW, EDIFF, etc.)
-- [ ] No Python cache issues (run cache clear)
-- [ ] Example script follows naming convention `step_XX_feature_name.py`
-- [ ] Module exported in `__init__.py`
-- [ ] Documentation in example folder (if needed)
-
----
-
-## Common Issues and Solutions
-
-| Issue | Solution |
-|-------|----------|
-| Import errors after changes | Run `verdi daemon restart` |
-| Tasks not running in parallel | Check `max_number_jobs` setting |
-| Serialization errors | Use AiiDA types (orm.Float, orm.Dict) not Python types |
-| Provenance cycles | Use `@task.graph` instead of `@task.calcfunction` for stored nodes |
-| Remote folder not cleaning | Set `clean_workdir=True` in builder inputs |
-
----
-
-## Branch Management
-
-1. **Development**: Create feature folders in `teros/experimental/`
-2. **Testing**: Create test scripts in `examples/`
-3. **Integration**: Move validated code to `teros/core/`
-4. **Documentation**: Create docs alongside test scripts
-
----
-
-## Useful Commands Reference
-
-```bash
-# Profile management
-verdi profile list
-verdi profile set-default presto
-
-# Process monitoring
-verdi process status <PK>
-verdi process show <PK>
-verdi process report <PK>
-verdi process kill <PK>
-
-# Node inspection
-verdi node show <PK>
-verdi data core.dict show <PK>
-verdi data core.structure show <PK>
-
-# Daemon management
-verdi daemon status
-verdi daemon start
-verdi daemon restart
-verdi daemon stop
-
-# Code information
-verdi code show <CODE_LABEL>
-verdi code list
-```

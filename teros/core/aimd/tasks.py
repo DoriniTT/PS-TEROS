@@ -1,6 +1,7 @@
 """WorkGraph tasks for AIMD module."""
+import typing as t
 from aiida import orm
-from aiida_workgraph import task
+from aiida_workgraph import task, dynamic, namespace
 from aiida.engine import calcfunction
 
 
@@ -39,3 +40,29 @@ def create_supercell_calcfunc(
 
 # Wrap calcfunction as WorkGraph task
 create_supercell = task(create_supercell_calcfunc)
+
+
+@task.graph
+def create_supercells_scatter(
+    slabs: dynamic(orm.StructureData),
+    spec: orm.List
+) -> t.Annotated[dict, namespace(result=dynamic(orm.StructureData))]:
+    """
+    Create supercells for a dictionary of slabs (Graph Builder).
+
+    Args:
+        slabs: Dictionary of {label: StructureData}
+        spec: List [nx, ny, nz] supercell dimensions
+
+    Returns:
+        Dictionary of {label: SupercellStructureData} wrapped in 'result' namespace.
+    """
+    outputs = {}
+    for label, structure in slabs.items():
+        # create_supercell is a task
+        sc_task = create_supercell(structure=structure, spec=spec)
+        # Use .result to access the output of the task
+        outputs[label] = sc_task.result
+    
+    # Return wrapped in 'result' to match the namespace annotation
+    return {'result': outputs}

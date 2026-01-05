@@ -87,6 +87,7 @@ def relax_slabs_with_semaphore(
     fix_elements: t.List[str] = None,
     structure_specific_builder_inputs: dict = None,
     max_number_jobs: int = None,
+    restart_folders: t.Annotated[dict[str, orm.RemoteData], dynamic(orm.RemoteData)] = None,
 ) -> t.Annotated[dict, namespace(**{
     'structures': dynamic(orm.StructureData),
     'energies': dynamic(orm.Float),
@@ -134,6 +135,8 @@ def relax_slabs_with_semaphore(
                      Default: None (unlimited concurrency for selected structures)
                      Note: This controls HOW MANY calculations run concurrently from the
                      selected batch (max_batch_size). Use this for cluster concurrency limits.
+        restart_folders: Optional dict of RemoteData for restarting calculations.
+                        Keys must match structures dict keys.
 
     Returns:
         Dictionary with namespace outputs:
@@ -199,6 +202,10 @@ def relax_slabs_with_semaphore(
         # Override structure and code (these are set by the workflow)
         vasp_inputs['structure'] = structure
         vasp_inputs['code'] = code
+
+        # Handle restart folder if available
+        if restart_folders is not None and key in restart_folders:
+            vasp_inputs['restart_folder'] = restart_folders[key]
 
         # Convert plain dicts to orm.Dict where needed
         if 'potential_mapping' in vasp_inputs and not isinstance(vasp_inputs['potential_mapping'], orm.Dict):
