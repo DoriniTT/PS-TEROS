@@ -10,6 +10,8 @@ from aiida_workgraph import task
 from collections import Counter
 from typing import Union
 
+from .constants import EV_TO_KJ_PER_MOL
+
 
 @task.calcfunction
 def calculate_formation_enthalpy(
@@ -158,8 +160,8 @@ def calculate_formation_enthalpy(
     # Normalize per formula unit
     formation_energy_per_fu = formation_energy / formula_units
 
-    # Convert to kJ/mol (1 eV = 96.485 kJ/mol)
-    formation_energy_kjmol = formation_energy_per_fu * 96.485
+    # Convert to kJ/mol
+    formation_energy_kjmol = formation_energy_per_fu * EV_TO_KJ_PER_MOL
 
     # Calculate per atom
     total_atoms = sum(element_counts.values())

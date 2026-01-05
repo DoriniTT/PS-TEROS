@@ -5,7 +5,6 @@ This module provides functions to generate surface slabs from bulk structures
 using Pymatgen's SlabGenerator with scatter-gather pattern for parallel relaxation.
 """
 
-import copy
 import typing as t
 from aiida import orm
 from aiida.plugins import WorkflowFactory
@@ -14,38 +13,7 @@ from pymatgen.core.surface import SlabGenerator
 from pymatgen.io.ase import AseAtomsAdaptor
 from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
 
-
-def deep_merge_dicts(base: dict, override: dict) -> dict:
-    """
-    Deep merge override dict into base dict.
-
-    For nested dicts, recursively merges. For other values, override replaces base.
-
-    Args:
-        base: Base dictionary
-        override: Override dictionary (values take precedence)
-
-    Returns:
-        Merged dictionary
-
-    Example:
-        >>> base = {'a': 1, 'b': {'c': 2, 'd': 3}}
-        >>> override = {'b': {'c': 99}, 'e': 5}
-        >>> result = deep_merge_dicts(base, override)
-        >>> result
-        {'a': 1, 'b': {'c': 99, 'd': 3}, 'e': 5}
-    """
-    result = copy.deepcopy(base)
-
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            # Recursively merge nested dicts
-            result[key] = deep_merge_dicts(result[key], value)
-        else:
-            # Override value
-            result[key] = copy.deepcopy(value)
-
-    return result
+from .utils import deep_merge_dicts, get_vasp_parser_settings, extract_max_jobs_value
 
 
 def extract_restart_folders_from_node(node_pk: int) -> dict[str, orm.RemoteData]:
@@ -224,10 +192,10 @@ def generate_slab_structures(
     if not slab_nodes:
         raise ValueError(
             f"No slabs were generated for the specified surface orientation "
-            f"({miller_index.value[0]}, {miller_index.value[1]}, {miller_index.value[2]}). "
+            f"({miller_indices.get_list()[0]}, {miller_indices.get_list()[1]}, {miller_indices.get_list()[2]}). "
             f"This may occur if the Miller indices are invalid for the given structure, "
-            f"or if the slab generation parameters (min_slab_size={min_slab_size.value}, "
-            f"min_vacuum_size={min_vacuum_size.value}) are too restrictive."
+            f"or if the slab generation parameters (min_slab_thickness={min_slab_thickness.value}, "
+            f"min_vacuum_thickness={min_vacuum_thickness.value}) are too restrictive."
         )
 
     return {'slabs': slab_nodes}
@@ -259,14 +227,11 @@ def extract_total_energy(energies: orm.Dict) -> orm.Float:
 def get_settings():
     """
     Parser settings for aiida-vasp.
+
+    Note: This function is kept for backward compatibility.
+    New code should use get_vasp_parser_settings() from utils.py
     """
-    return {
-        'parser_settings': {
-            'add_trajectory': True,
-            'add_structure': True,
-            'add_kpoints': True,
-        }
-    }
+    return get_vasp_parser_settings(add_energy=False)
 
 
 @task.graph
@@ -323,7 +288,7 @@ def scf_relax_and_calculate_relaxation_energy(
     # Set max_number_jobs on this workgraph to control concurrency
     if max_number_jobs is not None:
         wg = get_current_graph()
-        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        max_jobs_value = extract_max_jobs_value(max_number_jobs)
         wg.max_number_jobs = max_jobs_value
 
     vasp_wc = WorkflowFactory('vasp.v2.vasp')
@@ -453,7 +418,7 @@ def scf_slabs_scatter(
     # Set max_number_jobs on this workgraph to control concurrency
     if max_number_jobs is not None:
         wg = get_current_graph()
-        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        max_jobs_value = extract_max_jobs_value(max_number_jobs)
         wg.max_number_jobs = max_jobs_value
 
     vasp_wc = WorkflowFactory('vasp.v2.vasp')
@@ -590,7 +555,7 @@ def relax_slabs_scatter(
     # Set max_number_jobs on this workgraph to control concurrency
     if max_number_jobs is not None:
         wg = get_current_graph()
-        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        max_jobs_value = extract_max_jobs_value(max_number_jobs)
         wg.max_number_jobs = max_jobs_value
 
     vasp_wc = WorkflowFactory('vasp.v2.vasp')
@@ -788,7 +753,7 @@ def calculate_electronic_properties_slabs_scatter(
     # Set max_number_jobs on this workgraph to control concurrency
     if max_number_jobs is not None:
         wg = get_current_graph()
-        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        max_jobs_value = extract_max_jobs_value(max_number_jobs)
         wg.max_number_jobs = max_jobs_value
 
     # Get BandsWorkChain and wrap as task

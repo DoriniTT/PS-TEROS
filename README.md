@@ -172,16 +172,28 @@ The restart feature automatically:
 Calculate cleavage energies for complementary surface pairs:
 
 ```python
-wg = build_core_workgraph_with_map(
-    **defaults,
+wg = build_core_workgraph(
+    workflow_preset='surface_thermodynamics',
+
+    # Structure files
+    structures_dir="/path/to/structures",
     bulk_name="ag2o.cif",
     metal_name="Ag.cif",
     oxygen_name="O2.cif",
+
+    # Surface parameters
     miller_indices=[1, 0, 0],
     min_slab_thickness=10.0,
     min_vacuum_thickness=15.0,
-    relax_slabs=True,
-    compute_cleavage=True,  # Enable cleavage calculation
+
+    # Enable cleavage calculation
+    compute_cleavage=True,
+
+    # Other required parameters...
+    code_label="vasp@localhost",
+    potential_family="PBE",
+    bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
+
     name="Ag2O_cleavage"
 )
 
@@ -372,9 +384,8 @@ See complete working example:
 
 ### `teros.core.workgraph`
 Main workflow construction functions:
-- `build_core_workgraph()`: Primary workflow builder
-- `build_core_workgraph_with_map()`: Simplified interface with structure file mapping
-- `core_workgraph()`: Low-level workflow graph construction
+- `build_core_workgraph()`: Primary workflow builder with full parameter control
+- `core_workgraph()`: Low-level workflow graph construction (used internally)
 
 ### `teros.core.slabs`
 Slab generation and relaxation:

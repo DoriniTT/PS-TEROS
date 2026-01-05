@@ -523,14 +523,27 @@ def validate_flag_dependencies(flags: Dict[str, bool], **kwargs) -> List[str]:
             messages.append(
                 "ERROR: run_aimd=True requires aimd_parameters parameter"
             )
-    
+
+    # Check adsorption energy dependencies
+    if flags.get('run_adsorption_energy', False):
+        if kwargs.get('adsorption_structures') is None:
+            messages.append(
+                "ERROR: run_adsorption_energy=True requires adsorption_structures parameter. "
+                "Provide a dictionary mapping labels to structure file paths."
+            )
+        if kwargs.get('adsorption_formulas') is None:
+            messages.append(
+                "ERROR: run_adsorption_energy=True requires adsorption_formulas parameter. "
+                "Provide a dictionary mapping labels to adsorbate chemical formulas (e.g., {'term_0': 'OH'})."
+            )
+
     # Check slab generation
     if flags.get('relax_slabs', False) or flags.get('run_aimd', False):
         if kwargs.get('miller_indices') is None and kwargs.get('input_slabs') is None:
             messages.append(
                 "WARNING: No slabs will be generated. Provide either miller_indices or input_slabs."
             )
-    
+
     return messages
 
 

@@ -32,6 +32,15 @@ from teros.core.workflow_presets import (
     validate_flag_dependencies,
     check_old_style_api,
 )
+from teros.core.utils import (
+    TaskOutputPlaceholder,
+    EnergyOutputPlaceholder,
+    FormationEnthalpyPlaceholder,
+    get_logger,
+)
+
+# Module logger
+logger = get_logger(__name__)
 
 def load_structure_from_file(filepath: str) -> orm.StructureData:
     """
@@ -339,9 +348,9 @@ def core_workgraph(
 
             nonmetal_energy = extract_total_energy(energies=nonmetal_vasp.misc)
         else:
-            # For binary oxides, use dummy values (will be ignored by calculate_formation_enthalpy)
-            nonmetal_vasp = type('obj', (object,), {'structure': metal_vasp.structure})()
-            nonmetal_energy = type('obj', (object,), {'result': metal_energy.result})()
+            # For binary oxides, use placeholder values (will be ignored by calculate_formation_enthalpy)
+            nonmetal_vasp = TaskOutputPlaceholder(structure=metal_vasp.structure)
+            nonmetal_energy = EnergyOutputPlaceholder(result=metal_energy.result)
 
         # ===== OXYGEN RELAXATION =====
         oxygen_struct = load_structure_from_file(f"{structures_dir}/{oxygen_name}")
@@ -377,16 +386,16 @@ def core_workgraph(
             oxygen_energy=oxygen_energy.result,
         )
     else:
-        # Bulk-only mode or no bulk: Create dummy outputs with proper types
+        # Bulk-only mode or no bulk: Create placeholder outputs with proper types
         if structures_dir and bulk_name:
             # We have bulk - use bulk structure as placeholder for reference structures
-            metal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
-            metal_energy = type('obj', (object,), {'result': bulk_energy.result})()
-            nonmetal_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
-            nonmetal_energy = type('obj', (object,), {'result': bulk_energy.result})()
-            oxygen_vasp = type('obj', (object,), {'structure': bulk_vasp.structure})()
-            oxygen_energy = type('obj', (object,), {'result': bulk_energy.result})()
-            formation_hf = type('obj', (object,), {'result': bulk_energy.result})()  # Placeholder
+            metal_vasp = TaskOutputPlaceholder(structure=bulk_vasp.structure)
+            metal_energy = EnergyOutputPlaceholder(result=bulk_energy.result)
+            nonmetal_vasp = TaskOutputPlaceholder(structure=bulk_vasp.structure)
+            nonmetal_energy = EnergyOutputPlaceholder(result=bulk_energy.result)
+            oxygen_vasp = TaskOutputPlaceholder(structure=bulk_vasp.structure)
+            oxygen_energy = EnergyOutputPlaceholder(result=bulk_energy.result)
+            formation_hf = FormationEnthalpyPlaceholder(result=bulk_energy.result)
         else:
             # No bulk at all - set everything to None
             metal_vasp = None
@@ -771,8 +780,6 @@ def build_core_workgraph(
     Args:
         workflow_preset: Name of workflow preset to use. If None, defaults to 'surface_thermodynamics'.
                         Use list_workflow_presets() to see available presets.
-        workflow_preset: Name of workflow preset to use. If None, defaults to 'surface_thermodynamics'.
-                        Use list_workflow_presets() to see available presets.
         structures_dir: Directory containing structure files
         bulk_name: Filename of bulk structure (e.g., 'ag3po4.cif')
         code_label: VASP code label in AiiDA. Default: 'VASP-VTST-6.4.3@bohr'
@@ -1121,7 +1128,7 @@ def build_core_workgraph(
     for warning in dependency_warnings:
         if warning.startswith("ERROR:"):
             raise ValueError(warning)
-        print(f"\n⚠️  {warning}\n")
+        logger.warning(warning)
     
     # ========================================================================
     # VALIDATE REQUIRED INPUTS
@@ -1149,16 +1156,16 @@ def build_core_workgraph(
                 + "\nEither provide structures_dir and bulk_name, or use input_slabs with aimd_only preset."
             )
     
-    # Print workflow configuration
-    print(f"\n{'='*70}")
-    print(f"WORKFLOW CONFIGURATION")
-    print(f"{'='*70}")
-    print(f"Preset: {resolved_preset_name}")
-    print(f"\nActive Components:")
+    # Log workflow configuration
+    logger.info("=" * 70)
+    logger.info("WORKFLOW CONFIGURATION")
+    logger.info("=" * 70)
+    logger.info("Preset: %s", resolved_preset_name)
+    logger.info("Active Components:")
     for flag_name, flag_value in resolved_flags.items():
         status = "✓" if flag_value else "✗"
-        print(f"  {status} {flag_name}: {flag_value}")
-    print(f"{'='*70}\n")
+        logger.info("  %s %s: %s", status, flag_name, flag_value)
+    logger.info("=" * 70)
     
     # ========================================================================
     # RESTART HANDLING
@@ -1169,9 +1176,9 @@ def build_core_workgraph(
     restart_slabs = None
     if restart_from_node is not None:
         from teros.core.slabs import extract_restart_folders_from_node
-        print(f"\n{'='*70}")
-        print(f"RESTART MODE: Loading data from node {restart_from_node}")
-        print(f"{'='*70}")
+        logger.info("=" * 70)
+        logger.info("RESTART MODE: Loading data from node %s", restart_from_node)
+        logger.info("=" * 70)
 
         # Load the previous workgraph node
         try:
@@ -1179,7 +1186,7 @@ def build_core_workgraph(
 
             # Extract restart folders (RemoteData)
             restart_folders = extract_restart_folders_from_node(restart_from_node)
-            print(f"  ✓ Extracted restart folders: {list(restart_folders.keys())}")
+            logger.info("  ✓ Extracted restart folders: %s", list(restart_folders.keys()))
 
             # Extract slab structures from previous run
             # Prefer relaxed_slabs if available (for refinement), otherwise use slab_structures (generated)
@@ -1187,25 +1194,25 @@ def build_core_workgraph(
                 restart_slabs = {}
                 for label in prev_node.outputs.relaxed_slabs.keys():
                     restart_slabs[label] = prev_node.outputs.relaxed_slabs[label]
-                print(f"  ✓ Extracted RELAXED slab structures: {list(restart_slabs.keys())}")
+                logger.info("  ✓ Extracted RELAXED slab structures: %s", list(restart_slabs.keys()))
             elif hasattr(prev_node.outputs, 'slab_structures'):
                 restart_slabs = {}
                 for label in prev_node.outputs.slab_structures.keys():
                     restart_slabs[label] = prev_node.outputs.slab_structures[label]
-                print(f"  ✓ Extracted slab structures: {list(restart_slabs.keys())}")
+                logger.info("  ✓ Extracted slab structures: %s", list(restart_slabs.keys()))
             else:
-                print(f"  ! Warning: Previous node has no slab_structures, will generate new slabs")
+                logger.warning("Previous node has no slab_structures, will generate new slabs")
 
             # Override input_slabs with slabs from previous run
             if restart_slabs:
                 input_slabs = restart_slabs
-                print(f"  → Using slabs from previous run")
+                logger.info("  → Using slabs from previous run")
 
-            print(f"{'='*70}\n")
+            logger.info("=" * 70)
 
         except ValueError as e:
-            print(f"  ✗ Error extracting restart data: {e}")
-            print(f"  → Proceeding without restart\n")
+            logger.error("Error extracting restart data: %s", e)
+            logger.info("  → Proceeding without restart")
             restart_folders = None
             restart_slabs = None
 
@@ -1239,17 +1246,17 @@ def build_core_workgraph(
             filename='GTH_POTENTIALS'
         )
 
-        print(f"\n  ✓ Created CP2K basis and pseudopotential files")
+        logger.info("  ✓ Created CP2K basis and pseudopotential files")
 
     # Automatically disable cleavage calculation when using manual slabs
     if use_input_slabs and compute_cleavage:
-        print(f"\n{'='*70}")
-        print(f"WARNING: Cleavage calculation disabled")
-        print(f"  Reason: Manual slabs (input_slabs) provided")
-        print(f"  Cleavage energies require complementary slab pairs from")
-        print(f"  automatic slab generation, which is bypassed when using")
-        print(f"  manually provided slabs.")
-        print(f"{'='*70}\n")
+        logger.warning("=" * 70)
+        logger.warning("Cleavage calculation disabled")
+        logger.warning("  Reason: Manual slabs (input_slabs) provided")
+        logger.warning("  Cleavage energies require complementary slab pairs from")
+        logger.warning("  automatic slab generation, which is bypassed when using")
+        logger.warning("  manually provided slabs.")
+        logger.warning("=" * 70)
         compute_cleavage = False
 
     # Build the workgraph (pass None for input_slabs to avoid serialization issues)
@@ -1356,7 +1363,7 @@ def build_core_workgraph(
         # Check if we have restart folders
         if restart_folders is not None:
             # RESTART MODE: Manually add VASP tasks with restart_folder
-            print(f"  → Building workgraph with restart_folder for each slab")
+            logger.info("  → Building workgraph with restart_folder for each slab")
 
             from aiida.plugins import WorkflowFactory
             from teros.core.slabs import extract_total_energy
@@ -1385,7 +1392,7 @@ def build_core_workgraph(
                 # Add restart_folder if available for this slab
                 if label in restart_folders:
                     vasp_inputs['restart_folder'] = restart_folders[label]
-                    print(f"    → {label}: using restart_folder PK {restart_folders[label].pk}")
+                    logger.debug("    → %s: using restart_folder PK %s", label, restart_folders[label].pk)
 
                 # Add VASP task
                 vasp_task = wg.add_task(
@@ -1426,8 +1433,8 @@ def build_core_workgraph(
             wg.outputs.slab_remote = collector.outputs.remote_folders
             wg.outputs.slab_structures = input_slabs
 
-            print(f"  ✓ Created {len(vasp_tasks)} VASP tasks with restart capability")
-            print(f"  ✓ All slab outputs connected via collector task")
+            logger.info("  ✓ Created %d VASP tasks with restart capability", len(vasp_tasks))
+            logger.info("  ✓ All slab outputs connected via collector task")
 
         else:
             # NO RESTART: Use normal scf + relax + relaxation_energy calculation
@@ -1525,7 +1532,7 @@ def build_core_workgraph(
 
             # Connect surface energies output
             wg.outputs.surface_energies = surface_energies_task.outputs.surface_energies
-            print(f"  ✓ Thermodynamics calculation enabled (surface energies)")
+            logger.info("  ✓ Thermodynamics calculation enabled (surface energies)")
 
         # Add cleavage energies calculation if requested
         # Note: Only add manually if we're in input_slabs mode (restart or manual slabs)
@@ -1552,7 +1559,7 @@ def build_core_workgraph(
 
             # Connect cleavage energies output
             wg.outputs.cleavage_energies = cleavage_task.outputs.cleavage_energies
-            print(f"  ✓ Cleavage energies calculation enabled")
+            logger.info("  ✓ Cleavage energies calculation enabled")
 
     # NEW: Add slab electronic properties calculation if requested
     # Currently only supported for input_slabs mode (including restart)
@@ -1602,7 +1609,7 @@ def build_core_workgraph(
         wg.outputs.slab_primitive_structures = slab_elec_task.outputs.slab_primitive_structures
         wg.outputs.slab_seekpath_parameters = slab_elec_task.outputs.slab_seekpath_parameters
 
-        print(f"  ✓ Slab electronic properties calculation enabled for {len(slab_electronic_properties)} slabs")
+        logger.info("  ✓ Slab electronic properties calculation enabled for %d slabs", len(slab_electronic_properties))
 
     # Add electronic properties calculation if requested
     if compute_electronic_properties_bulk:
@@ -1686,16 +1693,16 @@ def build_core_workgraph(
         wg.outputs.bulk_primitive_structure = bands_task.outputs.primitive_structure
         wg.outputs.bulk_seekpath_parameters = bands_task.outputs.seekpath_parameters
 
-        print(f"  ✓ Electronic properties calculation enabled (DOS and bands)")
+        logger.info("  ✓ Electronic properties calculation enabled (DOS and bands)")
 
     # ===== AIMD CALCULATION (OPTIONAL) =====
     # Check if AIMD should be added
     should_add_aimd = run_aimd and aimd_sequence is not None and (input_slabs is not None or miller_indices is not None)
 
     if should_add_aimd:
-        print("\n  → Adding AIMD stages to workflow")
-        print(f"     Calculator: {calculator}")
-        print(f"     Number of stages: {len(aimd_sequence)}")
+        logger.info("  → Adding AIMD stages to workflow")
+        logger.info("     Calculator: %s", calculator)
+        logger.info("     Number of stages: %d", len(aimd_sequence))
 
         # Import appropriate scatter function based on calculator
         if calculator == 'vasp':
@@ -1712,7 +1719,7 @@ def build_core_workgraph(
         # Load code - use aimd_code_label if provided, otherwise use code_label
         aimd_code_to_use = aimd_code_label if aimd_code_label is not None else code_label
         code = load_code(aimd_code_to_use)
-        print(f"     Using code: {aimd_code_to_use}")
+        logger.info("     Using code: %s", aimd_code_to_use)
 
         # Get parameters - use AIMD-specific or fall back to slab/bulk parameters
         slab_params = slab_parameters if slab_parameters is not None else bulk_parameters
@@ -1729,10 +1736,10 @@ def build_core_workgraph(
         fixed_atoms_lists = {}
 
         if fix_atoms and fix_type is not None:
-            print(f"\n  → Preparing fixed atoms constraints")
-            print(f"     Type: {fix_type}")
-            print(f"     Thickness: {fix_thickness} Å")
-            print(f"     Elements: {fix_elements if fix_elements else 'all'}")
+            logger.info("  → Preparing fixed atoms constraints")
+            logger.info("     Type: %s", fix_type)
+            logger.info("     Thickness: %s Å", fix_thickness)
+            logger.info("     Elements: %s", fix_elements if fix_elements else 'all')
 
             from teros.core.fixed_atoms import get_fixed_atoms_list
 
@@ -1746,28 +1753,28 @@ def build_core_workgraph(
                         fix_elements=fix_elements,
                     )
                     fixed_atoms_lists[label] = fixed_list
-                    print(f"     {label}: {len(fixed_list)} atoms fixed")
+                    logger.info("     %s: %d atoms fixed", label, len(fixed_list))
 
         # Determine which slabs to use as initial structures
         if relax_slabs and 'relax_slabs_scatter' in wg.tasks:
             relax_task = wg.tasks['relax_slabs_scatter']
             initial_slabs_source = relax_task.outputs.relaxed_structures
-            print(f"     Using relaxed slabs from relax_slabs_scatter task")
+            logger.info("     Using relaxed slabs from relax_slabs_scatter task")
         elif relax_slabs and 'collect_slab_outputs_restart' in wg.tasks:
             collector_task = wg.tasks['collect_slab_outputs_restart']
             initial_slabs_source = collector_task.outputs.structures
-            print(f"     Using relaxed slabs from restart collector")
+            logger.info("     Using relaxed slabs from restart collector")
         elif input_slabs is not None:
             initial_slabs_source = input_slabs
-            print(f"     Using unrelaxed input slabs as initial structures")
+            logger.info("     Using unrelaxed input slabs as initial structures")
         else:
             gen_task = wg.tasks['generate_slab_structures']
             initial_slabs_source = gen_task.outputs.slabs
-            print(f"     Using unrelaxed generated slabs as initial structures")
+            logger.info("     Using unrelaxed generated slabs as initial structures")
 
         # Handle supercell creation
         if aimd_supercell is not None:
-            print(f"     Supercell: {aimd_supercell}")
+            logger.info("     Supercell: %s", aimd_supercell)
             from teros.core.aimd.tasks import create_supercells_scatter
             
             # Add supercell task
@@ -1778,7 +1785,7 @@ def build_core_workgraph(
                 spec=orm.List(list=aimd_supercell)
             )
             initial_slabs_source = sc_task.outputs.result
-            print(f"     ✓ Created supercell generation task")
+            logger.info("     ✓ Created supercell generation task")
 
         # Sequential AIMD stages
         current_structures = initial_slabs_source
@@ -1792,7 +1799,7 @@ def build_core_workgraph(
 
             # Print stage info (support both old and new format temporarily)
             stage_steps = stage_config.get('NSW', stage_config.get('steps', 0))
-            print(f"     Stage {stage_idx}: {stage_temp}K × {stage_steps} steps")
+            logger.info("     Stage %d: %sK × %s steps", stage_idx, stage_temp, stage_steps)
 
             # Build stage inputs based on calculator
             if calculator == 'vasp':
@@ -1851,22 +1858,22 @@ def build_core_workgraph(
             current_structures = stage_task.outputs.structures
             current_remotes = stage_task.outputs.remote_folders
 
-        print(f"  ✓ AIMD calculation enabled ({len(aimd_sequence)} sequential stages)")
-        print(f"     Access AIMD outputs via: wg.tasks['aimd_stage_XX_XXXK'].outputs")
+        logger.info("  ✓ AIMD calculation enabled (%d sequential stages)", len(aimd_sequence))
+        logger.info("     Access AIMD outputs via: wg.tasks['aimd_stage_XX_XXXK'].outputs")
 
     # ===== ADSORPTION ENERGY CALCULATION (OPTIONAL) =====
     # Check if adsorption energy should be computed
     should_add_adsorption = run_adsorption_energy and adsorption_structures is not None and adsorption_formulas is not None
 
     if should_add_adsorption:
-        print("\n  → Adding adsorption energy calculation")
-        print(f"     Number of structures: {len(adsorption_structures)}")
-        print(f"     Structure keys: {list(adsorption_structures.keys())}")
-        print(f"     Adsorbate formulas: {adsorption_formulas}")
+        logger.info("  → Adding adsorption energy calculation")
+        logger.info("     Number of structures: %d", len(adsorption_structures))
+        logger.info("     Structure keys: %s", list(adsorption_structures.keys()))
+        logger.info("     Adsorbate formulas: %s", adsorption_formulas)
         if relax_before_adsorption:
-            print(f"     Relaxation: ENABLED (relax → separate → SCF)")
+            logger.info("     Relaxation: ENABLED (relax → separate → SCF)")
         else:
-            print(f"     Relaxation: DISABLED (separate → SCF)")
+            logger.info("     Relaxation: DISABLED (separate → SCF)")
 
         from aiida.orm import Code, load_code
 
@@ -1952,10 +1959,10 @@ def build_core_workgraph(
         wg.outputs.complete_energies = adsorption_task.outputs.complete_energies
         wg.outputs.adsorption_energies = adsorption_task.outputs.adsorption_energies
 
-        print(f"  ✓ Adsorption energy calculation enabled")
+        logger.info("  ✓ Adsorption energy calculation enabled")
         if relax_before_adsorption:
-            print(f"     Access relaxed structures via: wg.outputs.relaxed_complete_structures")
-        print(f"     Access adsorption energies via: wg.outputs.adsorption_energies")
+            logger.info("     Access relaxed structures via: wg.outputs.relaxed_complete_structures")
+        logger.info("     Access adsorption energies via: wg.outputs.adsorption_energies")
 
     # Set the name
     wg.name = name
@@ -1971,11 +1978,15 @@ if __name__ == '__main__':
     Simple test/example of the WorkGraph.
     For full examples, see examples/formation/
     """
-    print("PS-TEROS Core WorkGraph Module")
-    print("=" * 50)
-    print("\nThis creates a WorkGraph using @task.graph decorator:")
-    print("  - load_structure tasks (using @task)")
-    print("  - VASP relaxation tasks (run in parallel)")
-    print("  - extract_total_energy tasks (using @task)")
-    print("\nFor examples, see:")
-    print("  - examples/formation/formation.py (formation enthalpy)")
+    # Configure logging for CLI execution
+    import logging
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+
+    logger.info("PS-TEROS Core WorkGraph Module")
+    logger.info("=" * 50)
+    logger.info("\nThis creates a WorkGraph using @task.graph decorator:")
+    logger.info("  - load_structure tasks (using @task)")
+    logger.info("  - VASP relaxation tasks (run in parallel)")
+    logger.info("  - extract_total_energy tasks (using @task)")
+    logger.info("\nFor examples, see:")
+    logger.info("  - examples/formation/formation.py (formation enthalpy)")

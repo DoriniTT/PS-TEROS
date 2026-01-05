@@ -125,14 +125,18 @@ PS-TEROS/
 │   │   ├── # Specialized Submodules
 │   │   ├── aimd/                       # Ab initio molecular dynamics
 │   │   ├── custom_calculation/         # Generic VASP calculations
-│   │   ├── metal_surface_energy/       # Elemental metal surfaces
+│   │   ├── surface_energy/             # Metal and intermetallic surface energy
 │   │   ├── surface_hydroxylation/      # OH/vacancy studies
 │   │   │
 │   │   ├── builders/                   # Default parameter builders
 │   │   │   ├── default_ag2o_builders.py
 │   │   │   ├── default_ag3po4_builders.py
 │   │   │   ├── aimd_builder.py
+│   │   │   ├── aimd_builder_cp2k.py
 │   │   │   └── electronic_properties_builder.py
+│   │   │
+│   │   ├── utils.py                    # Shared utility functions
+│   │   ├── constants.py                # Physical constants
 │   │   │
 │   │   └── tests/                      # Unit tests
 │   │
@@ -335,6 +339,74 @@ wg = build_core_workgraph(
 ```
 
 **Available presets:** `surface_thermodynamics`, `bulk_only`, `cleavage_only`, `relaxation_energy_only`, `electronic_structure_bulk_only`, `electronic_structure_slabs_only`, `aimd_only`, `comprehensive`
+
+### 4.7 Fixed Atoms (Selective Dynamics)
+
+For slab calculations, you often need to fix atoms in certain regions to prevent unrealistic reconstructions. The `fixed_atoms` module provides calculator-agnostic utilities:
+
+```python
+from teros.core.fixed_atoms import get_fixed_atoms_list
+
+# Fix bottom 7 Å of the slab
+fixed_indices = get_fixed_atoms_list(
+    structure=slab_structure,
+    fix_type='bottom',      # 'bottom', 'top', or 'center'
+    fix_thickness=7.0,      # Angstroms
+    fix_elements=['Ag'],    # Optional: fix only specific elements
+)
+# Returns: [1, 2, 3, 5, 8, ...]  (1-based atom indices)
+```
+
+**Fix types:**
+- `'bottom'`: Fix atoms from the bottom up to `fix_thickness` Angstroms
+- `'top'`: Fix atoms from the top down to `fix_thickness` Angstroms
+- `'center'`: Fix atoms within `fix_thickness/2` of slab center
+
+**Integration with workflows:**
+
+```python
+# In build_core_workgraph for AIMD:
+wg = build_core_workgraph(
+    run_aimd=True,
+    fix_atoms=True,
+    fix_type='bottom',
+    fix_thickness=5.0,
+    fix_elements=['La', 'Mn'],  # Optional
+    ...
+)
+
+# For adsorption energy:
+wg = build_core_workgraph(
+    run_adsorption_energy=True,
+    adsorption_fix_atoms=True,
+    adsorption_fix_type='bottom',
+    adsorption_fix_thickness=7.0,
+    ...
+)
+```
+
+**Calculator-specific functions:**
+
+```python
+from teros.core.fixed_atoms import (
+    add_fixed_atoms_to_vasp_parameters,  # For VASP selective dynamics
+    add_fixed_atoms_to_cp2k_parameters,  # For CP2K FIXED_ATOMS constraint
+)
+
+# VASP: Returns updated params and constrained structure
+params, constrained_structure = add_fixed_atoms_to_vasp_parameters(
+    base_parameters=incar_params,
+    structure=slab_structure,
+    fixed_atoms_list=fixed_indices,
+)
+
+# CP2K: Returns updated params with MOTION/CONSTRAINT section
+params = add_fixed_atoms_to_cp2k_parameters(
+    base_parameters=cp2k_params,
+    fixed_atoms_list=fixed_indices,
+    components="XYZ",  # Or "XY", "Z"
+)
+```
 
 ---
 

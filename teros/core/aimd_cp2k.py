@@ -10,6 +10,8 @@ from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, dynamic, namespace
 
+from .utils import extract_max_jobs_value
+
 # Get CP2K workchain for type annotation
 Cp2kBaseWorkChain = WorkflowFactory('cp2k.base')
 
@@ -79,7 +81,7 @@ def aimd_single_stage_scatter_cp2k(
     # Set max_number_jobs on this workgraph to control concurrency
     if max_number_jobs is not None:
         wg = get_current_graph()
-        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        max_jobs_value = extract_max_jobs_value(max_number_jobs)
         wg.max_number_jobs = max_jobs_value
 
     # Get CP2K workchain

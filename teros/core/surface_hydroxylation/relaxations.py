@@ -7,50 +7,17 @@ from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, namespace, dynamic
 
 from ..fixed_atoms import get_fixed_atoms_list
+from ..utils import deep_merge_dicts, get_vasp_parser_settings, extract_max_jobs_value
 
 
 def get_settings():
-    """Parser settings for aiida-vasp."""
-    return {
-        'parser_settings': {
-            'add_trajectory': True,
-            'add_structure': True,
-            'add_kpoints': True,
-        }
-    }
-
-
-def deep_merge_dicts(base: dict, override: dict) -> dict:
     """
-    Deep merge override dict into base dict.
+    Parser settings for aiida-vasp.
 
-    For nested dicts, recursively merges. For other values, override replaces base.
-
-    Args:
-        base: Base dictionary
-        override: Override dictionary (values take precedence)
-
-    Returns:
-        Merged dictionary
-
-    Example:
-        >>> base = {'a': 1, 'b': {'c': 2, 'd': 3}}
-        >>> override = {'b': {'c': 99}, 'e': 5}
-        >>> deep_merge_dicts(base, override)
-        {'a': 1, 'b': {'c': 99, 'd': 3}, 'e': 5}
+    Note: This function is kept for backward compatibility.
+    New code should use get_vasp_parser_settings() from utils.py
     """
-    import copy
-    result = copy.deepcopy(base)
-
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            # Recursively merge nested dicts
-            result[key] = deep_merge_dicts(result[key], value)
-        else:
-            # Override value
-            result[key] = copy.deepcopy(value)
-
-    return result
+    return get_vasp_parser_settings(add_energy=False)
 
 
 @task.calcfunction
@@ -157,7 +124,7 @@ def relax_slabs_with_semaphore(
     # Set max_number_jobs on this workgraph to control concurrency
     if max_number_jobs is not None:
         wg = get_current_graph()
-        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        max_jobs_value = extract_max_jobs_value(max_number_jobs)
         wg.max_number_jobs = max_jobs_value
 
     # Get VASP workchain

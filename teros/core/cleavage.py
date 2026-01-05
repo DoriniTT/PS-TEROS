@@ -20,6 +20,8 @@ import numpy as np
 from aiida import orm
 from aiida_workgraph import dynamic, namespace, task
 
+from .constants import EV_PER_ANGSTROM2_TO_J_PER_M2, STOICHIOMETRY_RTOL
+
 
 @task.calcfunction
 def calculate_cleavage_energy(
@@ -102,7 +104,7 @@ def calculate_cleavage_energy(
     for element in reduced_bulk_counts.keys():
         expected_atoms = n_formula_units * reduced_bulk_counts[element]
         actual_atoms = combined_counts[element]
-        if not np.isclose(expected_atoms, actual_atoms, rtol=1e-3):
+        if not np.isclose(expected_atoms, actual_atoms, rtol=STOICHIOMETRY_RTOL):
             raise ValueError(
                 f'Stoichiometry mismatch for {element}: '
                 f'expected {expected_atoms:.2f} atoms, found {actual_atoms}'
@@ -127,9 +129,8 @@ def calculate_cleavage_energy(
     )
     cleavage_energy = numerator / (2.0 * area)
     
-    # Convert from eV/Angstrom^2 to J/m^2 (common units for surface energy)
-    # 1 eV/Angstrom^2 = 16.0217663 J/m^2
-    cleavage_energy_J_m2 = cleavage_energy * 16.0217663
+    # Convert from eV/Å² to J/m²
+    cleavage_energy_J_m2 = cleavage_energy * EV_PER_ANGSTROM2_TO_J_PER_M2
     
     return orm.Dict(
         dict={

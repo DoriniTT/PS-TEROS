@@ -10,20 +10,17 @@ from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, dynamic, namespace
 from teros.core.slabs import extract_total_energy
+from teros.core.utils import get_vasp_parser_settings, extract_max_jobs_value
 
 
 def get_settings():
     """
-    Parser settings for aiida-vasp (copied from workgraph.py for consistency).
+    Parser settings for aiida-vasp.
+
+    Note: This function is kept for backward compatibility.
+    New code should use get_vasp_parser_settings() from utils.py
     """
-    return {
-        'parser_settings': {
-            'add_energy': True,
-            'add_trajectory': True,
-            'add_structure': True,
-            'add_kpoints': True,
-        }
-    }
+    return get_vasp_parser_settings()
 
 
 def prepare_aimd_parameters(
@@ -192,7 +189,7 @@ def aimd_single_stage_scatter(
     # Set max_number_jobs on this workgraph to control concurrency
     if max_number_jobs is not None:
         wg = get_current_graph()
-        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        max_jobs_value = extract_max_jobs_value(max_number_jobs)
         wg.max_number_jobs = max_jobs_value
 
     # Get VASP workchain

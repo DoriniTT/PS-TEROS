@@ -270,6 +270,22 @@ def calculate_surface_energy_ternary(
     
     return orm.Dict(
         dict={
+            # ===== Primary formulation (A-based, for consistency with binary) =====
+            # Use 'primary' key for the default formulation
+            'primary': {
+                'phi': float(phi),
+                'Gamma_M': float(gamma_M),
+                'Gamma_O': float(gamma_O),
+                'delta_mu_M_range': [float(x) for x in delta_mu_M_range],
+                'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
+                'gamma_grid': gamma_grid_2d,
+                'gamma_at_muM_zero': gamma_at_muM_zero,
+                'gamma_at_muO_zero': gamma_at_muO_zero,
+                'gamma_at_reference': float(phi),
+                'element_M_independent': element_M,
+                'element_N_reference': element_N_ref,
+            },
+
             # ===== A-based formulation (original) =====
             'A_based': {
                 'phi': float(phi),
@@ -284,8 +300,8 @@ def calculate_surface_energy_ternary(
                 'element_A_independent': element_M,
                 'element_B_reference': element_N_ref,
             },
-            
-            # ===== B-based formulation (new) =====
+
+            # ===== B-based formulation (alternative) =====
             'B_based': {
                 'phi': float(phi_B),
                 'Gamma_B': float(gamma_N),
@@ -299,37 +315,32 @@ def calculate_surface_energy_ternary(
                 'element_B_independent': element_N_ref,
                 'element_A_reference': element_M,
             },
-            
+
             # ===== Common system information =====
             'oxide_type': 'ternary',
             'area_A2': float(area),
+            'bulk_stoichiometry': {
+                f'x_{element_M}': int(x_M),
+                f'y_{element_N_ref}': int(y_N),
+                'z_O': int(z_O),
+            },
+            'slab_atom_counts': {
+                f'N_{element_M}': int(N_M_slab),
+                f'N_{element_N_ref}': int(N_N_slab),
+                'N_O': int(N_O_slab),
+            },
+            'reference_energies_per_atom': {k: float(v) for k, v in ref_energies.items()},
+            'E_slab_eV': float(slab_energy.value),
+            'E_bulk_per_fu_eV': float(bulk_energy_per_fu),
+            'formation_enthalpy_eV': float(delta_h),
+
+            # ===== Legacy keys for backward compatibility =====
             'bulk_stoichiometry_AxByOz': {
                 f'x_{element_M}': int(x_M),
                 f'y_{element_N_ref}': int(y_N),
                 f'z_O': int(z_O),
             },
-            'slab_atom_counts': {
-                f'N_{element_M}': int(N_M_slab),
-                f'N_{element_N_ref}': int(N_N_slab),
-                f'N_O': int(N_O_slab),
-            },
-            'reference_energies_per_atom': {k: float(v) for k, v in ref_energies.items()},
-            'E_slab_eV': float(slab_energy.value),
             'E_bulk_fu_eV': float(bulk_energy_per_fu),
-            'formation_enthalpy_eV': float(delta_h),
-            
-            # ===== Legacy keys for backward compatibility =====
-            #'phi': float(phi),
-            #'Gamma_M_vs_Nref': float(gamma_M),
-            #'Gamma_O_vs_Nref': float(gamma_O),
-            #'delta_mu_M_range': [float(x) for x in delta_mu_M_range],
-            #'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
-            #'gamma_grid': gamma_grid_2d,
-            #'gamma_at_muM_zero': gamma_at_muM_zero,
-            #'gamma_at_muO_zero': gamma_at_muO_zero,
-            #'gamma_at_reference': float(phi),
-            #'element_M_independent': element_M,
-            #'element_N_reference': element_N_ref,
         }
     )
 
@@ -453,46 +464,62 @@ def calculate_surface_energy_binary(
     gamma_O_poor = gamma_array[0]  # At mu_O_min
     gamma_O_rich = gamma_array[-1]  # At mu_O_max
     
+    # Calculate bulk energy per formula unit for consistency with ternary
+    formula_units_in_bulk = bulk_counts[element_M] / x_reduced
+    bulk_energy_per_fu = bulk_energy.value / formula_units_in_bulk
+
     return orm.Dict(
         dict={
-            'phi': float(phi),
-            'Gamma_O': float(Gamma_O),
-            
-            # Chemical potential range
-            'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
-            
-            # Surface energy array: gamma_array[i] = γ(delta_mu_O[i])
-            # Easy to convert to numpy: gamma = np.array(data['gamma_array'])
-            # For plotting: plt.plot(delta_mu_O, gamma)
-            'gamma_array': gamma_array,
-            
-            # Special values
-            'gamma_O_poor': float(gamma_O_poor),
-            'gamma_O_rich': float(gamma_O_rich),
-            'gamma_at_reference': float(phi),
-            
-            # System information
+            # ===== Primary calculation (M as reference) =====
+            'primary': {
+                'phi': float(phi),
+                'Gamma_O': float(Gamma_O),
+                'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
+                'gamma_array': gamma_array,
+                'gamma_O_poor': float(gamma_O_poor),
+                'gamma_O_rich': float(gamma_O_rich),
+                'gamma_at_reference': float(phi),
+                'element_M': element_M,
+            },
+
+            # ===== Common system information =====
             'oxide_type': 'binary',
             'area_A2': float(area),
-            'element_M': element_M,
-            'bulk_stoichiometry_MxOy': {
+            'bulk_stoichiometry': {
                 f'x_{element_M}': int(x_reduced),
-                f'y_O': int(y_reduced),
+                'y_O': int(y_reduced),
             },
             'slab_atom_counts': {
                 f'N_{element_M}': int(N_M_slab),
                 'N_O': int(N_O_slab),
             },
-            'stoichiometric_imbalance': float(stoichiometric_imbalance),
-            'mu_O_min': float(mu_O_min),
-            'mu_O_max': float(mu_O_max),
             'reference_energies_per_atom': {
                 element_M: float(E_M_ref),
                 'O': float(E_O_ref),
             },
             'E_slab_eV': float(slab_energy.value),
-            'E_bulk_eV': float(bulk_energy.value),
+            'E_bulk_per_fu_eV': float(bulk_energy_per_fu),
             'formation_enthalpy_eV': float(delta_h),
+
+            # ===== Binary-specific data =====
+            'stoichiometric_imbalance': float(stoichiometric_imbalance),
+            'mu_O_min': float(mu_O_min),
+            'mu_O_max': float(mu_O_max),
+
+            # ===== Legacy keys for backward compatibility =====
+            'phi': float(phi),
+            'Gamma_O': float(Gamma_O),
+            'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
+            'gamma_array': gamma_array,
+            'gamma_O_poor': float(gamma_O_poor),
+            'gamma_O_rich': float(gamma_O_rich),
+            'gamma_at_reference': float(phi),
+            'element_M': element_M,
+            'E_bulk_eV': float(bulk_energy.value),
+            'bulk_stoichiometry_MxOy': {
+                f'x_{element_M}': int(x_reduced),
+                f'y_O': int(y_reduced),
+            },
         }
     )
 

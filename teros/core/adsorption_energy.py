@@ -8,7 +8,6 @@ substrate+adsorbate structures using AiiDA-WorkGraph and VASP.
 
 from __future__ import annotations
 
-import copy
 import typing as t
 from collections import Counter
 
@@ -22,39 +21,7 @@ from pymatgen.core import Composition
 
 from .slabs import extract_total_energy, get_settings
 from .fixed_atoms import get_fixed_atoms_list, add_fixed_atoms_to_vasp_parameters
-
-
-def deep_merge_dicts(base: dict, override: dict) -> dict:
-    """
-    Deep merge override dict into base dict.
-
-    For nested dicts, recursively merges. For other values, override replaces base.
-
-    Args:
-        base: Base dictionary
-        override: Override dictionary (values take precedence)
-
-    Returns:
-        Merged dictionary
-
-    Example:
-        >>> base = {'a': 1, 'b': {'c': 2, 'd': 3}}
-        >>> override = {'b': {'c': 99}, 'e': 5}
-        >>> result = deep_merge_dicts(base, override)
-        >>> result
-        {'a': 1, 'b': {'c': 99, 'd': 3}, 'e': 5}
-    """
-    result = copy.deepcopy(base)
-
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            # Recursively merge nested dicts
-            result[key] = deep_merge_dicts(result[key], value)
-        else:
-            # Override value
-            result[key] = copy.deepcopy(value)
-
-    return result
+from .utils import deep_merge_dicts, extract_max_jobs_value
 
 
 def _build_vasp_inputs(
@@ -679,7 +646,7 @@ def compute_adsorption_energies_scatter(
     # Set max_number_jobs on this workgraph to control concurrency
     if max_number_jobs is not None:
         wg = get_current_graph()
-        max_jobs_value = max_number_jobs.value if hasattr(max_number_jobs, 'value') else int(max_number_jobs)
+        max_jobs_value = extract_max_jobs_value(max_number_jobs)
         wg.max_number_jobs = max_jobs_value
 
     # Validate inputs

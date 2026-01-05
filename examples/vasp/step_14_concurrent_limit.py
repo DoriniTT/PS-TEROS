@@ -1,25 +1,59 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 STEP 14: Concurrency Control Example
 
 Demonstrates the max_concurrent_jobs parameter for controlling
 how many VASP calculations run simultaneously.
 
-This example shows three modes:
-1. Serial mode (max_concurrent_jobs=1)
-2. Limited concurrency (max_concurrent_jobs=4, default)
-3. Unlimited parallel (max_concurrent_jobs=None)
+Modes available (modify MAX_CONCURRENT_JOBS below):
+- 1: Serial mode - only 1 VASP at a time
+- 4: Limited mode - max 4 VASP calculations at once (default)
+- None: Unlimited mode - full parallel execution
 
 Material: Ag2O
-Miller indices: (1,0,0), (1,1,0)
+Surface: (100)
 
 Usage:
-    source ~/envs/aiida/bin/activate
+    # Activate your AiiDA environment first
     python step_14_concurrent_limit.py
 """
 
 import sys
 import os
+
+# ==============================================================================
+# CONFIGURATION - Modify these values for your setup
+# ==============================================================================
+try:
+    from config import (
+        AIIDA_PROFILE, VASP_CODE, POTENTIAL_FAMILY,
+        BULK_PARAMS, SLAB_PARAMS, COMMON_OPTIONS,
+        POTENTIAL_MAPPING_AG2O, POTENTIAL_MAPPING_AG, POTENTIAL_MAPPING_O2
+    )
+except ImportError:
+    AIIDA_PROFILE = 'presto'
+    VASP_CODE = 'VASP-6.4.1@cluster'
+    POTENTIAL_FAMILY = 'PBE'
+    BULK_PARAMS = {
+        'PREC': 'Accurate', 'ENCUT': 520, 'EDIFF': 1e-6, 'ISMEAR': 0,
+        'SIGMA': 0.05, 'IBRION': 2, 'ISIF': 3, 'NSW': 100, 'EDIFFG': -0.01,
+        'ALGO': 'Normal', 'LREAL': 'Auto', 'LWAVE': False, 'LCHARG': False,
+    }
+    SLAB_PARAMS = BULK_PARAMS.copy()
+    SLAB_PARAMS['ISIF'] = 2
+    COMMON_OPTIONS = {
+        'resources': {'num_machines': 1, 'num_cores_per_machine': 24},
+        'queue_name': 'normal',
+    }
+    POTENTIAL_MAPPING_AG2O = {'Ag': 'Ag', 'O': 'O'}
+    POTENTIAL_MAPPING_AG = {'Ag': 'Ag'}
+    POTENTIAL_MAPPING_O2 = {'O': 'O'}
+
+# Concurrency setting - modify this value
+# Options: 1 (serial), 4 (limited, default), None (unlimited)
+MAX_CONCURRENT_JOBS = 4
+# ==============================================================================
+
 from aiida import load_profile
 from teros.core.workgraph import build_core_workgraph
 
@@ -33,83 +67,54 @@ def main():
 
     # Load AiiDA profile
     print("\n1. Loading AiiDA profile...")
-    load_profile(profile='presto')
-    print("   ✓ Profile loaded")
+    load_profile(profile=AIIDA_PROFILE)
+    print(f"   Profile: {AIIDA_PROFILE}")
 
     # Setup paths
     script_dir = os.path.dirname(os.path.abspath(__file__))
     structures_dir = os.path.join(script_dir, 'structures')
 
+    # Miller indices
+    miller_indices = [1, 0, 0]  # (100) surface
+
     print(f"\n2. Structures:")
     print(f"   Bulk:   {structures_dir}/ag2o.cif")
     print(f"   Metal:  {structures_dir}/Ag.cif")
     print(f"   Oxygen: {structures_dir}/O2.cif")
+    print(f"   Surface: ({miller_indices[0]}{miller_indices[1]}{miller_indices[2]})")
 
-    # Code configuration
-    code_label = 'VASP-6.5.0@bohr-new'
-    potential_family = 'PBE'
+    print(f"\n3. VASP configuration:")
+    print(f"   Code: {VASP_CODE}")
+    print(f"   Potentials: {POTENTIAL_FAMILY}")
 
-    # Common VASP parameters
-    vasp_params = {
-        'PREC': 'Accurate',
-        'ENCUT': 420,
-        'EDIFF': 1e-4,
-        'ISMEAR': 0,
-        'SIGMA': 0.05,
-        'IBRION': 2,
-        'ISIF': 3,
-        'NSW': 100,
-        'EDIFFG': -0.1,
-        'ALGO': 'Normal',
-        'LREAL': 'Auto',
-        'LWAVE': False,
-        'LCHARG': False,
-    }
+    # Determine mode description
+    if MAX_CONCURRENT_JOBS == 1:
+        mode_name = 'Serial'
+        description = 'Only 1 VASP calculation at a time'
+    elif MAX_CONCURRENT_JOBS is None:
+        mode_name = 'Unlimited'
+        description = 'No limit (full parallel)'
+    else:
+        mode_name = 'Limited'
+        description = f'Max {MAX_CONCURRENT_JOBS} VASP calculations at once'
 
-    slab_params = vasp_params.copy()
-    slab_params['ISIF'] = 2
-
-    common_options = {
-        'resources': {
-            'num_machines': 1,
-            'num_cores_per_machine': 40,
-        },
-        'queue_name': 'par40',
-    }
-
-    # Choose mode
-    print("\n3. Concurrency modes:")
-    print("   A. Serial mode (max_concurrent_jobs=1)")
-    print("   B. Limited mode (max_concurrent_jobs=4, default)")
-    print("   C. Unlimited mode (max_concurrent_jobs=None)")
-
-    mode = input("\nSelect mode (A/B/C) [B]: ").strip().upper() or 'B'
-
-    mode_map = {
-        'A': (1, 'Serial', 'Only 1 VASP at a time'),
-        'B': (4, 'Limited', 'Max 4 VASP calculations at once (default)'),
-        'C': (None, 'Unlimited', 'No limit (full parallel)'),
-    }
-
-    max_concurrent_jobs, mode_name, description = mode_map.get(mode, mode_map['A'])
-
-    print(f"\n4. Building workgraph...")
+    print(f"\n4. Concurrency configuration:")
     print(f"   Mode: {mode_name}")
-    print(f"   max_concurrent_jobs: {max_concurrent_jobs}")
+    print(f"   max_concurrent_jobs: {MAX_CONCURRENT_JOBS}")
     print(f"   Description: {description}")
+
+    print("\n5. Building workgraph...")
+
+    # Oxygen parameters (ISIF=2 for molecule in box)
+    oxygen_params = BULK_PARAMS.copy()
+    oxygen_params['ISIF'] = 2
 
     # Build workgraph
     wg = build_core_workgraph(
-        max_concurrent_jobs=max_concurrent_jobs,  # CONCURRENCY CONTROL
+        max_concurrent_jobs=MAX_CONCURRENT_JOBS,
 
         # Enable slab generation + relaxation
         relax_slabs=True,
-        miller_indices=[(1, 0, 0)],
-        #miller_indices=[(1, 0, 0), (1, 1, 0)],
-        min_slab_thickness=10.0,
-        min_vacuum_thickness=15.0,
-
-        # Enable thermodynamics
         compute_thermodynamics=True,
         compute_cleavage=False,
 
@@ -119,58 +124,66 @@ def main():
         metal_name='Ag.cif',
         oxygen_name='O2.cif',
 
-        # Code
-        code_label=code_label,
-        potential_family=potential_family,
-        kpoints_spacing=0.4,
+        # VASP code
+        code_label=VASP_CODE,
+        potential_family=POTENTIAL_FAMILY,
+        kpoints_spacing=0.04,
         clean_workdir=False,
 
-        # Bulk
-        bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
-        bulk_parameters=vasp_params.copy(),
-        bulk_options=common_options,
+        # Bulk (Ag2O)
+        bulk_potential_mapping=POTENTIAL_MAPPING_AG2O,
+        bulk_parameters=BULK_PARAMS,
+        bulk_options=COMMON_OPTIONS,
 
-        # Metal
-        metal_potential_mapping={'Ag': 'Ag'},
-        metal_parameters=vasp_params.copy(),
-        metal_options=common_options,
+        # Metal (Ag)
+        metal_potential_mapping=POTENTIAL_MAPPING_AG,
+        metal_parameters=BULK_PARAMS,
+        metal_options=COMMON_OPTIONS,
 
-        # Oxygen
-        oxygen_potential_mapping={'O': 'O'},
-        oxygen_parameters=vasp_params.copy(),
-        oxygen_options=common_options,
+        # Oxygen (O2)
+        oxygen_potential_mapping=POTENTIAL_MAPPING_O2,
+        oxygen_parameters=oxygen_params,
+        oxygen_options=COMMON_OPTIONS,
+
+        # Slab generation
+        miller_indices=miller_indices,
+        min_slab_thickness=18.0,
+        min_vacuum_thickness=15.0,
+        lll_reduce=True,
+        center_slab=True,
+        symmetrize=True,
+        primitive=True,
 
         # Slabs
-        slab_parameters=slab_params.copy(),
-        slab_options=common_options,
-        slab_potential_mapping={'Ag': 'Ag', 'O': 'O'},
+        slab_parameters=SLAB_PARAMS,
+        slab_options=COMMON_OPTIONS,
 
         name=f'Step14_ConcurrencyControl_{mode_name}_Ag2O',
     )
 
-    print("   ✓ WorkGraph built successfully")
+    print("   WorkGraph built successfully")
     print(f"   WorkGraph.max_number_jobs = {wg.max_number_jobs}")
 
     # Submit
-    print("\n5. Submitting to AiiDA daemon...")
+    print("\n6. Submitting to AiiDA daemon...")
     wg.submit(wait=False)
 
     print(f"\n{'='*70}")
     print("STEP 14 SUBMITTED SUCCESSFULLY")
     print(f"{'='*70}")
     print(f"\nWorkGraph PK: {wg.pk}")
-    print(f"Mode: {mode_name} (max_concurrent_jobs={max_concurrent_jobs})")
+    print(f"Mode: {mode_name} (max_concurrent_jobs={MAX_CONCURRENT_JOBS})")
     print(f"\nMonitor with:")
     print(f"  verdi process status {wg.pk}")
     print(f"  verdi process show {wg.pk}")
     print(f"  watch -n 5 'verdi process list -a | grep VASP'")
 
-    if max_concurrent_jobs == 1:
-        print(f"\n✓ Serial mode: Only 1 VASP running at any time")
-    elif max_concurrent_jobs is None:
-        print(f"\n✓ Unlimited mode: All VASP jobs launch in parallel")
+    if MAX_CONCURRENT_JOBS == 1:
+        print(f"\nSerial mode: Only 1 VASP running at any time")
+    elif MAX_CONCURRENT_JOBS is None:
+        print(f"\nUnlimited mode: All VASP jobs launch in parallel")
     else:
-        print(f"\n✓ Limited mode: Max {max_concurrent_jobs} VASP jobs running at once")
+        print(f"\nLimited mode: Max {MAX_CONCURRENT_JOBS} VASP jobs running at once")
 
     print(f"{'='*70}\n")
 
@@ -181,7 +194,7 @@ if __name__ == '__main__':
     try:
         wg = main()
     except Exception as e:
-        print(f"\n✗ Error: {e}")
+        print(f"\nError: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)
