@@ -31,7 +31,7 @@ from teros.core.slabs import (
     relax_slabs_scatter,
     extract_total_energy,
 )
-from teros.core.metal_surface_energy.surface_energy import (
+from teros.core.surface_energy.surface_energy import (
     calculate_metal_surface_energy,
     calculate_bulk_energy_per_atom,
 )
