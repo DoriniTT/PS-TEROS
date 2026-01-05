@@ -32,6 +32,10 @@ from .adsorption_energy import (
     calculate_adsorption_energy,
     compute_adsorption_energies_scatter,
 )
+from .metal_surface_energy import (
+    calculate_metal_surface_energy,
+    build_metal_surface_energy_workgraph,
+)
 
 __all__ = [
     'get_structure_from_file',
@@ -54,4 +58,6 @@ __all__ = [
     'separate_adsorbate_structure',
     'calculate_adsorption_energy',
     'compute_adsorption_energies_scatter',
+    'calculate_metal_surface_energy',
+    'build_metal_surface_energy_workgraph',
 ]
