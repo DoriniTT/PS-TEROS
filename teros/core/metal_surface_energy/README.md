@@ -1,6 +1,6 @@
-# Metal Surface Energy Module
+# Metal and Intermetallic Surface Energy Module
 
-This module computes surface energies for **elemental metals** using the simple thermodynamic formula:
+This module computes surface energies for **elemental metals** and **stoichiometric intermetallics** using the simple thermodynamic formula:
 
 $$\gamma = \frac{E_{\text{slab}} - N \cdot E_{\text{bulk}}^{\text{atom}}}{2A}$$
 
@@ -11,14 +11,30 @@ Where:
 - $A$: Surface area (Å²)
 - Factor of 2 accounts for two surfaces (top and bottom)
 
+## Supported Materials
+
+### Elemental Metals
+Single-element metals like Au, Ag, Cu, Pt, Pd, Ni, Fe, etc.
+
+### Stoichiometric Intermetallics
+Binary or ternary intermetallic compounds where:
+- **Stoichiometric surface**: The slab composition matches the bulk stoichiometry
+- **Symmetric surface**: Top and bottom surfaces are equivalent
+
+Examples: PdIn, AuCu, NiAl, Cu3Au, TiAl, Ni3Al, etc.
+
+> **Note**: For non-stoichiometric or asymmetric intermetallic surfaces, chemical
+> potential-dependent formulations are required (to be implemented separately).
+
 ## Key Differences from Oxide Thermodynamics
 
-| Feature | Metal Surface Energy | Oxide Thermodynamics |
-|---------|---------------------|----------------------|
-| Chemical potential | None | Δμ_O, Δμ_Metal dependencies |
+| Feature | Metal/Intermetallic Surface Energy | Oxide Thermodynamics |
+|---------|-----------------------------------|----------------------|
+| Chemical potential | None (stoichiometric) | Δμ_O, Δμ_Metal dependencies |
 | Formula | Simple single-value γ | γ(Δμ) function |
 | Reference calculations | None needed | O₂, metal references required |
 | Complexity | Low | High |
+| Applicability | Stoichiometric surfaces | Any composition |
 
 ## Module Structure
 
@@ -32,6 +48,16 @@ metal_surface_energy/
 
 ## Key Functions
 
+### `identify_compound_type`
+Helper function that identifies whether a structure is an elemental metal or intermetallic.
+
+**Returns:** Dict with:
+- `compound_type`: 'elemental' or 'intermetallic'
+- `elements`: List of element symbols
+- `composition`: Dict mapping element to count
+- `formula`: Chemical formula (e.g., 'Au', 'PdIn', 'Au3Cu')
+- `stoichiometry`: Dict mapping element to ratio
+
 ### `calculate_metal_surface_energy`
 AiiDA calcfunction that computes surface energy for a single slab.
 
@@ -44,7 +70,14 @@ AiiDA calcfunction that computes surface energy for a single slab.
 **Returns:** Dict with:
 - `gamma_eV_A2`: Surface energy in eV/Å²
 - `gamma_J_m2`: Surface energy in J/m²
-- `area_A2`, `N_slab`, `N_bulk`, `element`
+- `area_A2`: Surface area in Å²
+- `N_slab`, `N_bulk`: Atom counts
+- `compound_type`: 'elemental' or 'intermetallic'
+- `formula`: Chemical formula
+- `elements`: List of elements
+- `composition`: Bulk composition dict
+- `slab_composition`: Slab composition dict
+- `is_stoichiometric`: Boolean flag
 
 ### `build_metal_surface_energy_workgraph`
 Main entry point for users. Builds a complete workflow.
@@ -53,7 +86,7 @@ Main entry point for users. Builds a complete workflow.
 - `bulk_structure_path`: Path to CIF file
 - `miller_indices`: List of orientations, e.g., `[[1,1,1], [1,0,0], [1,1,0]]`
 - `code_label`: VASP code in AiiDA
-- `potential_mapping`: e.g., `{'Au': 'Au'}`
+- `potential_mapping`: e.g., `{'Au': 'Au'}` or `{'Pd': 'Pd', 'In': 'In'}`
 
 ## Workflow Architecture
 
@@ -71,7 +104,7 @@ WorkGraph<MetalSurfaceEnergy>
 └── gather_surface_energies             # Consolidates all results
 ```
 
-## Usage Example
+## Usage Example - Elemental Metal (Au)
 
 ```python
 from aiida import load_profile
@@ -84,14 +117,14 @@ wg = build_metal_surface_energy_workgraph(
     code_label='VASP-6.5.1@cluster',
     potential_family='PBE',
     potential_mapping={'Au': 'Au'},
-    
+
     # Miller indices (all in ONE workflow)
     miller_indices=[[1,1,1], [1,0,0], [1,1,0]],
-    
+
     # Slab parameters
     min_slab_thickness=20.0,
     min_vacuum_thickness=20.0,
-    
+
     # VASP parameters
     bulk_parameters={
         'prec': 'Accurate',
@@ -103,8 +136,49 @@ wg = build_metal_surface_energy_workgraph(
         'nsw': 100,
         'ediffg': -0.01,
     },
-    
+
     name='Au_surface_energy',
+)
+
+wg.submit(wait=False)
+print(f"Submitted: PK={wg.pk}")
+```
+
+## Usage Example - Intermetallic (PdIn)
+
+```python
+from aiida import load_profile
+from teros.core.metal_surface_energy import build_metal_surface_energy_workgraph
+
+load_profile('myprofile')
+
+wg = build_metal_surface_energy_workgraph(
+    bulk_structure_path='/path/to/pdin.cif',
+    code_label='VASP-6.5.1@cluster',
+    potential_family='PBE',
+    potential_mapping={'Pd': 'Pd', 'In': 'In'},  # Map both elements
+
+    # Miller indices for intermetallic
+    miller_indices=[[1,1,0], [1,0,0], [1,1,1]],
+
+    # Slab parameters
+    min_slab_thickness=20.0,
+    min_vacuum_thickness=20.0,
+    symmetrize=True,  # Important for stoichiometric surfaces!
+
+    # VASP parameters
+    bulk_parameters={
+        'prec': 'Accurate',
+        'encut': 500,
+        'ismear': 1,
+        'sigma': 0.2,
+        'ibrion': 2,
+        'isif': 3,
+        'nsw': 100,
+        'ediffg': -0.01,
+    },
+
+    name='PdIn_surface_energy',
 )
 
 wg.submit(wait=False)
@@ -121,7 +195,7 @@ Outputs                  PK    Type
 bulk_energy              XXXX  Float
 bulk_energy_per_atom     XXXX  Float
 bulk_structure           XXXX  StructureData
-surface_energies         XXXX  Dict          ← All results consolidated
+surface_energies         XXXX  Dict          <- All results consolidated
 relaxed_slabs_hkl_111
     term_0               XXXX  StructureData
 relaxed_slabs_hkl_100
@@ -130,6 +204,8 @@ relaxed_slabs_hkl_100
 ```
 
 The `surface_energies` Dict contains:
+
+### For Elemental Metals:
 ```json
 {
     "hkl_111": {
@@ -138,16 +214,38 @@ The `surface_energies` Dict contains:
             "gamma_J_m2": 0.77,
             "area_A2": 21.5,
             "N_slab": 8,
-            "element": "Au"
+            "compound_type": "elemental",
+            "formula": "Au",
+            "elements": ["Au"],
+            "is_stoichiometric": true
         }
-    },
-    "hkl_100": { ... },
-    "hkl_110": { ... }
+    }
+}
+```
+
+### For Intermetallics:
+```json
+{
+    "hkl_110": {
+        "term_0": {
+            "gamma_eV_A2": 0.082,
+            "gamma_J_m2": 1.31,
+            "area_A2": 15.2,
+            "N_slab": 16,
+            "compound_type": "intermetallic",
+            "formula": "InPd",
+            "elements": ["In", "Pd"],
+            "composition": {"In": 4, "Pd": 4},
+            "slab_composition": {"In": 8, "Pd": 8},
+            "is_stoichiometric": true
+        }
+    }
 }
 ```
 
 ## Expected Surface Energies (PBE)
 
+### Elemental Metals
 | Metal | (111) | (100) | (110) |
 |-------|-------|-------|-------|
 | Au    | ~0.8  | ~0.9  | ~1.3  |
@@ -157,15 +255,34 @@ The `surface_energies` Dict contains:
 
 *Values in J/m². Actual results depend on computational parameters.*
 
+### Intermetallics
+Surface energies for intermetallics vary widely depending on:
+- Crystal structure (B2, L10, L12, etc.)
+- Element combination
+- Surface orientation and termination
+
+Typical values range from 0.5 to 2.5 J/m².
+
 ## VASP Parameter Recommendations
 
-For metals, use:
+For metals and intermetallics, use:
 - `ISMEAR = 1` (Methfessel-Paxton) or `ISMEAR = 2`
 - `SIGMA = 0.1-0.2` eV
-- `ENCUT ≥ 1.3 × ENMAX` from POTCAR
-- Dense k-points: spacing ≤ 0.03 Å⁻¹
+- `ENCUT >= 1.3 × ENMAX` from POTCAR
+- Dense k-points: spacing <= 0.03 Å⁻¹
 
 For slabs:
 - `ISIF = 2` (relax ions only, fix cell)
-- Sufficient vacuum (≥15 Å)
+- Sufficient vacuum (>= 15 Å)
 - Consider dipole corrections if asymmetric
+- Use `symmetrize=True` in slab generation for stoichiometric surfaces
+
+## Important Considerations for Intermetallics
+
+1. **Stoichiometry**: Ensure the slab generation produces stoichiometric slabs by using `symmetrize=True`
+
+2. **Termination**: For non-centrosymmetric intermetallics, different terminations may have different compositions. The `is_stoichiometric` flag in the output indicates whether each termination preserves bulk stoichiometry.
+
+3. **Validation**: Always check the `slab_composition` in the output to verify the surface composition matches expectations.
+
+4. **Future Extension**: For non-stoichiometric surfaces, chemical potential-dependent surface energies (γ(Δμ)) will be implemented in a separate module.

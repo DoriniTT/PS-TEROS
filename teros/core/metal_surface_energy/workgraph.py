@@ -1,12 +1,19 @@
 """
-Metal Surface Energy WorkGraph Builder.
+Metal and Intermetallic Surface Energy WorkGraph Builder.
 
 This module provides the main workflow builder for computing surface energies
-of elemental metals. It supports:
+of elemental metals and stoichiometric intermetallics. It supports:
 - Multiple Miller indices in a single parent workflow
 - Single bulk calculation shared across all orientations
 - Multiple terminations per orientation
 - Bulk relaxation → Slab generation → Slab relaxation → Surface energy calculation
+
+Supported materials:
+- Elemental metals: Au, Ag, Cu, Pt, Pd, Ni, Fe, etc.
+- Stoichiometric intermetallics: PdIn, AuCu, NiAl, Cu3Au, etc.
+
+For stoichiometric and symmetric intermetallic surfaces, the simple formula
+γ = (E_slab - N·E_bulk/atom) / (2A) is used, same as for elemental metals.
 """
 
 from __future__ import annotations

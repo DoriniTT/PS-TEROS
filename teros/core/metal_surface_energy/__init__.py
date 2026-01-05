@@ -1,7 +1,8 @@
 """
-Metal Surface Energy Module
+Metal and Intermetallic Surface Energy Module
 
-This module computes surface energies for elemental metals using the simple formula:
+This module computes surface energies for elemental metals and stoichiometric
+intermetallics using the simple formula:
 γ = (E_slab - N·E_bulk/atom) / (2A)
 
 where:
@@ -11,13 +12,19 @@ where:
 - A: Surface area
 - Factor of 2 accounts for two surfaces
 
-This is much simpler than oxide thermodynamics since there are no chemical potential
-dependencies for pure metals.
+Supported materials:
+- Elemental metals: Au, Ag, Cu, Pt, Pd, Ni, Fe, etc.
+- Stoichiometric intermetallics: PdIn, AuCu, NiAl, Cu3Au, etc.
+
+For stoichiometric and symmetric surfaces, no chemical potential dependencies
+are needed. For non-stoichiometric surfaces, use the oxide thermodynamics
+approach instead.
 """
 
 from .surface_energy import (
     calculate_metal_surface_energy,
     compute_metal_surface_energies_scatter,
+    identify_compound_type,
 )
 
 from .workgraph import build_metal_surface_energy_workgraph
@@ -25,5 +32,6 @@ from .workgraph import build_metal_surface_energy_workgraph
 __all__ = [
     'calculate_metal_surface_energy',
     'compute_metal_surface_energies_scatter',
+    'identify_compound_type',
     'build_metal_surface_energy_workgraph',
 ]
