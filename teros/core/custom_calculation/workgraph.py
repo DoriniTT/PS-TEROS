@@ -1,13 +1,116 @@
 """WorkGraph builder for custom VASP calculations."""
 
+import re
 import typing as t
 
 from aiida import orm
 from aiida.plugins import WorkflowFactory
-from aiida_workgraph import WorkGraph, task
+from aiida_workgraph import WorkGraph, task, namespace, dynamic
 
 from .tasks import extract_total_energy
 from ..fixed_atoms import get_fixed_atoms_list
+
+
+def _sanitize_key(label: str, index: int) -> str:
+    """
+    Sanitize a label to be a valid Python identifier for AiiDA link labels.
+
+    Args:
+        label: The original label string
+        index: Fallback index if label is empty or invalid
+
+    Returns:
+        A valid Python identifier string
+    """
+    if not label:
+        return f'structure_{index}'
+
+    # Replace common problematic characters
+    key = label.replace('.', '_').replace(' ', '_').replace('-', '_')
+
+    # Remove any remaining non-alphanumeric characters (except underscore)
+    key = re.sub(r'[^a-zA-Z0-9_]', '', key)
+
+    # Ensure it doesn't start with a digit (prepend 's_' if it does)
+    if key and key[0].isdigit():
+        key = f's_{key}'
+
+    # If empty after sanitization, use fallback
+    if not key:
+        return f'structure_{index}'
+
+    return key
+
+
+@task.graph
+def CustomCalculationMultipleWorkGraph(
+    structures: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
+    code: orm.InstalledCode,
+    builder_inputs_list: list,
+    fix_type: str = None,
+    fix_thickness: float = 0.0,
+    fix_elements: list = None,
+) -> t.Annotated[dict, namespace(**{
+    'structures': dynamic(orm.StructureData),
+    'energies': dynamic(orm.Float),
+    'misc': dynamic(orm.Dict),
+})]:
+    """
+    WorkGraph task for multiple custom VASP calculations.
+
+    Args:
+        structures: Dict of StructureData keyed by sanitized label
+        code: VASP InstalledCode
+        builder_inputs_list: List of builder input dicts (same order as structures)
+        fix_type: Where to fix atoms ('bottom'/'top'/'center'/None)
+        fix_thickness: Thickness in Angstroms for fixing region
+        fix_elements: Optional list of element symbols to fix
+
+    Returns:
+        Dictionary with namespace outputs:
+            - structures: Dict {key: StructureData} for relaxed structures
+            - energies: Dict {key: Float} for energies
+            - misc: Dict {key: Dict} for misc outputs
+    """
+    # Get VASP workchain and wrap as task
+    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
+    VaspTask = task(VaspWorkChain)
+
+    structures_out = {}
+    energies_out = {}
+    misc_out = {}
+
+    # Process each structure
+    keys = list(structures.keys())
+    for i, key in enumerate(keys):
+        struct = structures[key]
+        inputs = builder_inputs_list[i]
+
+        # Prepare builder inputs
+        prepared_inputs = _prepare_builder_inputs(
+            inputs, struct, fix_type, fix_thickness, fix_elements
+        )
+
+        # Add VaspTask
+        vasp_task = VaspTask(
+            structure=struct,
+            code=code,
+            **prepared_inputs
+        )
+
+        # Extract energy
+        energy_task = extract_total_energy(misc=vasp_task.misc)
+
+        # Collect outputs
+        structures_out[key] = vasp_task.structure
+        energies_out[key] = energy_task.result
+        misc_out[key] = vasp_task.misc
+
+    return {
+        'structures': structures_out,
+        'energies': energies_out,
+        'misc': misc_out,
+    }
 
 
 def build_custom_calculation_workgraph(
@@ -52,18 +155,13 @@ def build_custom_calculation_workgraph(
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
     VaspTask = task(VaspWorkChain)
 
-    # Create WorkGraph
-    wg = WorkGraph(name=name)
-
-    # Set max_number_jobs if specified (for concurrency control)
-    if max_concurrent_jobs is not None:
-        wg.max_number_jobs = max_concurrent_jobs
-
     # Detect single vs multiple structures
     is_single = isinstance(structure, orm.StructureData)
 
     if is_single:
-        # Single structure workflow
+        # Single structure workflow - use plain WorkGraph
+        wg = WorkGraph(name=name)
+
         # Prepare builder inputs (convert plain dicts to AiiDA types)
         prepared_inputs = _prepare_builder_inputs(
             builder_inputs, structure, fix_type, fix_thickness, fix_elements
@@ -86,12 +184,13 @@ def build_custom_calculation_workgraph(
         )
 
         # Set WorkGraph outputs (use 'any' socket type identifier)
-        # Note: structure comes directly from VaspWorkChain, not via a calcfunction
         wg.add_output('any', 'energy', from_socket=energy_task.outputs.result)
         wg.add_output('any', 'structure', from_socket=vasp_task.outputs.structure)
         wg.add_output('any', 'misc', from_socket=vasp_task.outputs.misc)
+
+        return wg
     else:
-        # Multiple structures workflow
+        # Multiple structures workflow - use @task.graph pattern
         structures = structure  # Rename for clarity
 
         # Handle builder_inputs: single dict or list of dicts
@@ -109,43 +208,29 @@ def build_custom_calculation_workgraph(
         else:
             raise TypeError("builder_inputs must be dict or list of dicts")
 
-        # Create VaspTask for each structure
-        vasp_tasks = []
-        energy_tasks = []
-        structure_tasks = []
+        # Prepare structures dict with sanitized keys
+        structures_dict = {}
+        for i, struct in enumerate(structures):
+            label = struct.label if hasattr(struct, 'label') else ''
+            key = _sanitize_key(label, i)
+            structures_dict[key] = struct
 
-        for i, (struct, inputs) in enumerate(zip(structures, builder_inputs_list)):
-            # Prepare builder inputs
-            prepared_inputs = _prepare_builder_inputs(
-                inputs, struct, fix_type, fix_thickness, fix_elements
-            )
+        # Build WorkGraph using @task.graph function
+        wg = CustomCalculationMultipleWorkGraph.build(
+            structures=structures_dict,
+            code=code,
+            builder_inputs_list=builder_inputs_list,
+            fix_type=fix_type,
+            fix_thickness=fix_thickness,
+            fix_elements=fix_elements,
+        )
 
-            # Add VaspTask
-            vasp_task = wg.add_task(
-                VaspTask,
-                name=f'vasp_calc_{i}',
-                structure=struct,
-                code=code,
-                **prepared_inputs
-            )
-            vasp_tasks.append(vasp_task)
+        # Set name and max concurrent jobs
+        wg.name = name
+        if max_concurrent_jobs is not None:
+            wg.max_number_jobs = max_concurrent_jobs
 
-            # Extract energy
-            energy_task = wg.add_task(
-                extract_total_energy,
-                name=f'extract_energy_{i}',
-                misc=vasp_task.outputs.misc
-            )
-            energy_tasks.append(energy_task)
-
-            # Structure comes directly from VaspWorkChain output
-            # (no need for extract_structure calcfunction)
-
-        # For multiple structures, outputs are accessed via task names
-        # (WorkGraph doesn't support dynamic list outputs with plain functions)
-        # Users can access: wg.tasks['vasp_calc_0'], wg.tasks['extract_energy_0'], etc.
-
-    return wg
+        return wg
 
 
 def _prepare_builder_inputs(
@@ -253,9 +338,25 @@ def get_custom_results(workgraph):
 
     Returns:
         dict with:
-            - energies: list of floats or single float
-            - structures: list of StructureData or single StructureData
-            - misc: list of dicts or single dict
+            - energies: dict (keyed by structure label) or single float
+            - structures: dict of StructureData (keyed by structure label), or single StructureData
+            - misc: dict (keyed by structure label) or single dict
+
+    For multiple structures, results are organized by structure key (derived from
+    structure labels, or 'structure_0', 'structure_1', etc. if no label):
+        {
+            'energies': {'my_struct_1': -123.45, 'my_struct_2': -234.56, ...},
+            'structures': {'my_struct_1': <StructureData>, 'my_struct_2': <StructureData>, ...},
+            'misc': {'my_struct_1': {...}, 'my_struct_2': {...}, ...}
+        }
+
+    Example:
+        >>> results = get_custom_results(wg)
+        >>> for key, energy in results['energies'].items():
+        ...     print(f"{key}: {energy:.3f} eV")
+        >>> # Access structures directly
+        >>> for key, struct in results['structures'].items():
+        ...     print(f"{key}: {struct.get_formula()}")
     """
     results = {}
 
@@ -265,23 +366,46 @@ def get_custom_results(workgraph):
         results['energies'] = workgraph.outputs.energy.value
         results['structures'] = workgraph.outputs.structure
         results['misc'] = workgraph.outputs.misc.get_dict()
+    elif hasattr(workgraph.outputs, 'energies'):
+        # Multiple structures with namespaced outputs
+        # Access energies namespace
+        energies = {}
+        for key in workgraph.outputs.energies:
+            energies[key] = workgraph.outputs.energies[key].value
+        results['energies'] = energies
+
+        # Access structures namespace
+        structures = {}
+        for key in workgraph.outputs.structures:
+            structures[key] = workgraph.outputs.structures[key]
+        results['structures'] = structures
+
+        # Access misc namespace
+        misc_dict = {}
+        for key in workgraph.outputs.misc:
+            misc_dict[key] = workgraph.outputs.misc[key].get_dict()
+        results['misc'] = misc_dict
     else:
-        # Multiple structures - access via task outputs
+        # Legacy: Multiple structures - access via task outputs
         i = 0
-        energies = []
-        structures = []
-        misc_list = []
+        energies = {}
+        structures = {}
+        misc_dict = {}
 
         # Find all energy extraction tasks
         while f'extract_energy_{i}' in workgraph.tasks:
             energy_task = workgraph.tasks[f'extract_energy_{i}']
             vasp_task = workgraph.tasks[f'vasp_calc_{i}']
 
+            # Get structure to determine key (use same sanitization as workgraph builder)
+            struct = vasp_task.outputs['structure'].value
+            label = struct.label if hasattr(struct, 'label') else ''
+            key = _sanitize_key(label, i)
+
             # Access outputs from completed tasks
-            # Structure comes directly from vasp_task (no extract_structure calcfunction)
-            energies.append(energy_task.outputs['result'].value)
-            structures.append(vasp_task.outputs['structure'].value)
-            misc_list.append(vasp_task.outputs['misc'].value.get_dict())
+            energies[key] = energy_task.outputs['result'].value
+            structures[key] = struct
+            misc_dict[key] = vasp_task.outputs['misc'].value.get_dict()
             i += 1
 
         if not energies:
@@ -289,6 +413,6 @@ def get_custom_results(workgraph):
 
         results['energies'] = energies
         results['structures'] = structures
-        results['misc'] = misc_list
+        results['misc'] = misc_dict
 
     return results
