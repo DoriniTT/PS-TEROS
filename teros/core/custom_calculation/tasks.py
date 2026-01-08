@@ -48,3 +48,83 @@ def extract_relaxed_structure(structure: orm.StructureData) -> orm.StructureData
     """
     return structure
 
+
+@task.calcfunction
+def gather_energies(**kwargs) -> orm.Dict:
+    """
+    Gather energies from multiple calculations into a single Dict.
+
+    Collects Float nodes from dynamic kwargs and returns a Dict with
+    the energy values keyed by their input names.
+
+    Args:
+        **kwargs: Dynamic inputs where keys are structure identifiers
+                  and values are orm.Float energy nodes
+
+    Returns:
+        orm.Dict with structure: {key: energy_value, ...}
+    """
+    energies = {}
+    for key, energy_node in kwargs.items():
+        if isinstance(energy_node, orm.Float):
+            energies[key] = energy_node.value
+        elif hasattr(energy_node, 'value'):
+            energies[key] = float(energy_node.value)
+        else:
+            energies[key] = float(energy_node)
+    return orm.Dict(dict=energies)
+
+
+@task.calcfunction
+def gather_misc(**kwargs) -> orm.Dict:
+    """
+    Gather misc outputs from multiple calculations into a single Dict.
+
+    Collects Dict nodes from dynamic kwargs and returns a Dict with
+    the misc data keyed by their input names.
+
+    Args:
+        **kwargs: Dynamic inputs where keys are structure identifiers
+                  and values are orm.Dict misc nodes
+
+    Returns:
+        orm.Dict with structure: {key: misc_dict, ...}
+    """
+    misc_data = {}
+    for key, misc_node in kwargs.items():
+        if isinstance(misc_node, orm.Dict):
+            misc_data[key] = misc_node.get_dict()
+        elif isinstance(misc_node, dict):
+            misc_data[key] = misc_node
+        else:
+            misc_data[key] = dict(misc_node)
+    return orm.Dict(dict=misc_data)
+
+
+@task.calcfunction
+def gather_structure_pks(**kwargs) -> orm.Dict:
+    """
+    Gather structure PKs from multiple calculations into a single Dict.
+
+    Collects StructureData nodes from dynamic kwargs and returns a Dict with
+    their PKs keyed by the input names. This provides a lightweight reference
+    to all structures without duplicating the data.
+
+    Args:
+        **kwargs: Dynamic inputs where keys are structure identifiers
+                  and values are orm.StructureData nodes
+
+    Returns:
+        orm.Dict with structure: {key: pk, ...}
+    """
+    structure_pks = {}
+    for key, struct_node in kwargs.items():
+        if isinstance(struct_node, orm.StructureData):
+            structure_pks[key] = struct_node.pk
+        elif hasattr(struct_node, 'pk'):
+            structure_pks[key] = struct_node.pk
+        else:
+            # Try to get pk from node
+            structure_pks[key] = int(struct_node)
+    return orm.Dict(dict=structure_pks)
+
