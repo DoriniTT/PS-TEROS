@@ -5,6 +5,7 @@ This module provides functions to generate surface slabs from bulk structures
 using Pymatgen's SlabGenerator with scatter-gather pattern for parallel relaxation.
 """
 
+import copy
 import typing as t
 from aiida import orm
 from aiida.plugins import WorkflowFactory
