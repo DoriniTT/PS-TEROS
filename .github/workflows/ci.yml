@@ -70,28 +70,38 @@ jobs:
         echo "✓ All Python files have valid syntax"
 
     - name: Configure AiiDA
+      env:
+        PGPASSWORD: aiida_password
+        PGUSER: aiida
+        PGHOST: 127.0.0.1
+        PGDATABASE: aiida_db
       run: |
         mkdir -p ~/.aiida
-        
-        verdi quicksetup --non-interactive \
-          --profile test_profile \
+
+        # Create profile with database (RabbitMQ auto-detected on localhost)
+        verdi profile setup core.psql_dos \
+          --profile-name test_profile \
+          --set-as-default \
+          --non-interactive \
           --email test@test.com \
           --first-name Test \
           --last-name User \
           --institution TestInst \
-          --db-engine postgresql_psycopg2 \
-          --db-host localhost \
-          --db-port 5432 \
-          --db-name aiida_db \
-          --db-username aiida \
-          --db-password aiida_password \
-          --broker-protocol amqp \
-          --broker-host localhost \
+          --database-hostname 127.0.0.1 \
+          --database-port 5432 \
+          --database-name aiida_db \
+          --database-username aiida \
+          --database-password aiida_password \
+          --repository-uri "file://$HOME/.aiida/repository/test_profile"
+
+        # Configure RabbitMQ broker separately
+        verdi profile configure-rabbitmq \
+          --broker-host 127.0.0.1 \
           --broker-port 5672 \
           --broker-username guest \
-          --broker-password guest
-        
-        verdi profile setdefault test_profile
+          --broker-password guest \
+          --non-interactive
+
         verdi status
 
     - name: Start AiiDA daemon
