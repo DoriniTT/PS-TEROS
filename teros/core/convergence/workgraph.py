@@ -43,61 +43,68 @@ DEFAULT_CONV_SETTINGS = {
 
 def _prepare_convergence_inputs(
     builder_inputs: dict,
+    code: orm.InstalledCode,
 ) -> dict:
     """
-    Prepare builder inputs by converting plain dicts to AiiDA types.
+    Prepare builder inputs for the vasp.v2.converge workchain.
+
+    The converge workchain expects VASP inputs under a 'vasp' namespace.
 
     Args:
         builder_inputs: dict with VASP builder parameters
+        code: The VASP code node
 
     Returns:
-        dict with AiiDA-compatible types
+        dict with 'vasp' namespace containing AiiDA-compatible types
     """
-    prepared = {}
+    vasp_inputs = {}
+
+    # Add code
+    vasp_inputs['code'] = code
 
     # Convert parameters dict to orm.Dict
     if 'parameters' in builder_inputs:
         if isinstance(builder_inputs['parameters'], dict):
-            prepared['parameters'] = orm.Dict(dict=builder_inputs['parameters'])
+            vasp_inputs['parameters'] = orm.Dict(dict=builder_inputs['parameters'])
         else:
-            prepared['parameters'] = builder_inputs['parameters']
+            vasp_inputs['parameters'] = builder_inputs['parameters']
 
     # Convert options dict to orm.Dict
     if 'options' in builder_inputs:
         if isinstance(builder_inputs['options'], dict):
-            prepared['options'] = orm.Dict(dict=builder_inputs['options'])
+            vasp_inputs['options'] = orm.Dict(dict=builder_inputs['options'])
         else:
-            prepared['options'] = builder_inputs['options']
+            vasp_inputs['options'] = builder_inputs['options']
 
     # Convert potential_mapping dict to orm.Dict
     if 'potential_mapping' in builder_inputs:
         if isinstance(builder_inputs['potential_mapping'], dict):
-            prepared['potential_mapping'] = orm.Dict(dict=builder_inputs['potential_mapping'])
+            vasp_inputs['potential_mapping'] = orm.Dict(dict=builder_inputs['potential_mapping'])
         else:
-            prepared['potential_mapping'] = builder_inputs['potential_mapping']
+            vasp_inputs['potential_mapping'] = builder_inputs['potential_mapping']
 
     # Convert settings dict to orm.Dict if present
     if 'settings' in builder_inputs:
         if isinstance(builder_inputs['settings'], dict):
-            prepared['settings'] = orm.Dict(dict=builder_inputs['settings'])
+            vasp_inputs['settings'] = orm.Dict(dict=builder_inputs['settings'])
         else:
-            prepared['settings'] = builder_inputs['settings']
+            vasp_inputs['settings'] = builder_inputs['settings']
 
     # Handle kpoints_spacing - ensure it's a float
     if 'kpoints_spacing' in builder_inputs:
         kps = builder_inputs['kpoints_spacing']
-        # Keep as plain Python float
         if isinstance(kps, (int, float)):
-            prepared['kpoints_spacing'] = float(kps)
+            vasp_inputs['kpoints_spacing'] = float(kps)
         else:
-            prepared['kpoints_spacing'] = kps
+            vasp_inputs['kpoints_spacing'] = kps
 
     # Copy string/bool values directly
-    for key in ('potential_family', 'clean_workdir'):
-        if key in builder_inputs:
-            prepared[key] = builder_inputs[key]
+    if 'potential_family' in builder_inputs:
+        vasp_inputs['potential_family'] = builder_inputs['potential_family']
+    if 'clean_workdir' in builder_inputs:
+        vasp_inputs['clean_workdir'] = builder_inputs['clean_workdir']
 
-    return prepared
+    return {'vasp': vasp_inputs}
 
 
 def build_convergence_workgraph(
@@ -188,8 +195,8 @@ def build_convergence_workgraph(
 
     logger.info(f"  Convergence settings: {merged_settings}")
 
-    # Prepare builder inputs
-    prepared_inputs = _prepare_convergence_inputs(builder_inputs)
+    # Prepare builder inputs (under 'vasp' namespace)
+    prepared_inputs = _prepare_convergence_inputs(builder_inputs, code)
 
     # Build WorkGraph
     wg = WorkGraph(name=name)
@@ -199,7 +206,6 @@ def build_convergence_workgraph(
         ConvergeTask,
         name='convergence_scan',
         structure=structure,
-        code=code,
         conv_settings=orm.Dict(dict=merged_settings),
         **prepared_inputs,
     )
