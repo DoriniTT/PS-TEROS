@@ -38,6 +38,16 @@ from .surface_energy import (
     build_metal_surface_energy_workgraph,
     identify_compound_type,
 )
+from .convergence import (
+    build_thickness_convergence_workgraph,
+    get_thickness_convergence_results,
+    generate_thickness_series,
+    extract_recommended_layers,
+)
+from .u_calculation import (
+    build_u_calculation_workgraph,
+    get_u_calculation_results,
+)
 from .utils import (
     deep_merge_dicts,
     get_vasp_parser_settings,
@@ -98,6 +108,14 @@ __all__ = [
     'calculate_metal_surface_energy',
     'build_metal_surface_energy_workgraph',
     'identify_compound_type',
+    # Thickness convergence
+    'build_thickness_convergence_workgraph',
+    'get_thickness_convergence_results',
+    'generate_thickness_series',
+    'extract_recommended_layers',
+    # Hubbard U calculation
+    'build_u_calculation_workgraph',
+    'get_u_calculation_results',
     # Utilities
     'deep_merge_dicts',
     'get_vasp_parser_settings',
