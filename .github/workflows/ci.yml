@@ -49,6 +49,15 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('setup.py') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
+          ${{ runner.os }}-pip-
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
@@ -110,9 +119,21 @@ jobs:
         sleep 5
         verdi daemon status
 
-    - name: Run all tests
+    - name: Run tests
       run: |
-        pytest tests/ -v --tb=short
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "Running fast tests (tier1) for PR"
+          pytest tests/ -v --tb=short --cov=teros --cov-report=xml -m "tier1"
+        else
+          echo "Running all tests for push"
+          pytest tests/ -v --tb=short --cov=teros --cov-report=xml
+        fi
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./coverage.xml
+        fail_ci_if_error: false
 
     - name: Run linting (non-blocking)
       continue-on-error: true
