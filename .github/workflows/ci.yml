@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.9', '3.10', '3.11']
+        python-version: ['3.11', '3.12', '3.13']
 
     services:
       postgres:
@@ -49,6 +49,15 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
 
+    - name: Cache pip dependencies
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('setup.py') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-${{ matrix.python-version }}-
+          ${{ runner.os }}-pip-
+
     - name: Install system dependencies
       run: |
         sudo apt-get update
@@ -70,28 +79,38 @@ jobs:
         echo "✓ All Python files have valid syntax"
 
     - name: Configure AiiDA
+      env:
+        PGPASSWORD: aiida_password
+        PGUSER: aiida
+        PGHOST: 127.0.0.1
+        PGDATABASE: aiida_db
       run: |
         mkdir -p ~/.aiida
-        
-        verdi quicksetup --non-interactive \
-          --profile test_profile \
+
+        # Create profile with database (RabbitMQ auto-detected on localhost)
+        verdi profile setup core.psql_dos \
+          --profile-name test_profile \
+          --set-as-default \
+          --non-interactive \
           --email test@test.com \
           --first-name Test \
           --last-name User \
           --institution TestInst \
-          --db-engine postgresql_psycopg2 \
-          --db-host localhost \
-          --db-port 5432 \
-          --db-name aiida_db \
-          --db-username aiida \
-          --db-password aiida_password \
-          --broker-protocol amqp \
-          --broker-host localhost \
+          --database-hostname 127.0.0.1 \
+          --database-port 5432 \
+          --database-name aiida_db \
+          --database-username aiida \
+          --database-password aiida_password \
+          --repository-uri "file://$HOME/.aiida/repository/test_profile"
+
+        # Configure RabbitMQ broker separately
+        verdi profile configure-rabbitmq \
+          --broker-host 127.0.0.1 \
           --broker-port 5672 \
           --broker-username guest \
-          --broker-password guest
-        
-        verdi profile setdefault test_profile
+          --broker-password guest \
+          --non-interactive
+
         verdi status
 
     - name: Start AiiDA daemon
@@ -100,9 +119,21 @@ jobs:
         sleep 5
         verdi daemon status
 
-    - name: Run all tests
+    - name: Run tests
       run: |
-        pytest tests/ -v --tb=short
+        if [ "${{ github.event_name }}" = "pull_request" ]; then
+          echo "Running fast tests (tier1) for PR"
+          pytest tests/ -v --tb=short --cov=teros --cov-report=xml -m "tier1"
+        else
+          echo "Running all tests for push"
+          pytest tests/ -v --tb=short --cov=teros --cov-report=xml
+        fi
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./coverage.xml
+        fail_ci_if_error: false
 
     - name: Run linting (non-blocking)
       continue-on-error: true

@@ -561,23 +561,23 @@ def core_workgraph(
     slab_dos_output = {}
     slab_primitive_structures_output = {}
     slab_seekpath_parameters_output = {}
-    
+
     # Add electronic properties for auto-generated slabs (same pattern as cleavage)
     if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties and not use_input_slabs:
         from teros.core.slabs import calculate_electronic_properties_slabs_scatter
         from aiida.orm import load_code
-        
+
         # Get code
         code = load_code(code_label)
-        
+
         # Get default parameters
         default_params = slab_bands_parameters if slab_bands_parameters else {}
         default_opts = slab_bands_options if slab_bands_options else bulk_options
         default_settings = slab_band_settings if slab_band_settings else {}
-        
+
         # Get slab parameters
         slab_pot_map = slab_potential_mapping if slab_potential_mapping is not None else bulk_potential_mapping
-        
+
         # Calculate electronic properties for selected slabs
         slab_elec_outputs = calculate_electronic_properties_slabs_scatter(
             slabs=relaxed_slabs_output,
@@ -591,7 +591,7 @@ def core_workgraph(
             default_band_settings=default_settings,
             max_number_jobs=orm.Int(max_concurrent_jobs_slabs) if max_concurrent_jobs_slabs is not None else (orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None),
         )
-        
+
         # Collect outputs
         slab_bands_output = slab_elec_outputs.slab_bands
         slab_dos_output = slab_elec_outputs.slab_dos
@@ -604,10 +604,10 @@ def core_workgraph(
     # For workflows without bulk, return dummy nodes to satisfy @task.graph output types
     dummy_float = create_dummy_float(0.0)
     dummy_struct = create_dummy_structure()
-    
+
     # Determine if we have bulk based on input parameters (not future values)
     has_bulk = structures_dir and bulk_name
-    
+
     return {
         'bulk_energy': bulk_energy.result if has_bulk else dummy_float,
         'bulk_structure': bulk_vasp.structure if has_bulk else dummy_struct,
@@ -755,9 +755,9 @@ def build_core_workgraph(
     - AIMD simulations (controlled by workflow preset or run_aimd flag)
 
     **NEW: Workflow Preset System**
-    
+
     Instead of manually setting 7+ boolean flags, you can use workflow presets for common use cases:
-    
+
     - 'surface_thermodynamics' (default): Complete surface thermodynamics workflow
     - 'surface_thermodynamics_unrelaxed': Quick unrelaxed surface energy screening
     - 'cleavage_only': Cleavage energy calculations only
@@ -767,9 +767,9 @@ def build_core_workgraph(
     - 'electronic_structure_bulk_only': Electronic properties (DOS/bands) for bulk
     - 'aimd_only': AIMD simulation on slabs
     - 'comprehensive': Complete analysis (all features enabled)
-    
+
     Use list_workflow_presets() to see all available presets with descriptions.
-    
+
     Presets can be overridden by explicitly setting individual flags:
         wg = build_core_workgraph(
             workflow_preset='surface_thermodynamics',
@@ -946,14 +946,14 @@ def build_core_workgraph(
         ...     bulk_parameters={...},
         ...     bulk_options={...},
         ... )
-        
+
         Overriding preset defaults:
         >>> wg = build_core_workgraph(
         ...     workflow_preset='surface_thermodynamics',
         ...     compute_cleavage=False,  # Override
         ...     ...
         ... )
-        
+
         Bulk-only relaxation:
         >>> wg = build_core_workgraph(
         ...     structures_dir='structures',
@@ -1072,7 +1072,7 @@ def build_core_workgraph(
         run_aimd,
         run_adsorption_energy,
     )
-    
+
     # Extract resolved flags
     relax_slabs = resolved_flags['relax_slabs']
     compute_thermodynamics = resolved_flags['compute_thermodynamics']
@@ -1082,7 +1082,7 @@ def build_core_workgraph(
     compute_electronic_properties_slabs = resolved_flags['compute_electronic_properties_slabs']
     run_aimd = resolved_flags['run_aimd']
     run_adsorption_energy = resolved_flags['run_adsorption_energy']
-    
+
     # Validate preset requirements
     validation_errors = validate_preset_inputs(
         resolved_preset_name,
@@ -1105,11 +1105,11 @@ def build_core_workgraph(
         adsorption_structures=adsorption_structures,
         adsorption_formulas=adsorption_formulas,
     )
-    
+
     if validation_errors:
         error_msg = "\n".join(validation_errors)
         raise ValueError(f"Preset validation failed:\n{error_msg}")
-    
+
     # Check flag dependencies and emit warnings
     dependency_warnings = validate_flag_dependencies(
         resolved_flags,
@@ -1124,25 +1124,25 @@ def build_core_workgraph(
         adsorption_structures=adsorption_structures,
         adsorption_formulas=adsorption_formulas,
     )
-    
+
     for warning in dependency_warnings:
         if warning.startswith("ERROR:"):
             raise ValueError(warning)
         logger.warning(warning)
-    
+
     # ========================================================================
     # VALIDATE REQUIRED INPUTS
     # ========================================================================
-    
+
     # Determine if bulk structure is needed
     compute_formation_enthalpy = (metal_name is not None and oxygen_name is not None)
     needs_bulk = (
-        compute_formation_enthalpy or 
-        compute_thermodynamics or 
+        compute_formation_enthalpy or
+        compute_thermodynamics or
         compute_electronic_properties_bulk or
         (miller_indices is not None and input_slabs is None)  # Need bulk for slab generation
     )
-    
+
     # Only require structures_dir and bulk_name if we actually need the bulk structure
     if needs_bulk:
         if structures_dir is None or bulk_name is None:
@@ -1155,7 +1155,7 @@ def build_core_workgraph(
                 + (f"  - Slab generation (miller_indices provided)\n" if (miller_indices and not input_slabs) else "")
                 + "\nEither provide structures_dir and bulk_name, or use input_slabs with aimd_only preset."
             )
-    
+
     # Log workflow configuration
     logger.info("=" * 70)
     logger.info("WORKFLOW CONFIGURATION")
@@ -1166,11 +1166,11 @@ def build_core_workgraph(
         status = "✓" if flag_value else "✗"
         logger.info("  %s %s: %s", status, flag_name, flag_value)
     logger.info("=" * 70)
-    
+
     # ========================================================================
     # RESTART HANDLING
     # ========================================================================
-    
+
     # Handle restart from previous workgraph
     restart_folders = None
     restart_slabs = None
@@ -1655,7 +1655,7 @@ def build_core_workgraph(
             scf_inputs['parameters'] = {'incar': bands_parameters['scf']}
         if bands_parameters and 'scf_kpoints_distance' in bands_parameters:
             scf_inputs['kpoints_spacing'] = bands_parameters['scf_kpoints_distance']
-        
+
         bands_inputs['scf'] = scf_inputs
 
         # Build Bands namespace inputs (optional)
@@ -1776,7 +1776,7 @@ def build_core_workgraph(
         if aimd_supercell is not None:
             logger.info("     Supercell: %s", aimd_supercell)
             from teros.core.aimd.tasks import create_supercells_scatter
-            
+
             # Add supercell task
             sc_task = wg.add_task(
                 create_supercells_scatter,
