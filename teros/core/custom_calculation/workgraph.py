@@ -416,3 +416,284 @@ def get_custom_results(workgraph):
         results['misc'] = misc_dict
 
     return results
+
+
+# =============================================================================
+# DOS CALCULATION FUNCTIONS
+# =============================================================================
+
+def build_dos_calculation_workgraph(
+    structure: t.Union[orm.StructureData, t.List[orm.StructureData]],
+    code_label: str,
+    scf_inputs: dict,
+    dos_inputs: dict,
+    dos_kpoints_distance: float = 0.2,
+    potential_family: str = 'PBE',
+    potential_mapping: dict = None,
+    options: dict = None,
+    name: str = 'dos_calc',
+    max_concurrent_jobs: int = None,
+) -> WorkGraph:
+    """
+    Build a WorkGraph for DOS calculations using vasp.v2.bands workflow.
+
+    This workflow:
+    1. Performs SCF calculation to get charge density (CHGCAR)
+    2. Performs non-SCF DOS calculation using the CHGCAR
+
+    Args:
+        structure: StructureData or list of StructureData
+        code_label: str, VASP code label (e.g., 'VASP-6.4.1@cluster')
+        scf_inputs: dict with SCF calculation parameters:
+            - parameters: Dict with nested 'incar' dict for SCF
+            - kpoints_spacing: float, k-point spacing for SCF
+            - settings: Dict (optional) for additional retrieve list, etc.
+        dos_inputs: dict with DOS calculation parameters:
+            - parameters: Dict with nested 'incar' dict for DOS
+            - settings: Dict (optional) for additional retrieve list, etc.
+        dos_kpoints_distance: float, k-point spacing for DOS (default 0.2)
+        potential_family: str, POTCAR family (default 'PBE')
+        potential_mapping: dict, element to POTCAR mapping
+        options: dict, calculation options (resources, queue, etc.)
+        name: str, WorkGraph name
+        max_concurrent_jobs: int, maximum concurrent calculations
+
+    Returns:
+        WorkGraph ready to submit
+
+    Example:
+        >>> scf_inputs = {
+        ...     'parameters': {'incar': {'ENCUT': 500, 'EDIFF': 1e-5, ...}},
+        ...     'kpoints_spacing': 0.3,
+        ... }
+        >>> dos_inputs = {
+        ...     'parameters': {'incar': {'ICHARG': 11, 'ISMEAR': -5, 'NEDOS': 2001, ...}},
+        ... }
+        >>> wg = build_dos_calculation_workgraph(
+        ...     structure=my_structure,
+        ...     code_label='VASP-6.4.1@cluster',
+        ...     scf_inputs=scf_inputs,
+        ...     dos_inputs=dos_inputs,
+        ... )
+        >>> wg.submit()
+    """
+    # Load code
+    code = orm.load_code(code_label)
+
+    # Get bands workchain (used for DOS-only calculations)
+    BandsWorkChain = WorkflowFactory('vasp.v2.bands')
+    BandsTask = task(BandsWorkChain)
+
+    # Detect single vs multiple structures
+    is_single = isinstance(structure, orm.StructureData)
+
+    if is_single:
+        structures = [structure]
+    else:
+        structures = structure
+
+    # Create WorkGraph
+    wg = WorkGraph(name=name)
+
+    # Process each structure
+    for i, struct in enumerate(structures):
+        label = struct.label if hasattr(struct, 'label') and struct.label else ''
+        key = _sanitize_key(label, i)
+
+        # Prepare inputs for the bands workflow (DOS-only mode)
+        prepared_inputs = _prepare_dos_builder_inputs(
+            structure=struct,
+            code=code,
+            scf_inputs=scf_inputs,
+            dos_inputs=dos_inputs,
+            dos_kpoints_distance=dos_kpoints_distance,
+            potential_family=potential_family,
+            potential_mapping=potential_mapping,
+            options=options,
+        )
+
+        # Add BandsTask (in DOS-only mode)
+        task_name = f'dos_calc_{key}' if not is_single else 'dos_calc'
+        wg.add_task(
+            BandsTask,
+            name=task_name,
+            **prepared_inputs
+        )
+
+    # Set max concurrent jobs if specified
+    if max_concurrent_jobs is not None:
+        wg.max_number_jobs = max_concurrent_jobs
+
+    return wg
+
+
+def _prepare_dos_builder_inputs(
+    structure: orm.StructureData,
+    code: orm.InstalledCode,
+    scf_inputs: dict,
+    dos_inputs: dict,
+    dos_kpoints_distance: float,
+    potential_family: str,
+    potential_mapping: dict,
+    options: dict,
+) -> dict:
+    """
+    Prepare inputs for vasp.v2.bands workflow in DOS-only mode.
+
+    Args:
+        structure: Input structure
+        code: VASP code
+        scf_inputs: SCF calculation parameters
+        dos_inputs: DOS calculation parameters
+        dos_kpoints_distance: k-point spacing for DOS
+        potential_family: POTCAR family
+        potential_mapping: Element to POTCAR mapping
+        options: Calculation options
+
+    Returns:
+        dict with prepared inputs for the bands workflow
+    """
+    inputs = {}
+
+    # Structure
+    inputs['structure'] = structure
+
+    # Band settings for DOS-only mode
+    band_settings = {
+        'only_dos': True,
+        'run_dos': True,
+        'dos_kpoints_distance': dos_kpoints_distance,
+    }
+    inputs['band_settings'] = orm.Dict(dict=band_settings)
+
+    # SCF namespace inputs
+    scf_namespace = {
+        'code': code,
+        'potential_family': orm.Str(potential_family),
+        'potential_mapping': orm.Dict(dict=potential_mapping or {}),
+    }
+
+    # SCF parameters
+    if 'parameters' in scf_inputs:
+        if isinstance(scf_inputs['parameters'], dict):
+            scf_namespace['parameters'] = orm.Dict(dict=scf_inputs['parameters'])
+        else:
+            scf_namespace['parameters'] = scf_inputs['parameters']
+
+    # SCF kpoints spacing
+    if 'kpoints_spacing' in scf_inputs:
+        scf_namespace['kpoints_spacing'] = float(scf_inputs['kpoints_spacing'])
+
+    # SCF settings (for additional retrieve list, etc.)
+    if 'settings' in scf_inputs:
+        if isinstance(scf_inputs['settings'], dict):
+            scf_namespace['settings'] = orm.Dict(dict=scf_inputs['settings'])
+        else:
+            scf_namespace['settings'] = scf_inputs['settings']
+
+    # Options for SCF
+    if options:
+        if isinstance(options, dict):
+            scf_namespace['options'] = orm.Dict(dict=options)
+        else:
+            scf_namespace['options'] = options
+
+    inputs['scf'] = scf_namespace
+
+    # DOS namespace inputs
+    dos_namespace = {
+        'code': code,
+        'potential_family': orm.Str(potential_family),
+        'potential_mapping': orm.Dict(dict=potential_mapping or {}),
+    }
+
+    # DOS parameters
+    if 'parameters' in dos_inputs:
+        if isinstance(dos_inputs['parameters'], dict):
+            dos_namespace['parameters'] = orm.Dict(dict=dos_inputs['parameters'])
+        else:
+            dos_namespace['parameters'] = dos_inputs['parameters']
+
+    # DOS settings (for additional retrieve list, etc.)
+    if 'settings' in dos_inputs:
+        if isinstance(dos_inputs['settings'], dict):
+            dos_namespace['settings'] = orm.Dict(dict=dos_inputs['settings'])
+        else:
+            dos_namespace['settings'] = dos_inputs['settings']
+
+    # Options for DOS
+    if options:
+        if isinstance(options, dict):
+            dos_namespace['options'] = orm.Dict(dict=options)
+        else:
+            dos_namespace['options'] = options
+
+    inputs['dos'] = dos_namespace
+
+    return inputs
+
+
+def get_dos_results(workgraph) -> dict:
+    """
+    Extract results from completed DOS calculation WorkGraph.
+
+    Args:
+        workgraph: Completed WorkGraph from build_dos_calculation_workgraph
+
+    Returns:
+        dict with:
+            - dos: dict of DOS data nodes (keyed by structure label)
+            - projectors: dict of projector data nodes for projected DOS (keyed by structure label)
+            - primitive_structure: dict of primitive structures used
+
+    Example:
+        >>> results = get_dos_results(wg)
+        >>> for key, dos_node in results['dos'].items():
+        ...     print(f"{key}: DOS data available")
+        >>> # Access projected DOS data
+        >>> for key, proj_node in results['projectors'].items():
+        ...     print(f"{key}: Projected DOS data available")
+    """
+    results = {
+        'dos': {},
+        'projectors': {},
+        'primitive_structure': {},
+    }
+
+    # Find all DOS calculation tasks
+    for task_name, task_obj in workgraph.tasks.items():
+        if task_name.startswith('dos_calc'):
+            # Extract key from task name
+            if task_name == 'dos_calc':
+                key = 'structure_0'
+            else:
+                key = task_name.replace('dos_calc_', '')
+
+            # Get outputs - check if task has completed and has outputs
+            try:
+                if hasattr(task_obj, 'outputs'):
+                    outputs = task_obj.outputs
+
+                    # Get DOS output
+                    if hasattr(outputs, 'dos'):
+                        dos_output = outputs.dos
+                        if hasattr(dos_output, 'value') and dos_output.value is not None:
+                            results['dos'][key] = dos_output.value
+
+                    # Get projectors output (for projected DOS)
+                    if hasattr(outputs, 'projectors'):
+                        proj_output = outputs.projectors
+                        if hasattr(proj_output, 'value') and proj_output.value is not None:
+                            results['projectors'][key] = proj_output.value
+
+                    # Get primitive structure output
+                    if hasattr(outputs, 'primitive_structure'):
+                        prim_output = outputs.primitive_structure
+                        if hasattr(prim_output, 'value') and prim_output.value is not None:
+                            results['primitive_structure'][key] = prim_output.value
+
+            except Exception:
+                # Task may not have completed or outputs not available
+                pass
+
+    return results
