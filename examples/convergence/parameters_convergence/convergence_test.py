@@ -83,7 +83,7 @@ def get_results(pk: int):
     from aiida_workgraph import WorkGraph
     load_profile()
 
-    wg = WorkGraph.from_pk(pk)
+    wg = WorkGraph.load(pk)
     results = get_convergence_results(wg)
 
     print("\n" + "=" * 60)

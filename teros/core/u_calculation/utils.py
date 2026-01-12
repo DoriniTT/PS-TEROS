@@ -64,6 +64,18 @@ def linear_regression(x: t.List[float], y: t.List[float]) -> t.Tuple[float, floa
     return float(slope), float(intercept), float(r_squared)
 
 
+def _lowercase_keys(d: dict) -> dict:
+    """Convert all dictionary keys to lowercase (recursively for nested dicts)."""
+    result = {}
+    for key, value in d.items():
+        lower_key = key.lower()
+        if isinstance(value, dict):
+            result[lower_key] = _lowercase_keys(value)
+        else:
+            result[lower_key] = value
+    return result
+
+
 def build_ldau_arrays(
     target_species: str,
     all_species: t.List[str],
@@ -138,15 +150,16 @@ def prepare_ground_state_incar(
         - LWAVE = True (save WAVECAR)
         - LCHARG = True (save CHGCAR)
     """
-    incar = copy.deepcopy(base_params) if base_params else {}
+    # Convert base params to lowercase
+    incar = _lowercase_keys(copy.deepcopy(base_params)) if base_params else {}
 
-    # Core ground state parameters
+    # Core ground state parameters (lowercase for AiiDA-VASP)
     incar.update({
-        'LDAU': False,
-        'LMAXMIX': lmaxmix,
-        'LORBIT': 11,      # Required for orbital projections
-        'LWAVE': True,     # Save WAVECAR
-        'LCHARG': True,    # Save CHGCAR
+        'ldau': False,
+        'lmaxmix': lmaxmix,
+        'lorbit': 11,      # Required for orbital projections
+        'lwave': True,     # Save WAVECAR
+        'lcharg': True,    # Save CHGCAR
     })
 
     return incar
@@ -189,7 +202,8 @@ def prepare_response_incar(
         - ICHARG = 11 (only for non-SCF)
         - LORBIT = 11 (for orbital projections)
     """
-    incar = copy.deepcopy(base_params) if base_params else {}
+    # Convert base params to lowercase
+    incar = _lowercase_keys(copy.deepcopy(base_params)) if base_params else {}
 
     # Build LDAU arrays
     ldaul_list, ldauu_list, ldauj_list = build_ldau_arrays(
@@ -200,20 +214,20 @@ def prepare_response_incar(
         ldauj_value=ldauj,
     )
 
-    # Set LDAU parameters
+    # Set LDAU parameters (lowercase for AiiDA-VASP)
     incar.update({
-        'LDAU': True,
-        'LDAUTYPE': 3,        # Linear response mode
-        'LDAUL': ldaul_list,
-        'LDAUU': ldauu_list,
-        'LDAUJ': ldauj_list,
-        'LORBIT': 11,         # Required for orbital projections
-        'LMAXMIX': lmaxmix,
+        'ldau': True,
+        'ldautype': 3,        # Linear response mode
+        'ldaul': ldaul_list,
+        'ldauu': ldauu_list,
+        'ldauj': ldauj_list,
+        'lorbit': 11,         # Required for orbital projections
+        'lmaxmix': lmaxmix,
     })
 
     # Non-SCF: Read and fix charge density
     if not is_scf:
-        incar['ICHARG'] = 11
+        incar['icharg'] = 11
 
     return incar
 
@@ -295,4 +309,6 @@ def get_species_order_from_structure(structure) -> t.List[str]:
 
 
 # Default potential values for linear regression
-DEFAULT_POTENTIAL_VALUES = [-0.2, -0.1, 0.0, 0.1, 0.2]
+# Note: V=0 is excluded because GS has LDAU=False while response has LDAU=True,
+# which can cause inconsistent baseline even at zero perturbation
+DEFAULT_POTENTIAL_VALUES = [-0.2, -0.1, 0.1, 0.2]

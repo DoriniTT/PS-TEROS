@@ -293,31 +293,36 @@ def get_convergence_results(workgraph) -> dict:
     """
     results = {}
 
+    # Helper to get dict from socket output
+    def _get_dict(socket):
+        node = socket.value
+        return node.get_dict() if node else None
+
     # Extract raw convergence data
     if hasattr(workgraph.outputs, 'cutoff_conv_data'):
-        results['cutoff_conv_data'] = workgraph.outputs.cutoff_conv_data.get_dict()
+        results['cutoff_conv_data'] = _get_dict(workgraph.outputs.cutoff_conv_data)
     else:
         results['cutoff_conv_data'] = None
 
     if hasattr(workgraph.outputs, 'kpoints_conv_data'):
-        results['kpoints_conv_data'] = workgraph.outputs.kpoints_conv_data.get_dict()
+        results['kpoints_conv_data'] = _get_dict(workgraph.outputs.kpoints_conv_data)
     else:
         results['kpoints_conv_data'] = None
 
     # Extract analysis results
     if hasattr(workgraph.outputs, 'cutoff_analysis'):
-        results['cutoff_analysis'] = workgraph.outputs.cutoff_analysis.get_dict()
+        results['cutoff_analysis'] = _get_dict(workgraph.outputs.cutoff_analysis)
     else:
         results['cutoff_analysis'] = None
 
     if hasattr(workgraph.outputs, 'kpoints_analysis'):
-        results['kpoints_analysis'] = workgraph.outputs.kpoints_analysis.get_dict()
+        results['kpoints_analysis'] = _get_dict(workgraph.outputs.kpoints_analysis)
     else:
         results['kpoints_analysis'] = None
 
     # Extract recommendations
     if hasattr(workgraph.outputs, 'recommendations'):
-        recommendations = workgraph.outputs.recommendations.get_dict()
+        recommendations = _get_dict(workgraph.outputs.recommendations)
         results['recommended_cutoff'] = recommendations.get('recommended_cutoff')
         results['recommended_kspacing'] = recommendations.get('recommended_kspacing')
         results['convergence_summary'] = {
@@ -895,13 +900,15 @@ def get_thickness_convergence_results(workgraph) -> dict:
 
     # Extract bulk energy
     if hasattr(workgraph.outputs, 'bulk_energy'):
-        results['bulk_energy'] = workgraph.outputs.bulk_energy.value
+        bulk_node = workgraph.outputs.bulk_energy.value
+        results['bulk_energy'] = bulk_node.value if hasattr(bulk_node, 'value') else float(bulk_node)
     else:
         results['bulk_energy'] = None
 
     # Extract convergence results
     if hasattr(workgraph.outputs, 'convergence_results'):
-        conv_data = workgraph.outputs.convergence_results.get_dict()
+        conv_node = workgraph.outputs.convergence_results.value
+        conv_data = conv_node.get_dict()
         results['convergence_results'] = conv_data
 
         summary = conv_data.get('summary', {})

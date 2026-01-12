@@ -271,6 +271,148 @@ verdi data core.structure export <PK> -o out.cif
 4. Export in `__init__.py` and `teros/core/__init__.py`
 5. Add example in `examples/`
 
+### Module Development & Testing Procedure
+
+Follow this standardized workflow when developing new modules:
+
+#### Phase 1: Local Testing
+
+1. **Create a minimal test script** in `examples/` using:
+   - Simple test structure (e.g., primitive cell, 2-4 atoms)
+   - Local VASP code: `VASP-6.5.1@localwork` (8 processors)
+   - Light parameters: low ENCUT, coarse k-points, few ionic steps
+   ```python
+   # Example test configuration
+   code_label = 'VASP-6.5.1@localwork'
+   options = {
+       'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8},
+       # Note: use num_mpiprocs_per_machine, NOT num_cores_per_machine
+   }
+   potential_family = 'PBE'  # Check available families with verdi data core.potcar listfamilies
+   ```
+
+2. **Submit and monitor:**
+   ```bash
+   verdi daemon restart  # CRITICAL: always restart after code changes
+   python examples/my_module/test_script.py
+   verdi process show <PK>
+   verdi process report <PK>  # For detailed task hierarchy
+   ```
+
+3. **Debug iteratively** until `Finished [0]}`:
+   - Check `verdi calcjob outputcat <PK>` for VASP errors
+   - Check `verdi process report <PK>` for Python tracebacks
+   - Common issues (see troubleshooting table below)
+
+#### Phase 2: Validate Results
+
+1. **Compare with reference values** (literature, VASP wiki, known benchmarks)
+2. **Check physical reasonableness:**
+   - Surface energies: 0.5-3.0 J/m²
+   - Formation enthalpies: negative for stable compounds
+   - Band gaps: compare with experimental values
+
+#### Phase 3: Expose Outputs
+
+1. **Add WorkGraph outputs** using the correct pattern:
+   ```python
+   # CORRECT: Use direct assignment
+   wg.outputs.summary = summary_task.outputs.result
+   wg.outputs.energy = energy_task.outputs.result
+   wg.outputs.structure = vasp_task.outputs.structure
+
+   # WRONG: Don't use add_output (outputs won't appear in verdi process show)
+   # wg.add_output('any', 'summary', from_socket=summary_task.outputs.result)
+   ```
+
+2. **Note on VaspWorkChain outputs:**
+   - `structure` only available if NSW > 0 (relaxation)
+   - Static SCF (NSW=0) only produces: `misc`, `remote_folder`, `retrieved`
+
+3. **Create helper functions** for result extraction:
+   ```python
+   def get_my_results(workgraph) -> dict:
+       """Extract results from completed WorkGraph (accepts PK, node, or live WorkGraph)."""
+       from aiida.common.links import LinkType
+
+       if isinstance(workgraph, (int, str)):
+           workgraph = orm.load_node(workgraph)
+
+       # For stored nodes, traverse CALL_CALC links to find calcfunction outputs
+       if hasattr(workgraph, 'base'):
+           calcfuncs = workgraph.base.links.get_outgoing(link_type=LinkType.CALL_CALC)
+           for link in calcfuncs.all():
+               if link.link_label == 'my_summary_task':
+                   for out_link in link.node.base.links.get_outgoing(
+                       link_type=LinkType.CREATE
+                   ).all():
+                       if out_link.link_label == 'result':
+                           return out_link.node.get_dict()
+
+       raise ValueError("Could not find results")
+
+   def print_my_summary(workgraph) -> None:
+       """Print formatted summary."""
+       results = get_my_results(workgraph)
+       # ... formatted output
+   ```
+
+#### Phase 4: Final Verification
+
+1. **Run a fresh test** with all changes:
+   ```bash
+   verdi daemon restart
+   python examples/my_module/test_script.py
+   ```
+
+2. **Verify outputs appear in `verdi process show <PK>`:**
+   ```
+   Outputs              PK  Type
+   ----------------  -----  ------
+   summary           12345  Dict
+   energy            12346  Float
+   structure         12347  StructureData
+   ```
+
+3. **Test helper functions:**
+   ```python
+   from teros.core.my_module import print_my_summary, get_my_results
+   print_my_summary(<PK>)
+   results = get_my_results(<PK>)
+   ```
+
+#### Optional: Production Testing on Cluster
+
+> **Note:** Only perform production testing when explicitly requested. Local testing is sufficient for most development iterations.
+
+If production testing is needed, use cluster code (e.g., `VASP-6.5.1-idefix-4@obelix`) with PBS scheduler:
+```python
+options = {
+    'resources': {
+        'num_machines': 1,
+        'num_mpiprocs_per_machine': 4,
+    },
+    'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
+#PBS -l nodes=1:ppn=88:skylake
+#PBS -j oe
+#PBS -N MyJobName''',
+}
+```
+
+Use production-quality parameters (proper ENCUT, converged k-points, appropriate supercell) and verify results match expectations.
+
+#### Common Issues During Development
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| INCAR keys not recognized | AiiDA-VASP requires lowercase | Use `'encut'` not `'ENCUT'` |
+| POTCAR family not found | Wrong family name | Check with `verdi data core.potcar listfamilies` |
+| Job requests too many CPUs | Wrong resource key | Use `num_mpiprocs_per_machine`, not `num_cores_per_machine` |
+| OUTCAR parsing fails | Parser doesn't extract needed data | Parse OUTCAR directly via `retrieved` FolderData |
+| Outputs not in `verdi process show` | Used `wg.add_output()` | Use `wg.outputs.name = socket` instead |
+| Results extraction fails on stored node | Accessing `.tasks` on AiiDA node | Traverse `CALL_CALC` links instead |
+| V=0 baseline shift | Different INCAR settings at V=0 | Ensure consistent settings across all calculations |
+
 ## Code Style
 
 **Import order:** stdlib → aiida → aiida_workgraph → third-party → teros

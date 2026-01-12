@@ -3,24 +3,12 @@
 These tasks extract d-electron occupations from VASP output and calculate
 the Hubbard U parameter using linear response theory.
 
-Expected VASP misc output structure (when LORBIT=11 and LDAU=True, LDAUTYPE=3):
-    misc = {
-        'site_magnetization': {
-            'sphere_0': {'s': 0.1, 'p': 0.2, 'd': 5.5, 'f': 0.0, 'total': 5.8},
-            'sphere_1': {'s': 0.1, 'p': 0.2, 'd': 5.4, 'f': 0.0, 'total': 5.7},
-            ...
-        },
-        # OR (alternative format)
-        'charge_per_site': [
-            {'s': 0.1, 'p': 0.2, 'd': 5.5, 'f': 0.0},
-            {'s': 0.1, 'p': 0.2, 'd': 5.4, 'f': 0.0},
-            ...
-        ],
-        'symbols': ['Fe', 'Fe', 'O', 'O', ...],  # Atom types per site
-        ...
-    }
+The extract_d_electron_occupation function parses the OUTCAR directly to get
+the total charge per orbital (not magnetization), which is required for
+accurate U calculation.
 """
 
+import re
 import typing as t
 
 from aiida import orm
@@ -29,20 +17,77 @@ from aiida_workgraph import task
 from .utils import linear_regression
 
 
+def _parse_total_charge_from_outcar(outcar_content: str) -> t.List[t.Dict[str, float]]:
+    """
+    Parse the 'total charge' section from VASP OUTCAR content.
+
+    The OUTCAR contains a section like:
+        total charge
+        # of ion       s       p       d       tot
+        ------------------------------------------
+            1        0.150   0.016   8.437   8.602
+            2        1.634   3.033   0.000   4.667
+        --------------------------------------------------
+
+    Args:
+        outcar_content: Full content of OUTCAR file
+
+    Returns:
+        List of dicts, one per ion, with keys 's', 'p', 'd', 'tot'
+
+    Raises:
+        ValueError: If total charge section not found
+    """
+    # Find the "total charge" section (last occurrence)
+    # Pattern: "total charge" followed by header and data lines
+    pattern = r'total charge\s*\n\s*#\s*of ion\s+s\s+p\s+d\s+tot\s*\n[-]+\s*\n((?:\s*\d+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s*\n)+)'
+
+    matches = list(re.finditer(pattern, outcar_content))
+
+    if not matches:
+        raise ValueError(
+            "Could not find 'total charge' section in OUTCAR. "
+            "Ensure LORBIT=11 is set in INCAR."
+        )
+
+    # Use the last match (final SCF cycle)
+    last_match = matches[-1]
+    data_block = last_match.group(1)
+
+    charges = []
+    for line in data_block.strip().split('\n'):
+        parts = line.split()
+        if len(parts) >= 5:
+            # parts: [ion_number, s, p, d, tot]
+            charges.append({
+                's': float(parts[1]),
+                'p': float(parts[2]),
+                'd': float(parts[3]),
+                'tot': float(parts[4]),
+            })
+
+    if not charges:
+        raise ValueError(
+            "Found 'total charge' section but could not parse any ion data."
+        )
+
+    return charges
+
+
 @task.calcfunction
 def extract_d_electron_occupation(
-    misc: orm.Dict,
+    retrieved: orm.FolderData,
     target_species: orm.Str,
     structure: orm.StructureData,
 ) -> orm.Dict:
     """
-    Extract d-electron occupation for target species from VASP misc output.
+    Extract d-electron occupation for target species from VASP OUTCAR.
 
-    Requires LORBIT=11 in VASP INCAR to produce orbital-resolved occupations.
-    The occupation is summed over all atoms of the target species.
+    Parses the 'total charge' section of OUTCAR to get orbital-resolved
+    occupations. Requires LORBIT=11 in VASP INCAR.
 
     Args:
-        misc: VASP misc output Dict
+        retrieved: FolderData from VASP calculation containing OUTCAR
         target_species: Element symbol to extract occupations for (e.g., 'Fe')
         structure: StructureData to identify atom types
 
@@ -54,16 +99,15 @@ def extract_d_electron_occupation(
             - atom_count: Number of target atoms
 
     Raises:
-        ValueError: If d-occupation data not found in misc output
+        ValueError: If OUTCAR not found or d-occupation data cannot be parsed
     """
-    misc_dict = misc.get_dict()
     species = target_species.value
 
     # Get atom symbols from structure
     ase_struct = structure.get_ase()
     symbols = ase_struct.get_chemical_symbols()
 
-    # Find indices of target species
+    # Find indices of target species (0-based)
     target_indices = [i for i, s in enumerate(symbols) if s == species]
 
     if not target_indices:
@@ -72,77 +116,28 @@ def extract_d_electron_occupation(
             f"Available: {sorted(set(symbols))}"
         )
 
-    # Try to extract d-occupations from different possible formats
-    per_atom_d_occ = []
-
-    # Format 1: site_magnetization with sphere_N keys
-    if 'site_magnetization' in misc_dict:
-        site_mag = misc_dict['site_magnetization']
-        for idx in target_indices:
-            sphere_key = f'sphere_{idx}'
-            if sphere_key in site_mag:
-                sphere_data = site_mag[sphere_key]
-                if 'd' in sphere_data:
-                    per_atom_d_occ.append(float(sphere_data['d']))
-                else:
-                    raise ValueError(
-                        f"'d' occupation not found in {sphere_key}. "
-                        f"Available keys: {list(sphere_data.keys())}. "
-                        f"Ensure LORBIT=11 is set in INCAR."
-                    )
-            else:
-                raise ValueError(
-                    f"{sphere_key} not found in site_magnetization. "
-                    f"Available: {list(site_mag.keys())}"
-                )
-
-    # Format 2: charge_per_site as list of dicts
-    elif 'charge_per_site' in misc_dict:
-        charges = misc_dict['charge_per_site']
-        for idx in target_indices:
-            if idx < len(charges):
-                site_charges = charges[idx]
-                if 'd' in site_charges:
-                    per_atom_d_occ.append(float(site_charges['d']))
-                else:
-                    raise ValueError(
-                        f"'d' occupation not found for site {idx}. "
-                        f"Ensure LORBIT=11 is set in INCAR."
-                    )
-            else:
-                raise ValueError(
-                    f"Site index {idx} out of range for charge_per_site "
-                    f"(length {len(charges)})"
-                )
-
-    # Format 3: projectors/local_charges (some VASP versions)
-    elif 'projectors' in misc_dict:
-        projectors = misc_dict['projectors']
-        for idx in target_indices:
-            if idx < len(projectors):
-                proj = projectors[idx]
-                if 'd' in proj:
-                    per_atom_d_occ.append(float(proj['d']))
-                elif 'd_total' in proj:
-                    per_atom_d_occ.append(float(proj['d_total']))
-                else:
-                    raise ValueError(
-                        f"'d' occupation not found in projectors for site {idx}. "
-                        f"Available: {list(proj.keys())}"
-                    )
-            else:
-                raise ValueError(
-                    f"Site index {idx} out of range for projectors"
-                )
-
-    else:
-        available_keys = list(misc_dict.keys())
+    # Read OUTCAR from retrieved folder
+    try:
+        outcar_content = retrieved.get_object_content('OUTCAR')
+    except FileNotFoundError:
         raise ValueError(
-            f"Could not find orbital occupation data in misc output. "
-            f"Expected 'site_magnetization', 'charge_per_site', or 'projectors'. "
-            f"Available keys: {available_keys}. "
-            f"Ensure LORBIT=11 is set in INCAR and parser is configured correctly."
+            "OUTCAR not found in retrieved folder. "
+            "Check that the VASP calculation completed successfully."
         )
+
+    # Parse total charge from OUTCAR
+    charges = _parse_total_charge_from_outcar(outcar_content)
+
+    # Extract d-occupations for target species
+    per_atom_d_occ = []
+    for idx in target_indices:
+        if idx < len(charges):
+            per_atom_d_occ.append(charges[idx]['d'])
+        else:
+            raise ValueError(
+                f"Site index {idx} out of range for parsed charges "
+                f"(got {len(charges)} ions)"
+            )
 
     total_d_occ = sum(per_atom_d_occ)
 
@@ -377,3 +372,110 @@ def gather_responses(
     responses.sort(key=lambda r: r.get('potential', 0.0))
 
     return orm.List(list=responses)
+
+
+@task.calcfunction
+def compile_u_calculation_summary(
+    hubbard_u_result: orm.Dict,
+    ground_state_occupation: orm.Dict,
+    structure: orm.StructureData,
+    target_species: orm.Str,
+    ldaul: orm.Int,
+) -> orm.Dict:
+    """
+    Compile a comprehensive summary of the Hubbard U calculation.
+
+    This function creates a well-organized Dict containing all relevant
+    results from the U calculation workflow, suitable for analysis and
+    reporting.
+
+    Args:
+        hubbard_u_result: Output from calculate_hubbard_u_linear_regression
+        ground_state_occupation: Output from extract_d_electron_occupation (GS)
+        structure: Input structure used for calculation
+        target_species: Element symbol for which U was calculated
+        ldaul: Angular momentum quantum number (2=d, 3=f)
+
+    Returns:
+        Dict with organized results:
+            - summary: Key results (U, target_species, structure info)
+            - linear_fit: Regression statistics (slopes, R², intercepts)
+            - response_data: Raw response values per potential
+            - ground_state: Ground state occupation details
+            - metadata: Calculation metadata
+    """
+    u_dict = hubbard_u_result.get_dict()
+    gs_dict = ground_state_occupation.get_dict()
+    species = target_species.value
+    l_value = ldaul.value
+
+    # Get structure info
+    ase_struct = structure.get_ase()
+    formula = structure.get_formula()
+    n_atoms = len(ase_struct)
+    cell_volume = ase_struct.get_volume()
+
+    # Count target atoms
+    symbols = ase_struct.get_chemical_symbols()
+    n_target = sum(1 for s in symbols if s == species)
+
+    # Orbital type string
+    orbital_type = {2: 'd', 3: 'f'}.get(l_value, f'l={l_value}')
+
+    # Build organized summary
+    summary = {
+        # Main results section
+        'summary': {
+            'hubbard_u_eV': u_dict['U'],
+            'target_species': species,
+            'orbital_type': orbital_type,
+            'ldaul': l_value,
+            'structure_formula': formula,
+            'n_atoms_total': n_atoms,
+            'n_target_atoms': n_target,
+            'cell_volume_A3': cell_volume,
+        },
+
+        # Linear regression details
+        'linear_fit': {
+            'chi_scf': {
+                'slope': u_dict['chi_slope'],
+                'intercept': u_dict['chi_intercept'],
+                'r_squared': u_dict['chi_r2'],
+                'description': 'Self-consistent response (charge evolves)',
+            },
+            'chi_0_nscf': {
+                'slope': u_dict['chi_0_slope'],
+                'intercept': u_dict['chi_0_intercept'],
+                'r_squared': u_dict['chi_0_r2'],
+                'description': 'Non-self-consistent response (frozen charge)',
+            },
+            'n_data_points': u_dict['n_points'],
+            'formula_used': 'U = 1/chi_scf - 1/chi_0_nscf',
+        },
+
+        # Raw response data for plotting/analysis
+        'response_data': {
+            'potential_values_eV': u_dict['potential_values'],
+            'delta_n_scf': u_dict['delta_n_scf_values'],
+            'delta_n_nscf': u_dict['delta_n_nscf_values'],
+        },
+
+        # Ground state information
+        'ground_state': {
+            'total_d_occupation': gs_dict['total_d_occupation'],
+            'per_atom_d_occupation': gs_dict['per_atom_d_occupation'],
+            'n_target_atoms': gs_dict['atom_count'],
+            'target_atom_indices': gs_dict['atom_indices'],
+            'average_d_per_atom': gs_dict['total_d_occupation'] / gs_dict['atom_count'],
+        },
+
+        # Metadata
+        'metadata': {
+            'method': 'Linear Response (Cococcioni & de Gironcoli)',
+            'reference': 'https://www.vasp.at/wiki/index.php/Calculate_U_for_LSDA+U',
+            'vasp_ldautype': 3,
+        },
+    }
+
+    return orm.Dict(dict=summary)

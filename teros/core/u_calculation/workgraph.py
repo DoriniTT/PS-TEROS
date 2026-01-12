@@ -25,6 +25,7 @@ from .tasks import (
     calculate_occupation_response,
     calculate_hubbard_u_linear_regression,
     gather_responses,
+    compile_u_calculation_summary,
 )
 from .utils import (
     prepare_ground_state_incar,
@@ -166,7 +167,7 @@ def build_u_calculation_workgraph(
     gs_occupation = wg.add_task(
         extract_d_electron_occupation,
         name='gs_occupation',
-        misc=ground_state.outputs.misc,
+        retrieved=ground_state.outputs.retrieved,
         target_species=orm.Str(target_species),
         structure=structure,
     )
@@ -211,7 +212,7 @@ def build_u_calculation_workgraph(
         nscf_occ = wg.add_task(
             extract_d_electron_occupation,
             name=f'nscf_occ_{V_str}',
-            misc=nscf_task.outputs.misc,
+            retrieved=nscf_task.outputs.retrieved,
             target_species=orm.Str(target_species),
             structure=structure,
         )
@@ -247,7 +248,7 @@ def build_u_calculation_workgraph(
         scf_occ = wg.add_task(
             extract_d_electron_occupation,
             name=f'scf_occ_{V_str}',
-            misc=scf_task.outputs.misc,
+            retrieved=scf_task.outputs.retrieved,
             target_species=orm.Str(target_species),
             structure=structure,
         )
@@ -283,46 +284,198 @@ def build_u_calculation_workgraph(
     )
 
     # =========================================================================
+    # STEP 5: Compile Comprehensive Summary
+    # =========================================================================
+    summary = wg.add_task(
+        compile_u_calculation_summary,
+        name='compile_summary',
+        hubbard_u_result=calc_u.outputs.result,
+        ground_state_occupation=gs_occupation.outputs.result,
+        structure=structure,
+        target_species=orm.Str(target_species),
+        ldaul=orm.Int(ldaul),
+    )
+
+    # =========================================================================
     # Set WorkGraph Outputs
     # =========================================================================
-    wg.add_output('any', 'hubbard_u_result', from_socket=calc_u.outputs.result)
-    wg.add_output('any', 'ground_state_misc', from_socket=ground_state.outputs.misc)
-    wg.add_output('any', 'ground_state_remote', from_socket=ground_state.outputs.remote_folder)
+    # Primary output: comprehensive summary
+    wg.outputs.summary = summary.outputs.result
+
+    # Raw U calculation result (for backward compatibility)
+    wg.outputs.hubbard_u_result = calc_u.outputs.result
+
+    # Ground state outputs
+    wg.outputs.ground_state_occupation = gs_occupation.outputs.result
+    wg.outputs.ground_state_misc = ground_state.outputs.misc
+    wg.outputs.ground_state_remote = ground_state.outputs.remote_folder
+    # Note: ground state is a static SCF (NSW=0), so no relaxed structure output
+
+    # Response data (gathered list of all responses)
+    wg.outputs.all_responses = gathered.outputs.result
 
     return wg
 
 
 def get_u_calculation_results(workgraph) -> dict:
     """
-    Extract results from a completed U calculation WorkGraph.
+    Extract comprehensive results from a completed U calculation WorkGraph.
+
+    Returns the full summary Dict containing all organized results including
+    the calculated U value, linear fit statistics, response data, and
+    ground state information.
+
+    Args:
+        workgraph: Completed WorkGraph (live object or loaded node PK/UUID)
+            Can be a WorkGraph object, an AiiDA Node, or a PK/UUID integer/string.
+
+    Returns:
+        dict with organized sections:
+            - summary: Key results (U, target_species, structure info)
+            - linear_fit: Regression statistics (slopes, R², intercepts)
+            - response_data: Raw response values per potential
+            - ground_state: Ground state occupation details
+            - metadata: Calculation metadata
+
+    Example:
+        >>> results = get_u_calculation_results(completed_wg)
+        >>> print(f"Hubbard U = {results['summary']['hubbard_u_eV']:.2f} eV")
+        >>> print(f"Target: {results['summary']['target_species']} {results['summary']['orbital_type']}-electrons")
+        >>> print(f"SCF fit R² = {results['linear_fit']['chi_scf']['r_squared']:.4f}")
+    """
+    from aiida.common.links import LinkType
+
+    # Handle different input types
+    if isinstance(workgraph, (int, str)):
+        workgraph = orm.load_node(workgraph)
+
+    # For stored AiiDA nodes (WorkGraphNode), traverse called calcfunctions
+    if hasattr(workgraph, 'base') and hasattr(workgraph.base, 'links'):
+        calcfuncs = workgraph.base.links.get_outgoing(link_type=LinkType.CALL_CALC)
+
+        # Try to find compile_summary first (comprehensive results)
+        for link in calcfuncs.all():
+            if link.link_label == 'compile_summary':
+                # Get the 'result' output of the calcfunction
+                for out_link in link.node.base.links.get_outgoing(
+                    link_type=LinkType.CREATE
+                ).all():
+                    if out_link.link_label == 'result':
+                        return out_link.node.get_dict()
+
+        # Fallback: try calculate_u (raw U calculation output)
+        for link in calcfuncs.all():
+            if link.link_label == 'calculate_u':
+                for out_link in link.node.base.links.get_outgoing(
+                    link_type=LinkType.CREATE
+                ).all():
+                    if out_link.link_label == 'result':
+                        return out_link.node.get_dict()
+
+    # For WorkGraph objects with tasks attribute (live objects)
+    if hasattr(workgraph, 'tasks'):
+        try:
+            summary_task = workgraph.tasks.get('compile_summary')
+            if summary_task and hasattr(summary_task.outputs, 'result'):
+                return summary_task.outputs.result.value.get_dict()
+        except Exception:
+            pass
+
+        try:
+            calc_u_task = workgraph.tasks.get('calculate_u')
+            if calc_u_task and hasattr(calc_u_task.outputs, 'result'):
+                return calc_u_task.outputs.result.value.get_dict()
+        except Exception:
+            pass
+
+    raise ValueError(
+        "Could not find results in workgraph outputs. "
+        "Ensure the workgraph has completed successfully."
+    )
+
+
+def get_u_value(workgraph) -> float:
+    """
+    Get just the Hubbard U value from a completed WorkGraph.
+
+    Convenience function for quick access to the U value.
 
     Args:
         workgraph: Completed WorkGraph from build_u_calculation_workgraph
 
     Returns:
-        dict with:
-            - U: Calculated Hubbard U value (eV)
-            - chi_slope: SCF response slope
-            - chi_0_slope: NSCF response slope
-            - chi_r2: SCF fit R²
-            - chi_0_r2: NSCF fit R²
-            - potential_values: Potentials used
-            - delta_n_scf_values: SCF occupation changes
-            - delta_n_nscf_values: NSCF occupation changes
+        Hubbard U value in eV
 
     Example:
-        >>> results = get_u_calculation_results(completed_wg)
-        >>> print(f"Hubbard U = {results['U']:.2f} eV")
-        >>> print(f"R² = {results['chi_r2']:.4f}")
+        >>> U = get_u_value(completed_wg)
+        >>> print(f"U = {U:.2f} eV")
     """
-    if hasattr(workgraph.outputs, 'hubbard_u_result'):
-        return workgraph.outputs.hubbard_u_result.get_dict()
+    results = get_u_calculation_results(workgraph)
+
+    # Handle both new summary format and old format
+    if 'summary' in results:
+        return results['summary']['hubbard_u_eV']
     else:
-        # Try to get from task directly
-        calc_u_task = workgraph.tasks.get('calculate_u')
-        if calc_u_task and hasattr(calc_u_task.outputs, 'result'):
-            return calc_u_task.outputs.result.value.get_dict()
-        raise ValueError(
-            "Could not find hubbard_u_result in workgraph outputs. "
-            "Ensure the workgraph has completed successfully."
-        )
+        return results['U']
+
+
+def print_u_calculation_summary(workgraph) -> None:
+    """
+    Print a formatted summary of the Hubbard U calculation results.
+
+    Args:
+        workgraph: Completed WorkGraph from build_u_calculation_workgraph
+
+    Example:
+        >>> print_u_calculation_summary(completed_wg)
+    """
+    results = get_u_calculation_results(workgraph)
+
+    # Handle both new and old format
+    if 'summary' not in results:
+        # Old format - just print raw values
+        print(f"Hubbard U = {results['U']:.3f} eV")
+        print(f"SCF response slope (χ): {results['chi_slope']:.4f}")
+        print(f"NSCF response slope (χ₀): {results['chi_0_slope']:.4f}")
+        print(f"SCF fit R²: {results['chi_r2']:.4f}")
+        print(f"NSCF fit R²: {results['chi_0_r2']:.4f}")
+        return
+
+    # New comprehensive format
+    s = results['summary']
+    lf = results['linear_fit']
+    gs = results['ground_state']
+
+    print("=" * 60)
+    print("HUBBARD U CALCULATION RESULTS")
+    print("=" * 60)
+
+    print(f"\n{'MAIN RESULT':^60}")
+    print("-" * 60)
+    print(f"  Hubbard U = {s['hubbard_u_eV']:.3f} eV")
+    print(f"  Target: {s['target_species']} {s['orbital_type']}-electrons (L={s['ldaul']})")
+
+    print(f"\n{'STRUCTURE':^60}")
+    print("-" * 60)
+    print(f"  Formula: {s['structure_formula']}")
+    print(f"  Total atoms: {s['n_atoms_total']}")
+    print(f"  Target atoms ({s['target_species']}): {s['n_target_atoms']}")
+    print(f"  Cell volume: {s['cell_volume_A3']:.2f} Å³")
+
+    print(f"\n{'LINEAR REGRESSION':^60}")
+    print("-" * 60)
+    print(f"  SCF response (χ):")
+    print(f"    Slope: {lf['chi_scf']['slope']:.6f}")
+    print(f"    R²: {lf['chi_scf']['r_squared']:.6f}")
+    print(f"  NSCF response (χ₀):")
+    print(f"    Slope: {lf['chi_0_nscf']['slope']:.6f}")
+    print(f"    R²: {lf['chi_0_nscf']['r_squared']:.6f}")
+    print(f"  Data points: {lf['n_data_points']}")
+    print(f"  Formula: {lf['formula_used']}")
+
+    print(f"\n{'GROUND STATE':^60}")
+    print("-" * 60)
+    print(f"  Average {s['orbital_type']}-occupation per {s['target_species']}: {gs['average_d_per_atom']:.3f} electrons")
+    print(f"  Total {s['orbital_type']}-occupation: {gs['total_d_occupation']:.3f} electrons")
+
+    print("\n" + "=" * 60)

@@ -185,3 +185,4 @@ __pycache__/
 .env
 venv/
 .worktree*.worktree/
+*.txt

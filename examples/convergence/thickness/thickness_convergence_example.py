@@ -128,7 +128,7 @@ def get_results(pk: int):
     load_profile()
 
     # Load the completed WorkGraph
-    wg = WorkGraph.from_pk(pk)
+    wg = WorkGraph.load(pk)
 
     # Extract results
     results = get_thickness_convergence_results(wg)
