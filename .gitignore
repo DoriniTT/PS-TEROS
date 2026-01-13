@@ -186,3 +186,4 @@ __pycache__/
 venv/
 .worktree*.worktree/
 *.txt
+git-commit.sh
