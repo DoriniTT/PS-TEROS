@@ -205,6 +205,31 @@ energy = misc_dict['total_energies']['energy_extrapolated']  # Recommended
 
 ## Testing
 
+### Testing Environment by Location
+
+**IMPORTANT:** Choose the testing environment based on the current working directory:
+
+| Working Directory | Testing Strategy | Code Label |
+|-------------------|------------------|------------|
+| `/home/thiagotd` (home computer) | Jump directly to production on obelix | `VASP-6.5.1-idefix@obelix` |
+| `/home/trevizam` (work computer) | 1. Test locally first, then production | `vasp-6.5.1-std@localhost` → `VASP-6.5.1-idefix@obelix` |
+
+**Obelix cluster configuration:**
+```python
+code_label = 'VASP-6.5.1-idefix@obelix'
+options = {
+    'resources': {
+        'num_machines': 1,
+        'num_mpiprocs_per_machine': 4,  # PROCESS_MPI=4 (hybrid MPI+OpenMP)
+    },
+    'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
+#PBS -l nodes=1:ppn=88:skylake
+#PBS -j oe
+#PBS -N MyJobName''',
+}
+potential_family = 'PBE'
+```
+
 ### Test Markers
 
 ```python
