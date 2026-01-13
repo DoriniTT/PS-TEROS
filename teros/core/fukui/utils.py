@@ -80,3 +80,140 @@ def validate_fukui_inputs(
 
 # Default delta_n values for Fukui calculations (from FukuiGrid documentation)
 DEFAULT_DELTA_N_VALUES = [0.0, 0.05, 0.10, 0.15]
+
+
+def calculate_nelect(
+    structure,
+    potential_family: str,
+    potential_mapping: dict,
+) -> int:
+    """
+    Calculate NELECT (number of valence electrons) from structure and POTCARs.
+
+    Automatically looks up ZVAL from POTCAR files stored in AiiDA and
+    calculates the total number of valence electrons.
+
+    Args:
+        structure: AiiDA StructureData or pymatgen Structure
+        potential_family: POTCAR family name (e.g., 'PBE')
+        potential_mapping: Element to POTCAR symbol mapping
+                          (e.g., {'Sn': 'Sn_d', 'O': 'O'})
+
+    Returns:
+        Total number of valence electrons (NELECT)
+
+    Example:
+        >>> from aiida import orm
+        >>> structure = orm.load_node(12345)
+        >>> nelect = calculate_nelect(
+        ...     structure,
+        ...     potential_family='PBE',
+        ...     potential_mapping={'Sn': 'Sn_d', 'O': 'O'}
+        ... )
+        >>> print(f"NELECT = {nelect}")
+        NELECT = 312
+    """
+    import re
+    from aiida import orm
+    from aiida_vasp.data.potcar import PotcarData
+
+    # Handle both AiiDA StructureData and pymatgen Structure
+    if hasattr(structure, 'get_pymatgen_structure'):
+        pmg_structure = structure.get_pymatgen_structure()
+    else:
+        pmg_structure = structure
+
+    # Get element counts from structure
+    composition = pmg_structure.composition.as_dict()
+
+    # Get elements list
+    elements = list(composition.keys())
+
+    # Get POTCAR nodes
+    potcars_dict = PotcarData.get_potcars_dict(
+        elements=elements,
+        family_name=potential_family,
+        mapping=potential_mapping,
+    )
+
+    # Extract ZVAL from each POTCAR and calculate total NELECT
+    total_nelect = 0.0
+    zval_info = {}
+
+    for element, potcar in potcars_dict.items():
+        # Get POTCAR content
+        content = potcar.get_content()
+        if isinstance(content, bytes):
+            content = content.decode('utf-8')
+
+        # Parse ZVAL from POTCAR content
+        # Format: "POMASS =  118.710; ZVAL   =   14.000    mass and valenz"
+        zval_match = re.search(r'ZVAL\s*=\s*([\d.]+)', content)
+        if zval_match:
+            zval = float(zval_match.group(1))
+        else:
+            raise ValueError(f"Could not find ZVAL in POTCAR for {element}")
+
+        count = composition[element]
+        contribution = zval * count
+        total_nelect += contribution
+        zval_info[element] = {'zval': zval, 'count': count, 'contribution': contribution}
+
+    return int(round(total_nelect))
+
+
+def print_nelect_breakdown(
+    structure,
+    potential_family: str,
+    potential_mapping: dict,
+) -> None:
+    """
+    Print detailed NELECT breakdown showing contribution from each element.
+
+    Args:
+        structure: AiiDA StructureData or pymatgen Structure
+        potential_family: POTCAR family name
+        potential_mapping: Element to POTCAR symbol mapping
+    """
+    import re
+    from aiida_vasp.data.potcar import PotcarData
+
+    # Handle both AiiDA StructureData and pymatgen Structure
+    if hasattr(structure, 'get_pymatgen_structure'):
+        pmg_structure = structure.get_pymatgen_structure()
+    else:
+        pmg_structure = structure
+
+    composition = pmg_structure.composition.as_dict()
+    elements = list(composition.keys())
+
+    potcars_dict = PotcarData.get_potcars_dict(
+        elements=elements,
+        family_name=potential_family,
+        mapping=potential_mapping,
+    )
+
+    print("\nNELECT Breakdown:")
+    print("-" * 60)
+    print(f"{'Element':<10} {'POTCAR':<15} {'ZVAL':<10} {'Count':<10} {'Subtotal':<10}")
+    print("-" * 60)
+
+    total_nelect = 0.0
+    for element in sorted(composition.keys()):
+        potcar = potcars_dict[element]
+        content = potcar.get_content()
+        if isinstance(content, bytes):
+            content = content.decode('utf-8')
+
+        zval_match = re.search(r'ZVAL\s*=\s*([\d.]+)', content)
+        zval = float(zval_match.group(1)) if zval_match else 0
+
+        count = composition[element]
+        subtotal = zval * count
+        total_nelect += subtotal
+
+        print(f"{element:<10} {potential_mapping.get(element, element):<15} {zval:<10.1f} {count:<10.0f} {subtotal:<10.0f}")
+
+    print("-" * 60)
+    print(f"{'TOTAL NELECT:':<47} {int(round(total_nelect))}")
+    print("-" * 60)

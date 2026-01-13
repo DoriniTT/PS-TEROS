@@ -47,6 +47,8 @@ from .utils import (
     make_delta_label,
     validate_fukui_inputs,
     DEFAULT_DELTA_N_VALUES,
+    calculate_nelect,
+    print_nelect_breakdown,
 )
 
 __all__ = [
@@ -69,4 +71,6 @@ __all__ = [
     'make_delta_label',
     'validate_fukui_inputs',
     'DEFAULT_DELTA_N_VALUES',
+    'calculate_nelect',
+    'print_nelect_breakdown',
 ]

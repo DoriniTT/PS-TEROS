@@ -24,7 +24,13 @@ Requirements:
 import sys
 from pathlib import Path
 from aiida import orm, load_profile
-from teros.core.fukui import build_fukui_workgraph, get_fukui_results, print_fukui_summary
+from teros.core.fukui import (
+    build_fukui_workgraph,
+    get_fukui_results,
+    print_fukui_summary,
+    calculate_nelect,
+    print_nelect_breakdown,
+)
 
 
 def main():
@@ -63,21 +69,21 @@ def main():
     print(f"   Composition: {structure.get_composition()}")
     print(f"   Number of atoms: {len(structure.sites)}")
 
-    # NELECT for neutral system
-    # For SnO2 with PBE pseudopotentials:
-    # - Sn: 4 valence electrons (or 14 with Sn_d)
-    # - O: 6 valence electrons
-    # You should verify this from a test VASP calculation (check OUTCAR)
-    #
-    # For 12 Sn + 24 O with standard PBE:
-    #   NELECT = 12*4 + 24*6 = 48 + 144 = 192
-    # For 12 Sn + 24 O with Sn_d:
-    #   NELECT = 12*14 + 24*6 = 168 + 144 = 312
-    #
-    # IMPORTANT: Verify this value from your VASP OUTCAR!
-    nelect_neutral = 192  # MODIFY: verify for your pseudopotentials
-    print(f"\n3. NELECT for neutral system: {nelect_neutral}")
-    print("   (Verify this from VASP OUTCAR if unsure)")
+    # Define POTCAR family and mapping (used for both NELECT and calculations)
+    potential_family = 'PBE'
+    potential_mapping = {
+        'Sn': 'Sn_d',  # Sn_d has 14 valence electrons
+        'O': 'O',      # O has 6 valence electrons
+    }
+
+    # Calculate NELECT automatically from POTCARs
+    print("\n3. Calculating NELECT from POTCAR files...")
+    nelect_neutral = calculate_nelect(
+        structure=structure,
+        potential_family=potential_family,
+        potential_mapping=potential_mapping,
+    )
+    print_nelect_breakdown(structure, potential_family, potential_mapping)
 
     # Define builder inputs
     print("\n4. Defining VASP calculation inputs...")
@@ -133,11 +139,8 @@ def main():
 #PBS -N Fukui_SnO2_110_plus''',
         },
         'kpoints_spacing': 0.03,              # Good k-points density for charge density
-        'potential_family': 'PBE',
-        'potential_mapping': {
-            'Sn': 'Sn_d',
-            'O': 'O',
-        },
+        'potential_family': potential_family,
+        'potential_mapping': potential_mapping,
         'clean_workdir': False,               # Keep files for debugging
     }
 
@@ -158,6 +161,10 @@ def main():
         code_label=code_label,
         builder_inputs=builder_inputs,
         relax_first=False,        # Structure is already relaxed
+        # Atom fixing (only used when relax_first=True):
+        # fix_atoms=True,         # Enable selective dynamics
+        # fix_type='center',      # Fix center atoms, relax surfaces
+        # fix_thickness=5.0,      # 5 Angstroms from center
         fukui_type='plus',
         max_concurrent_jobs=4,    # obelix can handle multiple jobs
         name='Fukui_SnO2_110_plus',

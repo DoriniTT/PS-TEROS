@@ -221,6 +221,10 @@ def build_fukui_workgraph(
     builder_inputs: dict = None,
     relax_first: bool = False,
     relax_builder_inputs: dict = None,
+    fix_atoms: bool = False,
+    fix_type: str = 'center',
+    fix_thickness: float = 0.0,
+    fix_elements: t.List[str] = None,
     fukui_type: str = 'plus',
     max_concurrent_jobs: int = None,
     name: str = 'FukuiWorkGraph',
@@ -254,6 +258,14 @@ def build_fukui_workgraph(
                     Default: False
         relax_builder_inputs: Optional separate builder inputs for relaxation.
                              If None and relax_first=True, uses builder_inputs.
+        fix_atoms: If True, apply selective dynamics during relaxation.
+                  Only used when relax_first=True. Default: False
+        fix_type: Where to fix atoms: 'center' (fix center, relax surfaces),
+                 'bottom', or 'top'. Default: 'center'
+        fix_thickness: Thickness in Angstroms for the fixing region.
+                      For 'center', fixes atoms within ±fix_thickness/2 from center.
+        fix_elements: Optional list of element symbols to fix (e.g., ['Sn']).
+                     If None, all atoms in the region are fixed.
         fukui_type: 'plus' for nucleophilic (remove electrons),
                    'minus' for electrophilic (add electrons)
         max_concurrent_jobs: Limit parallel VASP calculations (default: unlimited)
@@ -359,6 +371,28 @@ def build_fukui_workgraph(
         for key in ('potential_family', 'clean_workdir'):
             if key in relax_inputs:
                 prepared_relax[key] = relax_inputs[key]
+
+        # Apply selective dynamics if fix_atoms=True
+        if fix_atoms and fix_type is not None and fix_thickness > 0.0:
+            from ..fixed_atoms import get_fixed_atoms_list
+
+            fixed_atoms_list = get_fixed_atoms_list(
+                structure=structure,
+                fix_type=fix_type,
+                fix_thickness=fix_thickness,
+                fix_elements=fix_elements,
+            )
+
+            if fixed_atoms_list:
+                num_atoms = len(structure.sites)
+                positions_dof = []
+                for i in range(1, num_atoms + 1):  # 1-based indexing
+                    if i in fixed_atoms_list:
+                        positions_dof.append([False, False, False])  # Fixed
+                    else:
+                        positions_dof.append([True, True, True])     # Relax
+
+                prepared_relax['dynamics'] = orm.Dict(dict={'positions_dof': positions_dof})
 
         # Add relaxation task
         relax_task = wg.add_task(
