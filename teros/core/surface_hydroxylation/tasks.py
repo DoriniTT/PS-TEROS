@@ -92,6 +92,8 @@ def generate_structures(
     supercell = p.get('supercell', None)
     deduplicate = p.get('deduplicate_by_coverage', False)
     coverage_bins = p.get('coverage_bins', None)
+    max_vacancies = p.get('max_vacancies', None)
+    max_OH = p.get('max_OH', None)
 
     # Convert supercell to tuple if provided
     if supercell is not None:
@@ -113,7 +115,9 @@ def generate_structures(
             fmt='vasp',
             supercell=supercell,
             deduplicate_by_coverage=deduplicate,
-            coverage_bins=coverage_bins
+            coverage_bins=coverage_bins,
+            max_vacancies=max_vacancies,
+            max_OH=max_OH,
         )
 
         # Run appropriate mode

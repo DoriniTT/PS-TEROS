@@ -455,6 +455,8 @@ class SurfaceModifier:
         deduplicate_by_coverage: bool = False,
         coverage_precision: int = 4,
         coverage_bins: int | None = None,
+        max_vacancies: int | None = None,
+        max_OH: int | None = None,
     ):
         assert which_surface in {"top", "bottom", "both"}
         assert fmt in {"vasp", "cif", "xyz"}
@@ -476,6 +478,8 @@ class SurfaceModifier:
         self.deduplicate_by_coverage = deduplicate_by_coverage
         self.coverage_precision = coverage_precision
         self.coverage_bins = coverage_bins
+        self.max_vacancies = max_vacancies
+        self.max_OH = max_OH
 
         # Calculate and store surface area for coverage calculations
         self.surface_area_nm2 = calculate_surface_area(atoms)
@@ -503,6 +507,52 @@ class SurfaceModifier:
         else:
             write(path.as_posix(), atoms)
         return str(path)
+
+    # ---------- filtering ----------
+    def _filter_by_max_modifications(
+        self,
+        variants: List[Tuple[Dict[str, Any], Atoms, Any]],
+        mode: str
+    ) -> Tuple[List[Tuple[Dict[str, Any], Atoms, Any]], int]:
+        """Filter variants by maximum number of modifications.
+
+        Args:
+            variants: List of (variant_data, atoms_object, coverage_key) tuples
+            mode: Mode name ('vacancies', 'hydrogen', 'combine')
+
+        Returns:
+            (filtered_variants, count_filtered)
+        """
+        # Check if filtering is needed
+        if mode == 'vacancies' and self.max_vacancies is None:
+            return variants, 0
+        if mode == 'hydrogen' and self.max_OH is None:
+            return variants, 0
+        if mode == 'combine' and self.max_vacancies is None and self.max_OH is None:
+            return variants, 0
+
+        original_count = len(variants)
+        filtered = []
+
+        for v in variants:
+            meta = v[0]
+
+            if mode == 'vacancies':
+                if meta['count_deleted'] <= self.max_vacancies:
+                    filtered.append(v)
+
+            elif mode == 'hydrogen':
+                if meta['count_H'] <= self.max_OH:
+                    filtered.append(v)
+
+            elif mode == 'combine':
+                vac_ok = self.max_vacancies is None or meta['count_deleted'] <= self.max_vacancies
+                oh_ok = self.max_OH is None or meta['count_H'] <= self.max_OH
+                if vac_ok and oh_ok:
+                    filtered.append(v)
+
+        filtered_count = original_count - len(filtered)
+        return filtered, filtered_count
 
     # ---------- modes ----------
     def run_vacancies(self) -> Dict[str, Any]:
@@ -554,6 +604,20 @@ class SurfaceModifier:
                     "vacancy_coverage": coverage
                 }
                 variants_to_process.append((variant_data, var, coverage))
+
+        # Filter by max_vacancies if specified (BEFORE deduplication)
+        total_before_filter = len(variants_to_process)
+        variants_to_process, filtered_count = self._filter_by_max_modifications(
+            variants_to_process, 'vacancies'
+        )
+        if filtered_count > 0:
+            manifest["filter_stats"] = {
+                "max_vacancies": self.max_vacancies,
+                "max_OH": self.max_OH,
+                "total_generated": total_before_filter,
+                "filtered_out": filtered_count,
+                "kept": len(variants_to_process)
+            }
 
         # Deduplicate if requested
         if self.deduplicate_by_coverage and len(variants_to_process) > 0:
@@ -643,6 +707,20 @@ class SurfaceModifier:
                     "OH_coverage": coverage
                 }
                 variants_to_process.append((variant_data, var, coverage))
+
+        # Filter by max_OH if specified (BEFORE deduplication)
+        total_before_filter = len(variants_to_process)
+        variants_to_process, filtered_count = self._filter_by_max_modifications(
+            variants_to_process, 'hydrogen'
+        )
+        if filtered_count > 0:
+            manifest["filter_stats"] = {
+                "max_vacancies": self.max_vacancies,
+                "max_OH": self.max_OH,
+                "total_generated": total_before_filter,
+                "filtered_out": filtered_count,
+                "kept": len(variants_to_process)
+            }
 
         # Deduplicate if requested
         if self.deduplicate_by_coverage and len(variants_to_process) > 0:
@@ -784,6 +862,20 @@ class SurfaceModifier:
                 }
                 variants_to_process.append((variant_data, var, coverage_key))
 
+        # Filter by max_vacancies and max_OH if specified (BEFORE deduplication)
+        total_before_filter = len(variants_to_process)
+        variants_to_process, filtered_count = self._filter_by_max_modifications(
+            variants_to_process, 'combine'
+        )
+        if filtered_count > 0:
+            manifest["filter_stats"] = {
+                "max_vacancies": self.max_vacancies,
+                "max_OH": self.max_OH,
+                "total_generated": total_before_filter,
+                "filtered_out": filtered_count,
+                "kept": len(variants_to_process)
+            }
+
         # Deduplicate if requested
         if self.deduplicate_by_coverage and len(variants_to_process) > 0:
             variants_to_process, stats = deduplicate_by_coverage(variants_to_process, "combine")
@@ -900,6 +992,10 @@ def main():
                    help="Decimal places for coverage rounding (default: 4)")
     p.add_argument("--coverage-bins", type=int, default=None,
                    help="Number of bins for coverage sampling (requires --deduplicate-by-coverage)")
+    p.add_argument("--max-vacancies", type=int, default=None,
+                   help="Maximum number of O vacancies per structure (None = unlimited)")
+    p.add_argument("--max-OH", type=int, default=None,
+                   help="Maximum number of OH groups per structure (None = unlimited)")
 
     args = p.parse_args()
 
@@ -934,6 +1030,8 @@ def main():
         deduplicate_by_coverage=args.deduplicate_by_coverage,
         coverage_precision=args.coverage_precision,
         coverage_bins=args.coverage_bins,
+        max_vacancies=args.max_vacancies,
+        max_OH=args.max_OH,
     )
 
     if args.mode == "vacancies":

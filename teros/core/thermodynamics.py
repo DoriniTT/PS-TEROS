@@ -161,16 +161,23 @@ def calculate_surface_energy_ternary(
     gamma_O = (N_O_slab - (z_O / y_N) * N_N_slab) / (2 * area)
     
     # Reference surface energy φ
+    # Formula: φ = [E_slab - N_M·E_M - N_N·E_N - N_O·E_O - (N_N/y_N)·ΔH_f] / (2A)
+    # This corresponds to γ at Δμ_M = Δμ_O = 0 (equilibrium with pure elements)
     phi = (
         slab_energy.value
-        - (N_N_slab / y_N) * (bulk_energy_per_fu + delta_h)
         - N_M_slab * ref_energies[element_M]
+        - N_N_slab * ref_energies[element_N_ref]
         - N_O_slab * ref_energies[element_O]
+        - (N_N_slab / y_N) * delta_h
     ) / (2 * area)
     
-    # Generate grid
-    delta_mu_M_range = np.linspace(0, -delta_h / x_M, grid_points)
-    delta_mu_O_range = np.linspace(0, -delta_h / z_O, grid_points)
+    # Generate grid for chemical potentials
+    # Physical convention: Δμ = μ - μ_ref where μ_ref = E_element
+    # - Element-rich limit: Δμ = 0 (equilibrium with pure element)
+    # - Decomposition limit: Δμ = ΔH_f / stoich (stability boundary)
+    # Since ΔH_f < 0 for stable oxides, Δμ ranges from negative to 0
+    delta_mu_M_range = np.linspace(delta_h / x_M, 0, grid_points)
+    delta_mu_O_range = np.linspace(delta_h / z_O, 0, grid_points)
     
     # Compute γ(Δμ_M, Δμ_O) on a 2D grid
     # Store as 2D array where gamma_grid[i][j] = γ(Δμ_M[i], Δμ_O[j])
@@ -228,23 +235,16 @@ def calculate_surface_energy_ternary(
     ) / (2 * area)
     
     # Chemical potential ranges for B (element N)
-    # Maximum: Δμ_N = 0 (N-rich limit)
+    # Maximum: Δμ_N = 0 (N-rich limit, equilibrium with element N reference)
     delta_mu_N_max = 0.0
-    
-    # Minimum: from bulk stability constraint (prevent A precipitation)
-    # Using: x_M·Δμ_M + y_N·Δμ_N + z_O·Δμ_O >= ΔH_f
-    # When we eliminate μ_M: μ_M <= E_M => 
-    # (E_bulk - y_N·μ_N - z_O·μ_O)/x_M <= E_M
-    # => y_N·Δμ_N + z_O·Δμ_O >= ΔH_f
-    # At O-poor (Δμ_O at its minimum from A-based calc = -ΔH_f/z_O), the minimum Δμ_N is:
-    # But since we're using O range from [-ΔH_f/z_O, 0], we use the same O range
-    # At Δμ_O = -ΔH_f/z_O (O-poor), minimum Δμ_N from constraint:
-    # y_N·Δμ_N >= ΔH_f - z_O·(-ΔH_f/z_O) = ΔH_f + ΔH_f = 2·ΔH_f
-    # This gives Δμ_N >= 2·ΔH_f/y_N, but this is positive for negative ΔH_f!
-    # Actually, at O-poor limit, the constraint is:
-    delta_mu_N_min = (delta_h - z_O * delta_mu_O_range[0]) / y_N
-    
-    # Range for N
+
+    # Minimum: from bulk stability constraint
+    # At most restrictive condition (Δμ_M = 0, Δμ_O = 0):
+    # y_N·Δμ_N >= ΔH_f  =>  Δμ_N >= ΔH_f/y_N
+    # Since ΔH_f is negative for stable compounds, this gives a negative minimum
+    delta_mu_N_min = delta_h / y_N
+
+    # Range for N: from N-poor (ΔH_f/y_N) to N-rich (0)
     delta_mu_N_range = np.linspace(delta_mu_N_min, delta_mu_N_max, grid_points)
     
     # Compute 2D surface energy grid: γ(Δμ_N, Δμ_O)
