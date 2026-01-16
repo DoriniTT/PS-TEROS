@@ -3,13 +3,14 @@
 Fukui+ (Nucleophilic Attack) Calculation Example
 
 This example demonstrates running Fukui function calculations for SnO2 (110)
-surface using the interpolation method.
+surface using the interpolation method with automatic FukuiGrid processing.
 
 The workflow:
 1. Runs 4 parallel static VASP calculations at different charge states
    (delta_N = 0.0, 0.05, 0.10, 0.15)
 2. Collects CHGCAR files into a single FolderData output
-3. The CHGCAR files can then be processed with FukuiGrid.py
+3. Runs FukuiGrid interpolation to compute the Fukui function
+4. Outputs CHGCAR_FUKUI.vasp as a SinglefileData (ready for visualization in VESTA)
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -19,6 +20,7 @@ Requirements:
     - AiiDA profile configured
     - VASP code registered
     - POTCAR files available
+    - FukuiGrid cloned to teros/external/FukuiGrid/
 """
 
 import sys
@@ -166,10 +168,12 @@ def main():
         # fix_type='center',      # Fix center atoms, relax surfaces
         # fix_thickness=5.0,      # 5 Angstroms from center
         fukui_type='plus',
+        compute_fukui=True,       # Run FukuiGrid to compute Fukui function
         max_concurrent_jobs=4,    # obelix can handle multiple jobs
         name='Fukui_SnO2_110_plus',
     )
     print(f"   WorkGraph created: {wg.name}")
+    print(f"   compute_fukui=True: Will run FukuiGrid interpolation")
 
     # Print expected calculations
     print("\n6. Expected VASP calculations:")
@@ -201,21 +205,23 @@ Monitor progress:
 After completion, extract results:
     >>> from teros.core.fukui import get_fukui_results, print_fukui_summary
     >>> results = get_fukui_results({wg.pk})
-    >>> print(results['file_names'])
     >>> print_fukui_summary({wg.pk})
 
-The CHGCAR files will be in results['chgcar_folder']:
-    >>> chgcar_folder = results['chgcar_folder']
-    >>> chgcar_folder.list_object_names()
-    ['CHGCAR_0.00', 'CHGCAR_0.05', 'CHGCAR_0.10', 'CHGCAR_0.15']
+Outputs available:
+    - results['chgcar_folder']: FolderData with CHGCAR_0.00, CHGCAR_0.05, etc.
+    - results['fukui_chgcar']: SinglefileData with CHGCAR_FUKUI.vasp (Fukui function)
+    - results['summary']: Dict with calculation metadata
 
-Export CHGCAR files for FukuiGrid.py:
-    >>> import tempfile
-    >>> with tempfile.TemporaryDirectory() as tmpdir:
-    ...     for fname in chgcar_folder.list_object_names():
-    ...         content = chgcar_folder.get_object_content(fname)
-    ...         with open(f"{{tmpdir}}/{{fname}}", 'wb' if isinstance(content, bytes) else 'w') as f:
-    ...             f.write(content)
+Export CHGCAR_FUKUI.vasp for visualization in VESTA:
+    >>> fukui_file = results['fukui_chgcar']
+    >>> content = fukui_file.get_content()
+    >>> with open('CHGCAR_FUKUI.vasp', 'wb' if isinstance(content, bytes) else 'w') as f:
+    ...     f.write(content)
+
+Visualize in VESTA:
+    - Open CHGCAR_FUKUI.vasp
+    - Set isosurface value to ~0.0015 a0^-3
+    - Yellow regions indicate sites susceptible to nucleophilic attack
 """)
     print("=" * 70)
 

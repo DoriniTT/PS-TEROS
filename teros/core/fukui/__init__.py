@@ -41,6 +41,8 @@ from .tasks import (
     extract_total_energy,
     collect_chgcar_files_internal,
     generate_fukui_summary_internal,
+    run_fukui_interpolation,
+    run_fukui_interpolation_calcfunc,
 )
 
 from .utils import (
@@ -57,7 +59,7 @@ __all__ = [
     'get_fukui_results',
     'print_fukui_summary',
 
-    # Task graph
+    # Task graphs
     'FukuiCalculationScatter',
 
     # Calcfunctions
@@ -66,6 +68,8 @@ __all__ = [
     'extract_total_energy',
     'collect_chgcar_files_internal',
     'generate_fukui_summary_internal',
+    'run_fukui_interpolation',
+    'run_fukui_interpolation_calcfunc',
 
     # Utilities
     'make_delta_label',

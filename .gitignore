@@ -187,3 +187,6 @@ venv/
 .worktree*.worktree/
 *.txt
 git-commit.sh
+
+# External dependencies (cloned repos)
+teros/external/FukuiGrid/

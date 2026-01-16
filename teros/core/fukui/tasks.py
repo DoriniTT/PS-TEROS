@@ -11,6 +11,11 @@ from pathlib import Path
 from aiida import orm
 from aiida_workgraph import task
 
+# Paths for aiida-shell integration (relative to this module)
+_MODULE_DIR = Path(__file__).parent
+WRAPPER_SCRIPT = str(_MODULE_DIR / 'scripts' / 'fukui_interpolation_wrapper.py')
+FUKUI_GRID_PATH = str(_MODULE_DIR.parent.parent / 'external' / 'FukuiGrid')
+
 
 @task.calcfunction
 def extract_total_energy(misc: orm.Dict) -> orm.Float:
@@ -200,6 +205,10 @@ def generate_fukui_summary(
     return orm.Dict(dict=summary)
 
 
+# -----------------------------------------------------------------------------
+# Internal versions for @task.graph (using positional args instead of **kwargs)
+# -----------------------------------------------------------------------------
+
 @task.calcfunction
 def collect_chgcar_files_internal(
     delta_n_list: orm.List,
@@ -373,3 +382,150 @@ def generate_fukui_summary_internal(
     }
 
     return orm.Dict(dict=summary)
+
+
+# -----------------------------------------------------------------------------
+# FukuiGrid interpolation integration
+# -----------------------------------------------------------------------------
+
+@task.calcfunction
+def run_fukui_interpolation_calcfunc(
+    chgcar_files: orm.FolderData,
+    delta_n_values: orm.List,
+    fukui_type: orm.Str,
+) -> orm.SinglefileData:
+    """
+    Run FukuiGrid interpolation to compute the Fukui function.
+
+    This calcfunction runs the FukuiGrid wrapper script via subprocess to
+    compute the Fukui function from CHGCAR files at different charge states.
+
+    Args:
+        chgcar_files: FolderData with CHGCAR_0.00, CHGCAR_0.05, etc.
+        delta_n_values: List of delta_n values [0.0, 0.05, 0.10, 0.15]
+        fukui_type: Str with 'plus' or 'minus'
+
+    Returns:
+        SinglefileData containing CHGCAR_FUKUI.vasp
+    """
+    import subprocess
+    import sys
+    import os
+
+    # Get Python values from AiiDA types
+    dn_list = delta_n_values.get_list()
+    ftype = fukui_type.value
+
+    # Prepare file names (sorted by delta_n)
+    sorted_dn = sorted(dn_list)
+    file_names = [f'CHGCAR_{dn:.2f}' for dn in sorted_dn]
+    delta_n_csv = ','.join(str(dn) for dn in sorted_dn)
+
+    # Create temporary directory for processing
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmppath = Path(tmpdir)
+
+        # Copy CHGCAR files to temp directory
+        for filename in file_names:
+            content = chgcar_files.get_object_content(filename, mode='rb')
+            filepath = tmppath / filename
+            filepath.write_bytes(content)
+
+        # Build command arguments
+        args = [
+            sys.executable,
+            WRAPPER_SCRIPT,
+            ftype,
+            delta_n_csv,
+        ] + file_names
+
+        # Run the wrapper script
+        result = subprocess.run(
+            args,
+            cwd=str(tmppath),
+            capture_output=True,
+            text=True,
+        )
+
+        # Check for errors
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"FukuiGrid interpolation failed:\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}"
+            )
+
+        # Read output file
+        output_path = tmppath / 'CHGCAR_FUKUI.vasp'
+        if not output_path.exists():
+            raise FileNotFoundError(
+                f"FukuiGrid did not produce CHGCAR_FUKUI.vasp.\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}"
+            )
+
+        # Create SinglefileData from the output
+        output_file = orm.SinglefileData(str(output_path), filename='CHGCAR_FUKUI.vasp')
+
+    return output_file
+
+
+def run_fukui_interpolation(
+    chgcar_files: orm.FolderData,
+    delta_n_values: t.List[float],
+    fukui_type: str = 'plus',
+) -> orm.SinglefileData:
+    """
+    Run FukuiGrid interpolation using aiida-shell (standalone function).
+
+    This function launches a shell job that runs the FukuiGrid interpolation
+    to compute the Fukui function from CHGCAR files at different charge states.
+
+    Note: For use within WorkGraphs, use `run_fukui_interpolation_calcfunc` instead.
+
+    Args:
+        chgcar_files: FolderData with CHGCAR_0.00, CHGCAR_0.05, etc.
+        delta_n_values: List of delta_n values [0.0, 0.05, 0.10, 0.15]
+        fukui_type: 'plus' (nucleophilic f+) or 'minus' (electrophilic f-)
+
+    Returns:
+        SinglefileData containing CHGCAR_FUKUI.vasp
+
+    Example:
+        >>> from aiida import orm
+        >>> chgcar_folder = orm.load_node(31972)
+        >>> result = run_fukui_interpolation(
+        ...     chgcar_folder,
+        ...     delta_n_values=[0.0, 0.05, 0.10, 0.15],
+        ...     fukui_type='plus',
+        ... )
+        >>> print(result.filename)
+        'CHGCAR_FUKUI.vasp'
+    """
+    import sys
+    from aiida_shell import launch_shell_job
+
+    # Use the same Python interpreter that's running AiiDA
+    python_path = sys.executable
+
+    # Prepare file names (sorted by delta_n)
+    sorted_dn = sorted(delta_n_values)
+    file_names = [f'CHGCAR_{dn:.2f}' for dn in sorted_dn]
+    delta_n_csv = ','.join(str(dn) for dn in sorted_dn)
+
+    # Build arguments: wrapper.py fukui_type delta_n_csv file1 file2 file3 file4
+    arguments = f'{WRAPPER_SCRIPT} {fukui_type} {delta_n_csv} ' + ' '.join(file_names)
+
+    # Launch shell job
+    # Note: aiida-shell converts dots in output names to underscores
+    # So 'CHGCAR_FUKUI.vasp' becomes 'CHGCAR_FUKUI_vasp' in results
+    results, node = launch_shell_job(
+        python_path,
+        arguments=arguments,
+        nodes={'folder': chgcar_files},
+        filenames={'folder': '.'},  # Extract folder contents to working directory root
+        outputs=['CHGCAR_FUKUI.vasp'],
+    )
+
+    # Access the output using the underscore version (aiida-shell converts dots to underscores)
+    return results['CHGCAR_FUKUI_vasp']

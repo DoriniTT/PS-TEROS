@@ -10,7 +10,12 @@ from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import WorkGraph, task, namespace, dynamic
 
-from .tasks import extract_total_energy, collect_chgcar_files_internal, generate_fukui_summary_internal
+from .tasks import (
+    extract_total_energy,
+    collect_chgcar_files_internal,
+    generate_fukui_summary_internal,
+    run_fukui_interpolation_calcfunc,
+)
 from .utils import make_delta_label, validate_fukui_inputs, DEFAULT_DELTA_N_VALUES
 from ..utils import deep_merge_dicts
 
@@ -226,6 +231,7 @@ def build_fukui_workgraph(
     fix_thickness: float = 0.0,
     fix_elements: t.List[str] = None,
     fukui_type: str = 'plus',
+    compute_fukui: bool = False,
     max_concurrent_jobs: int = None,
     name: str = 'FukuiWorkGraph',
 ) -> WorkGraph:
@@ -268,6 +274,10 @@ def build_fukui_workgraph(
                      If None, all atoms in the region are fixed.
         fukui_type: 'plus' for nucleophilic (remove electrons),
                    'minus' for electrophilic (add electrons)
+        compute_fukui: If True, run FukuiGrid interpolation to compute the
+                      Fukui function from the CHGCAR files. Output will include
+                      'fukui_chgcar' (SinglefileData containing CHGCAR_FUKUI.vasp).
+                      Default: False
         max_concurrent_jobs: Limit parallel VASP calculations (default: unlimited)
         name: WorkGraph name
 
@@ -278,6 +288,7 @@ def build_fukui_workgraph(
         - chgcar_files: FolderData containing CHGCAR_0.00, CHGCAR_0.05, etc.
         - summary: Dict with calculation metadata (energies, NELECT values, convergence)
         - relaxed_structure: StructureData (only if relax_first=True)
+        - fukui_chgcar: SinglefileData with CHGCAR_FUKUI.vasp (only if compute_fukui=True)
 
     Example:
         >>> wg = build_fukui_workgraph(
@@ -427,6 +438,17 @@ def build_fukui_workgraph(
     wg.outputs.chgcar_files = scatter_task.outputs.chgcar_files
     wg.outputs.summary = scatter_task.outputs.summary
 
+    # Optional: Run FukuiGrid interpolation to compute Fukui function
+    if compute_fukui:
+        interpolation_task = wg.add_task(
+            run_fukui_interpolation_calcfunc,
+            name='fukui_interpolation',
+            chgcar_files=scatter_task.outputs.chgcar_files,
+            delta_n_values=orm.List(list=delta_n_values),
+            fukui_type=orm.Str(fukui_type),
+        )
+        wg.outputs.fukui_chgcar = interpolation_task.outputs.result
+
     # Set max_concurrent_jobs at WorkGraph level
     if max_concurrent_jobs is not None:
         wg.max_number_jobs = max_concurrent_jobs
@@ -447,6 +469,7 @@ def get_fukui_results(workgraph) -> dict:
         - summary: Dict with calculation metadata
         - file_names: List of CHGCAR file names in the folder
         - relaxed_structure: StructureData (if relax_first was True)
+        - fukui_chgcar: SinglefileData with CHGCAR_FUKUI.vasp (if compute_fukui was True)
 
     Example:
         >>> results = get_fukui_results(wg.pk)
@@ -485,6 +508,12 @@ def get_fukui_results(workgraph) -> dict:
         results['relaxed_structure'] = workgraph.outputs.relaxed_structure
     else:
         results['relaxed_structure'] = None
+
+    # Get fukui_chgcar if available (from compute_fukui=True)
+    if hasattr(workgraph.outputs, 'fukui_chgcar'):
+        results['fukui_chgcar'] = workgraph.outputs.fukui_chgcar
+    else:
+        results['fukui_chgcar'] = None
 
     return results
 
@@ -532,5 +561,17 @@ def print_fukui_summary(workgraph) -> None:
 
     if results.get('relaxed_structure'):
         print(f"\nRelaxed Structure: PK={results['relaxed_structure'].pk}")
+
+    if results.get('fukui_chgcar'):
+        fukui_file = results['fukui_chgcar']
+        print(f"\nFukui Function: PK={fukui_file.pk}")
+        print(f"  Filename: {fukui_file.filename}")
+        # Get file size if possible
+        try:
+            content = fukui_file.get_content()
+            size_mb = len(content) / (1024 * 1024)
+            print(f"  Size: {size_mb:.1f} MB")
+        except Exception:
+            pass
 
     print("=" * 60)
