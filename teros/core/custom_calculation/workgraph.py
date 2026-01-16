@@ -54,6 +54,7 @@ def CustomCalculationMultipleWorkGraph(
     'structures': dynamic(orm.StructureData),
     'energies': dynamic(orm.Float),
     'misc': dynamic(orm.Dict),
+    'retrieved': dynamic(orm.FolderData),
 })]:
     """
     WorkGraph task for multiple custom VASP calculations.
@@ -79,6 +80,7 @@ def CustomCalculationMultipleWorkGraph(
     structures_out = {}
     energies_out = {}
     misc_out = {}
+    retrieved_out = {}
 
     # Process each structure
     keys = list(structures.keys())
@@ -99,17 +101,22 @@ def CustomCalculationMultipleWorkGraph(
         )
 
         # Extract energy
-        energy_task = extract_total_energy(misc=vasp_task.misc)
+        energy_task = extract_total_energy(
+            misc=vasp_task.misc,
+            retrieved=vasp_task.retrieved
+        )
 
         # Collect outputs
         structures_out[key] = vasp_task.structure
         energies_out[key] = energy_task.result
         misc_out[key] = vasp_task.misc
+        retrieved_out[key] = vasp_task.retrieved
 
     return {
         'structures': structures_out,
         'energies': energies_out,
         'misc': misc_out,
+        'retrieved': retrieved_out,
     }
 
 
@@ -180,13 +187,15 @@ def build_custom_calculation_workgraph(
         energy_task = wg.add_task(
             extract_total_energy,
             name='extract_energy',
-            misc=vasp_task.outputs.misc
+            misc=vasp_task.outputs.misc,
+            retrieved=vasp_task.outputs.retrieved
         )
 
         # Set WorkGraph outputs (use 'any' socket type identifier)
         wg.add_output('any', 'energy', from_socket=energy_task.outputs.result)
         wg.add_output('any', 'structure', from_socket=vasp_task.outputs.structure)
         wg.add_output('any', 'misc', from_socket=vasp_task.outputs.misc)
+        wg.add_output('any', 'retrieved', from_socket=vasp_task.outputs.retrieved)
 
         return wg
     else:
@@ -366,6 +375,7 @@ def get_custom_results(workgraph):
         results['energies'] = workgraph.outputs.energy.value
         results['structures'] = workgraph.outputs.structure
         results['misc'] = workgraph.outputs.misc.get_dict()
+        results['retrieved'] = workgraph.outputs.retrieved
     elif hasattr(workgraph.outputs, 'energies'):
         # Multiple structures with namespaced outputs
         # Access energies namespace
@@ -385,6 +395,13 @@ def get_custom_results(workgraph):
         for key in workgraph.outputs.misc:
             misc_dict[key] = workgraph.outputs.misc[key].get_dict()
         results['misc'] = misc_dict
+
+        # Access retrieved namespace
+        retrieved_dict = {}
+        if hasattr(workgraph.outputs, 'retrieved'):
+            for key in workgraph.outputs.retrieved:
+                retrieved_dict[key] = workgraph.outputs.retrieved[key]
+        results['retrieved'] = retrieved_dict
     else:
         # Legacy: Multiple structures - access via task outputs
         i = 0

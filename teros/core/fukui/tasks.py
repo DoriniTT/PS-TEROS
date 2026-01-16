@@ -14,6 +14,8 @@ from aiida_workgraph import task
 # Paths for aiida-shell integration (relative to this module)
 _MODULE_DIR = Path(__file__).parent
 WRAPPER_SCRIPT = str(_MODULE_DIR / 'scripts' / 'fukui_interpolation_wrapper.py')
+ELECTRODES_WRAPPER_SCRIPT = str(_MODULE_DIR / 'scripts' / 'fukui_electrodes_wrapper.py')
+PERTURBATIVE_WRAPPER_SCRIPT = str(_MODULE_DIR / 'scripts' / 'perturbative_expansion_wrapper.py')
 FUKUI_GRID_PATH = str(_MODULE_DIR.parent.parent / 'external' / 'FukuiGrid')
 
 
@@ -529,3 +531,299 @@ def run_fukui_interpolation(
 
     # Access the output using the underscore version (aiida-shell converts dots to underscores)
     return results['CHGCAR_FUKUI_vasp']
+
+
+# -----------------------------------------------------------------------------
+# Phase 2: Dielectric constant extraction and Fukui potential via electrodes
+# -----------------------------------------------------------------------------
+
+@task.calcfunction
+def extract_dielectric_constant(
+    retrieved: orm.FolderData,
+    method: orm.Str = None,
+) -> orm.Float:
+    """
+    Extract dielectric constant from VASP LEPSILON calculation.
+
+    Parses the OUTCAR to get the macroscopic dielectric tensor and computes
+    the scalar value using the specified method (default: arithmetic mean).
+
+    Args:
+        retrieved: FolderData from VASP LEPSILON calculation (must include OUTCAR)
+        method: 'arithmetic' (default) or 'geometric'
+                - arithmetic: ε = (εxx + εyy + εzz) / 3
+                - geometric: ε = (εxx · εyy · εzz)^(1/3)
+
+    Returns:
+        Float with scalar dielectric constant
+
+    Raises:
+        FileNotFoundError: If OUTCAR not found in retrieved folder
+        ValueError: If dielectric tensor not found in OUTCAR
+    """
+    from pymatgen.io.vasp import Outcar
+
+    # Default to arithmetic mean
+    method_val = method.value if method is not None else 'arithmetic'
+
+    # Read OUTCAR from retrieved folder
+    try:
+        outcar_content = retrieved.get_object_content('OUTCAR')
+    except (FileNotFoundError, OSError) as e:
+        raise FileNotFoundError(
+            f"OUTCAR not found in retrieved folder. "
+            f"Ensure 'OUTCAR' is in ADDITIONAL_RETRIEVE_LIST for DFPT calculation. "
+            f"Error: {e}"
+        )
+
+    # Write to temp file for pymatgen parsing
+    with tempfile.NamedTemporaryFile(mode='w', suffix='_OUTCAR', delete=False) as f:
+        if isinstance(outcar_content, bytes):
+            f.write(outcar_content.decode('utf-8'))
+        else:
+            f.write(outcar_content)
+        outcar_path = f.name
+
+    try:
+        outcar = Outcar(outcar_path)
+        outcar.read_lepsilon()
+
+        # Check if dielectric tensor was parsed
+        if not hasattr(outcar, 'dielectric_tensor') or outcar.dielectric_tensor is None:
+            raise ValueError(
+                "Dielectric tensor not found in OUTCAR. "
+                "Ensure the VASP calculation used LEPSILON=.TRUE."
+            )
+
+        tensor = outcar.dielectric_tensor  # 3x3 matrix
+
+        eps_xx = tensor[0][0]
+        eps_yy = tensor[1][1]
+        eps_zz = tensor[2][2]
+
+        if method_val == 'geometric':
+            epsilon = (eps_xx * eps_yy * eps_zz) ** (1 / 3)
+        else:  # arithmetic (default)
+            epsilon = (eps_xx + eps_yy + eps_zz) / 3
+
+        return orm.Float(epsilon)
+    finally:
+        Path(outcar_path).unlink()
+
+
+@task.calcfunction
+def run_fukui_electrodes_calcfunc(
+    chgcar_files: orm.FolderData,
+    fukui_chgcar: orm.SinglefileData,
+    epsilon: orm.Float,
+) -> orm.SinglefileData:
+    """
+    Run FukuiGrid electrodes method to compute Fukui potential.
+
+    The electrodes method applies corrections to the electrostatic potential
+    to calculate the Fukui potential for electrode/surface systems. This
+    accounts for periodic boundary conditions and dielectric screening.
+
+    Args:
+        chgcar_files: FolderData containing CHGCAR_0.00 (neutral charge density)
+        fukui_chgcar: SinglefileData with CHGCAR_FUKUI.vasp from Phase 1 interpolation
+        epsilon: Float with dielectric constant (from DFPT calculation)
+
+    Returns:
+        SinglefileData containing LOCPOT_FUKUI.vasp (Fukui potential)
+
+    Raises:
+        FileNotFoundError: If required input files are missing
+        RuntimeError: If FukuiGrid electrodes calculation fails
+    """
+    import subprocess
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmppath = Path(tmpdir)
+
+        # Copy CHGCAR_0.00 (neutral charge density)
+        try:
+            neutral_content = chgcar_files.get_object_content('CHGCAR_0.00', mode='rb')
+        except (FileNotFoundError, OSError):
+            raise FileNotFoundError(
+                "CHGCAR_0.00 not found in chgcar_files. "
+                "This file should be the neutral charge density from delta_n=0.0 calculation."
+            )
+        neutral_path = tmppath / 'CHGCAR_0.00'
+        neutral_path.write_bytes(neutral_content)
+
+        # Copy CHGCAR_FUKUI.vasp (Fukui function from Phase 1)
+        try:
+            fukui_content = fukui_chgcar.get_content(mode='rb')
+        except Exception as e:
+            raise FileNotFoundError(
+                f"Could not read Fukui function file: {e}. "
+                f"Ensure Phase 1 interpolation completed successfully."
+            )
+        fukui_path = tmppath / 'CHGCAR_FUKUI.vasp'
+        fukui_path.write_bytes(fukui_content)
+
+        # Run the electrodes wrapper script
+        result = subprocess.run(
+            [
+                sys.executable,
+                ELECTRODES_WRAPPER_SCRIPT,
+                'CHGCAR_0.00',
+                'CHGCAR_FUKUI.vasp',
+                str(epsilon.value),
+            ],
+            cwd=str(tmppath),
+            capture_output=True,
+            text=True,
+        )
+
+        # Check for errors
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"FukuiGrid electrodes calculation failed:\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}"
+            )
+
+        # Read output file (FukuiGrid writes LOCPOT_FUKUI.vasp)
+        output_path = tmppath / 'LOCPOT_FUKUI.vasp'
+        if not output_path.exists():
+            raise FileNotFoundError(
+                f"FukuiGrid did not produce LOCPOT_FUKUI.vasp.\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}"
+            )
+
+        # Create SinglefileData from the output
+        output_file = orm.SinglefileData(str(output_path), filename='LOCPOT_FUKUI.vasp')
+
+    return output_file
+
+
+# -----------------------------------------------------------------------------
+# Phase 4: Perturbative expansion model for interaction energy prediction
+# -----------------------------------------------------------------------------
+
+@task.calcfunction
+def extract_locpot_from_retrieved(
+    retrieved: orm.FolderData,
+) -> orm.SinglefileData:
+    """
+    Extract LOCPOT file from VASP retrieved folder.
+
+    Used in Phase 4 to extract the electrostatic potential from the neutral
+    slab calculation (delta_n=0.0), which is needed for the perturbative
+    expansion model.
+
+    Args:
+        retrieved: FolderData from VASP calculation containing LOCPOT
+
+    Returns:
+        SinglefileData containing LOCPOT
+
+    Raises:
+        FileNotFoundError: If LOCPOT not found in retrieved folder
+    """
+    try:
+        locpot_content = retrieved.get_object_content('LOCPOT', mode='rb')
+    except (FileNotFoundError, OSError) as e:
+        raise FileNotFoundError(
+            f"LOCPOT not found in retrieved folder. "
+            f"Ensure 'LOCPOT' is in ADDITIONAL_RETRIEVE_LIST. Error: {e}"
+        )
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix='_LOCPOT') as f:
+        f.write(locpot_content)
+        temp_path = f.name
+
+    try:
+        return orm.SinglefileData(temp_path, filename='LOCPOT')
+    finally:
+        Path(temp_path).unlink(missing_ok=True)
+
+
+@task.calcfunction
+def run_perturbative_expansion_calcfunc(
+    locpot_neutral: orm.SinglefileData,
+    fukui_potential: orm.SinglefileData,
+    probe_charge: orm.Float,
+    electron_transfer: orm.Float,
+) -> orm.SinglefileData:
+    """
+    Run perturbative expansion to compute interaction energy map.
+
+    Uses the c-DFT perturbative expansion formula:
+        ΔU(r) = q·Φ(r) - q·ΔN·vf±(r)
+
+    Where:
+        Φ(r) = electrostatic potential (LOCPOT from neutral slab)
+        vf±(r) = Fukui potential (LOCPOT_FUKUI.vasp from Phase 2)
+        q = charge of the probe (point charge model)
+        ΔN = electron transfer
+
+    The output MODELPOT_LOCPOT.vasp contains a 3D potential field showing
+    favorable (negative) and unfavorable (positive) adsorption sites.
+
+    Args:
+        locpot_neutral: LOCPOT from neutral slab (electrostatic potential Φ)
+        fukui_potential: LOCPOT_FUKUI.vasp from Phase 2 (Fukui potential vf±)
+        probe_charge: Charge q of the probe in |e| (point charge model)
+        electron_transfer: Electron transfer ΔN (positive = electron gain,
+                          negative = electron donation)
+
+    Returns:
+        SinglefileData containing MODELPOT_LOCPOT.vasp
+
+    Raises:
+        RuntimeError: If perturbative expansion calculation fails
+        FileNotFoundError: If output file not generated
+    """
+    import subprocess
+    import sys
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmppath = Path(tmpdir)
+
+        # Copy LOCPOT (neutral electrostatic potential)
+        locpot_content = locpot_neutral.get_content(mode='rb')
+        locpot_path = tmppath / 'LOCPOT'
+        locpot_path.write_bytes(locpot_content)
+
+        # Copy LOCPOT_FUKUI.vasp (Fukui potential from Phase 2)
+        fukui_content = fukui_potential.get_content(mode='rb')
+        fukui_path = tmppath / 'LOCPOT_FUKUI.vasp'
+        fukui_path.write_bytes(fukui_content)
+
+        # Run wrapper script
+        result = subprocess.run(
+            [
+                sys.executable,
+                PERTURBATIVE_WRAPPER_SCRIPT,
+                'LOCPOT',
+                'LOCPOT_FUKUI.vasp',
+                str(probe_charge.value),
+                str(electron_transfer.value),
+            ],
+            cwd=str(tmppath),
+            capture_output=True,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Perturbative expansion calculation failed:\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}"
+            )
+
+        # Read output file
+        output_path = tmppath / 'MODELPOT_LOCPOT.vasp'
+        if not output_path.exists():
+            raise FileNotFoundError(
+                f"MODELPOT_LOCPOT.vasp not generated.\n"
+                f"stdout: {result.stdout}\n"
+                f"stderr: {result.stderr}"
+            )
+
+        return orm.SinglefileData(str(output_path), filename='MODELPOT_LOCPOT.vasp')
