@@ -48,6 +48,11 @@ from .u_calculation import (
     build_u_calculation_workgraph,
     get_u_calculation_results,
 )
+from .fukui import (
+    build_fukui_workgraph,
+    get_fukui_results,
+    print_fukui_summary,
+)
 from .utils import (
     deep_merge_dicts,
     get_vasp_parser_settings,
@@ -116,6 +121,10 @@ __all__ = [
     # Hubbard U calculation
     'build_u_calculation_workgraph',
     'get_u_calculation_results',
+    # Fukui function calculation
+    'build_fukui_workgraph',
+    'get_fukui_results',
+    'print_fukui_summary',
     # Utilities
     'deep_merge_dicts',
     'get_vasp_parser_settings',

@@ -203,6 +203,17 @@ energy = misc_dict['total_energies']['energy_extrapolated']  # Recommended
 | `IBRION` | Relaxation | 2 (CG), -1 (static) |
 | `NSW` | Max ionic steps | 0 (SCF), 100+ (relax) |
 
+### K-points Spacing Convention
+
+| Accuracy Level | `kpoints_spacing` (Å⁻¹) |
+|----------------|-------------------------|
+| Gamma-Only     | 10                      |
+| Low            | 0.06 - 0.04             |
+| Medium         | 0.04 - 0.03             |
+| Fine           | 0.02 - 0.01             |
+
+**0.03 - 0.04 is generally precise enough for most calculations.**
+
 ## Testing
 
 ### Testing Environment by Location
