@@ -43,12 +43,21 @@ def validate_fukui_inputs(
 
     Args:
         nelect_neutral: Number of electrons in neutral system
-        delta_n_values: List of delta_n values for fractional charges
+        delta_n_values: List of delta_n values for fractional charges.
+                       **Maximum 4 values supported** due to internal WorkGraph
+                       limitations.
         fukui_type: Type of Fukui calculation ('plus' or 'minus')
 
     Raises:
         ValueError: If inputs are invalid
+
+    Warns:
+        UserWarning: If delta_n=0.0 is not included (required for proper interpolation)
+        UserWarning: If very small delta_n values may cause SCF convergence issues
+        UserWarning: If large delta_n values may yield unphysical results
     """
+    import warnings
+
     # Check nelect_neutral is positive
     if nelect_neutral <= 0:
         raise ValueError(f"nelect_neutral must be positive, got {nelect_neutral}")
@@ -75,6 +84,40 @@ def validate_fukui_inputs(
         raise ValueError(
             f"delta_n values too large: would result in NELECT={min_nelect:.2f} < 1. "
             f"Reduce delta_n values or increase nelect_neutral."
+        )
+
+    # Check maximum number of delta_n values (internal WorkGraph limitation)
+    if len(delta_n_values) > 4:
+        raise ValueError(
+            f"Maximum of 4 delta_n values supported, got {len(delta_n_values)}. "
+            f"This limitation is due to the internal @task.graph implementation. "
+            f"For higher-order polynomial fitting, consider running multiple workflows."
+        )
+
+    # Warning: delta_n=0.0 should be included for proper interpolation
+    if 0.0 not in delta_n_values:
+        warnings.warn(
+            "delta_n=0.0 (neutral reference) is not in delta_n_values. "
+            "Including the neutral state is recommended for proper interpolation.",
+            UserWarning
+        )
+
+    # Warning: very small delta_n values may cause SCF convergence issues
+    small_dn = [dn for dn in delta_n_values if 0 < dn < 0.01]
+    if small_dn:
+        warnings.warn(
+            f"Very small delta_n values ({small_dn}) may cause SCF convergence issues "
+            f"with fractional electron occupation. Consider using delta_n >= 0.01.",
+            UserWarning
+        )
+
+    # Warning: large delta_n values may yield unphysical results
+    large_dn = [dn for dn in delta_n_values if dn > 0.5]
+    if large_dn:
+        warnings.warn(
+            f"Large delta_n values ({large_dn}) may yield unphysical results. "
+            f"The linear response regime is typically valid for delta_n <= 0.2.",
+            UserWarning
         )
 
 

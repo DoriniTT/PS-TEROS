@@ -1455,6 +1455,7 @@ def build_adsorption_energy_from_completed_workgraph(
     adsorbate_formulas: dict[str, str] = None,
     code_label: str = None,
     scf_builder_inputs: dict = None,
+    substrate_scf_builder_inputs: dict = None,
     retrieve_bader_files: bool = True,
     max_number_jobs: int = None,
     name: str = 'adsorption_energy_from_completed',
@@ -1476,6 +1477,10 @@ def build_adsorption_energy_from_completed_workgraph(
                            Example: {'ooh_on_O_000': 'OOH', 'ooh_on_Ni_000': 'OOH'}
         code_label: VASP code label (e.g., 'VASP-6.5.1@cluster')
         scf_builder_inputs: VASP builder parameters for SCF calculations
+        substrate_scf_builder_inputs: Optional overrides for substrate SCF calculations.
+                                      Deep-merged with scf_builder_inputs. Useful for setting
+                                      different INCAR parameters for substrate (e.g., AMIX, ALGO)
+                                      when substrate convergence is difficult.
         retrieve_bader_files: If True, add CHGCAR/AECCAR files to retrieve list
         max_number_jobs: Maximum concurrent VASP calculations
         name: WorkGraph name
@@ -1586,6 +1591,9 @@ def build_adsorption_energy_from_completed_workgraph(
 
         # Task 2: SCF for substrate
         substrate_inputs = copy.deepcopy(default_scf_builder)
+        # Apply substrate-specific overrides if provided
+        if substrate_scf_builder_inputs is not None:
+            substrate_inputs = deep_merge_dicts(substrate_inputs, substrate_scf_builder_inputs)
         substrate_inputs['code'] = code
         # Structure will be linked from separation task output
 

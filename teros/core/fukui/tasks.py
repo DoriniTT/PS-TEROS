@@ -226,8 +226,14 @@ def collect_chgcar_files_internal(
     This is an internal version using fixed positional arguments instead of
     dynamic **kwargs, to be used within @task.graph functions.
 
+    **IMPORTANT**: This function supports a maximum of 4 delta_n values due to
+    the fixed positional argument pattern required by @task.graph. For higher-order
+    polynomial fitting requiring more points, use the external `collect_chgcar_files()`
+    function instead, or run multiple workflows.
+
     Args:
-        delta_n_list: List of delta_n values (e.g., [0.0, 0.05, 0.10, 0.15])
+        delta_n_list: List of delta_n values (e.g., [0.0, 0.05, 0.10, 0.15]).
+                     **Maximum 4 values supported.**
         labels_list: List of labels corresponding to delta_n values
         retrieved_0: FolderData from first calculation (optional)
         retrieved_1: FolderData from second calculation (optional)
@@ -236,9 +242,20 @@ def collect_chgcar_files_internal(
 
     Returns:
         FolderData containing CHGCAR files named CHGCAR_0.00, CHGCAR_0.05, etc.
+
+    Raises:
+        ValueError: If more than 4 delta_n values are provided
     """
     delta_n_list_py = delta_n_list.get_list()
     labels_list_py = labels_list.get_list()
+
+    # Validate maximum number of delta_n values
+    if len(delta_n_list_py) > 4:
+        raise ValueError(
+            f"collect_chgcar_files_internal supports a maximum of 4 delta_n values, "
+            f"got {len(delta_n_list_py)}. For more points, use collect_chgcar_files() "
+            f"with dynamic kwargs or run multiple workflows."
+        )
 
     # Collect non-None retrieved folders in order
     retrieved_folders = [retrieved_0, retrieved_1, retrieved_2, retrieved_3]
@@ -307,9 +324,12 @@ def generate_fukui_summary_internal(
     This is an internal version using fixed positional arguments instead of
     dynamic **kwargs, to be used within @task.graph functions.
 
+    **IMPORTANT**: This function supports a maximum of 4 delta_n values due to
+    the fixed positional argument pattern required by @task.graph.
+
     Args:
         nelect_neutral: Number of electrons in neutral system
-        delta_n_list: List of delta_n values used
+        delta_n_list: List of delta_n values used. **Maximum 4 values supported.**
         fukui_type: Type of Fukui calculation ('plus' or 'minus')
         misc_0: Dict from first VASP calculation (optional)
         misc_1: Dict from second VASP calculation (optional)
@@ -318,12 +338,23 @@ def generate_fukui_summary_internal(
 
     Returns:
         Dict with summary information
+
+    Raises:
+        ValueError: If more than 4 delta_n values are provided
     """
     from .utils import make_delta_label
 
     nelect_neutral_val = nelect_neutral.value
     delta_n_list_py = delta_n_list.get_list()
     fukui_type_val = fukui_type.value
+
+    # Validate maximum number of delta_n values
+    if len(delta_n_list_py) > 4:
+        raise ValueError(
+            f"generate_fukui_summary_internal supports a maximum of 4 delta_n values, "
+            f"got {len(delta_n_list_py)}. For more points, use generate_fukui_summary() "
+            f"with dynamic kwargs."
+        )
 
     # Collect misc dicts in order
     misc_list = [misc_0, misc_1, misc_2, misc_3]
@@ -656,7 +687,7 @@ def run_fukui_electrodes_calcfunc(
         # Copy CHGCAR_FUKUI.vasp (Fukui function from Phase 1)
         try:
             fukui_content = fukui_chgcar.get_content(mode='rb')
-        except Exception as e:
+        except (FileNotFoundError, OSError, IOError) as e:
             raise FileNotFoundError(
                 f"Could not read Fukui function file: {e}. "
                 f"Ensure Phase 1 interpolation completed successfully."

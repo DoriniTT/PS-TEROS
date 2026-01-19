@@ -24,6 +24,54 @@ from .utils import make_delta_label, validate_fukui_inputs, DEFAULT_DELTA_N_VALU
 from ..utils import deep_merge_dicts
 
 
+def _convert_merged_to_aiida_types(
+    merged: dict,
+    structure: orm.StructureData,
+    code: orm.InstalledCode,
+) -> dict:
+    """
+    Convert a merged builder_inputs dict to AiiDA-compatible types.
+
+    This helper function handles the common conversion pattern used by both
+    _prepare_fukui_inputs() and _prepare_dfpt_inputs().
+
+    Args:
+        merged: Merged builder inputs dict (after applying overrides)
+        structure: Input structure
+        code: VASP code
+
+    Returns:
+        dict with AiiDA-compatible types ready for VaspTask
+    """
+    prepared = {
+        'structure': structure,
+        'code': code,
+    }
+
+    # Convert dict-type parameters to orm.Dict
+    for key in ('parameters', 'options', 'potential_mapping', 'settings'):
+        if key in merged:
+            if isinstance(merged[key], dict):
+                prepared[key] = orm.Dict(dict=merged[key])
+            else:
+                prepared[key] = merged[key]
+
+    # Handle kpoints_spacing - keep as plain Python float
+    if 'kpoints_spacing' in merged:
+        kps = merged['kpoints_spacing']
+        if isinstance(kps, (int, float)):
+            prepared['kpoints_spacing'] = float(kps)
+        else:
+            prepared['kpoints_spacing'] = kps
+
+    # Copy string/bool values directly
+    for key in ('potential_family', 'clean_workdir'):
+        if key in merged:
+            prepared[key] = merged[key]
+
+    return prepared
+
+
 def _prepare_fukui_inputs(
     builder_inputs: dict,
     nelect: float,
@@ -81,54 +129,8 @@ def _prepare_fukui_inputs(
         if 'LOCPOT' not in merged['settings']['ADDITIONAL_RETRIEVE_LIST']:
             merged['settings']['ADDITIONAL_RETRIEVE_LIST'].append('LOCPOT')
 
-    # Convert to AiiDA types
-    prepared = {
-        'structure': structure,
-        'code': code,
-    }
-
-    # Convert parameters dict to orm.Dict
-    if 'parameters' in merged:
-        if isinstance(merged['parameters'], dict):
-            prepared['parameters'] = orm.Dict(dict=merged['parameters'])
-        else:
-            prepared['parameters'] = merged['parameters']
-
-    # Convert options dict to orm.Dict
-    if 'options' in merged:
-        if isinstance(merged['options'], dict):
-            prepared['options'] = orm.Dict(dict=merged['options'])
-        else:
-            prepared['options'] = merged['options']
-
-    # Convert potential_mapping dict to orm.Dict
-    if 'potential_mapping' in merged:
-        if isinstance(merged['potential_mapping'], dict):
-            prepared['potential_mapping'] = orm.Dict(dict=merged['potential_mapping'])
-        else:
-            prepared['potential_mapping'] = merged['potential_mapping']
-
-    # Convert settings dict to orm.Dict
-    if 'settings' in merged:
-        if isinstance(merged['settings'], dict):
-            prepared['settings'] = orm.Dict(dict=merged['settings'])
-        else:
-            prepared['settings'] = merged['settings']
-
-    # Handle kpoints_spacing - keep as plain Python float
-    if 'kpoints_spacing' in merged:
-        kps = merged['kpoints_spacing']
-        if isinstance(kps, (int, float)):
-            prepared['kpoints_spacing'] = float(kps)
-        else:
-            prepared['kpoints_spacing'] = kps
-
-    # Copy string/bool values directly
-    for key in ('potential_family', 'clean_workdir'):
-        if key in merged:
-            prepared[key] = merged[key]
-
-    return prepared
+    # Convert to AiiDA types using common helper
+    return _convert_merged_to_aiida_types(merged, structure, code)
 
 
 def _prepare_dfpt_inputs(
@@ -175,54 +177,8 @@ def _prepare_dfpt_inputs(
     if 'OUTCAR' not in merged['settings']['ADDITIONAL_RETRIEVE_LIST']:
         merged['settings']['ADDITIONAL_RETRIEVE_LIST'].append('OUTCAR')
 
-    # Convert to AiiDA types (same pattern as _prepare_fukui_inputs)
-    prepared = {
-        'structure': structure,
-        'code': code,
-    }
-
-    # Convert parameters dict to orm.Dict
-    if 'parameters' in merged:
-        if isinstance(merged['parameters'], dict):
-            prepared['parameters'] = orm.Dict(dict=merged['parameters'])
-        else:
-            prepared['parameters'] = merged['parameters']
-
-    # Convert options dict to orm.Dict
-    if 'options' in merged:
-        if isinstance(merged['options'], dict):
-            prepared['options'] = orm.Dict(dict=merged['options'])
-        else:
-            prepared['options'] = merged['options']
-
-    # Convert potential_mapping dict to orm.Dict
-    if 'potential_mapping' in merged:
-        if isinstance(merged['potential_mapping'], dict):
-            prepared['potential_mapping'] = orm.Dict(dict=merged['potential_mapping'])
-        else:
-            prepared['potential_mapping'] = merged['potential_mapping']
-
-    # Convert settings dict to orm.Dict
-    if 'settings' in merged:
-        if isinstance(merged['settings'], dict):
-            prepared['settings'] = orm.Dict(dict=merged['settings'])
-        else:
-            prepared['settings'] = merged['settings']
-
-    # Handle kpoints_spacing - keep as plain Python float
-    if 'kpoints_spacing' in merged:
-        kps = merged['kpoints_spacing']
-        if isinstance(kps, (int, float)):
-            prepared['kpoints_spacing'] = float(kps)
-        else:
-            prepared['kpoints_spacing'] = kps
-
-    # Copy string/bool values directly
-    for key in ('potential_family', 'clean_workdir'):
-        if key in merged:
-            prepared[key] = merged[key]
-
-    return prepared
+    # Convert to AiiDA types using common helper
+    return _convert_merged_to_aiida_types(merged, structure, code)
 
 
 @task.graph
@@ -869,8 +825,8 @@ def print_fukui_summary(workgraph) -> None:
             content = fukui_file.get_content()
             size_mb = len(content) / (1024 * 1024)
             print(f"  Size: {size_mb:.1f} MB")
-        except Exception:
-            pass
+        except (OSError, IOError):
+            print("  Size: unknown (could not read file)")
 
     # Phase 2: Dielectric constant and Fukui potential
     if results.get('dielectric_constant') is not None:
@@ -885,8 +841,8 @@ def print_fukui_summary(workgraph) -> None:
             content = potential_file.get_content()
             size_mb = len(content) / (1024 * 1024)
             print(f"  Size: {size_mb:.1f} MB")
-        except Exception:
-            pass
+        except (OSError, IOError):
+            print("  Size: unknown (could not read file)")
 
     # Phase 4: LOCPOT and Model potential
     if results.get('locpot_neutral'):
@@ -897,8 +853,8 @@ def print_fukui_summary(workgraph) -> None:
             content = locpot_file.get_content()
             size_mb = len(content) / (1024 * 1024)
             print(f"  Size: {size_mb:.1f} MB")
-        except Exception:
-            pass
+        except (OSError, IOError):
+            print("  Size: unknown (could not read file)")
 
     if results.get('modelpot'):
         modelpot_file = results['modelpot']
@@ -909,7 +865,7 @@ def print_fukui_summary(workgraph) -> None:
             content = modelpot_file.get_content()
             size_mb = len(content) / (1024 * 1024)
             print(f"  Size: {size_mb:.1f} MB")
-        except Exception:
-            pass
+        except (OSError, IOError):
+            print("  Size: unknown (could not read file)")
 
     print("=" * 60)
