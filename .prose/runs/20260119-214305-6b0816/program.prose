@@ -1,0 +1,91 @@
+# Task Decorator Standardization for PS-TEROS
+# Converts old @calcfunction + task() pattern to modern @task.calcfunction
+
+agent fixer:
+  model: sonnet
+  prompt: """You are a Python developer specializing in AiiDA-WorkGraph.
+  You make precise code edits following the project's patterns.
+  Use @task.calcfunction from aiida_workgraph instead of @calcfunction from aiida.engine."""
+
+parallel:
+  aimd_fix = session: fixer
+    prompt: """Update teros/core/aimd/tasks.py to use modern task decorators.
+
+    Current pattern (OLD):
+    ```python
+    from aiida.engine import calcfunction
+    
+    @calcfunction
+    def create_supercell_calcfunc(...):
+        ...
+    
+    create_supercell = task(create_supercell_calcfunc)
+    ```
+
+    Target pattern (NEW):
+    ```python
+    from aiida_workgraph import task
+    
+    @task.calcfunction
+    def create_supercell(...):
+        ...
+    ```
+
+    Changes needed:
+    1. Remove `from aiida.engine import calcfunction`
+    2. Change `@calcfunction` to `@task.calcfunction`
+    3. Rename function from `create_supercell_calcfunc` to `create_supercell`
+    4. Remove the `create_supercell = task(create_supercell_calcfunc)` wrapper line
+    5. Update any references in create_supercells_scatter to use the renamed function
+
+    Make only these specific changes, preserve all docstrings and logic."""
+
+  surface_energy_fix = session: fixer
+    prompt: """Update teros/core/surface_hydroxylation/surface_energy.py to use modern task decorators.
+
+    Current pattern (OLD):
+    ```python
+    from aiida.engine import calcfunction
+    
+    @calcfunction
+    def calc_delta_g_general_reaction1(...):
+        ...
+    ```
+
+    Target pattern (NEW):
+    ```python
+    from aiida_workgraph import task
+    
+    @task.calcfunction
+    def calc_delta_g_general_reaction1(...):
+        ...
+    ```
+
+    Changes needed:
+    1. Replace `from aiida.engine import calcfunction` with `from aiida_workgraph import task`
+    2. Change all `@calcfunction` decorators to `@task.calcfunction`
+
+    Functions to update (all use @calcfunction):
+    - calc_delta_g_general_reaction1
+    - calc_delta_g_general_reaction2
+    - calc_delta_g_general_reaction3
+    - calc_delta_g_reaction1
+    - calc_delta_g_reaction2
+    - calc_delta_g_reaction3
+    - calc_surface_energy_hydroxylated
+    - analyze_composition_calcfunc
+
+    Make only these specific changes, preserve all docstrings, logic, and helper functions."""
+
+output summary = session "Verify decorator standardization"
+  model: sonnet
+  context: { aimd_fix, surface_energy_fix }
+  prompt: """Verify all task decorator changes were successful.
+
+  For each file:
+  1. Read the updated file
+  2. Confirm no `from aiida.engine import calcfunction` remains
+  3. Confirm all decorators are now `@task.calcfunction`
+  4. Run: flake8 <file> --max-line-length=120 --ignore=E501,W503,E402,F401
+
+  Return a summary of changes made and verification results."""

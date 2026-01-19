@@ -1,0 +1,165 @@
+# Complete the workgraph.py refactoring using stage functions
+# This program replaces inline code with calls to the already-implemented stage functions
+
+agent refactorer:
+  model: sonnet
+  prompt: """You are a Python developer refactoring PS-TEROS code.
+  The stage functions have already been implemented in teros/core/stages/.
+  Your job is to replace inline code in build_core_workgraph() with calls to these functions.
+  Maintain 100% backward compatibility - same inputs, same outputs, same behavior.
+  Use the exact function signatures from the implemented stage modules."""
+
+# Task 1: Replace slab electronic properties inline code
+let slab_elec = session: refactorer
+  prompt: """Replace the slab electronic properties inline code in build_core_workgraph().
+
+  The stage function is already implemented at:
+  teros/core/stages/electronic_properties.py -> add_slab_electronic_properties_stage()
+
+  Read the function signature from electronic_properties.py first.
+
+  In /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py, find and replace lines 1564-1612:
+  ```python
+  # NEW: Add slab electronic properties calculation if requested
+  # Currently only supported for input_slabs mode (including restart)
+  if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties and use_input_slabs:
+      from teros.core.slabs import calculate_electronic_properties_slabs_scatter
+      ... (all the inline code)
+      logger.info("  ✓ Slab electronic properties calculation enabled for %d slabs", len(slab_electronic_properties))
+  ```
+
+  Replace with a call to add_slab_electronic_properties_stage().
+  
+  Note: The stage function needs:
+  - wg, code_label, potential_family, bulk_options
+  - slab_potential_mapping, slab_bands_parameters, slab_bands_options, slab_band_settings
+  - slab_electronic_properties, max_concurrent_jobs, use_restart_mode (restart_folders is not None)
+  - logger
+  - Either scatter_task or collector depending on restart mode
+
+  Add the import at the top: from teros.core.stages import add_slab_electronic_properties_stage
+
+  Make the edit to workgraph.py."""
+
+# Task 2: Replace bulk electronic properties inline code
+let bulk_elec = session: refactorer
+  context: slab_elec
+  prompt: """Replace the bulk electronic properties inline code in build_core_workgraph().
+
+  The stage function is already implemented at:
+  teros/core/stages/electronic_properties.py -> add_bulk_electronic_properties_stage()
+
+  Read the function signature from electronic_properties.py.
+
+  In /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py, find and replace lines 1614-1696:
+  ```python
+  # Add electronic properties calculation if requested
+  if compute_electronic_properties_bulk:
+      from aiida.plugins import WorkflowFactory
+      from aiida.orm import load_code
+      ... (all the inline code including BandsWorkChain setup)
+      logger.info("  ✓ Electronic properties calculation enabled (DOS and bands)")
+  ```
+
+  Replace with a call to add_bulk_electronic_properties_stage().
+
+  The stage function needs:
+  - wg, code_label, potential_family, bulk_potential_mapping, bulk_options
+  - bands_parameters, bands_options, band_settings
+  - clean_workdir, logger
+
+  Make the edit to workgraph.py."""
+
+# Task 3: Replace AIMD inline code  
+let aimd_code = session: refactorer
+  context: bulk_elec
+  prompt: """Replace the AIMD inline code in build_core_workgraph().
+
+  The stage function is already implemented at:
+  teros/core/stages/aimd_stage.py -> add_aimd_stage()
+
+  Read the function signature from aimd_stage.py.
+
+  In /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py, find and replace the AIMD section (lines ~1698-1862):
+  ```python
+  # ===== AIMD CALCULATION (OPTIONAL) =====
+  # Check if AIMD should be added
+  should_add_aimd = run_aimd and aimd_sequence is not None and (input_slabs is not None or miller_indices is not None)
+
+  if should_add_aimd:
+      logger.info("  → Adding AIMD stages to workflow")
+      ... (all the AIMD inline code)
+      logger.info("     Access AIMD outputs via: wg.tasks['aimd_stage_XX_XXXK'].outputs")
+  ```
+
+  Replace with a call to add_aimd_stage().
+
+  IMPORTANT: The add_aimd_stage function handles parameter resolution internally using
+  resolve_aimd_parameters(), so pass the raw aimd_parameters/slab_parameters/bulk_parameters
+  to let the function do the fallback resolution.
+
+  Add the import: from teros.core.stages import add_aimd_stage
+
+  Make the edit to workgraph.py."""
+
+# Task 4: Replace adsorption energy inline code
+let adsorption_code = session: refactorer
+  context: aimd_code
+  prompt: """Replace the adsorption energy inline code in build_core_workgraph().
+
+  The stage function is already implemented at:
+  teros/core/stages/adsorption_stage.py -> add_adsorption_energy_stage()
+
+  Read the function signature from adsorption_stage.py.
+
+  In /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py, find and replace the adsorption section (lines ~1864-1965):
+  ```python
+  # ===== ADSORPTION ENERGY CALCULATION (OPTIONAL) =====
+  # Check if adsorption energy should be computed
+  should_add_adsorption = run_adsorption_energy and adsorption_structures is not None and adsorption_formulas is not None
+
+  if should_add_adsorption:
+      logger.info("  → Adding adsorption energy calculation")
+      ... (all the inline code)
+      logger.info("     Access adsorption energies via: wg.outputs.adsorption_energies")
+  ```
+
+  Replace with a call to add_adsorption_energy_stage().
+
+  Add the import: from teros.core.stages import add_adsorption_energy_stage
+
+  Make the edit to workgraph.py."""
+
+# Task 5: Add all imports at top
+let add_imports = session: refactorer
+  context: adsorption_code
+  prompt: """Ensure all stage imports are properly added at the top of workgraph.py.
+
+  Add or verify this import block exists near the other teros imports:
+
+  ```python
+  from teros.core.stages import (
+      add_slab_electronic_properties_stage,
+      add_bulk_electronic_properties_stage,
+      add_aimd_stage,
+      add_adsorption_energy_stage,
+  )
+  ```
+
+  Check and update the imports in /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py"""
+
+# Task 6: Verify and test
+output verification = session: refactorer
+  context: { slab_elec, bulk_elec, aimd_code, adsorption_code, add_imports }
+  prompt: """Verify the refactoring was successful.
+
+  Run these commands:
+  1. python -c "from teros.core.workgraph import build_core_workgraph; print('Import OK')"
+  2. flake8 teros/core/workgraph.py teros/core/stages/ --max-line-length=120 --ignore=E501,W503,E402,F401
+
+  Count the lines in build_core_workgraph() function (it should be shorter now).
+  
+  Report:
+  - Which sections were successfully replaced
+  - Any errors found
+  - The new approximate line count of build_core_workgraph()"""

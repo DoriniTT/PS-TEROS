@@ -1,0 +1,123 @@
+# PS-TEROS Comprehensive Code Review
+# Uses 4 parallel reviewers + synthesis
+
+agent architect:
+  model: sonnet
+  prompt: """You are a software architecture expert specializing in scientific
+  computing frameworks and workflow orchestration systems. Analyze design patterns,
+  module organization, separation of concerns, and extensibility."""
+
+agent quality:
+  model: sonnet
+  prompt: """You are a code quality specialist focusing on Python best practices,
+  error handling, testing patterns, and maintainability. Look for anti-patterns,
+  code smells, and opportunities for improvement."""
+
+agent docs:
+  model: sonnet
+  prompt: """You are a technical documentation expert. Evaluate documentation
+  completeness, accuracy, developer onboarding experience, and API documentation
+  quality across docstrings, CLAUDE.md, and README files."""
+
+agent integration:
+  model: sonnet
+  prompt: """You are an AiiDA/WorkGraph integration specialist. Evaluate proper
+  use of task decorators, WorkGraph patterns, provenance tracking, scatter-gather
+  implementations, and VaspWorkChain integration."""
+
+# Run 4 reviews in parallel
+parallel:
+  arch = session: architect
+    prompt: """Review PS-TEROS architecture and design:
+
+    Codebase location: /home/thiagotd/git/PS-TEROS/teros/
+
+    Analyze:
+    1. Module organization (core/, experimental/, external/)
+    2. Design patterns used (builders, decorators, scatter-gather)
+    3. Separation of concerns between workgraph.py, thermodynamics.py, etc.
+    4. Extensibility for new calculation types
+    5. Deep merge pattern for parameter overrides
+    6. Workflow preset architecture
+
+    Grade A-F with specific findings and recommendations."""
+
+  qual = session: quality
+    prompt: """Review PS-TEROS code quality and best practices:
+
+    Codebase location: /home/thiagotd/git/PS-TEROS/teros/
+
+    Analyze:
+    1. Python best practices (type hints, error handling, logging)
+    2. Code organization within files
+    3. Testing patterns and test coverage strategy
+    4. Common anti-patterns or code smells
+    5. Security considerations (input validation, path handling)
+    6. Performance considerations (memory, vectorization)
+
+    Grade A-F with specific findings and recommendations."""
+
+  documentation = session: docs
+    prompt: """Review PS-TEROS documentation completeness:
+
+    Files to analyze:
+    - /home/thiagotd/git/PS-TEROS/CLAUDE.md
+    - /home/thiagotd/git/PS-TEROS/README.md (if exists)
+    - Docstrings across all modules in teros/
+    - Example scripts in examples/
+
+    Analyze:
+    1. CLAUDE.md accuracy and completeness
+    2. Docstring coverage and quality (Google style)
+    3. Example script documentation and usefulness
+    4. API documentation for public functions
+    5. Developer onboarding experience
+    6. Migration documentation between API versions
+
+    Grade A-F with specific findings and recommendations."""
+
+  aiida = session: integration
+    prompt: """Review PS-TEROS AiiDA/WorkGraph integration:
+
+    Codebase location: /home/thiagotd/git/PS-TEROS/teros/
+
+    Analyze:
+    1. @task.calcfunction and @task.graph decorator usage
+    2. WorkGraph output socket patterns
+    3. Scatter-gather implementation for parallel slabs
+    4. VaspWorkChain wrapping patterns
+    5. Builder input dictionary conventions
+    6. Provenance tracking completeness
+    7. Error handling in workflow chains
+
+    Grade A-F with specific findings and recommendations."""
+
+# Synthesize all reviews into unified report
+output report = session "Synthesize comprehensive review"
+  model: opus
+  context: { arch, qual, documentation, aiida }
+  prompt: """Create a unified code review report for PS-TEROS.
+
+  You have 4 specialized reviews. Synthesize into:
+
+  ## Executive Summary
+  - Overall assessment (grade A-F)
+  - Key strengths (top 5)
+  - Critical issues (top 5)
+
+  ## Detailed Findings by Category
+  - Architecture & Design
+  - Code Quality
+  - Documentation
+  - AiiDA Integration
+
+  ## Prioritized Recommendations
+  1. Critical (must fix)
+  2. High priority (should fix soon)
+  3. Medium priority (improve when possible)
+  4. Low priority (nice to have)
+
+  ## Action Items
+  Specific, actionable tasks with file paths.
+
+  Format as a comprehensive markdown report."""

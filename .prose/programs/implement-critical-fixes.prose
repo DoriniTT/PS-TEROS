@@ -1,0 +1,115 @@
+# PS-TEROS Critical Fixes Implementation
+# Implements the 3 critical items from code review
+
+agent implementer:
+  model: sonnet
+  prompt: """You are a Python developer implementing code for PS-TEROS.
+  Write production-quality code following the project's patterns.
+  Use Google-style docstrings, type hints, and pytest markers."""
+
+# Phase 1: Implement all fixes in parallel
+parallel:
+  exceptions = session: implementer
+    prompt: """Create the custom exception hierarchy for PS-TEROS.
+
+    Write to: /home/thiagotd/git/PS-TEROS/teros/core/exceptions.py
+
+    Create these exceptions following Python best practices:
+    - TerosError: Base exception for all PS-TEROS errors
+    - ValidationError: Invalid input parameters or structures
+    - StructureError: Problems with atomic structures
+    - ConvergenceError: DFT calculation convergence failures
+    - ConfigurationError: Workflow configuration issues
+    - WorkflowError: Workflow execution errors
+
+    Include:
+    - Proper inheritance hierarchy
+    - Docstrings for each exception
+    - Optional context attributes (e.g., parameter name, expected value)
+    - __str__ methods for informative messages
+
+    Follow the pattern from the existing codebase."""
+
+  test_fixed = session: implementer
+    prompt: """Create comprehensive tests for fixed_atoms.py.
+
+    Write to: /home/thiagotd/git/PS-TEROS/tests/test_fixed_atoms.py
+
+    The module has these functions to test:
+    1. get_fixed_atoms_list(structure, fix_type, fix_thickness, fix_elements)
+       - fix_type: 'bottom', 'top', 'center', or None
+       - Returns 1-based atom indices
+    2. add_fixed_atoms_to_cp2k_parameters(base_parameters, fixed_atoms_list, components)
+    3. add_fixed_atoms_to_vasp_parameters(base_parameters, structure, fixed_atoms_list)
+
+    Test cases needed:
+    - Test each fix_type option
+    - Test with element filtering (fix_elements parameter)
+    - Test edge cases: empty list, zero thickness, invalid fix_type
+    - Test CP2K parameter modification
+    - Test VASP parameter modification with selective dynamics
+
+    Use @pytest.mark.tier1 for pure Python tests.
+    Create mock structures using ASE for testing without AiiDA.
+    Follow the pattern from test_pure_functions.py."""
+
+  test_constants = session: implementer
+    prompt: """Create tests for constants.py to verify physical constants.
+
+    Write to: /home/thiagotd/git/PS-TEROS/tests/test_constants.py
+
+    Test that all constants have correct values:
+    - EV_PER_ANGSTROM2_TO_J_PER_M2 ≈ 16.0217663
+    - EV_TO_KJ_PER_MOL ≈ 96.485
+    - EV_TO_JOULE = 1.602176634e-19
+    - HARTREE_TO_EV ≈ 27.211
+    - BOHR_TO_ANGSTROM ≈ 0.529177
+    - AVOGADRO = 6.02214076e23
+    - BOLTZMANN_EV ≈ 8.617e-5
+    - etc.
+
+    Also test:
+    - Derived relationships (e.g., ANGSTROM_TO_BOHR * BOHR_TO_ANGSTROM ≈ 1)
+    - Consistency between related constants
+    - That all exports are accessible
+
+    Use @pytest.mark.tier1 since these are pure Python tests.
+    Reference CODATA 2018 values for verification."""
+
+  test_hf = session: implementer
+    prompt: """Create tests for hf.py (formation enthalpy calculation).
+
+    Write to: /home/thiagotd/git/PS-TEROS/tests/test_hf.py
+
+    The module has calculate_formation_enthalpy() which:
+    - Takes bulk, metal, nonmetal, oxygen structures and energies
+    - Supports binary (M-O) and ternary (M-N-O) oxides
+    - Returns formation enthalpy in eV and kJ/mol
+
+    Test cases needed:
+    - Binary oxide calculation (e.g., Ag2O)
+    - Ternary oxide calculation (e.g., Ag3PO4)
+    - Correct unit conversion (EV_TO_KJ_PER_MOL)
+    - Formula unit detection via GCD
+    - Error handling for mismatched elements
+    - Per-atom normalization
+
+    Since this uses @task.calcfunction, tests need AiiDA.
+    Use @pytest.mark.tier2 or skip_without_aiida fixture.
+    Create helper functions to build test structures."""
+
+# Phase 2: Update exports and verify
+output summary = session "Update exports and create summary"
+  model: sonnet
+  context: { exceptions, test_fixed, test_constants, test_hf }
+  prompt: """Complete the implementation:
+
+  1. Update /home/thiagotd/git/PS-TEROS/teros/core/__init__.py to export the new exceptions:
+     - Add imports from .exceptions
+     - Add to __all__ list
+
+  2. Verify all files were created correctly by reading them
+
+  3. Create a summary of what was implemented with file paths
+
+  Return a confirmation that all critical fixes are complete."""
