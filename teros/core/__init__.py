@@ -86,6 +86,14 @@ from .constants import (
     STOICHIOMETRY_RTOL,
     DEFAULT_KPOINTS_SPACING,
 )
+from .exceptions import (
+    TerosError,
+    ValidationError,
+    StructureError,
+    ConvergenceError,
+    ConfigurationError,
+    WorkflowError,
+)
 
 __all__ = [
     # Helper functions
@@ -162,4 +170,11 @@ __all__ = [
     "EV_TO_JOULE",
     "STOICHIOMETRY_RTOL",
     "DEFAULT_KPOINTS_SPACING",
+    # Exceptions
+    "TerosError",
+    "ValidationError",
+    "StructureError",
+    "ConvergenceError",
+    "ConfigurationError",
+    "WorkflowError",
 ]

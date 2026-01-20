@@ -1,0 +1,270 @@
+# Refactor build_core_workgraph() into Stage Builders
+# Breaks the 1000+ line function into smaller, testable modules
+
+agent architect:
+  model: sonnet
+  prompt: """You are a senior Python architect specializing in scientific workflow systems.
+  You excel at refactoring large functions into smaller, composable units while maintaining
+  backward compatibility. Follow existing patterns in the codebase."""
+
+agent implementer:
+  model: sonnet  
+  prompt: """You are a Python developer implementing code for PS-TEROS.
+  Write production-quality code following the project's patterns.
+  Use Google-style docstrings, type hints, and preserve all existing functionality."""
+
+# Phase 1: Analysis and Planning
+let analysis = session: architect
+  prompt: """Analyze the build_core_workgraph() function in /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py
+
+  The function spans lines 638-1974 (~1350 lines) and handles 10 distinct stages:
+  1. Workflow preset resolution (lines 1046-1131)
+  2. Input validation (lines 1133-1168)
+  3. Restart handling (lines 1170-1218)
+  4. CP2K setup (lines 1222-1260)
+  5. Core workgraph build (lines 1262-1346)
+  6. Input slabs handling with restart/thermodynamics/cleavage (lines 1348-1562)
+  7. Slab electronic properties (lines 1564-1612)
+  8. Bulk electronic properties (lines 1614-1696)
+  9. AIMD calculation (lines 1698-1862)
+  10. Adsorption energy calculation (lines 1864-1965)
+
+  Design a refactoring plan that:
+  1. Creates a new module: teros/core/stages/__init__.py
+  2. Extracts each stage into a separate function in teros/core/stages/
+  3. Keeps build_core_workgraph() as the orchestrator calling stage functions
+  4. Maintains 100% backward compatibility (same signature, same behavior)
+  5. Each stage function should be <100 lines and independently testable
+
+  Propose the module structure and function signatures for each stage builder.
+  DO NOT write code yet - just provide the architectural plan."""
+
+# Phase 2: Create stages module structure
+let stages_init = session: implementer
+  context: analysis
+  prompt: """Create the stages module structure.
+
+  Create the file: /home/thiagotd/git/PS-TEROS/teros/core/stages/__init__.py
+
+  This should:
+  1. Import and export all stage functions
+  2. Include a module docstring explaining the stage builder pattern
+  3. Define the StageContext dataclass that holds shared state between stages
+
+  The StageContext should contain:
+  - wg: WorkGraph instance
+  - resolved_flags: dict of workflow flags
+  - code references (code, bulk_code, slab_code, etc.)
+  - parameter dictionaries
+  - logger instance
+
+  Write the complete __init__.py file."""
+
+# Phase 3: Extract preset resolution stage
+let preset_stage = session: implementer
+  context: { analysis, stages_init }
+  prompt: """Extract the workflow preset resolution logic into a stage function.
+
+  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/preset_resolution.py
+
+  Extract lines 1046-1131 from build_core_workgraph() into:
+  - resolve_workflow_preset() function
+
+  This function should:
+  1. Call check_old_style_api()
+  2. Call resolve_preset()
+  3. Call validate_preset_inputs()
+  4. Call validate_flag_dependencies()
+  5. Return the resolved flags dictionary
+
+  Preserve all existing imports and logic exactly.
+  Include comprehensive docstring with Args, Returns, Raises."""
+
+# Phase 4: Extract input validation stage
+let validation_stage = session: implementer
+  context: { analysis, stages_init }
+  prompt: """Extract the input validation logic into a stage function.
+
+  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/input_validation.py
+
+  Extract lines 1133-1168 from build_core_workgraph() into:
+  - validate_workflow_inputs() function
+
+  This function should:
+  1. Determine if bulk structure is needed
+  2. Validate structures_dir and bulk_name when required
+  3. Log workflow configuration
+  4. Return validation results
+
+  Preserve all existing logic exactly."""
+
+# Phase 5: Extract restart handling stage
+let restart_stage = session: implementer
+  context: { analysis, stages_init }
+  prompt: """Extract the restart handling logic into a stage function.
+
+  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/restart_handling.py
+
+  Extract lines 1170-1218 from build_core_workgraph() into:
+  - handle_restart_from_node() function
+
+  This function should:
+  1. Load previous workgraph node
+  2. Extract restart folders (RemoteData)
+  3. Extract slab structures (relaxed or generated)
+  4. Return restart_folders, restart_slabs, and updated input_slabs
+
+  Preserve all existing logic exactly."""
+
+# Phase 6: Extract electronic properties stages
+let electronic_stage = session: implementer
+  context: { analysis, stages_init }
+  prompt: """Extract the electronic properties logic into stage functions.
+
+  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/electronic_properties.py
+
+  Extract two functions:
+
+  1. add_bulk_electronic_properties_stage() - lines 1614-1696
+     - Adds BandsWorkChain for bulk DOS/bands calculation
+     - Connects outputs to wg.outputs
+
+  2. add_slab_electronic_properties_stage() - lines 1564-1612
+     - Adds slab electronic properties scatter task
+     - Handles restart vs non-restart sources
+
+  Each function should:
+  - Take wg, relevant parameters, and source tasks as input
+  - Add tasks to workgraph
+  - Connect outputs
+  - Log status
+
+  Preserve all existing logic exactly."""
+
+# Phase 7: Extract AIMD stage
+let aimd_stage = session: implementer
+  context: { analysis, stages_init }
+  prompt: """Extract the AIMD calculation logic into a stage function.
+
+  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/aimd_stage.py
+
+  Extract lines 1698-1862 from build_core_workgraph() into:
+  - add_aimd_stage() function
+
+  This function should:
+  1. Determine calculator type (vasp/cp2k)
+  2. Load appropriate code
+  3. Handle fixed atoms if requested
+  4. Determine initial slab source (relaxed/input/generated)
+  5. Handle supercell creation
+  6. Create sequential AIMD stage tasks
+  7. Wire outputs between stages
+
+  Preserve all existing logic exactly. This is the most complex stage."""
+
+# Phase 8: Extract adsorption energy stage
+let adsorption_stage = session: implementer
+  context: { analysis, stages_init }
+  prompt: """Extract the adsorption energy logic into a stage function.
+
+  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/adsorption_stage.py
+
+  Extract lines 1864-1965 from build_core_workgraph() into:
+  - add_adsorption_energy_stage() function
+
+  This function should:
+  1. Load code
+  2. Get parameters with fallbacks
+  3. Extract relax and SCF parameters from builder_inputs
+  4. Add compute_adsorption_energies_scatter task
+  5. Connect all outputs
+
+  Preserve all existing logic exactly."""
+
+# Phase 9: Refactor main function
+let main_refactor = session: implementer
+  context: { analysis, stages_init, preset_stage, validation_stage, restart_stage, electronic_stage, aimd_stage, adsorption_stage }
+  prompt: """Refactor build_core_workgraph() to use the new stage functions.
+
+  Update /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py:
+
+  1. Add imports for the new stage modules at the top
+  2. Replace the inline code blocks with calls to stage functions
+  3. Keep the function signature EXACTLY the same (backward compatibility)
+  4. Keep the core_workgraph.build() call in place
+  5. Keep the input_slabs handling section (lines 1348-1562) for now - it's tightly coupled
+
+  The refactored function should be ~200-300 lines instead of 1350.
+
+  Structure:
+  ```python
+  def build_core_workgraph(...):
+      # 1. Resolve preset
+      resolved_flags = resolve_workflow_preset(...)
+      
+      # 2. Validate inputs
+      validate_workflow_inputs(...)
+      
+      # 3. Handle restart
+      restart_folders, restart_slabs, input_slabs = handle_restart_from_node(...)
+      
+      # 4. CP2K setup (keep inline - small)
+      ...
+      
+      # 5. Build core workgraph
+      wg = core_workgraph.build(...)
+      
+      # 6. Handle input slabs (keep inline - complex interdependencies)
+      ...
+      
+      # 7. Add optional stages
+      if compute_electronic_properties_slabs:
+          add_slab_electronic_properties_stage(wg, ...)
+      
+      if compute_electronic_properties_bulk:
+          add_bulk_electronic_properties_stage(wg, ...)
+      
+      if should_add_aimd:
+          add_aimd_stage(wg, ...)
+      
+      if should_add_adsorption:
+          add_adsorption_energy_stage(wg, ...)
+      
+      return wg
+  ```
+
+  Make the changes to workgraph.py."""
+
+# Phase 10: Update module exports
+let exports = session: implementer
+  context: { stages_init, preset_stage, validation_stage, restart_stage, electronic_stage, aimd_stage, adsorption_stage }
+  prompt: """Update the stages module exports and verify all imports work.
+
+  1. Update /home/thiagotd/git/PS-TEROS/teros/core/stages/__init__.py with all exports
+  
+  2. Verify imports work by reading teros/core/__init__.py and adding stages if needed
+
+  3. Run: python -c "from teros.core.stages import *; print('Imports OK')"
+  
+  4. Run: flake8 teros/core/stages/ --max-line-length=120 --ignore=E501,W503,E402,F401
+
+  Report any issues found."""
+
+# Final verification
+output summary = session "Verify refactoring success"
+  model: sonnet
+  context: { analysis, main_refactor, exports }
+  prompt: """Verify the refactoring was successful.
+
+  1. Check that build_core_workgraph() is now shorter (<400 lines)
+  2. Verify all stage modules exist in teros/core/stages/
+  3. Run: python -c "from teros.core.workgraph import build_core_workgraph; print('Import OK')"
+  4. Run: flake8 teros/core/workgraph.py --max-line-length=120 --ignore=E501,W503,E402,F401
+
+  Create a summary of:
+  - Files created
+  - Lines of code before/after in build_core_workgraph()
+  - Any remaining issues
+
+  The refactoring maintains 100% backward compatibility - the function signature
+  and behavior are unchanged, only the internal organization is improved."""

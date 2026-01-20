@@ -1,15 +1,12 @@
 """WorkGraph tasks for AIMD module."""
+
 import typing as t
 from aiida import orm
 from aiida_workgraph import task, dynamic, namespace
-from aiida.engine import calcfunction
 
 
-@calcfunction
-def create_supercell_calcfunc(
-    structure: orm.StructureData,
-    spec: orm.List
-) -> orm.StructureData:
+@task.calcfunction
+def create_supercell(structure: orm.StructureData, spec: orm.List) -> orm.StructureData:
     """
     Create supercell using pymatgen (as calcfunction).
 
@@ -38,14 +35,9 @@ def create_supercell_calcfunc(
     return supercell_data
 
 
-# Wrap calcfunction as WorkGraph task
-create_supercell = task(create_supercell_calcfunc)
-
-
 @task.graph
 def create_supercells_scatter(
-    slabs: dynamic(orm.StructureData),
-    spec: orm.List
+    slabs: dynamic(orm.StructureData), spec: orm.List
 ) -> t.Annotated[dict, namespace(result=dynamic(orm.StructureData))]:
     """
     Create supercells for a dictionary of slabs (Graph Builder).
@@ -63,6 +55,6 @@ def create_supercells_scatter(
         sc_task = create_supercell(structure=structure, spec=spec)
         # Use .result to access the output of the task
         outputs[label] = sc_task.result
-    
+
     # Return wrapped in 'result' to match the namespace annotation
-    return {'result': outputs}
+    return {"result": outputs}

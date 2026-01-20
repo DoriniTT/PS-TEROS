@@ -6,7 +6,7 @@ Implements equations 4-10 from Section S3 for calculating surface Gibbs free ene
 
 from collections import Counter
 import numpy as np
-from aiida.engine import calcfunction
+from aiida_workgraph import task
 from aiida.orm import Float, Int
 
 
@@ -86,15 +86,17 @@ def analyze_composition(slab_structure, bulk_structure):
         raise ValueError(f"Invalid n={n}, must be positive")
 
     # Calculate hydrogen addition
-    n_h = slab_formula.get('H', 0)
+    n_h = slab_formula.get("H", 0)
 
     # Validate n_h is even (required for H_{2x} formula)
     if n_h % 2 != 0:
-        raise ValueError(f"Number of H atoms must be even for H_{{2x}} formula, got n_h={n_h}")
+        raise ValueError(
+            f"Number of H atoms must be even for H_{{2x}} formula, got n_h={n_h}"
+        )
 
     # Calculate oxygen deficit
-    expected_o = n * bulk_formula['O']
-    actual_o = slab_formula['O']
+    expected_o = n * bulk_formula["O"]
+    actual_o = slab_formula["O"]
     n_o_deficit = expected_o - actual_o
 
     # Derive x and y
@@ -106,25 +108,29 @@ def analyze_composition(slab_structure, bulk_structure):
 
     # Validate results
     if (n_o_deficit + x) % 2 != 0:
-        raise ValueError(f"O balance gives non-integer y: n_o_deficit={n_o_deficit}, x={x}")
+        raise ValueError(
+            f"O balance gives non-integer y: n_o_deficit={n_o_deficit}, x={x}"
+        )
 
     if (n_o_deficit + x) != 2 * y:
-        raise ValueError(f"O balance inconsistent: n_o_deficit={n_o_deficit}, x={x}, y={y}")
+        raise ValueError(
+            f"O balance inconsistent: n_o_deficit={n_o_deficit}, x={x}, y={y}"
+        )
 
     # Format output
-    bulk_str = ''.join(f"{elem}{count}" for elem, count in sorted(bulk_formula.items()))
-    slab_str = ''.join(f"{elem}{count}" for elem, count in sorted(slab_formula.items()))
+    bulk_str = "".join(f"{elem}{count}" for elem, count in sorted(bulk_formula.items()))
+    slab_str = "".join(f"{elem}{count}" for elem, count in sorted(slab_formula.items()))
 
     return {
-        'n': n,
-        'x': x,
-        'y': y,
-        'n_h': n_h,
-        'n_o_deficit': n_o_deficit,
-        'formulas': {
-            'bulk': bulk_str,
-            'slab': slab_str,
-        }
+        "n": n,
+        "x": x,
+        "y": y,
+        "n_h": n_h,
+        "n_o_deficit": n_o_deficit,
+        "formulas": {
+            "bulk": bulk_str,
+            "slab": slab_str,
+        },
     }
 
 
@@ -165,12 +171,12 @@ def analyze_composition_general(slab_structure, pristine_structure):
     slab_formula = _get_formula_dict(slab_structure)
 
     # Calculate changes in H and O
-    h_pristine = pristine_formula.get('H', 0)
-    h_slab = slab_formula.get('H', 0)
+    h_pristine = pristine_formula.get("H", 0)
+    h_slab = slab_formula.get("H", 0)
     delta_h = h_slab - h_pristine
 
-    o_pristine = pristine_formula['O']
-    o_slab = slab_formula['O']
+    o_pristine = pristine_formula["O"]
+    o_slab = slab_formula["O"]
     delta_o = o_slab - o_pristine
 
     # Validate H change is even (required for H₂O)
@@ -182,57 +188,62 @@ def analyze_composition_general(slab_structure, pristine_structure):
     n_o2 = (o_pristine - o_slab + n_h2o) / 2.0
 
     # Format output
-    pristine_str = ''.join(f"{elem}{count}" for elem, count in sorted(pristine_formula.items()))
-    slab_str = ''.join(f"{elem}{count}" for elem, count in sorted(slab_formula.items()))
+    pristine_str = "".join(
+        f"{elem}{count}" for elem, count in sorted(pristine_formula.items())
+    )
+    slab_str = "".join(f"{elem}{count}" for elem, count in sorted(slab_formula.items()))
 
     return {
-        'n_h2o': n_h2o,
-        'n_o2': n_o2,
-        'delta_h': delta_h,
-        'delta_o': delta_o,
-        'formulas': {
-            'pristine': pristine_str,
-            'modified': slab_str,
-        }
+        "n_h2o": n_h2o,
+        "n_o2": n_o2,
+        "delta_h": delta_h,
+        "delta_o": delta_o,
+        "formulas": {
+            "pristine": pristine_str,
+            "modified": slab_str,
+        },
     }
 
 
 # Internal helper functions (not @calcfunction) for use within other functions
-def _calc_delta_g_general_reaction1_internal(e_modified, e_pristine, n_h2o, n_o2, delta_mu_h2o, delta_mu_o2):
+def _calc_delta_g_general_reaction1_internal(
+    e_modified, e_pristine, n_h2o, n_o2, delta_mu_h2o, delta_mu_o2
+):
     """Internal helper: Calculate ΔG for Reaction 1 (H2O/O2). Uses plain floats."""
-    delta_g = (
-        e_modified -
-        e_pristine -
-        n_h2o * delta_mu_h2o +
-        n_o2 * delta_mu_o2
-    )
+    delta_g = e_modified - e_pristine - n_h2o * delta_mu_h2o + n_o2 * delta_mu_o2
     return delta_g
 
 
-def _calc_delta_g_general_reaction2_internal(e_modified, e_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_h2o):
+def _calc_delta_g_general_reaction2_internal(
+    e_modified, e_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_h2o
+):
     """Internal helper: Calculate ΔG for Reaction 2 (H2/H2O). Uses plain floats."""
     delta_g = (
-        e_modified -
-        e_pristine -
-        n_h2o * delta_mu_h2 +
-        (n_o2 - 0.5 * n_h2o) * delta_mu_h2o
+        e_modified
+        - e_pristine
+        - n_h2o * delta_mu_h2
+        + (n_o2 - 0.5 * n_h2o) * delta_mu_h2o
     )
     return delta_g
 
 
-def _calc_delta_g_general_reaction3_internal(e_modified, e_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_o2):
+def _calc_delta_g_general_reaction3_internal(
+    e_modified, e_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_o2
+):
     """Internal helper: Calculate ΔG for Reaction 3 (H2/O2). Uses plain floats."""
     delta_g = (
-        e_modified -
-        e_pristine -
-        n_h2o * delta_mu_h2 +
-        (n_o2 - 0.5 * n_h2o) * delta_mu_o2
+        e_modified
+        - e_pristine
+        - n_h2o * delta_mu_h2
+        + (n_o2 - 0.5 * n_h2o) * delta_mu_o2
     )
     return delta_g
 
 
-@calcfunction
-def calc_delta_g_general_reaction1(E_modified, E_pristine, n_h2o, n_o2, delta_mu_h2o, delta_mu_o2):
+@task.calcfunction
+def calc_delta_g_general_reaction1(
+    E_modified, E_pristine, n_h2o, n_o2, delta_mu_h2o, delta_mu_o2
+):
     """
     Calculate formation energy using general approach - Reaction 1: H2O/O2 reservoirs.
 
@@ -252,17 +263,19 @@ def calc_delta_g_general_reaction1(E_modified, E_pristine, n_h2o, n_o2, delta_mu
         Float: Formation energy ΔG in eV
     """
     delta_g = (
-        E_modified.value -
-        E_pristine.value -
-        n_h2o.value * delta_mu_h2o.value +
-        n_o2.value * delta_mu_o2.value
+        E_modified.value
+        - E_pristine.value
+        - n_h2o.value * delta_mu_h2o.value
+        + n_o2.value * delta_mu_o2.value
     )
 
     return Float(delta_g)
 
 
-@calcfunction
-def calc_delta_g_general_reaction2(E_modified, E_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_h2o):
+@task.calcfunction
+def calc_delta_g_general_reaction2(
+    E_modified, E_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_h2o
+):
     """
     Calculate formation energy using general approach - Reaction 2: H2/H2O reservoirs.
 
@@ -286,17 +299,19 @@ def calc_delta_g_general_reaction2(E_modified, E_pristine, n_h2o, n_o2, delta_mu
     # Convert reaction to H2 reservoir
     # pristine + n_h2o·H2 → modified + (n_o2 - 0.5·n_h2o)·H2O
     delta_g = (
-        E_modified.value -
-        E_pristine.value -
-        n_h2o.value * delta_mu_h2.value +
-        (n_o2.value - 0.5 * n_h2o.value) * delta_mu_h2o.value
+        E_modified.value
+        - E_pristine.value
+        - n_h2o.value * delta_mu_h2.value
+        + (n_o2.value - 0.5 * n_h2o.value) * delta_mu_h2o.value
     )
 
     return Float(delta_g)
 
 
-@calcfunction
-def calc_delta_g_general_reaction3(E_modified, E_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_o2):
+@task.calcfunction
+def calc_delta_g_general_reaction3(
+    E_modified, E_pristine, n_h2o, n_o2, delta_mu_h2, delta_mu_o2
+):
     """
     Calculate formation energy using general approach - Reaction 3: H2/O2 reservoirs.
 
@@ -319,16 +334,16 @@ def calc_delta_g_general_reaction3(E_modified, E_pristine, n_h2o, n_o2, delta_mu
     """
     # pristine + n_h2o·H2 → modified + (n_o2 - 0.5·n_h2o)·O2
     delta_g = (
-        E_modified.value -
-        E_pristine.value -
-        n_h2o.value * delta_mu_h2.value +
-        (n_o2.value - 0.5 * n_h2o.value) * delta_mu_o2.value
+        E_modified.value
+        - E_pristine.value
+        - n_h2o.value * delta_mu_h2.value
+        + (n_o2.value - 0.5 * n_h2o.value) * delta_mu_o2.value
     )
 
     return Float(delta_g)
 
 
-@calcfunction
+@task.calcfunction
 def calc_delta_g_reaction1(E_slab, E_bulk, n, x, y, delta_mu_h2o, delta_mu_o2):
     """
     Calculate formation energy using Reaction 1: H2O/O2 reservoirs.
@@ -369,16 +384,16 @@ def calc_delta_g_reaction1(E_slab, E_bulk, n, x, y, delta_mu_h2o, delta_mu_o2):
 
     # Equation 4: ΔG = E + 2y·μ_O - n·E_bulk - x·μ_H2O
     delta_g = (
-        E_slab.value +
-        2 * y.value * mu_o -
-        n.value * E_bulk.value -
-        x.value * delta_mu_h2o.value
+        E_slab.value
+        + 2 * y.value * mu_o
+        - n.value * E_bulk.value
+        - x.value * delta_mu_h2o.value
     )
 
     return Float(delta_g)
 
 
-@calcfunction
+@task.calcfunction
 def calc_delta_g_reaction2(E_slab, E_bulk, n, x, y, delta_mu_h2, delta_mu_h2o):
     """
     Calculate formation energy using Reaction 2: H2/H2O reservoirs.
@@ -409,16 +424,16 @@ def calc_delta_g_reaction2(E_slab, E_bulk, n, x, y, delta_mu_h2, delta_mu_h2o):
 
     # Equation 5
     delta_g = (
-        E_slab.value +
-        (2 * y.value - x.value) * delta_mu_h2o.value -
-        n.value * E_bulk.value -
-        x.value * delta_mu_h2.value
+        E_slab.value
+        + (2 * y.value - x.value) * delta_mu_h2o.value
+        - n.value * E_bulk.value
+        - x.value * delta_mu_h2.value
     )
 
     return Float(delta_g)
 
 
-@calcfunction
+@task.calcfunction
 def calc_delta_g_reaction3(E_slab, E_bulk, n, x, y, delta_mu_h2, delta_mu_o2):
     """
     Calculate formation energy using Reaction 3: H2/O2 reservoirs.
@@ -452,10 +467,10 @@ def calc_delta_g_reaction3(E_slab, E_bulk, n, x, y, delta_mu_h2, delta_mu_o2):
 
     # Equation 6
     delta_g = (
-        E_slab.value +
-        (2 * y.value - x.value) * mu_o -
-        n.value * E_bulk.value -
-        x.value * delta_mu_h2.value
+        E_slab.value
+        + (2 * y.value - x.value) * mu_o
+        - n.value * E_bulk.value
+        - x.value * delta_mu_h2.value
     )
 
     return Float(delta_g)
@@ -484,9 +499,7 @@ def select_reaction_function(which_reaction):
     }
 
     if which_reaction not in reactions:
-        raise ValueError(
-            f"which_reaction must be 1, 2, or 3, got {which_reaction}"
-        )
+        raise ValueError(f"which_reaction must be 1, 2, or 3, got {which_reaction}")
 
     return reactions[which_reaction]
 
@@ -525,7 +538,7 @@ def get_surface_area(structure):
 EV_TO_J = 1.602176634e-19  # eV to Joules
 
 
-@calcfunction
+@task.calcfunction
 def calc_gamma_s(delta_g, area):
     """
     Calculate average surface energy of both surfaces.
@@ -561,7 +574,7 @@ def calc_gamma_s(delta_g, area):
     return Float(gamma_s)
 
 
-@calcfunction
+@task.calcfunction
 def calc_gamma(gamma_s_modified, gamma_0_pristine):
     """
     Calculate corrected surface energy (removes pristine contribution).
@@ -650,22 +663,20 @@ def calculate_surface_energies_general(
 
     # Get chemical potential corrections
     mu_corrections = {}
-    for species in ['H2O', 'H2', 'O2']:
+    for species in ["H2O", "H2", "O2"]:
         if species in pressures:
             mu_corrections[species] = janaf_db.get_mu_correction(
-                species=species,
-                T=temperature,
-                P=pressures[species]
+                species=species, T=temperature, P=pressures[species]
             )
 
     # Step 1: Identify reference structure (minimum H count)
     # For combine mode where all structures have H, use minimum-H structure as reference
-    min_h = float('inf')
+    min_h = float("inf")
     pristine_name = None
 
     for name, structure in structures_dict.items():
         formula_dict = _get_formula_dict(structure)
-        n_h = formula_dict.get('H', 0)
+        n_h = formula_dict.get("H", 0)
 
         if n_h < min_h:
             min_h = n_h
@@ -695,23 +706,25 @@ def calculate_surface_energies_general(
 
     # Select reaction functions (use internal helpers to avoid @calcfunction nesting)
     if which_reaction == 1:
-        required_species = ['H2O', 'O2']
+        required_species = ["H2O", "O2"]
     elif which_reaction == 2:
-        required_species = ['H2', 'H2O']
+        required_species = ["H2", "H2O"]
     elif which_reaction == 3:
-        required_species = ['H2', 'O2']
+        required_species = ["H2", "O2"]
     else:
         raise ValueError(f"which_reaction must be 1, 2, or 3, got {which_reaction}")
 
     # Check required species are present
     for species in required_species:
         if species not in mu_corrections:
-            raise ValueError(f"Reaction {which_reaction} requires {species} pressure, but it was not provided")
+            raise ValueError(
+                f"Reaction {which_reaction} requires {species} pressure, but it was not provided"
+            )
 
     # Extract plain float values for calculations
     # energies_dict values can be Float nodes or plain floats
     def get_value(val):
-        return val.value if hasattr(val, 'value') else val
+        return val.value if hasattr(val, "value") else val
 
     pristine_energy_val = get_value(pristine_energy)
 
@@ -723,28 +736,28 @@ def calculate_surface_energies_general(
             delta_g = _calc_delta_g_general_reaction1_internal(
                 e_modified=e_modified,
                 e_pristine=pristine_energy_val,
-                n_h2o=comp['n_h2o'],
-                n_o2=comp['n_o2'],
-                delta_mu_h2o=mu_corrections['H2O'],
-                delta_mu_o2=mu_corrections['O2'],
+                n_h2o=comp["n_h2o"],
+                n_o2=comp["n_o2"],
+                delta_mu_h2o=mu_corrections["H2O"],
+                delta_mu_o2=mu_corrections["O2"],
             )
         elif which_reaction == 2:
             delta_g = _calc_delta_g_general_reaction2_internal(
                 e_modified=e_modified,
                 e_pristine=pristine_energy_val,
-                n_h2o=comp['n_h2o'],
-                n_o2=comp['n_o2'],
-                delta_mu_h2=mu_corrections['H2'],
-                delta_mu_h2o=mu_corrections['H2O'],
+                n_h2o=comp["n_h2o"],
+                n_o2=comp["n_o2"],
+                delta_mu_h2=mu_corrections["H2"],
+                delta_mu_h2o=mu_corrections["H2O"],
             )
         else:  # reaction 3
             delta_g = _calc_delta_g_general_reaction3_internal(
                 e_modified=e_modified,
                 e_pristine=pristine_energy_val,
-                n_h2o=comp['n_h2o'],
-                n_o2=comp['n_o2'],
-                delta_mu_h2=mu_corrections['H2'],
-                delta_mu_o2=mu_corrections['O2'],
+                n_h2o=comp["n_h2o"],
+                n_o2=comp["n_o2"],
+                delta_mu_h2=mu_corrections["H2"],
+                delta_mu_o2=mu_corrections["O2"],
             )
 
         formation_energies[name] = delta_g
@@ -764,18 +777,18 @@ def calculate_surface_energies_general(
         surface_energies[name] = gamma_j_m2
 
     return {
-        'surface_energies': surface_energies,
-        'formation_energies': formation_energies,
-        'composition_changes': composition_changes,
-        'reference_data': {
-            'temperature': temperature,
-            'pressures': pressures,
-            'reaction_used': which_reaction,
-            'mu_corrections': mu_corrections,
-            'reference_name': pristine_name,
-            'reference_H_count': int(min_h),
-            'E_reference': pristine_energy_val,
-        }
+        "surface_energies": surface_energies,
+        "formation_energies": formation_energies,
+        "composition_changes": composition_changes,
+        "reference_data": {
+            "temperature": temperature,
+            "pressures": pressures,
+            "reaction_used": which_reaction,
+            "mu_corrections": mu_corrections,
+            "reference_name": pristine_name,
+            "reference_H_count": int(min_h),
+            "E_reference": pristine_energy_val,
+        },
     }
 
 
@@ -830,7 +843,9 @@ def calculate_surface_energies(
     """
     # DEBUG: Print to confirm this function is being called
     print("=" * 80)
-    print("DEBUG: calculate_surface_energies (OLD) called - redirecting to general version")
+    print(
+        "DEBUG: calculate_surface_energies (OLD) called - redirecting to general version"
+    )
     print("=" * 80)
 
     # Try using general approach instead
@@ -848,12 +863,10 @@ def calculate_surface_energies(
 
     # Get chemical potential corrections
     mu_corrections = {}
-    for species in ['H2O', 'H2', 'O2']:
+    for species in ["H2O", "H2", "O2"]:
         if species in pressures:
             mu_corrections[species] = janaf_db.get_mu_correction(
-                species=species,
-                T=temperature,
-                P=pressures[species]
+                species=species, T=temperature, P=pressures[species]
             )
 
     # Select reaction function
@@ -871,7 +884,7 @@ def calculate_surface_energies(
     for name, structure in structures_dict.items():
         # Get H count directly without full analysis
         formula_dict = _get_formula_dict(structure)
-        n_h = formula_dict.get('H', 0)
+        n_h = formula_dict.get("H", 0)
 
         if n_h == 0:
             pristine_name = name
@@ -901,31 +914,31 @@ def calculate_surface_energies(
         pristine_delta_g = calc_delta_g(
             E_slab=energies_dict[pristine_name],
             E_bulk=bulk_energy,
-            n=Int(pristine_comp['n']),
+            n=Int(pristine_comp["n"]),
             x=Int(0),
             y=Int(0),
-            delta_mu_h2o=Float(mu_corrections.get('H2O', 0.0)),
-            delta_mu_o2=Float(mu_corrections.get('O2', 0.0)),
+            delta_mu_h2o=Float(mu_corrections.get("H2O", 0.0)),
+            delta_mu_o2=Float(mu_corrections.get("O2", 0.0)),
         )
     elif which_reaction == 2:
         pristine_delta_g = calc_delta_g(
             E_slab=energies_dict[pristine_name],
             E_bulk=bulk_energy,
-            n=Int(pristine_comp['n']),
+            n=Int(pristine_comp["n"]),
             x=Int(0),
             y=Int(0),
-            delta_mu_h2=Float(mu_corrections.get('H2', 0.0)),
-            delta_mu_h2o=Float(mu_corrections.get('H2O', 0.0)),
+            delta_mu_h2=Float(mu_corrections.get("H2", 0.0)),
+            delta_mu_h2o=Float(mu_corrections.get("H2O", 0.0)),
         )
     else:  # reaction 3
         pristine_delta_g = calc_delta_g(
             E_slab=energies_dict[pristine_name],
             E_bulk=bulk_energy,
-            n=Int(pristine_comp['n']),
+            n=Int(pristine_comp["n"]),
             x=Int(0),
             y=Int(0),
-            delta_mu_h2=Float(mu_corrections.get('H2', 0.0)),
-            delta_mu_o2=Float(mu_corrections.get('O2', 0.0)),
+            delta_mu_h2=Float(mu_corrections.get("H2", 0.0)),
+            delta_mu_o2=Float(mu_corrections.get("O2", 0.0)),
         )
 
     pristine_gamma_s = calc_gamma_s(pristine_delta_g, pristine_area)
@@ -941,31 +954,31 @@ def calculate_surface_energies(
             delta_g = calc_delta_g(
                 E_slab=energies_dict[name],
                 E_bulk=bulk_energy,
-                n=Int(comp['n']),
-                x=Int(comp['x']),
-                y=Int(comp['y']),
-                delta_mu_h2o=Float(mu_corrections['H2O']),
-                delta_mu_o2=Float(mu_corrections['O2']),
+                n=Int(comp["n"]),
+                x=Int(comp["x"]),
+                y=Int(comp["y"]),
+                delta_mu_h2o=Float(mu_corrections["H2O"]),
+                delta_mu_o2=Float(mu_corrections["O2"]),
             )
         elif which_reaction == 2:
             delta_g = calc_delta_g(
                 E_slab=energies_dict[name],
                 E_bulk=bulk_energy,
-                n=Int(comp['n']),
-                x=Int(comp['x']),
-                y=Int(comp['y']),
-                delta_mu_h2=Float(mu_corrections['H2']),
-                delta_mu_h2o=Float(mu_corrections['H2O']),
+                n=Int(comp["n"]),
+                x=Int(comp["x"]),
+                y=Int(comp["y"]),
+                delta_mu_h2=Float(mu_corrections["H2"]),
+                delta_mu_h2o=Float(mu_corrections["H2O"]),
             )
         else:  # reaction 3
             delta_g = calc_delta_g(
                 E_slab=energies_dict[name],
                 E_bulk=bulk_energy,
-                n=Int(comp['n']),
-                x=Int(comp['x']),
-                y=Int(comp['y']),
-                delta_mu_h2=Float(mu_corrections['H2']),
-                delta_mu_o2=Float(mu_corrections['O2']),
+                n=Int(comp["n"]),
+                x=Int(comp["x"]),
+                y=Int(comp["y"]),
+                delta_mu_h2=Float(mu_corrections["H2"]),
+                delta_mu_o2=Float(mu_corrections["O2"]),
             )
 
         formation_energies[name] = delta_g.value
@@ -978,15 +991,15 @@ def calculate_surface_energies(
 
     # Return complete results
     return {
-        'surface_energies': surface_energies,
-        'formation_energies': formation_energies,
-        'stoichiometry': stoichiometry_data,
-        'reference_data': {
-            'temperature': temperature,
-            'pressures': pressures,
-            'reaction_used': which_reaction,
-            'mu_corrections': {k: v for k, v in mu_corrections.items()},
-            'E_bulk': bulk_energy.value,
-            'gamma_0': gamma_0.value,
-        }
+        "surface_energies": surface_energies,
+        "formation_energies": formation_energies,
+        "stoichiometry": stoichiometry_data,
+        "reference_data": {
+            "temperature": temperature,
+            "pressures": pressures,
+            "reaction_used": which_reaction,
+            "mu_corrections": {k: v for k, v in mu_corrections.items()},
+            "E_bulk": bulk_energy.value,
+            "gamma_0": gamma_0.value,
+        },
     }
