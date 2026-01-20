@@ -24,6 +24,7 @@ Public API:
     run_fukui_electrodes_calcfunc: @task.calcfunction for electrodes method
     run_perturbative_expansion_calcfunc: @task.calcfunction for perturbative expansion
     extract_locpot_from_retrieved: @task.calcfunction to extract LOCPOT from VASP
+    calculate_planar_average: @task.calcfunction to compute planar average of Fukui function
 
 Example (Phase 1 only):
     >>> from teros.core.fukui import build_fukui_workgraph, get_fukui_results
@@ -36,6 +37,18 @@ Example (Phase 1 only):
     ...     compute_fukui=True,
     ... )
     >>> wg.submit(wait=False)
+
+Example (Phase 1 + Planar Average):
+    >>> wg = build_fukui_workgraph(
+    ...     structure=my_structure,
+    ...     nelect_neutral=192,
+    ...     code_label='VASP-6.5.1@localwork',
+    ...     builder_inputs={...},
+    ...     fukui_type='plus',
+    ...     compute_fukui=True,
+    ...     compute_planar_average=True,  # Enable planar averaging
+    ...     planar_average_axis=2,        # Average along z-axis (default)
+    ... )
 
 Example (Phase 1 + Phase 2):
     >>> wg = build_fukui_workgraph(
@@ -86,6 +99,8 @@ from .tasks import (
     # Phase 4: Perturbative expansion
     extract_locpot_from_retrieved,
     run_perturbative_expansion_calcfunc,
+    # Planar average
+    calculate_planar_average,
 )
 
 from .utils import (
@@ -121,6 +136,9 @@ __all__ = [
     # Phase 4 Calcfunctions (Perturbative Expansion)
     'extract_locpot_from_retrieved',
     'run_perturbative_expansion_calcfunc',
+
+    # Planar average
+    'calculate_planar_average',
 
     # Utilities
     'make_delta_label',

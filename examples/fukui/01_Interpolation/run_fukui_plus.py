@@ -91,7 +91,7 @@ def main():
     print("\n4. Defining VASP calculation inputs...")
 
     # Code label for obelix cluster
-    code_label = 'VASP-6.5.1-idefix@obelix'
+    code_label = 'VASP-6.5.1-idefix-4@obelix'
 
     builder_inputs = {
         'parameters': {
@@ -169,6 +169,7 @@ def main():
         # fix_thickness=5.0,      # 5 Angstroms from center
         fukui_type='plus',
         compute_fukui=True,       # Run FukuiGrid to compute Fukui function
+        compute_planar_average=True,
         max_concurrent_jobs=4,    # obelix can handle multiple jobs
         name='Fukui_SnO2_110_plus',
     )

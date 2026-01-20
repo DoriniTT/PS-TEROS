@@ -19,6 +19,7 @@ from .tasks import (
     run_fukui_electrodes_calcfunc,
     extract_locpot_from_retrieved,
     run_perturbative_expansion_calcfunc,
+    calculate_planar_average,
 )
 from .utils import make_delta_label, validate_fukui_inputs, DEFAULT_DELTA_N_VALUES
 from ..utils import deep_merge_dicts
@@ -321,6 +322,9 @@ def build_fukui_workgraph(
     fix_elements: t.List[str] = None,
     fukui_type: str = 'plus',
     compute_fukui: bool = False,
+    # Planar average of Fukui function
+    compute_planar_average: bool = False,
+    planar_average_axis: int = 2,
     # Phase 2: Fukui potential via electrodes
     compute_fukui_potential: bool = False,
     bulk_structure: t.Union[orm.StructureData, int] = None,
@@ -375,6 +379,13 @@ def build_fukui_workgraph(
                       Fukui function from the CHGCAR files. Output will include
                       'fukui_chgcar' (SinglefileData containing CHGCAR_FUKUI.vasp).
                       Default: False
+        compute_planar_average: If True, calculate the planar average of the Fukui
+                               function along a specified axis. Automatically enables
+                               compute_fukui. Output will include 'planar_average' (Dict
+                               containing z_coordinates, planar_average values, and metadata).
+                               Default: False
+        planar_average_axis: Axis for planar averaging (0=x, 1=y, 2=z). Default: 2 (z-axis).
+                            Only used when compute_planar_average=True.
         compute_fukui_potential: If True, run FukuiGrid electrodes method to compute
                                 the Fukui potential. Requires bulk_structure for DFPT
                                 dielectric calculation. Automatically enables compute_fukui.
@@ -411,6 +422,7 @@ def build_fukui_workgraph(
         - summary: Dict with calculation metadata (energies, NELECT values, convergence)
         - relaxed_structure: StructureData (only if relax_first=True)
         - fukui_chgcar: SinglefileData with CHGCAR_FUKUI.vasp (only if compute_fukui=True)
+        - planar_average: Dict with planar-averaged Fukui values (only if compute_planar_average=True)
         - dielectric_constant: Float with epsilon value (only if compute_fukui_potential=True)
         - fukui_potential: SinglefileData with LOCPOT_FUKUI.vasp (only if compute_fukui_potential=True)
         - locpot_neutral: SinglefileData with LOCPOT (only if compute_perturbative_expansion=True)
@@ -441,6 +453,13 @@ def build_fukui_workgraph(
 
     # Validate inputs
     validate_fukui_inputs(nelect_neutral, delta_n_values, fukui_type)
+
+    # Validate planar average inputs
+    if compute_planar_average:
+        if not compute_fukui:
+            compute_fukui = True
+        if planar_average_axis not in (0, 1, 2):
+            raise ValueError(f"planar_average_axis must be 0, 1, or 2, got {planar_average_axis}")
 
     # Validate Phase 2 inputs
     if compute_fukui_potential:
@@ -606,6 +625,16 @@ def build_fukui_workgraph(
         )
         wg.outputs.fukui_chgcar = interpolation_task.outputs.result
 
+    # Optional: Calculate planar average of Fukui function
+    if compute_planar_average:
+        planar_avg_task = wg.add_task(
+            calculate_planar_average,
+            name='planar_average',
+            fukui_chgcar=interpolation_task.outputs.result,
+            axis=orm.Int(planar_average_axis),
+        )
+        wg.outputs.planar_average = planar_avg_task.outputs.result
+
     # Phase 2: Fukui potential via electrodes
     if compute_fukui_potential:
         # Load bulk structure if PK provided
@@ -741,6 +770,16 @@ def get_fukui_results(workgraph) -> dict:
     else:
         results['fukui_chgcar'] = None
 
+    # Get planar_average if available (from compute_planar_average=True)
+    if hasattr(workgraph.outputs, 'planar_average'):
+        planar_avg = workgraph.outputs.planar_average
+        if isinstance(planar_avg, orm.Dict):
+            results['planar_average'] = planar_avg.get_dict()
+        else:
+            results['planar_average'] = dict(planar_avg)
+    else:
+        results['planar_average'] = None
+
     # Phase 2: Get dielectric constant if available (from compute_fukui_potential=True)
     if hasattr(workgraph.outputs, 'dielectric_constant'):
         eps_node = workgraph.outputs.dielectric_constant
@@ -827,6 +866,32 @@ def print_fukui_summary(workgraph) -> None:
             print(f"  Size: {size_mb:.1f} MB")
         except (OSError, IOError):
             print("  Size: unknown (could not read file)")
+
+    # Planar average information
+    if results.get('planar_average'):
+        pa = results['planar_average']
+        print(f"\nPlanar Average (axis={pa.get('axis_label', 'z')}):")
+        print(f"  Grid dimensions: {pa.get('grid_dimensions', [])}")
+        z_range = pa.get('z_range', {})
+        z_min = z_range.get('min', 'N/A')
+        z_max = z_range.get('max', 'N/A')
+        if isinstance(z_min, (int, float)) and isinstance(z_max, (int, float)):
+            print(f"  Z-range: {z_min:.3f} to {z_max:.3f} Å")
+        else:
+            print(f"  Z-range: {z_min} to {z_max} Å")
+        value_range = pa.get('value_range', {})
+        v_min = value_range.get('min', 'N/A')
+        v_max = value_range.get('max', 'N/A')
+        if isinstance(v_min, (int, float)) and isinstance(v_max, (int, float)):
+            print(f"  Value range: {v_min:.6f} to {v_max:.6f}")
+        else:
+            print(f"  Value range: {v_min} to {v_max}")
+        print(f"  Number of points: {pa.get('n_points', 'N/A')}")
+        integral = pa.get('integral', 'N/A')
+        if isinstance(integral, (int, float)):
+            print(f"  Integral |f(z)|: {integral:.6f}")
+        else:
+            print(f"  Integral |f(z)|: {integral}")
 
     # Phase 2: Dielectric constant and Fukui potential
     if results.get('dielectric_constant') is not None:

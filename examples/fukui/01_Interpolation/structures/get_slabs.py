@@ -13,7 +13,7 @@ miller_indices = (1, 1, 0)
 min_slab_thickness = 18 # in Angstroms
 vacuum = 15  # in Angstroms
 # Generate the slabs
-slab_generator = SlabGenerator(primitive_structure, miller_indices, min_slab_thickness, vacuum, lll_reduce=True, center_slab=False)
+slab_generator = SlabGenerator(primitive_structure, miller_indices, min_slab_thickness, vacuum, lll_reduce=True, center_slab=True)
 slabs = slab_generator.get_slabs(symmetrize=True)
 
 all_structures = []

@@ -858,3 +858,85 @@ def run_perturbative_expansion_calcfunc(
             )
 
         return orm.SinglefileData(str(output_path), filename='MODELPOT_LOCPOT.vasp')
+
+
+# -----------------------------------------------------------------------------
+# Planar average calculation
+# -----------------------------------------------------------------------------
+
+@task.calcfunction
+def calculate_planar_average(
+    fukui_chgcar: orm.SinglefileData,
+    axis: orm.Int = None,
+) -> orm.Dict:
+    """
+    Calculate planar average of the Fukui function along a specified axis.
+
+    Uses Pymatgen's Chgcar.get_average_along_axis() to compute the planar-averaged
+    Fukui function, which is useful for analyzing the spatial distribution of
+    reactivity along the surface normal direction.
+
+    Args:
+        fukui_chgcar: SinglefileData containing CHGCAR_FUKUI.vasp
+        axis: Axis for averaging (0=x, 1=y, 2=z). Default: 2 (z-axis)
+
+    Returns:
+        Dict with z_coordinates, planar_average, and metadata including:
+        - z_coordinates: List of coordinates along the axis (Angstroms)
+        - planar_average: List of planar-averaged Fukui values at each coordinate
+        - axis: Axis index (0, 1, or 2)
+        - axis_label: Axis name ('x', 'y', or 'z')
+        - grid_dimensions: FFT grid size [nx, ny, nz]
+        - z_range: Min/max coordinates along the axis
+        - value_range: Min/max Fukui values
+        - structure_info: Formula, atom count, lattice parameters
+        - integral: Integral of |f(z)| along the axis
+        - n_points: Number of grid points along the axis
+    """
+    from pymatgen.io.vasp import Chgcar
+
+    axis_val = axis.value if axis is not None else 2
+    if axis_val not in (0, 1, 2):
+        raise ValueError(f"axis must be 0, 1, or 2, got {axis_val}")
+
+    axis_labels = {0: 'x', 1: 'y', 2: 'z'}
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_path = Path(tmpdir) / 'CHGCAR_FUKUI.vasp'
+        content = fukui_chgcar.get_content(mode='rb')
+        temp_path.write_bytes(content)
+        chgcar = Chgcar.from_file(str(temp_path))
+
+    structure = chgcar.structure
+    lattice = structure.lattice
+    planar_avg = chgcar.get_average_along_axis(axis_val)
+    axis_coords = chgcar.get_axis_grid(axis_val)
+
+    # Convert to lists for JSON serialization (handle both numpy arrays and lists)
+    planar_avg_list = planar_avg.tolist() if hasattr(planar_avg, 'tolist') else list(planar_avg)
+    axis_coords_list = axis_coords.tolist() if hasattr(axis_coords, 'tolist') else list(axis_coords)
+
+    # Calculate integral
+    dz = axis_coords_list[1] - axis_coords_list[0] if len(axis_coords_list) > 1 else 0
+    integral = sum(abs(v) for v in planar_avg_list) * dz
+
+    result = {
+        'z_coordinates': axis_coords_list,
+        'planar_average': planar_avg_list,
+        'axis': axis_val,
+        'axis_label': axis_labels[axis_val],
+        'grid_dimensions': list(chgcar.data['total'].shape),
+        'z_range': {'min': float(min(axis_coords_list)), 'max': float(max(axis_coords_list))},
+        'value_range': {'min': float(min(planar_avg_list)), 'max': float(max(planar_avg_list))},
+        'structure_info': {
+            'formula': str(structure.composition.reduced_formula),
+            'n_atoms': len(structure),
+            'lattice_a': float(lattice.a),
+            'lattice_b': float(lattice.b),
+            'lattice_c': float(lattice.c),
+        },
+        'integral': float(integral),
+        'n_points': len(axis_coords_list),
+    }
+
+    return orm.Dict(dict=result)
