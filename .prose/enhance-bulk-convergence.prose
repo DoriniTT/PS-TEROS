@@ -1,0 +1,142 @@
+# Enhance Bulk Convergence Module for PS-TEROS
+# OpenProse program to create an enhanced bulk material convergence testing module
+
+session "Analyze existing convergence module and design enhancements"
+  prompt: """
+  I've analyzed the existing PS-TEROS convergence module. Here's what exists:
+
+  ## Current Implementation (teros/core/convergence/)
+
+  1. **build_convergence_workgraph()** - Wraps vasp.v2.converge plugin
+     - Inputs: structure, code_label, builder_inputs, conv_settings, convergence_threshold
+     - Runs ENCUT and k-points convergence scans
+     - Has analysis tasks that determine converged values
+
+  2. **get_convergence_results()** - Extracts results from WorkGraph
+     - Returns recommended_cutoff, recommended_kspacing, convergence_summary
+
+  3. **Analysis tasks** (tasks.py):
+     - analyze_cutoff_convergence
+     - analyze_kpoints_convergence
+     - extract_recommended_parameters
+
+  ## What's Missing / Can Be Enhanced
+
+  1. **Visualization functions** - No plotting utilities to visualize convergence curves
+  2. **Print summary function** - No formatted console output like other modules
+  3. **Result export** - No CSV/JSON export for convergence data
+  4. **Cleaner cluster examples** - Need bohr-specific example with par40 queue
+
+  ## Design Plan
+
+  I will:
+  1. Add `print_convergence_summary(wg)` function for formatted console output
+  2. Add `plot_convergence(wg, save_path=None)` function using matplotlib
+  3. Add `export_convergence_data(wg, filepath)` for CSV export
+  4. Create a clean example script for Si on bohr cluster (par40 queue)
+
+  The module already wraps vasp.v2.converge correctly, so I'll focus on the output/visualization side.
+  """
+
+session "Implement print_convergence_summary function"
+  prompt: """
+  Create a `print_convergence_summary()` function that:
+  1. Takes a WorkGraph PK or node as input
+  2. Displays a nicely formatted summary with:
+     - Structure info (formula, number of atoms)
+     - Convergence threshold used
+     - ENCUT convergence table (cutoff values, energies, converged status)
+     - K-points convergence table (kspacing values, energies, converged status)
+     - Final recommendations with safety margin
+  3. Uses Unicode box drawing characters for nice formatting
+  4. Shows convergence achieved/not achieved status
+
+  Example output format:
+  ```
+  ═══════════════════════════════════════════════════════════════════
+                    VASP CONVERGENCE TEST RESULTS
+  ═══════════════════════════════════════════════════════════════════
+  Structure: Si2 (2 atoms)
+  Threshold: 1.0 meV/atom
+  ───────────────────────────────────────────────────────────────────
+
+  ENCUT Convergence:
+  ┌─────────┬──────────────┬──────────────┬───────────┐
+  │ ENCUT   │ Energy/atom  │ ΔE from ref  │ Converged │
+  │ (eV)    │ (eV)         │ (meV)        │           │
+  ├─────────┼──────────────┼──────────────┼───────────┤
+  │ 200     │ -5.4123      │ 15.2         │ ✗         │
+  │ 250     │ -5.4201      │ 7.4          │ ✗         │
+  │ 300     │ -5.4258      │ 1.7          │ ✗         │
+  │ 350     │ -5.4270      │ 0.5          │ ✓         │
+  │ 400     │ -5.4275      │ 0.0          │ ✓ (ref)   │
+  └─────────┴──────────────┴──────────────┴───────────┘
+  ✓ Converged at ENCUT = 350 eV
+  → Recommended: 400 eV (with safety margin)
+
+  K-points Convergence:
+  ... similar table ...
+
+  ═══════════════════════════════════════════════════════════════════
+  SUMMARY: ENCUT = 400 eV, k-spacing = 0.03 Å⁻¹
+  ═══════════════════════════════════════════════════════════════════
+  ```
+  """
+
+session "Implement plot_convergence function"
+  prompt: """
+  Create a `plot_convergence()` function that:
+  1. Takes a WorkGraph PK or node as input
+  2. Creates a 2-panel matplotlib figure:
+     - Left: ENCUT convergence (energy vs cutoff, with threshold line)
+     - Right: K-points convergence (energy vs kspacing, with threshold line)
+  3. Marks converged values with vertical dashed lines
+  4. Shows threshold as horizontal dashed lines
+  5. Optional: save to file with save_path parameter
+  6. Returns the figure for further customization
+
+  Use clean, publication-quality styling with proper axis labels.
+  """
+
+session "Implement export_convergence_data function"
+  prompt: """
+  Create an `export_convergence_data()` function that:
+  1. Takes a WorkGraph PK or node as input
+  2. Exports convergence data to CSV with columns:
+     - For cutoff: ENCUT, Energy, Energy/atom, Delta_E_meV, Converged
+     - For kpoints: kspacing, Energy, Energy/atom, Delta_E_meV, Converged
+  3. Also exports a summary JSON with recommendations
+  4. Can export to a directory with multiple files or single combined file
+  """
+
+session "Create bohr cluster example script"
+  prompt: """
+  Create an example script `examples/convergence/parameters_convergence/convergence_si_bohr.py` that:
+  1. Uses Si diamond structure (2 atoms) as test case
+  2. Configures for bohr cluster with par40 queue (40 cores, PBS scheduler)
+  3. Uses appropriate convergence scan ranges:
+     - ENCUT: 200-600 eV in 50 eV steps
+     - k-spacing: 0.08-0.02 Å⁻¹ in -0.01 steps
+  4. Has functions:
+     - submit_convergence(): Submit the workflow
+     - get_results(pk): Show results with print_convergence_summary
+     - plot_results(pk): Plot convergence curves
+  5. Clean, well-documented code following PS-TEROS patterns
+
+  Bohr cluster settings:
+  - queue_name: par40
+  - num_machines: 1
+  - num_cores_per_machine: 40 (PBS)
+  - code_label: VASP-6.4.3@bohr
+  - potential_family: PBE
+  """
+
+session "Update module exports in __init__.py"
+  prompt: """
+  Update the convergence module's __init__.py to export the new functions:
+  - print_convergence_summary
+  - plot_convergence
+  - export_convergence_data
+
+  Follow the existing export pattern in the module.
+  """

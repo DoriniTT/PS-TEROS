@@ -39,6 +39,13 @@ from .surface_energy import (
     identify_compound_type,
 )
 from .convergence import (
+    # ENCUT/k-points convergence
+    build_convergence_workgraph,
+    get_convergence_results,
+    print_convergence_summary,
+    plot_convergence,
+    export_convergence_data,
+    # Thickness convergence
     build_thickness_convergence_workgraph,
     get_thickness_convergence_results,
     generate_thickness_series,
@@ -58,6 +65,14 @@ from .vasp_parallelization import (
     get_benchmark_results,
     print_benchmark_summary,
     generate_benchmark_combinations,
+)
+from .neb import (
+    build_neb_workgraph,
+    get_neb_results,
+    print_neb_summary,
+    interpolate_structures,
+    calculate_barrier,
+    get_neb_incar_parameters,
 )
 from .utils import (
     deep_merge_dicts,
@@ -127,6 +142,12 @@ __all__ = [
     "calculate_metal_surface_energy",
     "build_metal_surface_energy_workgraph",
     "identify_compound_type",
+    # ENCUT/k-points convergence
+    "build_convergence_workgraph",
+    "get_convergence_results",
+    "print_convergence_summary",
+    "plot_convergence",
+    "export_convergence_data",
     # Thickness convergence
     "build_thickness_convergence_workgraph",
     "get_thickness_convergence_results",
@@ -144,6 +165,13 @@ __all__ = [
     "get_benchmark_results",
     "print_benchmark_summary",
     "generate_benchmark_combinations",
+    # NEB (Nudged Elastic Band)
+    "build_neb_workgraph",
+    "get_neb_results",
+    "print_neb_summary",
+    "interpolate_structures",
+    "calculate_barrier",
+    "get_neb_incar_parameters",
     # Utilities
     "deep_merge_dicts",
     "get_vasp_parser_settings",

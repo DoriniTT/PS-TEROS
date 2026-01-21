@@ -1,0 +1,143 @@
+# Wulff Shape Enhancement for PS-TEROS Surface Energy Module
+#
+# This program orchestrates the enhancement of the surface_energy module
+# to add Wulff shape calculation from surface energies.
+#
+# The enhancement includes:
+# 1. Symmetry expansion of Miller indices
+# 2. Pymatgen WulffShape integration
+# 3. Exposure of Wulff shape as workgraph output
+
+input project_path: "Path to PS-TEROS project"
+
+# Define specialized agents
+agent code-architect:
+  model: opus
+  prompt: """
+    You are an expert in AiiDA-WorkGraph and computational materials science.
+    You understand how to design workflow components that integrate with
+    existing codebases. You focus on clean, maintainable code that follows
+    established patterns in the project.
+  """
+
+agent implementer:
+  model: sonnet
+  prompt: """
+    You are a Python developer implementing scientific computing code.
+    You write clean, well-documented code following project conventions.
+    You use proper type hints and docstrings.
+  """
+
+agent tester:
+  model: sonnet
+  prompt: """
+    You are a testing expert who validates code functionality.
+    You verify implementations against requirements and check for edge cases.
+  """
+
+agent captain:
+  model: sonnet
+  persist: true
+  prompt: """
+    You coordinate the enhancement work, review outputs from other agents,
+    and make decisions about next steps. You never implement directly.
+  """
+
+# Phase 1: Design the enhancement
+session: captain
+  prompt: """
+    We are enhancing the PS-TEROS surface_energy module to add Wulff shape calculation.
+
+    The wulff.py file has already been created with:
+    - get_symmetrically_equivalent_miller_indices() - expands Miller indices via symmetry
+    - expand_surface_energies_with_symmetry() - expands surface energies dict
+    - build_wulff_shape() - @task.calcfunction to create WulffShape
+    - visualize_wulff_shape() - helper for plotting
+    - get_wulff_shape_summary() - human-readable summary
+
+    We need to:
+    1. Integrate build_wulff_shape into the workgraph.py
+    2. Update __init__.py to export new functions
+    3. Update the example script to demonstrate Wulff shape output
+
+    Review this plan and confirm it's correct.
+  """
+
+# Phase 2: Update workgraph.py to integrate Wulff shape
+let workgraph_update = session: implementer
+  prompt: """
+    Update the file /home/thiagotd/git/PS-TEROS/teros/core/surface_energy/workgraph.py to:
+
+    1. Import build_wulff_shape from wulff.py
+    2. Add a new task that calls build_wulff_shape after gather_surface_energies
+    3. Expose wulff_shape as a workgraph output
+
+    The integration should:
+    - Use the bulk_structure from bulk_task.outputs.structure
+    - Use the surface_energies from gather_task.outputs.result
+    - Add wulff_shape_task after gather_task
+    - Expose wg.outputs.wulff_shape = wulff_shape_task.outputs.result
+
+    Read the existing workgraph.py first to understand the structure.
+    Make minimal, targeted changes to integrate the Wulff shape.
+  """
+
+# Phase 3: Update exports in __init__.py
+let init_update = session: implementer
+  prompt: """
+    Update /home/thiagotd/git/PS-TEROS/teros/core/surface_energy/__init__.py to:
+
+    1. Import from wulff.py:
+       - build_wulff_shape
+       - get_symmetrically_equivalent_miller_indices
+       - expand_surface_energies_with_symmetry
+       - visualize_wulff_shape
+       - get_wulff_shape_summary
+
+    2. Add these to __all__ list
+
+    Keep the existing structure and just add the new imports/exports.
+  """
+
+# Phase 4: Update the example script
+let example_update = session: implementer
+  prompt: """
+    Update /home/thiagotd/git/PS-TEROS/examples/surface_thermo_gold/surface_thermo_metals.py to:
+
+    1. Add more Miller indices for better Wulff shape (at least 3 unique families)
+    2. Update the output description to mention Wulff shape
+    3. Add a note about expected outputs including wulff_shape
+
+    The example should demonstrate calculating surface energies for FCC Au
+    with (111), (100), (110) and producing a Wulff shape output.
+  """
+
+# Phase 5: Review and validate
+resume: captain
+  prompt: """
+    Review the changes made:
+    1. workgraph.py integration
+    2. __init__.py exports
+    3. Example script updates
+
+    Verify:
+    - The Wulff shape task is properly connected in the workflow
+    - All new functions are exported
+    - The example demonstrates the new functionality
+
+    Provide a summary of what was accomplished.
+  """
+  context: [workgraph_update, init_update, example_update]
+
+# Final output
+output summary = session: captain
+  prompt: """
+    Create a final summary of the Wulff shape enhancement:
+
+    1. What files were modified/created
+    2. New functions available
+    3. How to use the new Wulff shape functionality
+    4. Expected outputs from the workflow
+
+    Format as a clear, concise report.
+  """

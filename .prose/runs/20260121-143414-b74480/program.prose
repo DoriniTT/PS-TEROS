@@ -1,0 +1,194 @@
+# Enhance Thickness Convergence Module
+# Add visualization and make it a fully standalone module
+
+# Define specialized agents for this task
+agent code-explorer:
+  model: sonnet
+  prompt: """You analyze existing codebases to understand patterns, architecture,
+  and conventions. Focus on identifying how modules are structured, what patterns
+  are used for similar features, and what dependencies exist."""
+
+agent module-designer:
+  model: opus
+  prompt: """You design clean, maintainable module architectures that follow
+  project conventions. You create comprehensive plans with specific files,
+  functions, and integration points."""
+
+agent implementer:
+  model: sonnet
+  prompt: """You implement Python code following project conventions exactly.
+  You write clean, well-documented code with proper type hints and error handling.
+  For PS-TEROS: use aiida_workgraph patterns, @task.calcfunction decorators,
+  and follow the existing module structure."""
+
+agent code-reviewer:
+  model: sonnet
+  prompt: """You review code for bugs, style issues, and adherence to project
+  conventions. You check that implementations match specifications and that
+  all edge cases are handled."""
+
+# ============================================================================
+# Phase 1: Analyze existing implementation
+# ============================================================================
+
+let analysis = session: code-explorer
+  prompt: """Analyze the existing thickness convergence module in PS-TEROS:
+
+  1. Read teros/core/convergence/__init__.py to see exports
+  2. Read teros/core/convergence/workgraph.py for the main workflow
+  3. Read teros/core/convergence/slabs.py for slab generation
+  4. Read teros/core/convergence/visualization.py for current visualization
+
+  Focus on:
+  - What functions are already implemented for thickness convergence
+  - What visualization functions exist (if any) for thickness convergence
+  - What patterns are used in the ENCUT/k-points visualization
+  - What's missing to make thickness convergence a complete standalone feature
+
+  Provide a structured analysis of the current state."""
+
+# ============================================================================
+# Phase 2: Design enhanced module
+# ============================================================================
+
+let design = session: module-designer
+  prompt: """Based on the analysis, design enhancements for the thickness
+  convergence module to make it fully standalone.
+
+  Requirements:
+  1. Add visualization functions for thickness convergence:
+     - print_thickness_convergence_summary() - formatted console output
+     - plot_thickness_convergence() - matplotlib visualization
+     - export_thickness_convergence_data() - CSV/JSON export
+
+  2. Follow the patterns from ENCUT/k-points visualization exactly
+
+  3. Make visualization work with both WorkGraph and PK inputs
+
+  4. Add example script similar to thickness_convergence_example.py from ML-SAPIE
+
+  Provide:
+  - List of functions to add
+  - Function signatures with type hints
+  - Description of what each function does
+  - Where each function should be placed"""
+  context: analysis
+
+# ============================================================================
+# Phase 3: Implement visualization functions
+# ============================================================================
+
+let visualization_impl = session: implementer
+  prompt: """Implement the thickness convergence visualization functions.
+
+  Add to teros/core/convergence/visualization.py:
+
+  1. print_thickness_convergence_summary(workgraph)
+     - Print formatted table showing:
+       - Layer count vs surface energy (J/m²)
+       - Convergence status for each thickness
+       - Recommended thickness
+     - Follow the exact table format from print_convergence_summary()
+
+  2. plot_thickness_convergence(workgraph, save_path=None)
+     - Single panel plot: surface energy vs layer count
+     - Mark convergence threshold as horizontal band
+     - Mark recommended thickness
+     - Include error bars if available
+
+  3. export_thickness_convergence_data(workgraph, output_dir, prefix)
+     - Export to CSV with headers
+     - Export summary JSON
+
+  Use the existing _load_workgraph() helper.
+  Import get_thickness_convergence_results from workgraph.py.
+
+  Write COMPLETE, WORKING code ready to add to the file."""
+  context: design
+
+# ============================================================================
+# Phase 4: Update __init__.py exports
+# ============================================================================
+
+let exports_impl = session: implementer
+  prompt: """Update teros/core/convergence/__init__.py to export the new
+  thickness convergence visualization functions:
+
+  Add imports:
+  - print_thickness_convergence_summary
+  - plot_thickness_convergence
+  - export_thickness_convergence_data
+
+  Add to __all__ list.
+
+  Also update the module docstring to document the new functions.
+
+  Provide the complete updated __init__.py content."""
+  context: visualization_impl
+
+# ============================================================================
+# Phase 5: Create example script
+# ============================================================================
+
+let example_impl = session: implementer
+  prompt: """Create an example script for thickness convergence testing.
+
+  Location: examples/convergence/thickness_convergence/run_thickness_convergence.py
+
+  The script should:
+  1. Load AiiDA profile
+  2. Build thickness convergence workgraph for a metal surface (Au 111)
+  3. Submit the workflow
+  4. Print monitoring instructions
+
+  Use configuration for obelix cluster (from CLAUDE.md):
+  - code_label: 'VASP-6.5.1-idefix@obelix'
+  - potential_family: 'PBE'
+  - Custom PBS scheduler commands for skylake nodes
+
+  Include a helper function to print results after completion.
+
+  Follow the exact pattern from ML-SAPIE's thickness_convergence_example.py."""
+  context: [design, exports_impl]
+
+# ============================================================================
+# Phase 6: Review all implementations
+# ============================================================================
+
+let review = session: code-reviewer
+  prompt: """Review all the implemented code:
+
+  1. Check visualization.py additions for:
+     - Correct function signatures
+     - Proper error handling
+     - Consistent style with existing code
+     - Correct import of get_thickness_convergence_results
+
+  2. Check __init__.py for:
+     - All new exports present
+     - __all__ list updated
+     - Docstring updated
+
+  3. Check example script for:
+     - Correct cluster configuration
+     - Proper import paths
+     - Good documentation
+
+  Provide a list of any issues found and corrections needed."""
+  context: [visualization_impl, exports_impl, example_impl]
+
+# ============================================================================
+# Output final implementation
+# ============================================================================
+
+output implementation_plan = session "Create final implementation summary"
+  prompt: """Compile the final implementation plan with all code changes:
+
+  1. Summary of what was analyzed
+  2. Complete code for visualization.py additions
+  3. Complete updated __init__.py
+  4. Complete example script
+  5. Any review corrections applied
+
+  Format as a clear, actionable implementation guide."""
+  context: [analysis, visualization_impl, exports_impl, example_impl, review]
