@@ -1,19 +1,25 @@
 """
 Metal and Intermetallic Surface Energy WorkGraph Builder.
 
-This module provides the main workflow builder for computing surface energies
-of elemental metals and stoichiometric intermetallics. It supports:
-- Multiple Miller indices in a single parent workflow
-- Single bulk calculation shared across all orientations
-- Multiple terminations per orientation
-- Bulk relaxation → Slab generation → Slab relaxation → Surface energy calculation
+This module computes surface energies for stoichiometric AND symmetric surfaces
+using the simple formula: γ = (E_slab - N·E_bulk/atom) / (2A)
+
+IMPORTANT: This module REQUIRES surfaces to be both:
+1. Stoichiometric - slab composition matches bulk
+2. Symmetric - top and bottom surfaces are equivalent
+
+For non-stoichiometric or asymmetric surfaces, use teros.core.thermodynamics
+which handles chemical potential dependencies: γ(Δμ_O, Δμ_M).
 
 Supported materials:
 - Elemental metals: Au, Ag, Cu, Pt, Pd, Ni, Fe, etc.
 - Stoichiometric intermetallics: PdIn, AuCu, NiAl, Cu3Au, etc.
 
-For stoichiometric and symmetric intermetallic surfaces, the simple formula
-γ = (E_slab - N·E_bulk/atom) / (2A) is used, same as for elemental metals.
+Features:
+- Multiple Miller indices in a single parent workflow
+- Automatic stoichiometric+symmetric surface finder (filters BEFORE DFT)
+- Single bulk calculation shared across all orientations
+- Wulff shape construction from surface energies
 """
 
 from __future__ import annotations
@@ -187,8 +193,8 @@ def metal_surface_energy_single_hkl(
     # Sequential execution - creates data dependency for chaining tasks
     wait_for: orm.Data = None,
 
-    # Stoichiometric+Symmetric Surface Finder (EXPERIMENTAL)
-    require_stoichiometric_symmetric: bool = False,
+    # Stoichiometric+Symmetric Surface Finder
+    require_stoichiometric_symmetric: bool = True,
     stoichiometric_strategies: list = None,
     stoichiometric_max_thickness: float = 30.0,
 ):
@@ -197,12 +203,13 @@ def metal_surface_energy_single_hkl(
 
     Receives already-relaxed bulk structure and energy from parent.
 
-    If require_stoichiometric_symmetric=True, uses the experimental stoichiometric
-    finder to generate only stoichiometric AND symmetric slabs.
+    By default (require_stoichiometric_symmetric=True), uses the stoichiometric
+    finder to generate only stoichiometric AND symmetric slabs. This is required
+    for the simple surface energy formula to be valid.
     """
     # ===== SLAB GENERATION =====
     if require_stoichiometric_symmetric:
-        # Use stoichiometric+symmetric finder (EXPERIMENTAL)
+        # Use stoichiometric+symmetric finder (default behavior)
         slab_generation_outputs = generate_stoichiometric_symmetric_slabs(
             bulk_structure=bulk_structure,
             miller_indices=orm.List(list=[miller_indices]),  # Single Miller index in list
@@ -293,8 +300,8 @@ def build_metal_surface_energy_workgraph(
     # Concurrency
     max_concurrent_jobs: int = 4,
 
-    # Stoichiometric+Symmetric Surface Finder (EXPERIMENTAL)
-    require_stoichiometric_symmetric: bool = False,
+    # Stoichiometric+Symmetric Surface Finder
+    require_stoichiometric_symmetric: bool = True,
     stoichiometric_strategies: list = None,
     stoichiometric_bonds: dict = None,
     stoichiometric_auto_detect_bonds: bool = False,
@@ -332,10 +339,12 @@ def build_metal_surface_energy_workgraph(
         slab_options: Scheduler options for slab calculations
         slab_kpoints_spacing: K-points spacing for slabs
         max_concurrent_jobs: Maximum concurrent VASP calculations
-        require_stoichiometric_symmetric: (EXPERIMENTAL) If True, use stoichiometric+symmetric
+        require_stoichiometric_symmetric: If True (default), use stoichiometric+symmetric
             surface finder to pre-filter slabs before DFT. Only slabs that are BOTH
-            stoichiometric AND symmetric will be generated. Raises
+            stoichiometric AND symmetric will be generated. This is required for the
+            simple γ = (E_slab - N·E_bulk/atom) / 2A formula to be valid. Raises
             NoStoichiometricSymmetricSurfaceError if no valid surfaces found.
+            For non-stoichiometric surfaces, use teros.core.thermodynamics instead.
         stoichiometric_strategies: List of search strategies for stoichiometric finder.
             Options: 'filter_first', 'symmetrize_check', 'thickness_scan', 'bond_preservation'.
             Default: all strategies in order.
@@ -452,7 +461,7 @@ def build_metal_surface_energy_workgraph(
             slab_options=slab_opts,
             slab_kpoints_spacing=slab_kpts,
             max_concurrent_jobs=max_concurrent_jobs,
-            # Stoichiometric+Symmetric Surface Finder (EXPERIMENTAL)
+            # Stoichiometric+Symmetric Surface Finder
             require_stoichiometric_symmetric=require_stoichiometric_symmetric,
             stoichiometric_strategies=stoichiometric_strategies,
             stoichiometric_max_thickness=stoichiometric_max_thickness,

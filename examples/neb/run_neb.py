@@ -77,7 +77,6 @@ BUILDER_INPUTS = {
             'num_cores_per_machine': 40,   # 40 cores per node on bohr
         },
         'queue_name': 'par120',            # Use par120 for multi-node jobs
-        'max_wallclock_seconds': 3 * 24 * 3600,  # 3 days
     },
 }
 

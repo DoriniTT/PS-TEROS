@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 """
-Metal Surface Energy with Stoichiometric+Symmetric Filter
+Metal Surface Energy with Stoichiometric+Symmetric Requirement
 
-This script demonstrates the EXPERIMENTAL require_stoichiometric_symmetric
-feature which ensures only stoichiometric AND symmetric slabs are generated
-BEFORE running expensive DFT calculations.
+This script demonstrates the surface_energy module which ONLY works with
+stoichiometric AND symmetric slabs. This is the default behavior - all
+slabs are validated BEFORE running expensive DFT calculations.
 
 Material: PdIn (B2 intermetallic)
-Surfaces: (110), (100) - pre-filtered for stoichiometry
+Surfaces: (110), (100) - pre-filtered for stoichiometry+symmetry
+
+For non-stoichiometric or asymmetric surfaces, use teros.core.thermodynamics.
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -25,10 +27,10 @@ from teros.core.surface_energy import (
 
 
 def main():
-    """Run metal surface energy with stoichiometric filter."""
+    """Run metal surface energy calculation for stoichiometric+symmetric surfaces."""
 
     print("\n" + "=" * 70)
-    print("METAL SURFACE ENERGY WITH STOICHIOMETRIC FILTER")
+    print("METAL SURFACE ENERGY CALCULATION")
     print("Material: PdIn (B2 intermetallic)")
     print("=" * 70)
 
@@ -75,7 +77,8 @@ def main():
     all_feasible = all(r.has_valid_surfaces for r in reports.values())
     if not all_feasible:
         print("\n   WARNING: Some orientations have no stoichiometric+symmetric surfaces!")
-        print("   The workflow will raise NoStoichiometricSymmetricSurfaceError for these.")
+        print("   The workflow will raise NoStoichiometricSymmetricSurfaceError.")
+        print("   Use teros.core.thermodynamics for those orientations instead.")
 
     # Code configuration (update for your cluster)
     code_label = 'VASP-6.5.1-idefix@obelix'
@@ -113,9 +116,10 @@ def main():
 #PBS -N PdIn_surf''',
     }
 
-    print("\n4. Building workgraph with stoichiometric filter...")
+    print("\n4. Building workgraph...")
 
-    # Build workflow WITH stoichiometric+symmetric filter (EXPERIMENTAL)
+    # Build workflow
+    # Note: require_stoichiometric_symmetric=True is the DEFAULT
     wg = build_metal_surface_energy_workgraph(
         # Structure (pass StructureData directly instead of file path)
         bulk_structure=pdin_structure,
@@ -139,8 +143,7 @@ def main():
         center_slab=True,
         primitive=True,
 
-        # EXPERIMENTAL: Stoichiometric+Symmetric filter
-        require_stoichiometric_symmetric=True,
+        # Stoichiometric finder configuration
         stoichiometric_strategies=['filter_first', 'symmetrize_check', 'thickness_scan'],
         stoichiometric_max_thickness=30.0,
 
@@ -152,7 +155,7 @@ def main():
         # Concurrency
         max_concurrent_jobs=4,
 
-        name='PdIn_stoich_sym_surface_energy',
+        name='PdIn_surface_energy',
     )
 
     print("   WorkGraph built successfully")
@@ -168,13 +171,12 @@ def main():
     print(f"\nMonitor with:")
     print(f"  verdi process status {wg.pk}")
     print(f"  verdi process show {wg.pk}")
-    print(f"\nExpected behavior:")
-    print(f"  - Only stoichiometric+symmetric slabs will be generated")
-    print(f"  - Non-stoichiometric terminations are filtered BEFORE DFT")
-    print(f"  - Saves computational resources on invalid surfaces")
-    print(f"\nIf an orientation has no valid surfaces:")
-    print(f"  - NoStoichiometricSymmetricSurfaceError will be raised")
-    print(f"  - Recommendation: Use thermodynamics module for those orientations")
+    print(f"\nModule behavior:")
+    print(f"  - Only stoichiometric+symmetric slabs are generated")
+    print(f"  - Non-stoichiometric terminations filtered BEFORE DFT")
+    print(f"  - Saves computational resources")
+    print(f"\nFor non-stoichiometric surfaces:")
+    print(f"  Use teros.core.thermodynamics instead")
     print(f"{'=' * 70}\n")
 
     return wg

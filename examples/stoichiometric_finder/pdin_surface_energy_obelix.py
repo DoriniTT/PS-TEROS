@@ -4,7 +4,7 @@ PdIn Intermetallic Surface Energy Calculation on Obelix Cluster
 
 This example demonstrates:
 1. Pre-flight feasibility analysis for stoichiometric+symmetric surfaces
-2. Surface energy calculation with the EXPERIMENTAL stoichiometric filter
+2. Surface energy calculation (stoichiometric+symmetric surfaces only)
 3. Wulff shape construction from calculated surface energies
 
 Material: PdIn (B2 CsCl-type intermetallic)
@@ -14,6 +14,9 @@ Code: VASP 6.5.1
 The B2 structure has Pd at corners and In at body center, making it an
 ideal test case for the stoichiometric finder since different Miller
 indices can have varying stoichiometry behavior.
+
+Note: The surface_energy module ONLY works with stoichiometric+symmetric
+surfaces. For non-stoichiometric surfaces, use teros.core.thermodynamics.
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -89,9 +92,6 @@ MILLER_INDICES = [[1, 1, 0], [1, 0, 0], [1, 1, 1]]
 MIN_SLAB_THICKNESS = 20.0   # Angstroms
 MIN_VACUUM_THICKNESS = 20.0  # Angstroms
 
-# Enable experimental stoichiometric filter
-USE_STOICHIOMETRIC_FILTER = True
-
 
 # =============================================================================
 # MAIN SCRIPT
@@ -128,8 +128,8 @@ def run_feasibility_analysis(pmg_structure):
     Pre-flight analysis: check which Miller indices have valid surfaces.
 
     This analysis runs BEFORE any DFT calculations and helps identify:
-    - Orientations suitable for simple surface energy formula
-    - Orientations that need thermodynamics approach
+    - Orientations suitable for this module (stoichiometric+symmetric)
+    - Orientations that need teros.core.thermodynamics instead
     """
     print("\n" + "-" * 70)
     print("PRE-FLIGHT FEASIBILITY ANALYSIS")
@@ -153,7 +153,7 @@ def run_feasibility_analysis(pmg_structure):
 
     all_feasible = True
     for miller, report in reports.items():
-        status = "OK" if report.has_valid_surfaces else "NEEDS THERMODYNAMICS"
+        status = "OK" if report.has_valid_surfaces else "USE THERMODYNAMICS"
         if not report.has_valid_surfaces:
             all_feasible = False
         print(f"  {str(miller):14s} | {report.n_stoichiometric:6d} | {report.n_symmetric:3d} | "
@@ -163,9 +163,8 @@ def run_feasibility_analysis(pmg_structure):
 
     if not all_feasible:
         print("\n  WARNING: Some orientations have no stoichiometric+symmetric surfaces!")
-        if USE_STOICHIOMETRIC_FILTER:
-            print("  With require_stoichiometric_symmetric=True, these will raise errors.")
-            print("  Consider removing them or using thermodynamics module.")
+        print("  These orientations will raise NoStoichiometricSymmetricSurfaceError.")
+        print("  Remove them from MILLER_INDICES or use teros.core.thermodynamics.")
 
     return reports, all_feasible
 
@@ -178,7 +177,9 @@ def build_and_submit_workflow(aiida_structure):
     print("-" * 70)
 
     # Build workflow
-    wg_kwargs = dict(
+    # Note: require_stoichiometric_symmetric=True is the DEFAULT
+    # The module only works with stoichiometric+symmetric surfaces
+    wg = build_metal_surface_energy_workgraph(
         # Structure
         bulk_structure=aiida_structure,
 
@@ -202,6 +203,10 @@ def build_and_submit_workflow(aiida_structure):
         symmetrize=True,
         primitive=True,
 
+        # Stoichiometric finder strategies (default: all strategies)
+        stoichiometric_strategies=['filter_first', 'symmetrize_check', 'thickness_scan'],
+        stoichiometric_max_thickness=30.0,
+
         # Slab relaxation
         slab_parameters=SLAB_PARAMETERS,
         slab_options=OBELIX_OPTIONS,
@@ -214,19 +219,9 @@ def build_and_submit_workflow(aiida_structure):
         name='PdIn_surface_energy',
     )
 
-    # Add stoichiometric filter if enabled
-    if USE_STOICHIOMETRIC_FILTER:
-        print("\n  EXPERIMENTAL: Stoichiometric+symmetric filter ENABLED")
-        wg_kwargs.update(
-            require_stoichiometric_symmetric=True,
-            stoichiometric_strategies=['filter_first', 'symmetrize_check', 'thickness_scan'],
-            stoichiometric_max_thickness=30.0,
-        )
-    else:
-        print("\n  Standard mode: All terminations will be calculated")
-
-    wg = build_metal_surface_energy_workgraph(**wg_kwargs)
     print(f"\n  WorkGraph '{wg.name}' built successfully")
+    print("  Only stoichiometric+symmetric slabs will be generated")
+    print("  Non-stoichiometric terminations are filtered BEFORE DFT")
 
     # Submit
     print("\n  Submitting to AiiDA daemon...")
@@ -284,15 +279,13 @@ After Completion - View Results:
 Expected Surface Energies (approximate):
   PdIn is a B2 intermetallic with anisotropic surface energies.
   Typical values: 1.0 - 2.0 J/m2 depending on orientation.
-""")
 
-    if USE_STOICHIOMETRIC_FILTER:
-        print("""
-STOICHIOMETRIC FILTER ENABLED:
+Module Behavior:
   - Only stoichiometric+symmetric slabs are generated
   - Non-stoichiometric terminations filtered BEFORE DFT
   - Saves computational resources
   - If no valid surface exists: NoStoichiometricSymmetricSurfaceError raised
+  - For non-stoichiometric surfaces: use teros.core.thermodynamics
 """)
 
     print("=" * 70 + "\n")
@@ -331,9 +324,8 @@ def main():
         print(f"\n  ERROR: {e}")
         print("\n  Some Miller indices have no valid stoichiometric+symmetric surfaces.")
         print("  Options:")
-        print("    1. Remove problematic Miller indices from the list")
-        print("    2. Set USE_STOICHIOMETRIC_FILTER = False")
-        print("    3. Use thermodynamics module for those orientations")
+        print("    1. Remove problematic Miller indices from MILLER_INDICES")
+        print("    2. Use teros.core.thermodynamics for those orientations")
         sys.exit(1)
 
     # 5. Print post-submission information

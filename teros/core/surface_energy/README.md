@@ -1,5 +1,8 @@
 # Metal and Intermetallic Surface Energy Module
 
+> **Important**: This module is exclusively for **stoichiometric AND symmetric** surfaces.
+> For non-stoichiometric or asymmetric surfaces, use `teros.core.thermodynamics` instead.
+
 This module computes surface energies for **elemental metals** and **stoichiometric intermetallics** using the simple thermodynamic formula:
 
 $$\gamma = \frac{E_{\text{slab}} - N \cdot E_{\text{bulk}}^{\text{atom}}}{2A}$$
@@ -23,8 +26,8 @@ Binary or ternary intermetallic compounds where:
 
 Examples: PdIn, AuCu, NiAl, Cu3Au, TiAl, Ni3Al, etc.
 
-> **Note**: For non-stoichiometric or asymmetric intermetallic surfaces, chemical
-> potential-dependent formulations are required (to be implemented separately).
+> **Note**: For non-stoichiometric or asymmetric surfaces, use `teros.core.thermodynamics`
+> which calculates γ(Δμ) with proper chemical potential dependencies.
 
 ## Key Differences from Oxide Thermodynamics
 
@@ -44,7 +47,7 @@ surface_energy/
 ├── surface_energy.py         # Surface energy calcfunctions
 ├── workgraph.py              # WorkGraph builder
 ├── wulff.py                  # Wulff shape construction
-├── stoichiometric_finder.py  # Stoichiometric+symmetric finder (EXPERIMENTAL)
+├── stoichiometric_finder.py  # Stoichiometric+symmetric surface finder
 └── README.md                 # This file
 ```
 
@@ -462,9 +465,9 @@ ax = visualize_wulff_shape(
 
 ---
 
-## Stoichiometric+Symmetric Surface Finder (EXPERIMENTAL)
+## Stoichiometric+Symmetric Surface Finder
 
-This experimental feature helps find surfaces that are BOTH stoichiometric AND symmetric, which is challenging for intermetallics and oxides but valuable because it enables using the simple surface energy formula without chemical potential dependencies.
+This module automatically finds surfaces that are BOTH stoichiometric AND symmetric. This is the **default behavior** - slabs are validated BEFORE expensive DFT calculations.
 
 ### Why This Matters
 
@@ -532,8 +535,8 @@ wg = build_metal_surface_energy_workgraph(
     bulk_structure_path='/path/to/pdin.cif',
     miller_indices=[[1,1,0], [1,0,0]],
 
-    # EXPERIMENTAL: Only generate stoichiometric+symmetric slabs
-    require_stoichiometric_symmetric=True,
+    # Default: Only generate stoichiometric+symmetric slabs
+    # require_stoichiometric_symmetric=True,  # (default, can be omitted)
     stoichiometric_strategies=['filter_first', 'thickness_scan'],
     stoichiometric_max_thickness=30.0,
 
