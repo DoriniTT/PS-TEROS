@@ -91,6 +91,11 @@ def T_from_delta_mu_O(delta_mu_O, P_atm=1.0, delta_mu_O_ref=DELTA_MU_O_REF):
 
     Returns:
         Temperature in K
+
+    Note:
+        With the Reuter & Scheffler convention:
+        - Delta_mu_O = 0 corresponds to low T (O-rich, equilibrium with O2)
+        - Delta_mu_O < 0 corresponds to high T (O-poor, reducing conditions)
     """
     T_ref = 298.15
     T = T_ref - 2 * (delta_mu_O - delta_mu_O_ref) / S_O2_298K
@@ -189,9 +194,7 @@ def plot_gamma_vs_mu_O(
     x_min, x_max = ax.get_xlim()
 
     # Define sensible tick positions for Delta_mu_O
-    # The data range is roughly -8.9 to -7.4 eV (relative to O2 molecule)
-    # We need ticks that fit this range
-    mu_range = np.array([x_min, x_max])
+    # With corrected convention: range is approximately -3 to 0 eV
     mu_ticks = np.arange(np.ceil(x_min * 2) / 2, np.floor(x_max * 2) / 2 + 0.25, 0.5)
     mu_ticks = mu_ticks[(mu_ticks >= x_min - 0.1) & (mu_ticks <= x_max + 0.1)]
 
@@ -199,24 +202,14 @@ def plot_gamma_vs_mu_O(
     ax_temp = ax.secondary_xaxis('top')
     ax_temp.set_xlabel('Temperature (K) @ 1 atm', fontsize=FONTSIZE_LABEL - 2)
 
-    # Calculate temperatures for the tick positions
-    # Note: The delta_mu_O values here are absolute (including reference energy)
-    # We need to convert to the standard convention (relative to 1/2 O2 at 0K)
-    # The reference point depends on the DFT calculation
-    # For now, we'll show relative temperatures based on the range
-
-    # Get the formation enthalpy limits
-    first_data = all_term_data[term_labels[0]]
-
-    # Use relative scale: O-rich (right) = low T, O-poor (left) = high T
-    # This is a simplified scale showing the trend
+    # Calculate temperatures using the thermodynamic relationship
+    # With Reuter & Scheffler convention:
+    # - Delta_mu_O = 0 corresponds to low T (O-rich)
+    # - Delta_mu_O < 0 corresponds to high T (O-poor)
     t_labels = []
     for mu in mu_ticks:
-        # Approximate temperature scale (simplified)
-        # More negative mu_O -> higher temperature (O-poor)
-        rel_position = (mu - x_max) / (x_min - x_max)  # 0 at O-rich, 1 at O-poor
-        T_approx = 300 + rel_position * 900  # 300K to 1200K range
-        t_labels.append(f'{int(T_approx)}')
+        T = T_from_delta_mu_O(mu, P_atm=1.0)
+        t_labels.append(f'{int(T)}')
 
     ax_temp.set_xticks(mu_ticks)
     ax_temp.set_xticklabels(t_labels, fontsize=FONTSIZE_TICK - 1)
@@ -310,6 +303,9 @@ def plot_stability_diagram(
                   ha='right', va='center')
 
     # Add O-poor / O-rich labels
+    # With Reuter & Scheffler convention:
+    # - Left (negative Delta_mu_O) = O-poor = high T = reducing
+    # - Right (Delta_mu_O = 0) = O-rich = low T = oxidizing
     ax.text(delta_mu_O[0], -0.15, 'O-poor\n(high T)', ha='left', va='top',
             fontsize=FONTSIZE_TICK - 2, transform=ax.get_xaxis_transform())
     ax.text(delta_mu_O[-1], -0.15, 'O-rich\n(low T)', ha='right', va='top',

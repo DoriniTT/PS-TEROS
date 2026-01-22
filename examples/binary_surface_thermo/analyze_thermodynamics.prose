@@ -1,0 +1,130 @@
+# Surface Thermodynamics Analysis
+# Compare binary and ternary oxide surface energy calculations in PS-TEROS
+
+agent literature_expert:
+  model: opus
+  prompt: """
+    You are an expert in computational surface science and ab initio thermodynamics.
+    Your task is to analyze scientific literature and extract the theoretical framework
+    for calculating surface Gibbs free energy and chemical potentials of oxygen.
+    Focus on the mathematical formulations and their physical meaning.
+  """
+
+agent code_analyst:
+  model: opus
+  prompt: """
+    You are an expert in Python scientific code analysis, particularly for
+    computational materials science workflows. Analyze code to understand:
+    - Mathematical formulas implemented
+    - Variable definitions and their physical meaning
+    - How chemical potentials are calculated and bounded
+  """
+
+agent comparator:
+  model: opus
+  prompt: """
+    You are a scientific methodology expert who compares theoretical frameworks
+    with their implementations. Identify discrepancies, missing terms, or
+    incorrect formulations. Be precise about equation references.
+  """
+
+# Phase 1: Analyze the reference article
+let reference_theory = session: literature_expert
+  prompt: """
+    Read and analyze the reference article on ab initio thermodynamics of oxide surfaces.
+
+    File: /home/trevizam/PhysRevB.65.035406.pdf
+
+    Extract the following:
+    1. The general formula for surface Gibbs free energy gamma(T, p)
+    2. How Delta_mu_O (oxygen chemical potential deviation) is defined
+    3. The bounds/limits for Delta_mu_O (O-rich and O-poor limits)
+    4. How the reference state for oxygen is defined (1/2 O2 molecule?)
+    5. The relationship between mu_O, temperature T, and partial pressure p_O2
+    6. Any specific equations for binary oxides (like RuO2, TiO2, SnO2)
+
+    Present the equations in a clear format with equation numbers from the paper.
+  """
+
+# Phase 2: Analyze implementations in parallel
+parallel:
+  ternary_impl = session: code_analyst
+    prompt: """
+      Analyze the TERNARY oxide surface thermodynamics implementation in PS-TEROS.
+
+      Key files to examine:
+      - /home/trevizam/git/PS-TEROS/teros/core/thermodynamics.py
+
+      Focus on:
+      1. The formula for surface Gibbs free energy gamma(Delta_mu_O, Delta_mu_M)
+      2. How Delta_mu_O range is calculated (mu_O_min, mu_O_max)
+      3. How the reference energies are defined (E_O from O2 molecule, E_M from metal)
+      4. The surface excess terms (Gamma_O, Gamma_M)
+      5. How formation enthalpy enters the calculation
+
+      Extract the exact Python code implementing the key equations.
+    """
+    context: reference_theory
+
+  binary_impl = session: code_analyst
+    prompt: """
+      Analyze the BINARY oxide surface thermodynamics implementation in PS-TEROS.
+
+      Key files to examine:
+      - /home/trevizam/git/PS-TEROS/teros/core/thermodynamics.py
+
+      Focus on:
+      1. The formula for surface Gibbs free energy gamma(Delta_mu_O) for binary oxides
+      2. How Delta_mu_O range is calculated for binary case
+      3. The phi (reference surface energy) calculation
+      4. The Gamma_O (oxygen surface excess) calculation
+      5. How the bounds mu_O_min and mu_O_max are determined
+
+      Look for the section handling 'binary' oxide_type.
+      Extract the exact Python code implementing the key equations.
+    """
+    context: reference_theory
+
+# Phase 3: Compare and identify discrepancies
+let comparison = session: comparator
+  prompt: """
+    Compare the theoretical framework from the reference article with both implementations.
+
+    Specifically check:
+    1. Is Delta_mu_O defined consistently with the reference?
+       - The reference defines: mu_O = 1/2 * mu_O2(T,p) = 1/2 * [E_O2 + mu_O2(T,p,0)]
+       - Where mu_O2(T,p,0) includes zero-point energy, entropy, enthalpy contributions
+
+    2. Are the bounds for Delta_mu_O correct?
+       - O-rich limit: Delta_mu_O = 0 (equilibrium with O2 gas)
+       - O-poor limit: Delta_mu_O = Delta_H_f / n_O (oxide decomposition)
+
+    3. Is the reference energy for oxygen correctly defined?
+       - Should be 1/2 * E(O2) from DFT, not the atomic oxygen energy
+
+    4. Are there any sign convention issues?
+
+    5. Is the binary case a proper simplification of the ternary case?
+
+    Provide a detailed comparison table and highlight any errors or inconsistencies.
+  """
+  context: { reference_theory, ternary_impl, binary_impl }
+
+# Phase 4: Generate recommendations
+output recommendations = session: literature_expert
+  prompt: """
+    Based on the comparison analysis, provide specific recommendations for fixing
+    any issues found in the binary oxide implementation.
+
+    For each issue:
+    1. What is wrong (cite the equation from the reference)
+    2. What the code currently does
+    3. What it should do instead
+    4. Specific code changes needed (with line numbers if possible)
+
+    Also clarify:
+    - The correct formula for Delta_mu_O in terms of DFT energies
+    - How the chemical potential range should be displayed on plots
+    - Whether the current output values are physically reasonable
+  """
+  context: comparison
