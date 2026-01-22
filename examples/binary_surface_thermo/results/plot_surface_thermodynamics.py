@@ -36,7 +36,7 @@ sns.set_context("paper", font_scale=1.2)
 AIIDA_PROFILE = 'presto'
 
 # Workflow PK or UUID
-WORKFLOW_PK = 20372
+WORKFLOW_PK = 21845
 
 # Material info
 MATERIAL_NAME = 'SnO2'

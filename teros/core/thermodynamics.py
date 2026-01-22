@@ -16,6 +16,8 @@ import numpy as np
 from aiida import orm
 from aiida_workgraph import dynamic, namespace, task
 
+from teros.core.constants import EV_PER_ANGSTROM2_TO_J_PER_M2
+
 
 @task.calcfunction
 def identify_oxide_type(bulk_structure: orm.StructureData) -> orm.Str:
@@ -452,13 +454,20 @@ def calculate_surface_energy_binary(
     # Generate chemical potential range (O-poor to O-rich)
     delta_mu_O_range = np.linspace(delta_mu_O_min, delta_mu_O_max, grid_points)
 
-    # ========== CORRECTED: Reference surface energy φ at Δμ_O = 0 (O-rich) ==========
-    # φ = (1/2A) × [E_slab - N_M×(E_bulk/x) - N_O×E_O_ref]
-    # where E_O_ref = (1/2)E_O2 is the oxygen reference energy per atom
+    # ========== Reference surface energy φ at Δμ_O = 0 (O-rich) ==========
+    # From Reuter & Scheffler PRB 65, 035406, Eq. (4):
+    #   γ = (1/2A) × [E_slab - (N_M/x)×E_bulk + ((y/x)×N_M - N_O)×μ_O]
+    #
+    # At Δμ_O = 0, μ_O = E_O_ref = (1/2)E_O2, so:
+    #   φ = (1/2A) × [E_slab - (N_M/x)×E_bulk + (y/x)×N_M×E_O_ref - N_O×E_O_ref]
+    #
+    # The term (y/x)×N_M×E_O_ref accounts for oxygen in stoichiometric bulk
+    # corresponding to N_M metal atoms.
     phi = (
         slab_energy.value
         - N_M_slab * (bulk_energy.value / x)
-        - N_O_slab * E_O_ref
+        + (y / x) * N_M_slab * E_O_ref  # Oxygen in stoichiometric bulk reference
+        - N_O_slab * E_O_ref             # Actual oxygen in slab
     ) / (2 * area)
 
     # ========== CORRECTED: Surface oxygen excess (Reuter & Scheffler convention) ==========
@@ -473,10 +482,18 @@ def calculate_surface_energy_binary(
         gamma = phi - Gamma_O * float(delta_mu_O)
         gamma_array.append(float(gamma))
     
-    # Special values
-    gamma_O_poor = gamma_array[0]   # At Δμ_O_min (O-poor/decomposition limit)
-    gamma_O_rich = gamma_array[-1]  # At Δμ_O_max = 0 (O-rich/O2 equilibrium)
-    
+    # Special values (in eV/Å²)
+    gamma_O_poor_raw = gamma_array[0]   # At Δμ_O_min (O-poor/decomposition limit)
+    gamma_O_rich_raw = gamma_array[-1]  # At Δμ_O_max = 0 (O-rich/O2 equilibrium)
+
+    # ========== Convert surface energies from eV/Å² to J/m² ==========
+    # Conversion factor: 1 eV/Å² = 16.0217663 J/m²
+    phi_Jm2 = phi * EV_PER_ANGSTROM2_TO_J_PER_M2
+    gamma_array_Jm2 = [g * EV_PER_ANGSTROM2_TO_J_PER_M2 for g in gamma_array]
+    gamma_O_poor = gamma_O_poor_raw * EV_PER_ANGSTROM2_TO_J_PER_M2
+    gamma_O_rich = gamma_O_rich_raw * EV_PER_ANGSTROM2_TO_J_PER_M2
+    # Note: Gamma_O (surface excess) remains in atoms/Å² (not an energy)
+
     # Calculate bulk energy per formula unit for consistency with ternary
     formula_units_in_bulk = bulk_counts[element_M] / x_reduced
     bulk_energy_per_fu = bulk_energy.value / formula_units_in_bulk
@@ -484,14 +501,15 @@ def calculate_surface_energy_binary(
     return orm.Dict(
         dict={
             # ===== Primary calculation (M as reference) =====
+            # Surface energies in J/m² (SI units)
             'primary': {
-                'phi': float(phi),
-                'Gamma_O': float(Gamma_O),
+                'phi': float(phi_Jm2),
+                'Gamma_O': float(Gamma_O),  # atoms/Å² (not converted)
                 'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
-                'gamma_array': gamma_array,
+                'gamma_array': gamma_array_Jm2,
                 'gamma_O_poor': float(gamma_O_poor),
                 'gamma_O_rich': float(gamma_O_rich),
-                'gamma_at_reference': float(phi),
+                'gamma_at_reference': float(phi_Jm2),
                 'element_M': element_M,
             },
 
@@ -520,13 +538,14 @@ def calculate_surface_energy_binary(
             'delta_mu_O_max': float(delta_mu_O_max),  # O-rich limit (= 0)
 
             # ===== Legacy keys for backward compatibility =====
-            'phi': float(phi),
-            'Gamma_O': float(Gamma_O),
+            # All surface energies in J/m² (SI units)
+            'phi': float(phi_Jm2),
+            'Gamma_O': float(Gamma_O),  # atoms/Å²
             'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
-            'gamma_array': gamma_array,
+            'gamma_array': gamma_array_Jm2,
             'gamma_O_poor': float(gamma_O_poor),
             'gamma_O_rich': float(gamma_O_rich),
-            'gamma_at_reference': float(phi),
+            'gamma_at_reference': float(phi_Jm2),
             'element_M': element_M,
             'E_bulk_eV': float(bulk_energy.value),
             'bulk_stoichiometry_MxOy': {
