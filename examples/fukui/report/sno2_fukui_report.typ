@@ -112,6 +112,60 @@ The calculation procedure involves:
 
 == Results
 
+The Fukui calculations were performed using the automated AiiDA-WorkGraph workflow in PS-TEROS. The workflow handles the entire process from structure input to final Fukui function output, ensuring full provenance tracking. Below is an example of the workflow node information for the f#super[-] calculation:
+
+#figure(
+  block(
+    width: 100%,
+    fill: luma(245),
+    stroke: 0.5pt + gray,
+    inset: 10pt,
+    radius: 4pt,
+  )[
+    #set text(size: 8pt)
+    ```
+Property     Value
+-----------  ------------------------------------
+type         WorkGraph<Fukui_SnO2_110_minus>
+state        Finished [0]
+pk           18855
+uuid         6f7eb2ea-09d9-40de-961b-e742a77b0bf4
+label        Fukui_SnO2_110_minus
+ctime        2026-01-19 10:58:08.935939+01:00
+mtime        2026-01-19 11:21:43.677122+01:00
+
+Inputs                   PK     Type
+-----------------------  -----  -------------
+tasks
+    fukui_scatter
+        structure        18847  StructureData
+        nelect_neutral   18848  Int
+        nelect_values    18849  List
+        delta_n_values   18850  List
+        delta_n_labels   18851  List
+        fukui_type       18852  Str
+        code             6823   InstalledCode
+    fukui_interpolation
+        delta_n_values   18853  List
+        fukui_type       18854  Str
+
+Outputs          PK  Type
+------------  -----  --------------
+chgcar_files  19642  FolderData
+fukui_chgcar  19646  SinglefileData
+summary       19644  Dict
+
+Called                  PK  Type
+-------------------  -----  --------------------------------
+fukui_scatter        18874  WorkGraph<fukui_scatter>
+fukui_interpolation  19645  run_fukui_interpolation_calcfunc
+    ```
+  ],
+  caption: [
+    AiiDA WorkGraph node information for the automated Fukui f#super[-] calculation, showing the workflow structure, inputs, and outputs with full provenance tracking.
+  ],
+) <fig-workflow-node>
+
 The calculated Fukui function identifies sites susceptible to nucleophilic attack on the SnO#sub[2] (110) surface. @fig-fukui-3d shows the 3D isosurface visualization compared with the reference from the FukuiGrid paper. The yellow isosurfaces indicate regions where electron density decreases upon removal of electrons, corresponding to electrophilic sites. The reactive regions are localized on the bridging oxygen atoms and the five-fold coordinated Sn atoms, in agreement with the published results.
 
 #figure(
