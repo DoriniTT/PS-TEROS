@@ -209,6 +209,68 @@ wg = build_thickness_convergence_workgraph(
 wg.submit()
 ```
 
+### Thickness Convergence Visualization
+
+#### `print_thickness_convergence_summary`
+
+Print a formatted table of thickness convergence results.
+
+```python
+from teros.core.convergence import print_thickness_convergence_summary
+
+print_thickness_convergence_summary(wg.pk)  # Using PK
+print_thickness_convergence_summary(wg)     # Using WorkGraph
+```
+
+**Output:**
+```
+══════════════════════════════════════════════════════════════════════
+          THICKNESS CONVERGENCE TEST RESULTS
+══════════════════════════════════════════════════════════════════════
+Structure: Au4 (4 atoms)
+Miller indices: (1 1 1)
+Threshold: 10.0 mJ/m²
+──────────────────────────────────────────────────────────────────────
+
+Slab Thickness Convergence:
+┌─────────┬───────────────────┬──────────────┬───────────┐
+│ Layers  │ Surface Energy    │ ΔE from prev │ Converged │
+│         │ (J/m²)            │ (mJ/m²)      │           │
+├─────────┼───────────────────┼──────────────┼───────────┤
+│       3 │            0.8521 │         0.00 │ ─         │
+│       5 │            0.7892 │        62.90 │ ✗         │
+│       7 │            0.7756 │        13.60 │ ✗         │
+│       9 │            0.7723 │         3.30 │ ✓         │
+│      11 │            0.7715 │         0.80 │ ✓         │
+└─────────┴───────────────────┴──────────────┴───────────┘
+
+✓ Converged at 9 layers
+→ Recommended: 9 layers
+══════════════════════════════════════════════════════════════════════
+```
+
+#### `plot_thickness_convergence`
+
+Generate a thickness convergence plot.
+
+```python
+from teros.core.convergence import plot_thickness_convergence
+
+fig = plot_thickness_convergence(wg.pk)  # Display interactively
+fig = plot_thickness_convergence(wg, save_path='thickness_conv.png')  # Save to file
+```
+
+#### `export_thickness_convergence_data`
+
+Export thickness convergence data to CSV and JSON.
+
+```python
+from teros.core.convergence import export_thickness_convergence_data
+
+files = export_thickness_convergence_data(wg.pk, './results', prefix='Au_111')
+# Creates: Au_111.csv, Au_111_summary.json
+```
+
 ## Input Configuration
 
 ### `builder_inputs` Structure

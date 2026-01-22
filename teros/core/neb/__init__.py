@@ -77,7 +77,7 @@ from .workgraph import (
 
 from .tasks import (
     interpolate_structures,
-    interpolate_structures_output,
+    create_single_neb_image,
     extract_neb_energies,
     calculate_barrier,
     extract_neb_trajectory,
@@ -104,7 +104,7 @@ __all__ = [
 
     # Calcfunctions
     'interpolate_structures',
-    'interpolate_structures_output',
+    'create_single_neb_image',
     'extract_neb_energies',
     'calculate_barrier',
     'extract_neb_trajectory',

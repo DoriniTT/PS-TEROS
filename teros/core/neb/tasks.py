@@ -43,7 +43,7 @@ def interpolate_structures(
         ... )
         >>> # Access via: result.get_dict()['image_01'], etc.
     """
-    from ase.neb import NEB
+    from ase.mep import NEB
     import numpy as np
 
     # Convert to ASE Atoms objects
@@ -83,35 +83,37 @@ def interpolate_structures(
 
 
 @task.calcfunction
-def interpolate_structures_output(
+def create_single_neb_image(
     initial: orm.StructureData,
     final: orm.StructureData,
     n_images: orm.Int,
+    image_index: orm.Int,
     method: orm.Str,
-) -> dict:
+) -> orm.StructureData:
     """
-    Generate NEB intermediate images with direct StructureData output.
+    Generate a single NEB intermediate image.
 
-    This version returns structures directly for use in WorkGraphs, rather than
-    a Dict with PKs. The structures are returned as a dictionary that can be
-    expanded into the neb_images namespace.
+    This calcfunction generates one specific intermediate image by performing
+    the full interpolation and extracting the requested image. While this
+    repeats the interpolation for each image, it allows proper AiiDA provenance.
 
     Args:
         initial: Initial structure (reactant)
         final: Final structure (product)
-        n_images: Number of intermediate images to generate
+        n_images: Total number of intermediate images
+        image_index: Index of the image to return (1-based)
         method: Interpolation method - 'idpp' (recommended) or 'linear'
 
     Returns:
-        Dictionary with keys 'image_01', 'image_02', etc. mapping to StructureData
+        StructureData for the specified intermediate image
     """
-    from ase.neb import NEB
+    from ase.mep import NEB
 
-    # Convert to ASE Atoms objects
     atoms_initial = initial.get_ase()
     atoms_final = final.get_ase()
 
     n_img = n_images.value
+    idx = image_index.value
     method_str = method.value
 
     # Create list of images (including endpoints)
@@ -131,12 +133,8 @@ def interpolate_structures_output(
     else:
         neb.interpolate(mic=True)
 
-    # Return intermediate images as StructureData (exclude endpoints)
-    result = {}
-    for i, img in enumerate(images[1:-1], start=1):
-        result[f'image_{i:02d}'] = orm.StructureData(ase=img)
-
-    return result
+    # Return the specific intermediate image (idx is 1-based, images[0] is initial)
+    return orm.StructureData(ase=images[idx])
 
 
 @task.calcfunction

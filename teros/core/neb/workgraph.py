@@ -18,7 +18,7 @@ from aiida.plugins import WorkflowFactory
 from aiida_workgraph import WorkGraph, task
 
 from .tasks import (
-    interpolate_structures_output,
+    create_single_neb_image,
     extract_neb_energies,
     calculate_barrier,
     extract_total_energy,
@@ -371,14 +371,18 @@ def build_neb_workgraph(
         final_energy_task = None
 
     # Step 2: Generate intermediate images via interpolation
-    interp_task = wg.add_task(
-        interpolate_structures_output,
-        name='interpolate_structures',
-        initial=initial_for_neb,
-        final=final_for_neb,
-        n_images=orm.Int(n_images),
-        method=orm.Str(interpolation_method),
-    )
+    # Create individual tasks for each NEB image
+    interp_tasks = {}
+    for i in range(1, n_images + 1):
+        interp_tasks[i] = wg.add_task(
+            create_single_neb_image,
+            name=f'interp_image_{i:02d}',
+            initial=initial_for_neb,
+            final=final_for_neb,
+            n_images=orm.Int(n_images),
+            image_index=orm.Int(i),
+            method=orm.Str(interpolation_method),
+        )
 
     # Step 3: Stage 1 - Regular NEB (LCLIMB=False)
     # Get NEB-specific INCAR parameters for Stage 1
@@ -421,25 +425,17 @@ def build_neb_workgraph(
     if restart_folder is not None:
         neb_inputs_stage1['restart_folder'] = restart_folder
 
+    # Add interpolated images directly to inputs
+    # VaspNEBWorkChain expects neb_images namespace with keys '01', '02', etc.
+    for i in range(1, n_images + 1):
+        neb_inputs_stage1[f'neb_images__{i:02d}'] = interp_tasks[i].outputs.result
+
     # Create Stage 1 NEB task
-    # Note: neb_images are passed dynamically from interpolation output
     neb_stage1_task = wg.add_task(
         NEBTask,
         name='neb_stage1',
         **neb_inputs_stage1,
     )
-
-    # Link interpolated images to NEB task
-    # The interpolation task returns a dict with 'image_01', 'image_02', etc.
-    # We need to connect these to the neb_images namespace
-    for i in range(1, n_images + 1):
-        image_key = f'image_{i:02d}'
-        neb_key = f'neb_images__{i:02d}'
-        # Connect interpolation output to NEB input
-        wg.add_link(
-            interp_task.outputs[image_key],
-            neb_stage1_task.inputs[neb_key],
-        )
 
     # Expose Stage 1 remote folder for restarts
     wg.outputs.stage1_remote_folder = neb_stage1_task.outputs.remote_folder
@@ -478,21 +474,16 @@ def build_neb_workgraph(
         if 'settings' in builder_inputs:
             neb_inputs_stage2['settings'] = orm.Dict(dict=builder_inputs['settings'])
 
+        # Add interpolated images for Stage 2
+        for i in range(1, n_images + 1):
+            neb_inputs_stage2[f'neb_images__{i:02d}'] = interp_tasks[i].outputs.result
+
         # Create Stage 2 CI-NEB task
         neb_stage2_task = wg.add_task(
             NEBTask,
             name='neb_cineb',
             **neb_inputs_stage2,
         )
-
-        # Link interpolated images to Stage 2 as well
-        for i in range(1, n_images + 1):
-            image_key = f'image_{i:02d}'
-            neb_key = f'neb_images__{i:02d}'
-            wg.add_link(
-                interp_task.outputs[image_key],
-                neb_stage2_task.inputs[neb_key],
-            )
 
         final_neb_task = neb_stage2_task
     else:

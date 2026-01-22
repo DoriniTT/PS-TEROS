@@ -50,6 +50,10 @@ from .convergence import (
     get_thickness_convergence_results,
     generate_thickness_series,
     extract_recommended_layers,
+    # Thickness convergence visualization
+    print_thickness_convergence_summary,
+    plot_thickness_convergence,
+    export_thickness_convergence_data,
 )
 from .u_calculation import (
     build_u_calculation_workgraph,
@@ -153,6 +157,10 @@ __all__ = [
     "get_thickness_convergence_results",
     "generate_thickness_series",
     "extract_recommended_layers",
+    # Thickness convergence visualization
+    "print_thickness_convergence_summary",
+    "plot_thickness_convergence",
+    "export_thickness_convergence_data",
     # Hubbard U calculation
     "build_u_calculation_workgraph",
     "get_u_calculation_results",

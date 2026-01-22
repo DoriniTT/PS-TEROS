@@ -64,13 +64,8 @@ BUILDER_INPUTS = {
     },
     'kpoints_spacing': 0.03,    # K-point spacing (Å⁻¹)
     'potential_family': 'PBE',
-    'potential_mapping': {
-        # Map elements to POTCAR types
-        # Adjust for your system
-        'Ag': 'Ag',
-        'O': 'O',
-        # 'Cu': 'Cu_pv',  # Example: use _pv for transition metals
-    },
+    # potential_mapping will be built dynamically from structure kinds
+    # See build_potential_mapping() function below
     'options': {
         'resources': {
             'num_machines': 3,             # 3 nodes for parallel NEB
@@ -142,6 +137,42 @@ def load_structures():
     return initial, final
 
 
+def build_potential_mapping(structures):
+    """
+    Build potential mapping from structure kinds.
+
+    AiiDA StructureData may have kinds like 'Cu1', 'Cu2', etc. for atoms
+    of the same element at different sites. This function creates a mapping
+    that maps all kind names to the correct POTCAR symbol.
+
+    Args:
+        structures: List of StructureData objects
+
+    Returns:
+        dict: Mapping from kind names to POTCAR symbols
+    """
+    # Element to POTCAR symbol mapping (customize for your needs)
+    element_to_potcar = {
+        'Cu': 'Cu',      # Can use 'Cu_pv' for more accurate but slower
+        'Ag': 'Ag',
+        'Au': 'Au',
+        'O': 'O',
+        'H': 'H',
+        # Add more elements as needed
+    }
+
+    potential_mapping = {}
+    for structure in structures:
+        for kind in structure.kinds:
+            if kind.name not in potential_mapping:
+                # Get the element symbol (first symbol in kind)
+                element = kind.symbols[0]
+                potcar = element_to_potcar.get(element, element)
+                potential_mapping[kind.name] = potcar
+
+    return potential_mapping
+
+
 # =============================================================================
 # Main Execution
 # =============================================================================
@@ -170,6 +201,13 @@ def main():
     print(f"  Atoms: {len(initial.sites)}")
     print(f"Final structure: {final.get_formula()}")
     print(f"  Atoms: {len(final.sites)}")
+
+    # Build potential mapping from structure kinds
+    potential_mapping = build_potential_mapping([initial, final])
+    print(f"\nPotential mapping: {potential_mapping}")
+
+    # Add potential_mapping to builder_inputs
+    BUILDER_INPUTS['potential_mapping'] = potential_mapping
 
     # Estimate resources
     print("\nResource estimate:")
