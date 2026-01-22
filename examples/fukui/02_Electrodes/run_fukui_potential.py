@@ -191,7 +191,7 @@ def main():
     print("\n5. Defining VASP calculation inputs...")
 
     # Code label for obelix cluster
-    code_label = 'VASP-6.5.1-idefix-4@obelix'
+    code_label = 'VASP-6.5.1-idefix@obelix'
 
     # Common VASP settings for charge density calculations
     builder_inputs = {

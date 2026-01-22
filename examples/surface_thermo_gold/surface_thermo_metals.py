@@ -1,13 +1,19 @@
 #!/home/trevizam/envs/aiida/bin/python
 """
-Metal Surface Energy Calculation for FCC Gold (Au)
+Metal Surface Energy Calculation and Wulff Shape for FCC Gold (Au)
 
 This script demonstrates the surface_energy module for computing
 surface energies of elemental metals using the simple formula:
 γ = (E_slab - N·E_bulk/atom) / (2A)
 
+Additionally, it constructs the Wulff shape (equilibrium crystal morphology)
+from the calculated surface energies using Pymatgen's WulffShape class.
+The workflow automatically expands calculated orientations to their
+symmetry equivalents to construct the full Wulff shape.
+
 Material: FCC Au
 Surfaces: (111), (100), (110) - all in a single WorkGraph
+Output: Surface energies + Wulff shape analysis
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -140,14 +146,25 @@ def main():
     print(f"\nMonitor with:")
     print(f"  verdi process status {wg.pk}")
     print(f"  verdi process show {wg.pk}")
-    print(f"\nExpected outputs per orientation:")
+    print(f"\nExpected outputs:")
     print(f"  - bulk_energy, bulk_energy_per_atom, bulk_structure")
     print(f"  - slab_structures, relaxed_slabs, slab_energies")
     print(f"  - surface_energies (gamma_eV_A2, gamma_J_m2)")
+    print(f"  - wulff_shape (shape_factor, anisotropy, facet_fractions, etc.)")
     print(f"\nExpected surface energies for Au:")
     print(f"  (111): ~0.79 J/m² (most stable)")
     print(f"  (100): ~0.94 J/m²")
     print(f"  (110): ~1.33 J/m²")
+    print(f"\nWulff shape analysis:")
+    print(f"  - 3 calculated orientations → 26+ symmetry-equivalent facets")
+    print(f"  - Dominant facet expected: (111) with ~60%% surface area")
+    print(f"  - Shape factor expected: ~1.02 (near spherical)")
+    print(f"\nTo visualize the Wulff shape after completion:")
+    print(f"  from aiida import orm")
+    print(f"  from teros.core.surface_energy import visualize_wulff_shape, get_wulff_shape_summary")
+    print(f"  wg = orm.load_node({wg.pk})")
+    print(f"  print(get_wulff_shape_summary(wg.outputs.wulff_shape))")
+    print(f"  visualize_wulff_shape(wg.outputs.bulk_structure, wg.outputs.surface_energies)")
     print(f"{'='*70}\n")
     
     return wg

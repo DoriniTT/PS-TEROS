@@ -1,19 +1,25 @@
 """
 Metal and Intermetallic Surface Energy WorkGraph Builder.
 
-This module provides the main workflow builder for computing surface energies
-of elemental metals and stoichiometric intermetallics. It supports:
-- Multiple Miller indices in a single parent workflow
-- Single bulk calculation shared across all orientations
-- Multiple terminations per orientation
-- Bulk relaxation → Slab generation → Slab relaxation → Surface energy calculation
+This module computes surface energies for stoichiometric AND symmetric surfaces
+using the simple formula: γ = (E_slab - N·E_bulk/atom) / (2A)
+
+IMPORTANT: This module REQUIRES surfaces to be both:
+1. Stoichiometric - slab composition matches bulk
+2. Symmetric - top and bottom surfaces are equivalent
+
+For non-stoichiometric or asymmetric surfaces, use teros.core.thermodynamics
+which handles chemical potential dependencies: γ(Δμ_O, Δμ_M).
 
 Supported materials:
 - Elemental metals: Au, Ag, Cu, Pt, Pd, Ni, Fe, etc.
 - Stoichiometric intermetallics: PdIn, AuCu, NiAl, Cu3Au, etc.
 
-For stoichiometric and symmetric intermetallic surfaces, the simple formula
-γ = (E_slab - N·E_bulk/atom) / (2A) is used, same as for elemental metals.
+Features:
+- Multiple Miller indices in a single parent workflow
+- Automatic stoichiometric+symmetric surface finder (filters BEFORE DFT)
+- Single bulk calculation shared across all orientations
+- Wulff shape construction from surface energies
 """
 
 from __future__ import annotations
@@ -34,6 +40,11 @@ from teros.core.slabs import (
 from teros.core.surface_energy.surface_energy import (
     calculate_metal_surface_energy,
     calculate_bulk_energy_per_atom,
+)
+from teros.core.surface_energy.wulff import build_wulff_shape
+from teros.core.surface_energy.stoichiometric_finder import (
+    generate_stoichiometric_symmetric_slabs,
+    NoStoichiometricSymmetricSurfaceError,
 )
 
 
@@ -181,23 +192,50 @@ def metal_surface_energy_single_hkl(
 
     # Sequential execution - creates data dependency for chaining tasks
     wait_for: orm.Data = None,
+
+    # Stoichiometric+Symmetric Surface Finder
+    require_stoichiometric_symmetric: bool = True,
+    stoichiometric_strategies: list = None,
+    stoichiometric_max_thickness: float = 30.0,
 ):
     """
     Slab generation and relaxation for a SINGLE Miller index.
-    
+
     Receives already-relaxed bulk structure and energy from parent.
+
+    By default (require_stoichiometric_symmetric=True), uses the stoichiometric
+    finder to generate only stoichiometric AND symmetric slabs. This is required
+    for the simple surface energy formula to be valid.
     """
     # ===== SLAB GENERATION =====
-    slab_namespace = generate_slab_structures(
-        bulk_structure=bulk_structure,
-        miller_indices=orm.List(list=miller_indices),
-        min_slab_thickness=orm.Float(min_slab_thickness),
-        min_vacuum_thickness=orm.Float(min_vacuum_thickness),
-        lll_reduce=orm.Bool(lll_reduce),
-        center_slab=orm.Bool(center_slab),
-        symmetrize=orm.Bool(symmetrize),
-        primitive=orm.Bool(primitive),
-    ).slabs
+    if require_stoichiometric_symmetric:
+        # Use stoichiometric+symmetric finder (default behavior)
+        slab_generation_outputs = generate_stoichiometric_symmetric_slabs(
+            bulk_structure=bulk_structure,
+            miller_indices=orm.List(list=[miller_indices]),  # Single Miller index in list
+            min_slab_thickness=orm.Float(min_slab_thickness),
+            min_vacuum_thickness=orm.Float(min_vacuum_thickness),
+            lll_reduce=orm.Bool(lll_reduce),
+            center_slab=orm.Bool(center_slab),
+            primitive=orm.Bool(primitive),
+            strategies=orm.List(list=stoichiometric_strategies) if stoichiometric_strategies else None,
+            max_thickness=orm.Float(stoichiometric_max_thickness),
+        )
+        # Extract slabs for the single Miller index
+        hkl_key = f"hkl_{miller_indices[0]}{miller_indices[1]}{miller_indices[2]}"
+        slab_namespace = slab_generation_outputs['slabs'][hkl_key]
+    else:
+        # Standard slab generation
+        slab_namespace = generate_slab_structures(
+            bulk_structure=bulk_structure,
+            miller_indices=orm.List(list=miller_indices),
+            min_slab_thickness=orm.Float(min_slab_thickness),
+            min_vacuum_thickness=orm.Float(min_vacuum_thickness),
+            lll_reduce=orm.Bool(lll_reduce),
+            center_slab=orm.Bool(center_slab),
+            symmetrize=orm.Bool(symmetrize),
+            primitive=orm.Bool(primitive),
+        ).slabs
     
     # ===== SLAB RELAXATION =====
     relaxation_outputs = relax_slabs_scatter(
@@ -261,7 +299,14 @@ def build_metal_surface_energy_workgraph(
     
     # Concurrency
     max_concurrent_jobs: int = 4,
-    
+
+    # Stoichiometric+Symmetric Surface Finder
+    require_stoichiometric_symmetric: bool = True,
+    stoichiometric_strategies: list = None,
+    stoichiometric_bonds: dict = None,
+    stoichiometric_auto_detect_bonds: bool = False,
+    stoichiometric_max_thickness: float = 30.0,
+
     # Workflow name
     name: str = 'MetalSurfaceEnergy',
 ) -> WorkGraph:
@@ -294,8 +339,22 @@ def build_metal_surface_energy_workgraph(
         slab_options: Scheduler options for slab calculations
         slab_kpoints_spacing: K-points spacing for slabs
         max_concurrent_jobs: Maximum concurrent VASP calculations
+        require_stoichiometric_symmetric: If True (default), use stoichiometric+symmetric
+            surface finder to pre-filter slabs before DFT. Only slabs that are BOTH
+            stoichiometric AND symmetric will be generated. This is required for the
+            simple γ = (E_slab - N·E_bulk/atom) / 2A formula to be valid. Raises
+            NoStoichiometricSymmetricSurfaceError if no valid surfaces found.
+            For non-stoichiometric surfaces, use teros.core.thermodynamics instead.
+        stoichiometric_strategies: List of search strategies for stoichiometric finder.
+            Options: 'filter_first', 'symmetrize_check', 'thickness_scan', 'bond_preservation'.
+            Default: all strategies in order.
+        stoichiometric_bonds: Bond dictionary for 'bond_preservation' strategy.
+            Format: {('element1', 'element2'): bond_length}
+        stoichiometric_auto_detect_bonds: Auto-detect bonds from covalent radii for
+            the 'bond_preservation' strategy.
+        stoichiometric_max_thickness: Maximum thickness for 'thickness_scan' strategy.
         name: Name for the WorkGraph
-        
+
     Returns:
         WorkGraph ready for submission
         
@@ -304,6 +363,8 @@ def build_metal_surface_energy_workgraph(
         - bulk_energy: extract_total_energy result
         - bulk_energy_per_atom: calculate_bulk_energy_per_atom result
         - surface_energies: Dict containing consolidated results for ALL orientations
+        - wulff_shape: Dict containing Wulff shape analysis (shape_factor, anisotropy,
+          weighted_surface_energy, facet_fractions, dominant_facet, etc.)
         - relaxed_slabs_hkl_XXX: Per-orientation slab structures
         - slab_energies_hkl_XXX: Per-orientation slab energies
     """
@@ -400,6 +461,10 @@ def build_metal_surface_energy_workgraph(
             slab_options=slab_opts,
             slab_kpoints_spacing=slab_kpts,
             max_concurrent_jobs=max_concurrent_jobs,
+            # Stoichiometric+Symmetric Surface Finder
+            require_stoichiometric_symmetric=require_stoichiometric_symmetric,
+            stoichiometric_strategies=stoichiometric_strategies,
+            stoichiometric_max_thickness=stoichiometric_max_thickness,
         )
 
         # Chain Miller index tasks sequentially to respect max_concurrent_jobs=1
@@ -432,9 +497,18 @@ def build_metal_surface_energy_workgraph(
         name='gather_surface_energies',
         **gather_inputs
     )
-    
+
+    # ===== BUILD WULFF SHAPE =====
+    wulff_task = wg.add_task(
+        build_wulff_shape,
+        name='build_wulff_shape',
+        bulk_structure=bulk_task.outputs.structure,
+        surface_energies=gather_task.outputs.result,
+    )
+
     # Expose consolidated output
     wg.outputs.surface_energies = gather_task.outputs.result
+    wg.outputs.wulff_shape = wulff_task.outputs.result
     
     # Expose bulk outputs
     wg.outputs.bulk_energy = bulk_energy_task.outputs.result

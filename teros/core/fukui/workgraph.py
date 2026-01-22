@@ -129,6 +129,8 @@ def _prepare_fukui_inputs(
     if retrieve_locpot:
         if 'LOCPOT' not in merged['settings']['ADDITIONAL_RETRIEVE_LIST']:
             merged['settings']['ADDITIONAL_RETRIEVE_LIST'].append('LOCPOT')
+        # IMPORTANT: VASP only writes LOCPOT when LVTOT=.TRUE.
+        merged['parameters']['incar']['lvtot'] = True
 
     # Convert to AiiDA types using common helper
     return _convert_merged_to_aiida_types(merged, structure, code)
