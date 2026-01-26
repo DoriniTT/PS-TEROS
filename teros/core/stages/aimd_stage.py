@@ -20,8 +20,9 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional, TYPE_CHECKING, Union
 
+from aiida import orm
+
 if TYPE_CHECKING:
-    from aiida import orm
     from aiida_workgraph import WorkGraph
 
 __all__ = [
