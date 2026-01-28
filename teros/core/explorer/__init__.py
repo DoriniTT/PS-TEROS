@@ -61,12 +61,78 @@ DOS calculation using BandsWorkChain:
     >>> # Get DOS results
     >>> results = get_dos_results(pk)
     >>> print(f"Energy: {results['energy']:.4f} eV")
+
+Batch DOS calculation (multiple structures in parallel):
+
+    >>> from teros.core.explorer import quick_dos_batch, get_batch_dos_results
+    >>>
+    >>> # Compare DOS for different structures
+    >>> result = quick_dos_batch(
+    ...     structures={'pristine': s1, 'vacancy': s2, 'interstitial': s3},
+    ...     code_label='VASP-6.5.1@localwork',
+    ...     scf_incar={'encut': 400, 'ediff': 1e-6, 'ismear': 0},
+    ...     dos_incar={'nedos': 2000, 'lorbit': 11, 'ismear': -5},
+    ...     kpoints_spacing=0.03,
+    ...     potential_family='PBE',
+    ...     potential_mapping={'Sn': 'Sn_d', 'O': 'O'},
+    ...     options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},
+    ...     max_concurrent_jobs=2,  # Run 2 DOS calcs in parallel
+    ...     retrieve=['DOSCAR'],
+    ... )
+    >>> print(f"WorkGraph PK: {result['__workgraph_pk__']}")
+    >>>
+    >>> # Get batch results when done
+    >>> batch_results = get_batch_dos_results(result)
+    >>> for key, dos_result in batch_results.items():
+    ...     print(f"{key}: E = {dos_result['energy']:.4f} eV")
+
+Sequential multi-stage calculation with restart chaining:
+
+    >>> from teros.core.explorer import quick_vasp_sequential, print_sequential_results
+    >>>
+    >>> # Define stages with automatic restart chaining
+    >>> stages = [
+    ...     {
+    ...         'name': 'relax_rough',
+    ...         'incar': {'NSW': 100, 'IBRION': 2, 'ISIF': 2, 'ENCUT': 400},
+    ...         'kpoints_spacing': 0.06,
+    ...         'retrieve': ['CONTCAR', 'OUTCAR'],
+    ...     },
+    ...     {
+    ...         'name': 'relax_fine',
+    ...         'incar': {'NSW': 100, 'IBRION': 2, 'ISIF': 2, 'ENCUT': 520},
+    ...         'kpoints_spacing': 0.03,
+    ...         'retrieve': ['CONTCAR', 'OUTCAR', 'WAVECAR'],
+    ...         # restart='previous' is default -> restart from previous stage
+    ...     },
+    ...     {
+    ...         'name': 'relax_supercell',
+    ...         'supercell': [2, 2, 1],  # Create supercell, no restart_folder
+    ...         'incar': {'NSW': 100, 'IBRION': 2, 'ISIF': 2, 'ENCUT': 520},
+    ...         'kpoints_spacing': 0.03,
+    ...         'retrieve': ['CONTCAR', 'OUTCAR', 'CHGCAR'],
+    ...     },
+    ... ]
+    >>>
+    >>> result = quick_vasp_sequential(
+    ...     structure=my_structure,
+    ...     stages=stages,
+    ...     code_label='VASP-6.5.1@localwork',
+    ...     potential_family='PBE',
+    ...     potential_mapping={'Sn': 'Sn_d', 'O': 'O'},
+    ...     options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},
+    ... )
+    >>>
+    >>> # Get results when done
+    >>> print_sequential_results(result)
 """
 
 from .workgraph import (
     quick_vasp,
     quick_vasp_batch,
+    quick_vasp_sequential,
     quick_dos,
+    quick_dos_batch,
     get_batch_results_from_workgraph,
 )
 from .results import (
@@ -77,6 +143,11 @@ from .results import (
     print_results,
     get_dos_results,
     print_dos_results,
+    get_batch_dos_results,
+    print_batch_dos_results,
+    get_sequential_results,
+    get_stage_results,
+    print_sequential_results,
 )
 from .utils import (
     get_status,
@@ -90,7 +161,9 @@ __all__ = [
     # Core functions
     'quick_vasp',
     'quick_vasp_batch',
+    'quick_vasp_sequential',
     'quick_dos',
+    'quick_dos_batch',
     # Result extraction
     'get_results',
     'get_energy',
@@ -100,6 +173,11 @@ __all__ = [
     'print_results',
     'get_dos_results',
     'print_dos_results',
+    'get_batch_dos_results',
+    'print_batch_dos_results',
+    'get_sequential_results',
+    'get_stage_results',
+    'print_sequential_results',
     # Utilities
     'get_status',
     'export_files',
