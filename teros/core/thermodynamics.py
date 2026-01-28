@@ -16,6 +16,8 @@ import numpy as np
 from aiida import orm
 from aiida_workgraph import dynamic, namespace, task
 
+from teros.core.constants import EV_PER_ANGSTROM2_TO_J_PER_M2
+
 
 @task.calcfunction
 def identify_oxide_type(bulk_structure: orm.StructureData) -> orm.Str:
@@ -357,15 +359,20 @@ def calculate_surface_energy_binary(
 ) -> orm.Dict:
     """
     Compute γ(Δμ_O) surface energy for a single binary oxide slab.
-    
+
+    Following Reuter & Scheffler convention (PRB 65, 035406):
+    - Δμ_O = μ_O - (1/2)E_O2 (deviation from O2 reference)
+    - O-rich limit: Δμ_O = 0 (equilibrium with O2 gas)
+    - O-poor limit: Δμ_O = ΔH_f / y (oxide decomposition into metal)
+
     For a binary oxide M_x O_y, the surface energy is calculated as:
     γ(Δμ_O) = φ - Γ_O·Δμ_O
-    
+
     where:
-    - φ: reference surface energy at O-poor limit
-    - Γ_O: surface oxygen excess relative to bulk stoichiometry
-    - Δμ_O: oxygen chemical potential deviation (from decomposition limit to O2)
-    
+    - φ: reference surface energy at Δμ_O = 0 (O-rich limit)
+    - Γ_O: surface oxygen excess per unit area
+    - Δμ_O: oxygen chemical potential deviation from O2 reference
+
     Args:
         bulk_structure: Bulk structure containing M, O
         bulk_energy: Total energy of bulk structure (eV)
@@ -374,7 +381,7 @@ def calculate_surface_energy_binary(
         reference_energies: Dict with 'metal_energy_per_atom', 'oxygen_energy_per_atom'
         formation_enthalpy: Dict with 'formation_enthalpy_ev'
         sampling: Number of grid points for Δμ_O sampling
-        
+
     Returns:
         Dictionary containing surface energy data
     """
@@ -432,38 +439,61 @@ def calculate_surface_energy_binary(
     # Expected oxygen based on metal count and bulk stoichiometry
     expected_O = (y / x) * N_M_slab
     stoichiometric_imbalance = expected_O - N_O_slab
-    
-    # Oxygen chemical potential bounds
-    # Lower bound (O-poor): decomposition limit
-    mu_O_min = (bulk_energy.value - x * E_M_ref) / y
-    
-    # Upper bound (O-rich): from formation energy
-    mu_O_from_formation = mu_O_min + delta_h / y
-    mu_O_max = min(0.0, mu_O_from_formation)
-    
-    # Generate chemical potential range
-    delta_mu_O_range = np.linspace(mu_O_min, mu_O_max, grid_points)
-    
-    # Calculate surface energy at O-poor limit (reference)
+
+    # ========== CORRECTED: Δμ_O bounds (Reuter & Scheffler convention) ==========
+    # Δμ_O = μ_O - (1/2)E_O2, referenced to O2 molecule at T=0K
+    #
+    # O-poor limit: oxide decomposes into metal + O2
+    #   Δμ_O_min = ΔH_f / y (negative for stable oxide)
+    delta_mu_O_min = delta_h / y_reduced
+    #
+    # O-rich limit: equilibrium with O2 gas (reference state)
+    #   Δμ_O_max = 0
+    delta_mu_O_max = 0.0
+
+    # Generate chemical potential range (O-poor to O-rich)
+    delta_mu_O_range = np.linspace(delta_mu_O_min, delta_mu_O_max, grid_points)
+
+    # ========== Reference surface energy φ at Δμ_O = 0 (O-rich) ==========
+    # From Reuter & Scheffler PRB 65, 035406, Eq. (4):
+    #   γ = (1/2A) × [E_slab - (N_M/x)×E_bulk + ((y/x)×N_M - N_O)×μ_O]
+    #
+    # At Δμ_O = 0, μ_O = E_O_ref = (1/2)E_O2, so:
+    #   φ = (1/2A) × [E_slab - (N_M/x)×E_bulk + (y/x)×N_M×E_O_ref - N_O×E_O_ref]
+    #
+    # The term (y/x)×N_M×E_O_ref accounts for oxygen in stoichiometric bulk
+    # corresponding to N_M metal atoms.
     phi = (
         slab_energy.value
         - N_M_slab * (bulk_energy.value / x)
-        + stoichiometric_imbalance * mu_O_min
+        + (y / x) * N_M_slab * E_O_ref  # Oxygen in stoichiometric bulk reference
+        - N_O_slab * E_O_ref             # Actual oxygen in slab
     ) / (2 * area)
-    
-    # Surface oxygen excess (per unit area)
-    Gamma_O = stoichiometric_imbalance / (2 * area)
-    
-    # Compute γ(Δμ_O) - 1D array
+
+    # ========== CORRECTED: Surface oxygen excess (Reuter & Scheffler convention) ==========
+    # Γ_O = (N_O - (y/x)×N_M) / (2A) = -stoichiometric_imbalance / (2A)
+    # Positive Γ_O means O-rich surface, negative means O-poor surface
+    Gamma_O = -stoichiometric_imbalance / (2 * area)
+
+    # ========== CORRECTED: Compute γ(Δμ_O) ==========
+    # γ(Δμ_O) = φ - Γ_O × Δμ_O
     gamma_array = []
-    for mu_O in delta_mu_O_range:
-        gamma = phi - Gamma_O * (float(mu_O) - mu_O_min)
+    for delta_mu_O in delta_mu_O_range:
+        gamma = phi - Gamma_O * float(delta_mu_O)
         gamma_array.append(float(gamma))
     
-    # Special values
-    gamma_O_poor = gamma_array[0]  # At mu_O_min
-    gamma_O_rich = gamma_array[-1]  # At mu_O_max
-    
+    # Special values (in eV/Å²)
+    gamma_O_poor_raw = gamma_array[0]   # At Δμ_O_min (O-poor/decomposition limit)
+    gamma_O_rich_raw = gamma_array[-1]  # At Δμ_O_max = 0 (O-rich/O2 equilibrium)
+
+    # ========== Convert surface energies from eV/Å² to J/m² ==========
+    # Conversion factor: 1 eV/Å² = 16.0217663 J/m²
+    phi_Jm2 = phi * EV_PER_ANGSTROM2_TO_J_PER_M2
+    gamma_array_Jm2 = [g * EV_PER_ANGSTROM2_TO_J_PER_M2 for g in gamma_array]
+    gamma_O_poor = gamma_O_poor_raw * EV_PER_ANGSTROM2_TO_J_PER_M2
+    gamma_O_rich = gamma_O_rich_raw * EV_PER_ANGSTROM2_TO_J_PER_M2
+    # Note: Gamma_O (surface excess) remains in atoms/Å² (not an energy)
+
     # Calculate bulk energy per formula unit for consistency with ternary
     formula_units_in_bulk = bulk_counts[element_M] / x_reduced
     bulk_energy_per_fu = bulk_energy.value / formula_units_in_bulk
@@ -471,14 +501,15 @@ def calculate_surface_energy_binary(
     return orm.Dict(
         dict={
             # ===== Primary calculation (M as reference) =====
+            # Surface energies in J/m² (SI units)
             'primary': {
-                'phi': float(phi),
-                'Gamma_O': float(Gamma_O),
+                'phi': float(phi_Jm2),
+                'Gamma_O': float(Gamma_O),  # atoms/Å² (not converted)
                 'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
-                'gamma_array': gamma_array,
+                'gamma_array': gamma_array_Jm2,
                 'gamma_O_poor': float(gamma_O_poor),
                 'gamma_O_rich': float(gamma_O_rich),
-                'gamma_at_reference': float(phi),
+                'gamma_at_reference': float(phi_Jm2),
                 'element_M': element_M,
             },
 
@@ -503,17 +534,18 @@ def calculate_surface_energy_binary(
 
             # ===== Binary-specific data =====
             'stoichiometric_imbalance': float(stoichiometric_imbalance),
-            'mu_O_min': float(mu_O_min),
-            'mu_O_max': float(mu_O_max),
+            'delta_mu_O_min': float(delta_mu_O_min),  # O-poor limit (= ΔH_f / y)
+            'delta_mu_O_max': float(delta_mu_O_max),  # O-rich limit (= 0)
 
             # ===== Legacy keys for backward compatibility =====
-            'phi': float(phi),
-            'Gamma_O': float(Gamma_O),
+            # All surface energies in J/m² (SI units)
+            'phi': float(phi_Jm2),
+            'Gamma_O': float(Gamma_O),  # atoms/Å²
             'delta_mu_O_range': [float(x) for x in delta_mu_O_range],
-            'gamma_array': gamma_array,
+            'gamma_array': gamma_array_Jm2,
             'gamma_O_poor': float(gamma_O_poor),
             'gamma_O_rich': float(gamma_O_rich),
-            'gamma_at_reference': float(phi),
+            'gamma_at_reference': float(phi_Jm2),
             'element_M': element_M,
             'E_bulk_eV': float(bulk_energy.value),
             'bulk_stoichiometry_MxOy': {

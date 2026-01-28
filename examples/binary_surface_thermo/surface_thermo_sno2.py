@@ -37,23 +37,37 @@ try:
     )
 except ImportError:
     AIIDA_PROFILE = 'presto'
-    VASP_CODE = 'VASP-VTST-6.4.3@bohr'
+    VASP_CODE = 'VASP-6.5.1-idefix-4@obelix'
     POTENTIAL_FAMILY = 'PBE'
 
     BULK_PARAMS = {
-        'PREC': 'Accurate', 'ENCUT': 500, 'EDIFF': 1e-5, 'ISMEAR': 0,
+        'PREC': 'Accurate', 'ENCUT': 500, 'EDIFF': 1e-6, 'ISMEAR': 0,
         'SIGMA': 0.05, 'IBRION': 2, 'ISIF': 3, 'NSW': 500, 'EDIFFG': -0.01,
         'ALGO': 'Normal', 'LREAL': 'Auto', 'LWAVE': False, 'LCHARG': False,
+        'POTIM': 0.3,  # Conservative ionic step size
     }
+    # Metallic Sn: tighter convergence and better algorithm for metals
     METAL_PARAMS = BULK_PARAMS.copy()
-    METAL_PARAMS.update({'ISMEAR': 1, 'SIGMA': 0.2})  # Metallic Sn
+    METAL_PARAMS.update({
+        'ISMEAR': 1,      # Methfessel-Paxton for metals
+        'SIGMA': 0.2,     # Appropriate smearing for metals
+        'ALGO': 'Fast',   # Better SCF convergence for metals
+        'POTIM': 0.2,     # More conservative steps for metals
+        'EDIFF': 1e-7,    # Tighter electronic convergence (fixes ZBRENT)
+    })
     SLAB_PARAMS = BULK_PARAMS.copy()
     SLAB_PARAMS['ISIF'] = 2  # Fix cell, relax ions
 
-    # Bohr cluster: 40 cores per node, PBS Pro scheduler
+    # Obelix cluster: hybrid MPI+OpenMP (4 MPI processes, 22 threads each)
     COMMON_OPTIONS = {
-        'resources': {'num_machines': 1, 'num_cores_per_machine': 40},
-        'queue_name': 'par40',
+        'resources': {
+            'num_machines': 1,
+            'num_mpiprocs_per_machine': 4,
+        },
+        'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
+#PBS -l nodes=1:ppn=88:skylake
+#PBS -j oe
+#PBS -N SnO2_SurfThermo''',
     }
 
     # Use Sn_d for better d-electron treatment (14 valence electrons)
@@ -114,9 +128,14 @@ def main():
     print("     - Cleavage energies")
     print("     - Relaxation energies")
 
-    # Oxygen parameters (ISIF=2 for molecule in box)
+    # Oxygen parameters (molecule in box)
     oxygen_params = BULK_PARAMS.copy()
-    oxygen_params['ISIF'] = 2
+    oxygen_params.update({
+        'ISIF': 2,        # Fix cell, relax ions only
+        'ISMEAR': 0,      # Gaussian smearing for molecules
+        'SIGMA': 0.01,    # Small smearing for molecule
+        'ISPIN': 2,       # Spin-polarized for triplet O2
+    })
 
     # Build workgraph using surface_thermodynamics preset
     wg = build_core_workgraph(
