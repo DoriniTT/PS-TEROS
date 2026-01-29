@@ -501,7 +501,7 @@ def _validate_stages(stages: t.List[dict]) -> None:
 
         # Get stage type (default to 'vasp')
         stage_type = stage.get('type', 'vasp')
-        valid_types = ('vasp', 'dos')
+        valid_types = ('vasp', 'dos', 'batch')
         if stage_type not in valid_types:
             raise ValueError(
                 f"Stage '{name}' type='{stage_type}' must be one of {valid_types}"
@@ -518,6 +518,25 @@ def _validate_stages(stages: t.List[dict]) -> None:
                 raise ValueError(f"Stage '{name}': DOS stages require 'structure_from'")
 
             # Validate structure_from for DOS stages
+            structure_from = stage['structure_from']
+            if structure_from not in stage_names:
+                raise ValueError(
+                    f"Stage '{name}' structure_from='{structure_from}' must reference "
+                    f"a previous stage name"
+                )
+
+        elif stage_type == 'batch':
+            # Batch stages require structure_from, base_incar, calculations
+            if 'structure_from' not in stage:
+                raise ValueError(f"Stage '{name}': batch stages require 'structure_from'")
+            if 'base_incar' not in stage:
+                raise ValueError(f"Stage '{name}': batch stages require 'base_incar'")
+            if 'calculations' not in stage or not stage['calculations']:
+                raise ValueError(
+                    f"Stage '{name}': batch stages require non-empty 'calculations' dict"
+                )
+
+            # Validate structure_from references a previous stage
             structure_from = stage['structure_from']
             if structure_from not in stage_names:
                 raise ValueError(
@@ -726,6 +745,119 @@ def _create_dos_stage_tasks(
     }
 
 
+def _create_batch_stage_tasks(
+    wg: WorkGraph,
+    stage: dict,
+    stage_name: str,
+    input_structure,
+    code,
+    potential_family: str,
+    potential_mapping: dict,
+    options: dict,
+    base_kpoints_spacing: float,
+    clean_workdir: bool,
+) -> dict:
+    """
+    Create batch stage tasks: multiple parallel VASP calculations with varying parameters.
+
+    For each entry in the stage's 'calculations' dict, a separate VaspTask and
+    extract_energy task are created. Per-calculation overrides for incar, kpoints,
+    and retrieve are merged with stage-level defaults.
+
+    Args:
+        wg: WorkGraph to add tasks to
+        stage: Stage configuration dict with keys:
+            - base_incar: Base INCAR dict applied to all calculations
+            - calculations: Dict of {label: {incar: {overrides}, kpoints: [...], ...}}
+            - kpoints_spacing: Default k-points spacing (fallback to base_kpoints_spacing)
+            - kpoints: Default explicit k-points mesh [nx, ny, nz]
+            - retrieve: Default files to retrieve
+        stage_name: Unique stage identifier
+        input_structure: Structure socket from previous stage
+        code: VASP code node
+        potential_family: POTCAR family
+        potential_mapping: Element to POTCAR mapping
+        options: Scheduler options
+        base_kpoints_spacing: Default k-points spacing
+        clean_workdir: Whether to clean work directories
+
+    Returns:
+        Dict with:
+            - calc_tasks: {label: vasp_task} for each calculation
+            - energy_tasks: {label: energy_task} for each calculation
+            - structure: input structure (unchanged, batch is static)
+    """
+    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
+    VaspTask = task(VaspWorkChain)
+
+    base_incar = stage['base_incar']
+    calculations = stage['calculations']
+
+    # Stage-level defaults
+    stage_kpoints_spacing = stage.get('kpoints_spacing', base_kpoints_spacing)
+    stage_kpoints_mesh = stage.get('kpoints', None)
+    stage_retrieve = stage.get('retrieve', None)
+
+    calc_tasks = {}
+    energy_tasks = {}
+
+    for calc_label, calc_config in calculations.items():
+        # Deep-merge base_incar with per-calculation incar overrides
+        calc_incar_overrides = calc_config.get('incar', {})
+        if calc_incar_overrides:
+            merged_incar = deep_merge_dicts(base_incar, calc_incar_overrides)
+        else:
+            merged_incar = dict(base_incar)
+
+        # Per-calc kpoints or fall back to stage-level
+        calc_kpoints_mesh = calc_config.get('kpoints', stage_kpoints_mesh)
+        calc_kpoints_spacing = calc_config.get('kpoints_spacing', stage_kpoints_spacing)
+
+        # Per-calc retrieve or fall back to stage-level
+        calc_retrieve = calc_config.get('retrieve', stage_retrieve)
+
+        # Prepare builder inputs
+        builder_inputs = _prepare_builder_inputs(
+            incar=merged_incar,
+            kpoints_spacing=calc_kpoints_spacing,
+            potential_family=potential_family,
+            potential_mapping=potential_mapping,
+            options=options,
+            retrieve=calc_retrieve,
+            restart_folder=None,
+            clean_workdir=clean_workdir,
+            kpoints_mesh=calc_kpoints_mesh,
+        )
+
+        # Add VASP task
+        vasp_task_name = f'vasp_{stage_name}_{calc_label}'
+        vasp_task = wg.add_task(
+            VaspTask,
+            name=vasp_task_name,
+            structure=input_structure,
+            code=code,
+            **builder_inputs
+        )
+
+        # Add energy extraction task
+        energy_task_name = f'energy_{stage_name}_{calc_label}'
+        energy_task = wg.add_task(
+            extract_energy,
+            name=energy_task_name,
+            misc=vasp_task.outputs.misc,
+            retrieved=vasp_task.outputs.retrieved,
+        )
+
+        calc_tasks[calc_label] = vasp_task
+        energy_tasks[calc_label] = energy_task
+
+    return {
+        'calc_tasks': calc_tasks,
+        'energy_tasks': energy_tasks,
+        'structure': input_structure,
+    }
+
+
 def quick_vasp_sequential(
     structure: t.Union[orm.StructureData, int] = None,
     stages: t.List[dict] = None,
@@ -887,8 +1019,8 @@ def quick_vasp_sequential(
             structure_from = stage['structure_from']
             # Get structure from specified previous stage
             prev_stage_type = stage_types.get(structure_from, 'vasp')
-            if prev_stage_type == 'dos':
-                # DOS stages use the input structure directly
+            if prev_stage_type in ('dos', 'batch'):
+                # DOS/batch stages use the input structure directly
                 stage_structure = stage_tasks[structure_from]['structure']
             else:
                 stage_structure = stage_tasks[structure_from]['vasp'].outputs.structure
@@ -953,6 +1085,47 @@ def quick_vasp_sequential(
             except AttributeError:
                 pass
 
+        elif stage_type == 'batch':
+            # Batch stage: multiple parallel VASP calculations on same structure
+            structure_from = stage['structure_from']
+            # Resolve structure from referenced stage
+            ref_stage_type = stage_types.get(structure_from, 'vasp')
+            if ref_stage_type == 'dos':
+                stage_structure = stage_tasks[structure_from]['structure']
+            elif ref_stage_type == 'batch':
+                stage_structure = stage_tasks[structure_from]['structure']
+            else:
+                stage_structure = stage_tasks[structure_from]['vasp'].outputs.structure
+
+            # Create batch tasks
+            batch_tasks = _create_batch_stage_tasks(
+                wg=wg,
+                stage=stage,
+                stage_name=stage_name,
+                input_structure=stage_structure,
+                code=code,
+                potential_family=potential_family,
+                potential_mapping=potential_mapping or {},
+                options=options,
+                base_kpoints_spacing=kpoints_spacing,
+                clean_workdir=clean_workdir,
+            )
+
+            # Store tasks for later reference
+            stage_tasks[stage_name] = batch_tasks
+
+            # Expose outputs for each calculation in the batch
+            for calc_label, vasp_task in batch_tasks['calc_tasks'].items():
+                energy_task = batch_tasks['energy_tasks'][calc_label]
+                setattr(wg.outputs, f'{stage_name}_{calc_label}_energy',
+                        energy_task.outputs.result)
+                setattr(wg.outputs, f'{stage_name}_{calc_label}_misc',
+                        vasp_task.outputs.misc)
+                setattr(wg.outputs, f'{stage_name}_{calc_label}_remote',
+                        vasp_task.outputs.remote_folder)
+                setattr(wg.outputs, f'{stage_name}_{calc_label}_retrieved',
+                        vasp_task.outputs.retrieved)
+
         else:  # stage_type == 'vasp'
             # VASP stage: existing logic
             # Determine structure source
@@ -966,15 +1139,15 @@ def quick_vasp_sequential(
                 # Use output structure from previous stage
                 prev_name = stage_names[i - 1]
                 prev_stage_type = stage_types[prev_name]
-                if prev_stage_type == 'dos':
-                    # DOS stages don't modify structure, use their input structure
+                if prev_stage_type in ('dos', 'batch'):
+                    # DOS/batch stages don't modify structure, use their input structure
                     stage_structure = stage_tasks[prev_name]['structure']
                 else:
                     stage_structure = stage_tasks[prev_name]['vasp'].outputs.structure
             else:
                 # Use output structure from specific stage
                 ref_stage_type = stage_types.get(structure_from, 'vasp')
-                if ref_stage_type == 'dos':
+                if ref_stage_type in ('dos', 'batch'):
                     stage_structure = stage_tasks[structure_from]['structure']
                 else:
                     stage_structure = stage_tasks[structure_from]['vasp'].outputs.structure
