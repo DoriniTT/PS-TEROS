@@ -789,6 +789,8 @@ def get_stage_results(sequential_result: dict, stage_name: str) -> dict:
         return _get_dos_stage_results(wg_node, wg_pk, stage_name)
     elif stage_type == 'batch':
         return _get_batch_stage_results(wg_node, wg_pk, stage_name)
+    elif stage_type == 'bader':
+        return _get_bader_stage_results(wg_node, wg_pk, stage_name)
     else:
         return _get_vasp_stage_results(wg_node, wg_pk, stage_name)
 
@@ -1049,6 +1051,93 @@ def _get_batch_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
         _extract_batch_stage_from_workgraph(wg_node, stage_name, result)
 
     return result
+
+
+def _get_bader_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
+    """Extract results from a Bader stage in a sequential workflow.
+
+    Accesses WorkGraph exposed outputs using the naming convention
+    ``{stage_name}_charges``, ``{stage_name}_acf``, ``{stage_name}_bcf``,
+    ``{stage_name}_avf``.
+
+    Falls back to link traversal if direct output access fails.
+
+    Args:
+        wg_node: The WorkGraph ProcessNode.
+        wg_pk: WorkGraph PK (stored in the returned dict).
+        stage_name: Name of the Bader stage.
+
+    Returns:
+        Dict with keys: charges, dat_files, pk, stage, type.
+    """
+    result = {
+        'charges': None,
+        'dat_files': {},
+        'pk': wg_pk,
+        'stage': stage_name,
+        'type': 'bader',
+    }
+
+    # Try to access via WorkGraph outputs (exposed outputs)
+    if hasattr(wg_node, 'outputs'):
+        outputs = wg_node.outputs
+
+        # Charges Dict
+        charges_attr = f'{stage_name}_charges'
+        if hasattr(outputs, charges_attr):
+            charges_node = getattr(outputs, charges_attr)
+            if hasattr(charges_node, 'get_dict'):
+                result['charges'] = charges_node.get_dict()
+
+        # .dat files: acf, bcf, avf
+        for dat_key in ('acf', 'bcf', 'avf'):
+            dat_attr = f'{stage_name}_{dat_key}'
+            if hasattr(outputs, dat_attr):
+                result['dat_files'][dat_key] = getattr(outputs, dat_attr)
+
+    # Fallback: traverse links to find bader calcfunction outputs
+    if result['charges'] is None:
+        _extract_bader_stage_from_workgraph(wg_node, stage_name, result)
+
+    return result
+
+
+def _extract_bader_stage_from_workgraph(
+    wg_node, stage_name: str, result: dict
+) -> None:
+    """Extract Bader stage results by traversing WorkGraph links.
+
+    Fallback for ``_get_bader_stage_results`` when direct output access
+    is unavailable.
+
+    Args:
+        wg_node: The WorkGraph ProcessNode.
+        stage_name: Name of the Bader stage.
+        result: Result dict to populate (modified in place).
+    """
+    if not hasattr(wg_node, 'base'):
+        return
+
+    bader_task_name = f'bader_{stage_name}'
+
+    # Traverse CALL_CALC links to find the bader calcfunction
+    called_calc = wg_node.base.links.get_outgoing(link_type=LinkType.CALL_CALC)
+    for link in called_calc.all():
+        child_node = link.node
+        link_label = link.link_label
+
+        if bader_task_name in link_label or link_label == bader_task_name:
+            # Get outputs created by the calcfunction
+            created = child_node.base.links.get_outgoing(link_type=LinkType.CREATE)
+            for out_link in created.all():
+                out_label = out_link.link_label
+                out_node = out_link.node
+
+                if out_label == 'charges' and hasattr(out_node, 'get_dict'):
+                    result['charges'] = out_node.get_dict()
+                elif out_label in ('acf', 'bcf', 'avf'):
+                    result['dat_files'][out_label] = out_node
+            break
 
 
 def _extract_batch_stage_from_workgraph(
@@ -1419,6 +1508,47 @@ def print_sequential_results(sequential_result: dict) -> None:
             if stage_result['files'] is not None:
                 files = stage_result['files'].list_object_names()
                 print(f"      DOS Retrieved: {', '.join(files)}")
+
+        elif stage_type == 'bader':
+            # Bader stage output
+            print(f"  [{i}] {stage_name} (BADER)")
+
+            if stage_result['charges'] is not None:
+                charges = stage_result['charges']
+                atoms = charges.get('atoms', [])
+                total = charges.get('total_charge', 0.0)
+                vacuum = charges.get('vacuum_charge', 0.0)
+                print(f"      Atoms analyzed: {len(atoms)}")
+                print(f"      Total charge: {total:.5f}")
+                print(f"      Vacuum charge: {vacuum:.5f}")
+
+                # Print per-atom charges
+                if atoms:
+                    print("      Per-atom Bader charges:")
+                    for atom in atoms:
+                        elem = atom.get('element', '?')
+                        bader_q = atom.get('bader_charge', None)
+                        valence = atom.get('valence', None)
+                        if bader_q is not None:
+                            print(
+                                f"        #{atom['index']:>3d} {elem:>2s}  "
+                                f"charge={bader_q:+.5f}  "
+                                f"valence={valence:.1f}  "
+                                f"raw={atom['charge']:.5f}"
+                            )
+                        else:
+                            print(
+                                f"        #{atom['index']:>3d}  "
+                                f"charge={atom['charge']:.5f}  "
+                                f"vol={atom['volume']:.3f}"
+                            )
+
+            dat_files = stage_result.get('dat_files', {})
+            if dat_files:
+                file_names = ', '.join(
+                    f"{k}.dat (PK {v.pk})" for k, v in dat_files.items()
+                )
+                print(f"      Dat files: {file_names}")
 
         elif stage_type == 'batch':
             # Batch stage output (multiple parallel calculations)

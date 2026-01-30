@@ -12,7 +12,7 @@ from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import WorkGraph, task
 
-from .tasks import extract_energy, compute_dynamics
+from .tasks import extract_energy, compute_dynamics, run_bader_analysis
 from .utils import prepare_restart_settings, get_status
 from ..utils import deep_merge_dicts
 
@@ -501,7 +501,7 @@ def _validate_stages(stages: t.List[dict]) -> None:
 
         # Get stage type (default to 'vasp')
         stage_type = stage.get('type', 'vasp')
-        valid_types = ('vasp', 'dos', 'batch')
+        valid_types = ('vasp', 'dos', 'batch', 'bader')
         if stage_type not in valid_types:
             raise ValueError(
                 f"Stage '{name}' type='{stage_type}' must be one of {valid_types}"
@@ -541,6 +541,21 @@ def _validate_stages(stages: t.List[dict]) -> None:
             if structure_from not in stage_names:
                 raise ValueError(
                     f"Stage '{name}' structure_from='{structure_from}' must reference "
+                    f"a previous stage name"
+                )
+
+        elif stage_type == 'bader':
+            # Bader stages require charge_from (stage with retrieved AECCAR files)
+            if 'charge_from' not in stage:
+                raise ValueError(
+                    f"Stage '{name}': bader stages require 'charge_from' "
+                    f"(name of stage with AECCAR files in retrieved)"
+                )
+
+            charge_from = stage['charge_from']
+            if charge_from not in stage_names:
+                raise ValueError(
+                    f"Stage '{name}' charge_from='{charge_from}' must reference "
                     f"a previous stage name"
                 )
 
@@ -895,7 +910,7 @@ def quick_vasp_sequential(
         Dict with:
             - __workgraph_pk__: WorkGraph PK
             - __stage_names__: List of stage names in order
-            - __stage_types__: Dict mapping stage names to types ('vasp', 'dos', or 'batch')
+            - __stage_types__: Dict mapping stage names to types ('vasp', 'dos', 'batch', or 'bader')
             - <stage_name>: WorkGraph PK (for each stage)
 
     Stage Configuration (VASP stages, type='vasp' or omitted):
@@ -1046,8 +1061,8 @@ def quick_vasp_sequential(
             structure_from = stage['structure_from']
             # Get structure from specified previous stage
             prev_stage_type = stage_types.get(structure_from, 'vasp')
-            if prev_stage_type in ('dos', 'batch'):
-                # DOS/batch stages use the input structure directly
+            if prev_stage_type in ('dos', 'batch', 'bader'):
+                # DOS/batch/bader stages use the input structure directly
                 stage_structure = stage_tasks[structure_from]['structure']
             else:
                 stage_structure = stage_tasks[structure_from]['vasp'].outputs.structure
@@ -1117,9 +1132,7 @@ def quick_vasp_sequential(
             structure_from = stage['structure_from']
             # Resolve structure from referenced stage
             ref_stage_type = stage_types.get(structure_from, 'vasp')
-            if ref_stage_type == 'dos':
-                stage_structure = stage_tasks[structure_from]['structure']
-            elif ref_stage_type == 'batch':
+            if ref_stage_type in ('dos', 'batch', 'bader'):
                 stage_structure = stage_tasks[structure_from]['structure']
             else:
                 stage_structure = stage_tasks[structure_from]['vasp'].outputs.structure
@@ -1153,6 +1166,60 @@ def quick_vasp_sequential(
                 setattr(wg.outputs, f'{stage_name}_{calc_label}_retrieved',
                         vasp_task.outputs.retrieved)
 
+        elif stage_type == 'bader':
+            # Bader stage: run Bader charge analysis on AECCAR files
+            charge_from = stage['charge_from']
+
+            # Get the retrieved FolderData from the referenced stage
+            ref_stage_type = stage_types.get(charge_from, 'vasp')
+            if ref_stage_type == 'vasp':
+                retrieved_socket = stage_tasks[charge_from]['vasp'].outputs.retrieved
+            else:
+                raise ValueError(
+                    f"Bader stage '{stage_name}' charge_from='{charge_from}' must "
+                    f"reference a VASP stage (got type='{ref_stage_type}')"
+                )
+
+            # Resolve structure: prefer output structure (from relaxation),
+            # fall back to input structure (for SCF with NSW=0 which has
+            # no output structure).
+            charge_from_stage = stage_tasks[charge_from]
+            charge_from_incar = next(
+                (s.get('incar', {}) for s in stages if s['name'] == charge_from),
+                {},
+            )
+            if charge_from_incar.get('nsw', 0) > 0:
+                stage_structure = charge_from_stage['vasp'].outputs.structure
+            else:
+                stage_structure = charge_from_stage.get(
+                    'input_structure',
+                    charge_from_stage['vasp'].outputs.structure,
+                )
+
+            # Add bader analysis task
+            bader_task = wg.add_task(
+                run_bader_analysis,
+                name=f'bader_{stage_name}',
+                retrieved=retrieved_socket,
+                structure=stage_structure,
+            )
+
+            # Store tasks for later reference
+            stage_tasks[stage_name] = {
+                'bader': bader_task,
+                'structure': stage_structure,
+            }
+
+            # Expose outputs: charges dict and individual .dat files
+            setattr(wg.outputs, f'{stage_name}_charges',
+                    bader_task.outputs.charges)
+            setattr(wg.outputs, f'{stage_name}_acf',
+                    bader_task.outputs.acf)
+            setattr(wg.outputs, f'{stage_name}_bcf',
+                    bader_task.outputs.bcf)
+            setattr(wg.outputs, f'{stage_name}_avf',
+                    bader_task.outputs.avf)
+
         else:  # stage_type == 'vasp'
             # VASP stage: existing logic
             # Determine structure source
@@ -1166,15 +1233,15 @@ def quick_vasp_sequential(
                 # Use output structure from previous stage
                 prev_name = stage_names[i - 1]
                 prev_stage_type = stage_types[prev_name]
-                if prev_stage_type in ('dos', 'batch'):
-                    # DOS/batch stages don't modify structure, use their input structure
+                if prev_stage_type in ('dos', 'batch', 'bader'):
+                    # DOS/batch/bader stages don't modify structure, use their input structure
                     stage_structure = stage_tasks[prev_name]['structure']
                 else:
                     stage_structure = stage_tasks[prev_name]['vasp'].outputs.structure
             else:
                 # Use output structure from specific stage
                 ref_stage_type = stage_types.get(structure_from, 'vasp')
-                if ref_stage_type in ('dos', 'batch'):
+                if ref_stage_type in ('dos', 'batch', 'bader'):
                     stage_structure = stage_tasks[structure_from]['structure']
                 else:
                     stage_structure = stage_tasks[structure_from]['vasp'].outputs.structure
@@ -1282,10 +1349,14 @@ def quick_vasp_sequential(
             )
 
             # Store tasks for later reference
+            # 'input_structure' is the structure fed INTO the VASP task,
+            # useful for stages like bader where the SCF (NSW=0) doesn't
+            # produce an output structure.
             stage_tasks[stage_name] = {
                 'vasp': vasp_task,
                 'energy': energy_task,
                 'supercell': supercell_task,
+                'input_structure': stage_structure,
             }
 
             # Expose outputs for this stage
