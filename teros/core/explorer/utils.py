@@ -28,6 +28,11 @@ def get_status(pk: int) -> str:
 
     Returns:
         Status string: 'waiting', 'running', 'finished', 'failed', 'excepted', or 'killed'
+
+    Example:
+        >>> status = get_status(pk=12345)
+        >>> if status == 'finished':
+        ...     results = get_results(pk=12345)
     """
     node = orm.load_node(pk)
 
@@ -60,6 +65,11 @@ def get_restart_info(pk: int) -> dict:
         dict with:
             - structure: StructureData (relaxed if available, else input)
             - remote_folder: RemoteData (for WAVECAR, CHGCAR restart)
+
+    Example:
+        >>> info = get_restart_info(pk=12345)
+        >>> structure = info['structure']
+        >>> remote = info['remote_folder']
     """
     node = orm.load_node(pk)
 
@@ -125,6 +135,10 @@ def export_files(
 
     Returns:
         List of exported file paths
+
+    Example:
+        >>> exported = export_files(pk=12345, output_dir='./output', files=['CONTCAR'])
+        >>> print(exported)  # ['./output/CONTCAR']
     """
     node = orm.load_node(pk)
 
@@ -201,6 +215,11 @@ def list_calculations(
 
     Returns:
         List of dicts with: pk, label, state, ctime
+
+    Example:
+        >>> calcs = list_calculations(name_pattern='sno2*', limit=5)
+        >>> for c in calcs:
+        ...     print(f"PK {c['pk']}: {c['label']} [{c['state']}]")
     """
     from aiida.orm import QueryBuilder
     from aiida_workgraph.orm import WorkGraphNode

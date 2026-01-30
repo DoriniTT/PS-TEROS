@@ -895,7 +895,7 @@ def quick_vasp_sequential(
         Dict with:
             - __workgraph_pk__: WorkGraph PK
             - __stage_names__: List of stage names in order
-            - __stage_types__: Dict mapping stage names to types ('vasp' or 'dos')
+            - __stage_types__: Dict mapping stage names to types ('vasp', 'dos', or 'batch')
             - <stage_name>: WorkGraph PK (for each stage)
 
     Stage Configuration (VASP stages, type='vasp' or omitted):
@@ -921,6 +921,33 @@ def quick_vasp_sequential(
         - kpoints_spacing: K-points for SCF (default: base value)
         - dos_kpoints_spacing: K-points for DOS (default: kpoints_spacing * 0.8)
         - retrieve: Files to retrieve from DOS step (default: ['DOSCAR'])
+
+    Stage Configuration (Batch stages, type='batch'):
+        Runs multiple parallel VASP calculations on the same structure with
+        varying parameters (e.g., fractional charge for Fukui analysis).
+
+        - name (required): Unique stage identifier
+        - type: 'batch'
+        - structure_from (required): Stage name to get structure from
+        - base_incar (required): Base INCAR dict applied to ALL calculations
+        - calculations (required): Dict of {label: overrides}, where each
+          override dict may contain:
+            - incar: INCAR keys to override/add on top of base_incar
+            - kpoints: Explicit k-points mesh [nx, ny, nz]
+            - kpoints_spacing: K-points spacing
+            - retrieve: Files to retrieve
+        - kpoints_spacing: Default k-points spacing for all calculations
+        - kpoints: Default explicit k-points mesh for all calculations
+        - retrieve: Default files to retrieve for all calculations
+
+        Output naming: Each calculation produces outputs named
+            {stage_name}_{calc_label}_energy
+            {stage_name}_{calc_label}_misc
+            {stage_name}_{calc_label}_remote
+            {stage_name}_{calc_label}_retrieved
+
+        Note: Batch stages do NOT modify the structure. All calculations
+        run the same geometry with different electronic parameters.
 
     Example:
         >>> stages = [
