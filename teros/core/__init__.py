@@ -78,7 +78,7 @@ from .neb import (
     calculate_barrier,
     get_neb_incar_parameters,
 )
-from .explorer import (
+from .lego import (
     quick_vasp,
     quick_vasp_batch,
     quick_dos,

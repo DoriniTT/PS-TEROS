@@ -5,17 +5,17 @@ This script demonstrates how to run DOS calculations on multiple
 structures in parallel using the explorer module.
 
 Usage:
-    1. Place structure files (*.vasp) in this directory
+    1. Place structure files (structure_1.vasp, structure_2.vasp, ...) in this directory
     2. Edit the configuration below for your system
-    3. Run: python run_explorer_batch_dos.py
+    3. Run: python run_batch_dos.py
     4. Monitor: verdi process show <PK>
-    5. Get results: python -c "from teros.core.explorer import print_batch_dos_results; print_batch_dos_results(<result>)"
+    5. Get results: python -c "from teros.core.lego import print_batch_dos_results; print_batch_dos_results(<result>)"
 """
 
 from pathlib import Path
 from aiida import orm, load_profile
 from ase.io import read
-from teros.core.explorer import quick_dos_batch, get_batch_dos_results
+from teros.core.lego import quick_dos_batch, get_batch_dos_results
 
 # ============================================================================
 # Configuration - Edit these for your system
@@ -38,7 +38,6 @@ SCF_INCAR = {
     'sigma': 0.05,
     'algo': 'Normal',
     'nelm': 120,
-    'lorbit': 11,
 }
 
 # DOS INCAR parameters - BandsWorkChain handles ICHARG internally
@@ -56,8 +55,8 @@ OPTIONS = {
 }
 
 # K-points spacing
-KPOINTS_SPACING = 0.05      # For SCF
-DOS_KPOINTS_SPACING = 0.04  # For DOS (denser)
+KPOINTS_SPACING = 0.05  # Coarse for testing
+DOS_KPOINTS_SPACING = 0.04  # Slightly denser for DOS
 
 # Maximum concurrent jobs (localwork typically runs ONE job at a time)
 MAX_CONCURRENT_JOBS = 1
@@ -75,13 +74,13 @@ if __name__ == '__main__':
     structures = {}
 
     for vasp_file in sorted(structure_dir.glob('*.vasp')):
-        key = vasp_file.stem  # e.g., 'sno2', 'sno2_vacancy'
+        key = vasp_file.stem  # e.g., 'structure_1', 'structure_2'
         structures[key] = orm.StructureData(ase=read(vasp_file))
         print(f"Loaded: {key} ({structures[key].get_formula()})")
 
     if not structures:
         print("No .vasp files found in this directory")
-        print("Please create structure files (e.g., sno2.vasp, sno2_vacancy.vasp)")
+        print("Please create structure files (e.g., structure_1.vasp, structure_2.vasp)")
         exit(1)
 
     if len(structures) < 2:
@@ -110,7 +109,7 @@ if __name__ == '__main__':
     print(f"\nMonitor with: verdi process show {result['__workgraph_pk__']}")
     print(f"             verdi process report {result['__workgraph_pk__']}")
     print(f"\nTo get results when done:")
-    print(f"  from teros.core.explorer import get_batch_dos_results, print_batch_dos_results")
+    print(f"  from teros.core.lego import get_batch_dos_results, print_batch_dos_results")
     print(f"  result = {result}")
     print(f"  print_batch_dos_results(result)")
     print(f"\n  # Or extract results programmatically:")

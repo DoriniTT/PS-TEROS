@@ -1,4 +1,4 @@
-# Explorer Module
+# Lego Module
 
 Lightweight, incremental VASP calculation module for exploratory work.
 
@@ -13,7 +13,7 @@ Lightweight, incremental VASP calculation module for exploratory work.
 ## Quick Start
 
 ```python
-from teros.core.explorer import quick_vasp, get_results, get_status
+from teros.core.lego import quick_vasp, get_results, get_status
 
 # Single calculation
 pk = quick_vasp(
@@ -194,7 +194,7 @@ exported = export_files(pk, output_dir='./results/', files=['CHGCAR', 'DOSCAR'])
 
 #### `list_calculations(name_pattern, limit)`
 
-List explorer calculations, optionally filtered by name.
+List lego calculations, optionally filtered by name.
 
 ```python
 calcs = list_calculations(name_pattern='sno2*', limit=20)
@@ -239,7 +239,7 @@ For DOS calculations, `quick_dos` provides a simpler interface that handles
 the SCF → DOS chain automatically via the BandsWorkChain:
 
 ```python
-from teros.core.explorer import quick_dos, get_dos_results, print_dos_results
+from teros.core.lego import quick_dos, get_dos_results, print_dos_results
 
 # Submit DOS calculation
 # Note: AiiDA-VASP requires lowercase INCAR keys
@@ -278,7 +278,7 @@ print_dos_results(pk)
 ## Fukui-Style Batch Example
 
 ```python
-from teros.core.explorer import quick_vasp_batch, get_batch_results_from_workgraph
+from teros.core.lego import quick_vasp_batch, get_batch_results_from_workgraph
 
 # Run Fukui+ interpolation: 4 charge states
 delta_values = [0.0, 0.05, 0.10, 0.15]
@@ -309,12 +309,18 @@ for key, r in results.items():
 ## Module Structure
 
 ```
-teros/core/explorer/
+teros/core/lego/
 ├── __init__.py      # Public API exports
-├── workgraph.py     # Main WorkGraph builders
+├── workgraph.py     # Main WorkGraph builders (thin dispatcher)
 ├── tasks.py         # @task.calcfunction helpers
 ├── utils.py         # Status, restart, file handling
-├── results.py       # Result extraction
+├── results.py       # Result extraction (thin dispatcher)
+├── bricks/          # Stage type modules
+│   ├── __init__.py  # Brick registry + shared helpers
+│   ├── vasp.py      # VASP brick
+│   ├── dos.py       # DOS brick
+│   ├── batch.py     # Batch brick
+│   └── bader.py     # Bader brick
 └── README.md        # This file
 ```
 

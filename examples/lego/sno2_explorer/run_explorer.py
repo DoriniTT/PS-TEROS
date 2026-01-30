@@ -11,7 +11,7 @@ Usage:
 from pathlib import Path
 from aiida import orm, load_profile
 from ase.io import read
-from teros.core.explorer import quick_vasp_batch
+from teros.core.lego import quick_vasp_batch
 
 # =============================================================================
 # Configuration

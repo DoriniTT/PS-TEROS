@@ -1,12 +1,12 @@
-# TODO: Explorer as Central Orchestration Hub
+# TODO: Lego as Central Orchestration Hub
 
 ## Vision
 
-Transform the `explorer` module into the **central orchestration hub** for all PS-TEROS workflows. Instead of just chaining VASP calculations, users could compose complex multi-physics workflows by combining different modules like **LEGO blocks**.
+The `lego` module is the **central orchestration hub** for all PS-TEROS workflows. Instead of just chaining VASP calculations, users can compose complex multi-physics workflows by combining different stage types as **bricks**.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         EXPLORER: Central Hub                                │
+│                          LEGO: Central Hub                                   │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
 │   Stage 1        Stage 2        Stage 3        Stage 4        Stage 5      │
@@ -34,7 +34,7 @@ Users must manually orchestrate separate workflows and pass data between them. W
 ## Example: The Dream API
 
 ```python
-from teros.core.explorer import quick_workflow
+from teros.core.lego import quick_workflow
 
 stages = [
     # Stage 1-4: VASP relaxations (current functionality)
@@ -122,31 +122,9 @@ result = quick_workflow(
 
 ## Module Integration Roadmap
 
-### Phase 1: DOS Integration (Priority: HIGH)
+### Phase 1: DOS Integration (DONE)
 
-**Goal:** Add `type: 'dos'` stages that use `quick_dos` internally.
-
-**Implementation:**
-```python
-# In quick_vasp_sequential (or new quick_workflow):
-
-if stage['type'] == 'dos':
-    # Get structure from previous stage
-    structure = stage_tasks[stage['structure_from']]['vasp'].outputs.structure
-
-    # Create DOS task using BandsWorkChain
-    dos_task = wg.add_task(
-        BandsTask,
-        name=f'dos_{stage_name}',
-        structure=structure,
-        code=code,
-        # ... DOS-specific inputs
-    )
-
-    # Expose DOS outputs
-    setattr(wg.outputs, f'{stage_name}_dos', dos_task.outputs.dos)
-    setattr(wg.outputs, f'{stage_name}_energy', ...)
-```
+**Status:** Implemented as `bricks/dos.py`. DOS stages use the BandsWorkChain internally.
 
 **Stage Configuration for DOS:**
 | Field | Required | Default | Description |
@@ -159,12 +137,6 @@ if stage['type'] == 'dos':
 | `kpoints_spacing` | No | base | K-points for SCF |
 | `dos_kpoints_spacing` | No | 80% of SCF | K-points for DOS |
 | `retrieve` | No | `[]` | Files to retrieve |
-
-**New Result Functions:**
-```python
-get_dos_stage_results(result, 'dos_calculation')
-# Returns: {'energy': ..., 'dos': ArrayData, 'projectors': ...}
-```
 
 ---
 
@@ -228,61 +200,53 @@ get_dos_stage_results(result, 'dos_calculation')
 
 ## Architecture Changes
 
-### Current Architecture
+### Current Architecture (Implemented)
 ```
 quick_vasp_sequential()
-    └── Only handles 'vasp' type stages
+    └── Brick dispatcher (vasp, dos, batch, bader)
+        ├── bricks/vasp.py
+        ├── bricks/dos.py
+        ├── bricks/batch.py
+        └── bricks/bader.py
 ```
 
-### Proposed Architecture
-```
-quick_workflow()  # New unified function
-    ├── StageHandler (abstract base)
-    │   ├── VaspStageHandler      # Current VASP stages
-    │   ├── DosStageHandler       # DOS via BandsWorkChain
-    │   ├── AimdStageHandler      # AIMD module
-    │   ├── ThermodynamicsHandler # Surface energy
-    │   └── ... (extensible)
-    │
-    └── Stage validation per type
+Each brick module exports exactly 5 functions:
+```python
+def validate_stage(stage, stage_names): ...
+def create_stage_tasks(wg, stage, stage_name, context): ...
+def expose_stage_outputs(wg, stage_name, tasks_result): ...
+def get_stage_results(wg_node, wg_pk, stage_name): ...
+def print_stage_results(index, stage_name, stage_result): ...
 ```
 
 ### Key Design Decisions
 
 1. **Backward Compatibility**
-   - `quick_vasp_sequential()` remains unchanged
-   - New `quick_workflow()` function for multi-module stages
+   - `quick_vasp_sequential()` uses brick dispatcher internally
    - Stages without `type` field default to `'vasp'`
+   - All public API exports unchanged
 
-2. **Stage Handler Pattern**
-   ```python
-   class StageHandler(ABC):
-       @abstractmethod
-       def validate_config(self, stage: dict) -> None:
-           """Validate stage configuration."""
-           pass
-
-       @abstractmethod
-       def create_tasks(self, wg: WorkGraph, stage: dict, context: dict) -> dict:
-           """Create WorkGraph tasks for this stage."""
-           pass
-
-       @abstractmethod
-       def get_outputs(self) -> dict:
-           """Return output sockets to expose."""
-           pass
-   ```
+2. **Brick Module Pattern**
+   - Each brick is a Python module (not a class) with 5 standard functions
+   - Registry in `bricks/__init__.py` maps type strings to modules
+   - New bricks are added by creating a module and registering it
 
 3. **Context Passing**
    ```python
    context = {
-       'stage_tasks': {},           # name -> task references
-       'current_structure': ...,    # Current structure socket
-       'current_remote': ...,       # Current remote folder
-       'code': ...,                 # VASP code
-       'potential_family': ...,
-       'potential_mapping': ...,
-       'options': ...,
+       'wg': wg,
+       'code': code,
+       'potential_family': potential_family,
+       'potential_mapping': potential_mapping or {},
+       'options': options,
+       'base_kpoints_spacing': kpoints_spacing,
+       'clean_workdir': clean_workdir,
+       'stage_tasks': stage_tasks,
+       'stage_types': stage_types,
+       'stage_names': stage_names,
+       'stages': stages,
+       'input_structure': structure,
+       'stage_index': i,
    }
    ```
 
@@ -303,23 +267,17 @@ quick_workflow()  # New unified function
 
 ## Implementation Plan
 
-### Step 1: Refactor Current Code (Preparation)
-- [ ] Extract VASP stage handling into `VaspStageHandler` class
-- [ ] Create `StageHandler` abstract base class
-- [ ] Add `type` field support (default: `'vasp'`)
-- [ ] Ensure backward compatibility
+### Step 1: Refactor into Bricks (DONE)
+- [x] Extract VASP stage handling into `bricks/vasp.py`
+- [x] Extract DOS stage handling into `bricks/dos.py`
+- [x] Extract batch stage handling into `bricks/batch.py`
+- [x] Extract bader stage handling into `bricks/bader.py`
+- [x] Create brick registry in `bricks/__init__.py`
+- [x] Slim down `workgraph.py` and `results.py` to thin dispatchers
+- [x] Ensure backward compatibility
 
-### Step 2: Implement DOS Integration
-- [ ] Create `DosStageHandler` class
-- [ ] Add DOS stage validation
-- [ ] Wire BandsWorkChain as task
-- [ ] Add DOS-specific output extraction
-- [ ] Add `get_dos_stage_results()` function
-- [ ] Write tests
-- [ ] Update documentation
-
-### Step 3: Implement AIMD Integration
-- [ ] Create `AimdStageHandler` class
+### Step 2: Implement AIMD Integration
+- [ ] Create `bricks/aimd.py` brick module
 - [ ] Add AIMD stage validation
 - [ ] Wire AIMD WorkGraph as task
 - [ ] Handle AIMD restart between stages
@@ -327,11 +285,10 @@ quick_workflow()  # New unified function
 - [ ] Write tests
 - [ ] Update documentation
 
-### Step 4: Create `quick_workflow()` Function
-- [ ] New entry point that supports all stage types
-- [ ] Registry of stage handlers
-- [ ] Unified validation
-- [ ] Unified result extraction
+### Step 3: Additional Bricks
+- [ ] New bricks added by creating module + registering in `bricks/__init__.py`
+- [ ] Unified validation via brick dispatcher
+- [ ] Unified result extraction via brick dispatcher
 
 ---
 
@@ -406,11 +363,11 @@ stages = [
 
 ## Notes
 
-- Start with DOS integration as proof of concept
-- Keep the architecture flexible for future modules
-- Maintain the "simple API" philosophy of explorer
-- Each stage type should have comprehensive validation
-- Error messages should clearly indicate which stage failed and why
+- DOS, batch, and bader bricks already implemented
+- Keep the architecture flexible for future bricks
+- Maintain the "simple API" philosophy of lego
+- Each brick has comprehensive validation
+- Error messages clearly indicate which stage failed and why
 
 ---
 

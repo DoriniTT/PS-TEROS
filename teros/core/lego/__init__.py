@@ -1,4 +1,4 @@
-"""Explorer module for lightweight, incremental VASP calculations.
+"""Lego module for lightweight, incremental VASP calculations.
 
 This module provides a simple API for exploratory VASP work:
 - Submit a calculation, check results, decide next step, optionally restart
@@ -6,9 +6,15 @@ This module provides a simple API for exploratory VASP work:
 - Specific file retrieval - get exactly the files you need
 - Non-blocking default - submit and return immediately
 
+Stage types are implemented as "bricks" (see bricks/ subdirectory):
+- vasp: Standard VASP calculations (relaxation, SCF, etc.)
+- dos: DOS calculations via BandsWorkChain
+- batch: Multiple parallel VASP calculations with varying parameters
+- bader: Bader charge analysis
+
 Example usage:
 
-    >>> from teros.core.explorer import quick_vasp, get_results, get_status
+    >>> from teros.core.lego import quick_vasp, get_results, get_status
     >>>
     >>> # Single calculation
     >>> pk = quick_vasp(
@@ -41,7 +47,7 @@ Example usage:
 
 DOS calculation using BandsWorkChain:
 
-    >>> from teros.core.explorer import quick_dos, get_dos_results
+    >>> from teros.core.lego import quick_dos, get_dos_results
     >>>
     >>> # DOS calculation (SCF + DOS handled internally)
     >>> # Note: AiiDA-VASP requires lowercase INCAR keys
@@ -64,7 +70,7 @@ DOS calculation using BandsWorkChain:
 
 Batch DOS calculation (multiple structures in parallel):
 
-    >>> from teros.core.explorer import quick_dos_batch, get_batch_dos_results
+    >>> from teros.core.lego import quick_dos_batch, get_batch_dos_results
     >>>
     >>> # Compare DOS for different structures
     >>> result = quick_dos_batch(
@@ -88,7 +94,7 @@ Batch DOS calculation (multiple structures in parallel):
 
 Sequential multi-stage calculation with restart chaining:
 
-    >>> from teros.core.explorer import quick_vasp_sequential, print_sequential_results
+    >>> from teros.core.lego import quick_vasp_sequential, print_sequential_results
     >>>
     >>> # Define stages with automatic restart chaining
     >>> stages = [

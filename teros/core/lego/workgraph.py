@@ -1,4 +1,4 @@
-"""WorkGraph builders for the explorer module.
+"""WorkGraph builders for the lego module.
 
 This module provides lightweight, incremental VASP calculation wrappers
 for exploratory work. The goal is simplicity: submit a calculation,
@@ -12,7 +12,7 @@ from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import WorkGraph, task
 
-from .tasks import extract_energy, compute_dynamics, run_bader_analysis
+from .tasks import extract_energy, compute_dynamics
 from .utils import prepare_restart_settings, get_status
 from ..utils import deep_merge_dicts
 
@@ -479,12 +479,16 @@ def _validate_stages(stages: t.List[dict]) -> None:
     """
     Validate sequential stage configuration.
 
+    Delegates type-specific validation to each brick module.
+
     Args:
         stages: List of stage configuration dicts
 
     Raises:
         ValueError: If validation fails
     """
+    from .bricks import get_brick_module, VALID_BRICK_TYPES
+
     if not stages:
         raise ValueError("stages list cannot be empty")
 
@@ -501,376 +505,14 @@ def _validate_stages(stages: t.List[dict]) -> None:
 
         # Get stage type (default to 'vasp')
         stage_type = stage.get('type', 'vasp')
-        valid_types = ('vasp', 'dos', 'batch', 'bader')
-        if stage_type not in valid_types:
+        if stage_type not in VALID_BRICK_TYPES:
             raise ValueError(
-                f"Stage '{name}' type='{stage_type}' must be one of {valid_types}"
+                f"Stage '{name}' type='{stage_type}' must be one of {VALID_BRICK_TYPES}"
             )
 
-        # Type-specific validation
-        if stage_type == 'dos':
-            # DOS stages require scf_incar and dos_incar
-            if 'scf_incar' not in stage:
-                raise ValueError(f"Stage '{name}': DOS stages require 'scf_incar'")
-            if 'dos_incar' not in stage:
-                raise ValueError(f"Stage '{name}': DOS stages require 'dos_incar'")
-            if 'structure_from' not in stage:
-                raise ValueError(f"Stage '{name}': DOS stages require 'structure_from'")
-
-            # Validate structure_from for DOS stages
-            structure_from = stage['structure_from']
-            if structure_from not in stage_names:
-                raise ValueError(
-                    f"Stage '{name}' structure_from='{structure_from}' must reference "
-                    f"a previous stage name"
-                )
-
-        elif stage_type == 'batch':
-            # Batch stages require structure_from, base_incar, calculations
-            if 'structure_from' not in stage:
-                raise ValueError(f"Stage '{name}': batch stages require 'structure_from'")
-            if 'base_incar' not in stage:
-                raise ValueError(f"Stage '{name}': batch stages require 'base_incar'")
-            if 'calculations' not in stage or not stage['calculations']:
-                raise ValueError(
-                    f"Stage '{name}': batch stages require non-empty 'calculations' dict"
-                )
-
-            # Validate structure_from references a previous stage
-            structure_from = stage['structure_from']
-            if structure_from not in stage_names:
-                raise ValueError(
-                    f"Stage '{name}' structure_from='{structure_from}' must reference "
-                    f"a previous stage name"
-                )
-
-        elif stage_type == 'bader':
-            # Bader stages require charge_from (stage with retrieved AECCAR files)
-            if 'charge_from' not in stage:
-                raise ValueError(
-                    f"Stage '{name}': bader stages require 'charge_from' "
-                    f"(name of stage with AECCAR files in retrieved)"
-                )
-
-            charge_from = stage['charge_from']
-            if charge_from not in stage_names:
-                raise ValueError(
-                    f"Stage '{name}' charge_from='{charge_from}' must reference "
-                    f"a previous stage name"
-                )
-
-        else:  # stage_type == 'vasp'
-            # VASP stages require incar
-            if 'incar' not in stage:
-                raise ValueError(f"Stage '{name}' missing required 'incar' field")
-
-            # Require restart (must be None or a previous stage name)
-            if 'restart' not in stage:
-                raise ValueError(f"Stage '{name}' missing required 'restart' field (use None or a stage name)")
-
-            restart = stage['restart']
-            if restart is not None:
-                if restart not in stage_names:
-                    raise ValueError(
-                        f"Stage '{name}' restart='{restart}' references unknown or "
-                        f"later stage (must be defined before this stage)"
-                    )
-
-            # Validate structure_from for VASP stages
-            structure_from = stage.get('structure_from', 'previous')
-            if structure_from not in ('previous', 'input') and structure_from not in stage_names:
-                raise ValueError(
-                    f"Stage '{name}' structure_from='{structure_from}' must be 'previous', "
-                    f"'input', or a previous stage name"
-                )
-
-            # Validate supercell spec
-            if 'supercell' in stage:
-                spec = stage['supercell']
-                if not isinstance(spec, (list, tuple)) or len(spec) != 3:
-                    raise ValueError(
-                        f"Stage '{name}' supercell must be [nx, ny, nz], got: {spec}"
-                    )
-                for val in spec:
-                    if not isinstance(val, int) or val < 1:
-                        raise ValueError(
-                            f"Stage '{name}' supercell values must be positive integers, "
-                            f"got: {spec}"
-                        )
-
-            # Validate fix_type
-            fix_type = stage.get('fix_type', None)
-            if fix_type is not None:
-                valid_fix_types = ('bottom', 'center', 'top')
-                if fix_type not in valid_fix_types:
-                    raise ValueError(
-                        f"Stage '{name}' fix_type='{fix_type}' must be one of {valid_fix_types}"
-                    )
-
-                # If fix_type is set, fix_thickness must be positive
-                fix_thickness = stage.get('fix_thickness', 0.0)
-                if fix_thickness <= 0.0:
-                    raise ValueError(
-                        f"Stage '{name}' has fix_type='{fix_type}' but fix_thickness={fix_thickness}. "
-                        f"fix_thickness must be > 0 when fix_type is set."
-                    )
-
-
-def _create_dos_stage_tasks(
-    wg: WorkGraph,
-    stage: dict,
-    stage_name: str,
-    input_structure,
-    code,
-    potential_family: str,
-    potential_mapping: dict,
-    options: dict,
-    base_kpoints_spacing: float,
-    clean_workdir: bool,
-) -> dict:
-    """
-    Create DOS task using BandsWorkChain (vasp.v2.bands).
-
-    BandsWorkChain handles the SCF → non-SCF DOS workflow internally with
-    proper ICHARG settings and CHGCAR passing.
-
-    Args:
-        wg: WorkGraph to add tasks to
-        stage: Stage configuration dict with keys:
-            - scf_incar: INCAR dict for SCF step
-            - dos_incar: INCAR dict for DOS step
-            - kpoints_spacing: K-points spacing for SCF (default: base_kpoints_spacing)
-            - kpoints: Explicit k-points mesh [nx, ny, nz] for SCF (overrides kpoints_spacing)
-            - dos_kpoints_spacing: K-points spacing for DOS (default: scf_spacing * 0.8)
-            - dos_kpoints: Explicit k-points mesh [nx, ny, nz] for DOS (overrides dos_kpoints_spacing)
-            - retrieve: List of files to retrieve from DOS calc (default: ['DOSCAR'])
-        stage_name: Unique stage identifier
-        input_structure: Structure socket from previous stage
-        code: VASP code node
-        potential_family: POTCAR family
-        potential_mapping: Element to POTCAR mapping
-        options: Scheduler options
-        base_kpoints_spacing: Default k-points spacing
-        clean_workdir: Whether to clean work directories
-
-    Returns:
-        Dict with task references for later stages
-    """
-    # Get BandsWorkChain and wrap as task
-    BandsWorkChain = WorkflowFactory('vasp.v2.bands')
-    BandsTask = task(BandsWorkChain)
-
-    # Handle SCF k-points: explicit mesh or spacing
-    scf_kpoints_mesh = stage.get('kpoints', None)
-    scf_kpoints_spacing = stage.get('kpoints_spacing', base_kpoints_spacing)
-
-    # Handle DOS k-points: explicit mesh or spacing
-    dos_kpoints_mesh = stage.get('dos_kpoints', None)
-    dos_kpoints_spacing = stage.get('dos_kpoints_spacing', scf_kpoints_spacing * 0.8)
-
-    # Prepare SCF INCAR (BandsWorkChain handles lwave/lcharg internally)
-    scf_incar = dict(stage['scf_incar'])
-    scf_incar.update({
-        'nsw': 0,        # Static calculation
-        'ibrion': -1,    # No ionic relaxation
-    })
-
-    # Prepare DOS INCAR (BandsWorkChain handles ICHARG internally)
-    dos_incar = dict(stage['dos_incar'])
-    dos_incar.setdefault('ismear', -5)   # Tetrahedron method for DOS
-    dos_incar.setdefault('lorbit', 11)   # Projected DOS
-    dos_incar.setdefault('nedos', 2000)  # Number of DOS points
-    dos_incar.update({
-        'nsw': 0,        # Static calculation
-        'ibrion': -1,    # No ionic relaxation
-    })
-
-    # Files to retrieve from DOS calc
-    dos_retrieve = stage.get('retrieve', ['DOSCAR'])
-
-    # DOS settings for file retrieval
-    dos_settings = {}
-    if dos_retrieve:
-        dos_settings = {
-            'ADDITIONAL_RETRIEVE_LIST': dos_retrieve,
-        }
-
-    # Prepare SCF input dict
-    scf_input = {
-        'code': code,
-        'parameters': orm.Dict({'incar': scf_incar}),
-        'potential_family': potential_family,
-        'potential_mapping': orm.Dict(potential_mapping),
-        'options': orm.Dict(options),
-        'settings': orm.Dict({}),
-        'clean_workdir': False,  # Keep for DOS restart
-    }
-
-    # SCF k-points: explicit mesh or spacing
-    if scf_kpoints_mesh is not None:
-        scf_kpoints = orm.KpointsData()
-        scf_kpoints.set_kpoints_mesh(scf_kpoints_mesh)
-        scf_input['kpoints'] = scf_kpoints
-    else:
-        scf_input['kpoints_spacing'] = float(scf_kpoints_spacing)
-
-    # Prepare DOS input dict
-    dos_input = {
-        'code': code,
-        'parameters': orm.Dict({'incar': dos_incar}),
-        'potential_family': potential_family,
-        'potential_mapping': orm.Dict(potential_mapping),
-        'options': orm.Dict(options),
-        'settings': orm.Dict(dos_settings),
-    }
-
-    # DOS k-points: explicit mesh or spacing
-    if dos_kpoints_mesh is not None:
-        dos_kpoints = orm.KpointsData()
-        dos_kpoints.set_kpoints_mesh(dos_kpoints_mesh)
-        dos_input['kpoints'] = dos_kpoints
-        # Set dummy spacing in band_settings (required but ignored when kpoints is set)
-        band_settings = orm.Dict({
-            'only_dos': True,
-            'run_dos': True,
-            'dos_kpoints_distance': 0.03,  # Will be overridden by explicit kpoints
-        })
-    else:
-        # Use spacing-based k-points for DOS
-        band_settings = orm.Dict({
-            'only_dos': True,
-            'run_dos': True,
-            'dos_kpoints_distance': float(dos_kpoints_spacing),
-        })
-
-    # Add BandsWorkChain task
-    bands_task = wg.add_task(
-        BandsTask,
-        name=f'bands_{stage_name}',
-        structure=input_structure,
-        scf=scf_input,
-        dos=dos_input,
-        band_settings=band_settings,
-        clean_children_workdir=orm.Str('all') if clean_workdir else None,
-    )
-
-    return {
-        'bands_task': bands_task,
-        'structure': input_structure,  # DOS doesn't modify structure
-    }
-
-
-def _create_batch_stage_tasks(
-    wg: WorkGraph,
-    stage: dict,
-    stage_name: str,
-    input_structure,
-    code,
-    potential_family: str,
-    potential_mapping: dict,
-    options: dict,
-    base_kpoints_spacing: float,
-    clean_workdir: bool,
-) -> dict:
-    """
-    Create batch stage tasks: multiple parallel VASP calculations with varying parameters.
-
-    For each entry in the stage's 'calculations' dict, a separate VaspTask and
-    extract_energy task are created. Per-calculation overrides for incar, kpoints,
-    and retrieve are merged with stage-level defaults.
-
-    Args:
-        wg: WorkGraph to add tasks to
-        stage: Stage configuration dict with keys:
-            - base_incar: Base INCAR dict applied to all calculations
-            - calculations: Dict of {label: {incar: {overrides}, kpoints: [...], ...}}
-            - kpoints_spacing: Default k-points spacing (fallback to base_kpoints_spacing)
-            - kpoints: Default explicit k-points mesh [nx, ny, nz]
-            - retrieve: Default files to retrieve
-        stage_name: Unique stage identifier
-        input_structure: Structure socket from previous stage
-        code: VASP code node
-        potential_family: POTCAR family
-        potential_mapping: Element to POTCAR mapping
-        options: Scheduler options
-        base_kpoints_spacing: Default k-points spacing
-        clean_workdir: Whether to clean work directories
-
-    Returns:
-        Dict with:
-            - calc_tasks: {label: vasp_task} for each calculation
-            - energy_tasks: {label: energy_task} for each calculation
-            - structure: input structure (unchanged, batch is static)
-    """
-    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
-    VaspTask = task(VaspWorkChain)
-
-    base_incar = stage['base_incar']
-    calculations = stage['calculations']
-
-    # Stage-level defaults
-    stage_kpoints_spacing = stage.get('kpoints_spacing', base_kpoints_spacing)
-    stage_kpoints_mesh = stage.get('kpoints', None)
-    stage_retrieve = stage.get('retrieve', None)
-
-    calc_tasks = {}
-    energy_tasks = {}
-
-    for calc_label, calc_config in calculations.items():
-        # Deep-merge base_incar with per-calculation incar overrides
-        calc_incar_overrides = calc_config.get('incar', {})
-        if calc_incar_overrides:
-            merged_incar = deep_merge_dicts(base_incar, calc_incar_overrides)
-        else:
-            merged_incar = dict(base_incar)
-
-        # Per-calc kpoints or fall back to stage-level
-        calc_kpoints_mesh = calc_config.get('kpoints', stage_kpoints_mesh)
-        calc_kpoints_spacing = calc_config.get('kpoints_spacing', stage_kpoints_spacing)
-
-        # Per-calc retrieve or fall back to stage-level
-        calc_retrieve = calc_config.get('retrieve', stage_retrieve)
-
-        # Prepare builder inputs
-        builder_inputs = _prepare_builder_inputs(
-            incar=merged_incar,
-            kpoints_spacing=calc_kpoints_spacing,
-            potential_family=potential_family,
-            potential_mapping=potential_mapping,
-            options=options,
-            retrieve=calc_retrieve,
-            restart_folder=None,
-            clean_workdir=clean_workdir,
-            kpoints_mesh=calc_kpoints_mesh,
-        )
-
-        # Add VASP task
-        vasp_task_name = f'vasp_{stage_name}_{calc_label}'
-        vasp_task = wg.add_task(
-            VaspTask,
-            name=vasp_task_name,
-            structure=input_structure,
-            code=code,
-            **builder_inputs
-        )
-
-        # Add energy extraction task
-        energy_task_name = f'energy_{stage_name}_{calc_label}'
-        energy_task = wg.add_task(
-            extract_energy,
-            name=energy_task_name,
-            misc=vasp_task.outputs.misc,
-            retrieved=vasp_task.outputs.retrieved,
-        )
-
-        calc_tasks[calc_label] = vasp_task
-        energy_tasks[calc_label] = energy_task
-
-    return {
-        'calc_tasks': calc_tasks,
-        'energy_tasks': energy_tasks,
-        'structure': input_structure,
-    }
+        # Delegate type-specific validation to brick module
+        brick = get_brick_module(stage_type)
+        brick.validate_stage(stage, stage_names)
 
 
 def quick_vasp_sequential(
@@ -1013,8 +655,6 @@ def quick_vasp_sequential(
         - When supercell is specified, restart is automatically set to None
         - VaspWorkChain handles WAVECAR/CHGCAR copying from restart.folder automatically
     """
-    from teros.core.aimd.tasks import create_supercell
-
     # Validate required inputs
     if structure is None:
         raise ValueError("structure is required")
@@ -1035,20 +675,13 @@ def quick_vasp_sequential(
     # Load code
     code = orm.load_code(code_label)
 
-    # Get VASP workchain and wrap as task
-    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
-    VaspTask = task(VaspWorkChain)
-
     # Build WorkGraph
     wg = WorkGraph(name=name)
 
     # Track structures and remote folders across stages
     stage_tasks = {}  # name -> {'vasp': task, 'energy': task, 'supercell': task, ...}
     stage_names = []  # Ordered list
-    stage_types = {}  # name -> 'vasp' or 'dos'
-
-    # Get the initial structure (may need to be wrapped for first supercell)
-    current_structure = structure
+    stage_types = {}  # name -> 'vasp', 'dos', 'batch', or 'bader'
 
     for i, stage in enumerate(stages):
         stage_name = stage['name']
@@ -1056,315 +689,29 @@ def quick_vasp_sequential(
         stage_names.append(stage_name)
         stage_types[stage_name] = stage_type
 
-        if stage_type == 'dos':
-            # DOS stage: get structure from specified stage
-            structure_from = stage['structure_from']
-            # Get structure from specified previous stage
-            prev_stage_type = stage_types.get(structure_from, 'vasp')
-            if prev_stage_type in ('dos', 'batch', 'bader'):
-                # DOS/batch/bader stages use the input structure directly
-                stage_structure = stage_tasks[structure_from]['structure']
-            else:
-                stage_structure = stage_tasks[structure_from]['vasp'].outputs.structure
+        # Build context for brick modules
+        context = {
+            'wg': wg,
+            'code': code,
+            'potential_family': potential_family,
+            'potential_mapping': potential_mapping or {},
+            'options': options,
+            'base_kpoints_spacing': kpoints_spacing,
+            'clean_workdir': clean_workdir,
+            'stage_tasks': stage_tasks,
+            'stage_types': stage_types,
+            'stage_names': stage_names,
+            'stages': stages,
+            'input_structure': structure,
+            'stage_index': i,
+        }
 
-            # Create DOS tasks
-            dos_tasks = _create_dos_stage_tasks(
-                wg=wg,
-                stage=stage,
-                stage_name=stage_name,
-                input_structure=stage_structure,
-                code=code,
-                potential_family=potential_family,
-                potential_mapping=potential_mapping or {},
-                options=options,
-                base_kpoints_spacing=kpoints_spacing,
-                clean_workdir=clean_workdir,
-            )
-
-            # Store tasks for later reference
-            stage_tasks[stage_name] = dos_tasks
-
-            # Expose outputs for DOS stage (BandsWorkChain)
-            bands_task = dos_tasks['bands_task']
-
-            # Expose BandsWorkChain outputs that are available
-            # These are optional - BandsWorkChain may or may not produce them
-            # depending on parser settings and calculation success
-            try:
-                setattr(wg.outputs, f'{stage_name}_dos', bands_task.outputs.dos)
-            except AttributeError:
-                pass  # Will be extracted via link traversal
-            try:
-                setattr(wg.outputs, f'{stage_name}_projectors', bands_task.outputs.projectors)
-            except AttributeError:
-                pass  # Will be extracted via link traversal
-
-            # Expose internal SCF workchain outputs (always available)
-            try:
-                setattr(wg.outputs, f'{stage_name}_scf_misc', bands_task.outputs.scf_misc)
-            except AttributeError:
-                pass
-            try:
-                setattr(wg.outputs, f'{stage_name}_scf_remote', bands_task.outputs.scf_remote_folder)
-            except AttributeError:
-                pass
-            try:
-                setattr(wg.outputs, f'{stage_name}_scf_retrieved', bands_task.outputs.scf_retrieved)
-            except AttributeError:
-                pass
-
-            # Expose internal DOS workchain outputs (always available)
-            try:
-                setattr(wg.outputs, f'{stage_name}_dos_misc', bands_task.outputs.dos_misc)
-            except AttributeError:
-                pass
-            try:
-                setattr(wg.outputs, f'{stage_name}_dos_remote', bands_task.outputs.dos_remote_folder)
-            except AttributeError:
-                pass
-            try:
-                setattr(wg.outputs, f'{stage_name}_dos_retrieved', bands_task.outputs.dos_retrieved)
-            except AttributeError:
-                pass
-
-        elif stage_type == 'batch':
-            # Batch stage: multiple parallel VASP calculations on same structure
-            structure_from = stage['structure_from']
-            # Resolve structure from referenced stage
-            ref_stage_type = stage_types.get(structure_from, 'vasp')
-            if ref_stage_type in ('dos', 'batch', 'bader'):
-                stage_structure = stage_tasks[structure_from]['structure']
-            else:
-                stage_structure = stage_tasks[structure_from]['vasp'].outputs.structure
-
-            # Create batch tasks
-            batch_tasks = _create_batch_stage_tasks(
-                wg=wg,
-                stage=stage,
-                stage_name=stage_name,
-                input_structure=stage_structure,
-                code=code,
-                potential_family=potential_family,
-                potential_mapping=potential_mapping or {},
-                options=options,
-                base_kpoints_spacing=kpoints_spacing,
-                clean_workdir=clean_workdir,
-            )
-
-            # Store tasks for later reference
-            stage_tasks[stage_name] = batch_tasks
-
-            # Expose outputs for each calculation in the batch
-            for calc_label, vasp_task in batch_tasks['calc_tasks'].items():
-                energy_task = batch_tasks['energy_tasks'][calc_label]
-                setattr(wg.outputs, f'{stage_name}_{calc_label}_energy',
-                        energy_task.outputs.result)
-                setattr(wg.outputs, f'{stage_name}_{calc_label}_misc',
-                        vasp_task.outputs.misc)
-                setattr(wg.outputs, f'{stage_name}_{calc_label}_remote',
-                        vasp_task.outputs.remote_folder)
-                setattr(wg.outputs, f'{stage_name}_{calc_label}_retrieved',
-                        vasp_task.outputs.retrieved)
-
-        elif stage_type == 'bader':
-            # Bader stage: run Bader charge analysis on AECCAR files
-            charge_from = stage['charge_from']
-
-            # Get the retrieved FolderData from the referenced stage
-            ref_stage_type = stage_types.get(charge_from, 'vasp')
-            if ref_stage_type == 'vasp':
-                retrieved_socket = stage_tasks[charge_from]['vasp'].outputs.retrieved
-            else:
-                raise ValueError(
-                    f"Bader stage '{stage_name}' charge_from='{charge_from}' must "
-                    f"reference a VASP stage (got type='{ref_stage_type}')"
-                )
-
-            # Resolve structure: prefer output structure (from relaxation),
-            # fall back to input structure (for SCF with NSW=0 which has
-            # no output structure).
-            charge_from_stage = stage_tasks[charge_from]
-            charge_from_incar = next(
-                (s.get('incar', {}) for s in stages if s['name'] == charge_from),
-                {},
-            )
-            if charge_from_incar.get('nsw', 0) > 0:
-                stage_structure = charge_from_stage['vasp'].outputs.structure
-            else:
-                stage_structure = charge_from_stage.get(
-                    'input_structure',
-                    charge_from_stage['vasp'].outputs.structure,
-                )
-
-            # Add bader analysis task
-            bader_task = wg.add_task(
-                run_bader_analysis,
-                name=f'bader_{stage_name}',
-                retrieved=retrieved_socket,
-                structure=stage_structure,
-            )
-
-            # Store tasks for later reference
-            stage_tasks[stage_name] = {
-                'bader': bader_task,
-                'structure': stage_structure,
-            }
-
-            # Expose outputs: charges dict and individual .dat files
-            setattr(wg.outputs, f'{stage_name}_charges',
-                    bader_task.outputs.charges)
-            setattr(wg.outputs, f'{stage_name}_acf',
-                    bader_task.outputs.acf)
-            setattr(wg.outputs, f'{stage_name}_bcf',
-                    bader_task.outputs.bcf)
-            setattr(wg.outputs, f'{stage_name}_avf',
-                    bader_task.outputs.avf)
-
-        else:  # stage_type == 'vasp'
-            # VASP stage: existing logic
-            # Determine structure source
-            structure_from = stage.get('structure_from', 'previous')
-            if i == 0:
-                # First stage always uses input structure
-                stage_structure = current_structure
-            elif structure_from == 'input':
-                stage_structure = structure
-            elif structure_from == 'previous':
-                # Use output structure from previous stage
-                prev_name = stage_names[i - 1]
-                prev_stage_type = stage_types[prev_name]
-                if prev_stage_type in ('dos', 'batch', 'bader'):
-                    # DOS/batch/bader stages don't modify structure, use their input structure
-                    stage_structure = stage_tasks[prev_name]['structure']
-                else:
-                    stage_structure = stage_tasks[prev_name]['vasp'].outputs.structure
-            else:
-                # Use output structure from specific stage
-                ref_stage_type = stage_types.get(structure_from, 'vasp')
-                if ref_stage_type in ('dos', 'batch', 'bader'):
-                    stage_structure = stage_tasks[structure_from]['structure']
-                else:
-                    stage_structure = stage_tasks[structure_from]['vasp'].outputs.structure
-
-            # Handle supercell transformation
-            supercell_task = None
-            if 'supercell' in stage:
-                supercell_spec = stage['supercell']
-                supercell_task = wg.add_task(
-                    create_supercell,
-                    name=f'supercell_{stage_name}',
-                    structure=stage_structure,
-                    spec=orm.List(list=supercell_spec),
-                )
-                stage_structure = supercell_task.outputs.result
-
-            # Determine restart source (None or stage name)
-            restart = stage['restart']
-            restart_folder = None
-            if restart is not None:
-                restart_folder = stage_tasks[restart]['vasp'].outputs.remote_folder
-
-            # Prepare builder inputs for this stage
-            stage_incar = stage['incar']
-            stage_kpoints_spacing = stage.get('kpoints_spacing', kpoints_spacing)
-            stage_kpoints_mesh = stage.get('kpoints', None)
-            stage_retrieve = stage.get('retrieve', None)
-
-            # Get fix parameters for this stage
-            stage_fix_type = stage.get('fix_type', None)
-            stage_fix_thickness = stage.get('fix_thickness', 0.0)
-            stage_fix_elements = stage.get('fix_elements', None)
-
-            # Determine if we can compute dynamics at build time
-            # (only possible if structure is an actual StructureData, not a socket)
-            is_structure_socket = not isinstance(stage_structure, orm.StructureData)
-
-            # Prepare builder inputs
-            # If fix_type is set and we have an actual structure, compute dynamics at build time
-            if stage_fix_type is not None and not is_structure_socket:
-                builder_inputs = _prepare_builder_inputs(
-                    incar=stage_incar,
-                    kpoints_spacing=stage_kpoints_spacing,
-                    potential_family=potential_family,
-                    potential_mapping=potential_mapping or {},
-                    options=options,
-                    retrieve=stage_retrieve,
-                    restart_folder=None,  # We'll pass restart separately
-                    clean_workdir=clean_workdir,
-                    kpoints_mesh=stage_kpoints_mesh,
-                    structure=stage_structure,
-                    fix_type=stage_fix_type,
-                    fix_thickness=stage_fix_thickness,
-                    fix_elements=stage_fix_elements,
-                )
-            else:
-                builder_inputs = _prepare_builder_inputs(
-                    incar=stage_incar,
-                    kpoints_spacing=stage_kpoints_spacing,
-                    potential_family=potential_family,
-                    potential_mapping=potential_mapping or {},
-                    options=options,
-                    retrieve=stage_retrieve,
-                    restart_folder=None,  # We'll pass restart separately
-                    clean_workdir=clean_workdir,
-                    kpoints_mesh=stage_kpoints_mesh,
-                )
-
-            # If fix_type is set and structure is a socket, compute dynamics at runtime
-            dynamics_task = None
-            if stage_fix_type is not None and is_structure_socket:
-                dynamics_task = wg.add_task(
-                    compute_dynamics,
-                    name=f'dynamics_{stage_name}',
-                    structure=stage_structure,
-                    fix_type=orm.Str(stage_fix_type),
-                    fix_thickness=orm.Float(stage_fix_thickness),
-                    fix_elements=orm.List(list=stage_fix_elements) if stage_fix_elements else None,
-                )
-
-            # Add VASP task
-            vasp_task_kwargs = {
-                'name': f'vasp_{stage_name}',
-                'structure': stage_structure,
-                'code': code,
-                **builder_inputs
-            }
-
-            # Add restart if available
-            if restart_folder is not None:
-                vasp_task_kwargs['restart'] = {'folder': restart_folder}
-
-            # Add dynamics from calcfunction if computed at runtime
-            if dynamics_task is not None:
-                vasp_task_kwargs['dynamics'] = dynamics_task.outputs.result
-
-            vasp_task = wg.add_task(VaspTask, **vasp_task_kwargs)
-
-            # Add energy extraction task
-            energy_task = wg.add_task(
-                extract_energy,
-                name=f'energy_{stage_name}',
-                misc=vasp_task.outputs.misc,
-                retrieved=vasp_task.outputs.retrieved,
-            )
-
-            # Store tasks for later reference
-            # 'input_structure' is the structure fed INTO the VASP task,
-            # useful for stages like bader where the SCF (NSW=0) doesn't
-            # produce an output structure.
-            stage_tasks[stage_name] = {
-                'vasp': vasp_task,
-                'energy': energy_task,
-                'supercell': supercell_task,
-                'input_structure': stage_structure,
-            }
-
-            # Expose outputs for this stage
-            setattr(wg.outputs, f'{stage_name}_energy', energy_task.outputs.result)
-            setattr(wg.outputs, f'{stage_name}_structure', vasp_task.outputs.structure)
-            setattr(wg.outputs, f'{stage_name}_misc', vasp_task.outputs.misc)
-            setattr(wg.outputs, f'{stage_name}_remote', vasp_task.outputs.remote_folder)
-            setattr(wg.outputs, f'{stage_name}_retrieved', vasp_task.outputs.retrieved)
+        # Delegate to brick module
+        from .bricks import get_brick_module
+        brick = get_brick_module(stage_type)
+        tasks_result = brick.create_stage_tasks(wg, stage, stage_name, context)
+        stage_tasks[stage_name] = tasks_result
+        brick.expose_stage_outputs(wg, stage_name, tasks_result)
 
     # Submit
     wg.submit()

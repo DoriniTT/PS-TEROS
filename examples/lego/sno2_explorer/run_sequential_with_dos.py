@@ -17,7 +17,7 @@ from pathlib import Path
 
 load_profile('presto')
 
-from teros.core.explorer import quick_vasp_sequential, print_sequential_results
+from teros.core.lego import quick_vasp_sequential, print_sequential_results
 
 # Load structure
 structure_file = Path(__file__).parent / 'sno2.vasp'
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     print(f"Stage types: {result['__stage_types__']}")
     print(f"\nMonitor: verdi process show {result['__workgraph_pk__']}")
     print("\nAfter completion, view results with:")
-    print("  from teros.core.explorer import print_sequential_results, get_stage_results")
+    print("  from teros.core.lego import print_sequential_results, get_stage_results")
     print(f"  result = {{'__workgraph_pk__': {result['__workgraph_pk__']}, '__stage_names__': {result['__stage_names__']}, '__stage_types__': {result['__stage_types__']}}}")
     print("  print_sequential_results(result)")
     print("  dos_result = get_stage_results(result, 'dos')")

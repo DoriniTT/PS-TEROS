@@ -9,13 +9,13 @@ Usage:
     2. Edit the configuration below for your system
     3. Run: python run_dos.py
     4. Monitor: verdi process show <PK>
-    5. Get results: python -c "from teros.core.explorer import print_dos_results; print_dos_results(<PK>)"
+    5. Get results: python -c "from teros.core.lego import print_dos_results; print_dos_results(<PK>)"
 """
 
 from pathlib import Path
 from aiida import orm, load_profile
 from ase.io import read
-from teros.core.explorer import quick_dos
+from teros.core.lego import quick_dos
 
 # ============================================================================
 # Configuration - Edit these for your system
@@ -56,11 +56,11 @@ OPTIONS = {
 }
 
 # K-points spacing
-KPOINTS_SPACING = 0.03      # For SCF
-DOS_KPOINTS_SPACING = 0.02  # For DOS (denser)
+KPOINTS_SPACING = 0.05      # For SCF
+DOS_KPOINTS_SPACING = 0.04  # For DOS (denser)
 
 # Structure file
-STRUCTURE_FILE = Path(__file__).parent / 'structure_1.vasp'
+STRUCTURE_FILE = Path(__file__).parent / 'sno2.vasp'
 
 # ============================================================================
 # Main
@@ -70,16 +70,8 @@ if __name__ == '__main__':
     # Load AiiDA profile
     load_profile('presto')
 
-    # Check structure file exists
-    if not STRUCTURE_FILE.exists():
-        print(f"Error: Structure file not found: {STRUCTURE_FILE}")
-        print("Please create a structure file (e.g., structure_1.vasp) in this directory")
-        exit(1)
-
     # Load structure
     structure = orm.StructureData(ase=read(STRUCTURE_FILE))
-    print(f"Structure: {structure.get_formula()}")
-    print(f"  Atoms: {len(structure.sites)}")
 
     # Submit DOS calculation
     pk = quick_dos(
@@ -98,4 +90,4 @@ if __name__ == '__main__':
 
     print(f"\nSubmitted DOS calculation: PK {pk}")
     print(f"Monitor with: verdi process show {pk}")
-    print(f"Get results: python -c \"from teros.core.explorer import print_dos_results; print_dos_results({pk})\"")
+    print(f"Get results: python -c \"from teros.core.lego import print_dos_results; print_dos_results({pk})\"")

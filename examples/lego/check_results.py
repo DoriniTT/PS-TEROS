@@ -8,7 +8,7 @@ Usage:
 
 import sys
 from aiida import orm, load_profile
-from teros.core.explorer import get_status
+from teros.core.lego import get_status
 
 load_profile('presto')
 
