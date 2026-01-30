@@ -125,6 +125,40 @@ Sequential multi-stage calculation with restart chaining:
     >>>
     >>> # Get results when done
     >>> print_sequential_results(result)
+
+Batch stages: multiple parallel calculations with varying parameters
+(e.g., Fukui function with fractional charges):
+
+    >>> stages = [
+    ...     {
+    ...         'name': 'relax_fine',
+    ...         'incar': incar_fine,
+    ...         'restart': None,
+    ...         'kpoints_spacing': 0.03,
+    ...         'retrieve': ['CONTCAR', 'OUTCAR', 'CHGCAR'],
+    ...     },
+    ...     {
+    ...         'name': 'fukui_minus',
+    ...         'type': 'batch',
+    ...         'structure_from': 'relax_fine',
+    ...         'base_incar': incar_static,
+    ...         'kpoints_spacing': 0.03,
+    ...         'retrieve': ['CHGCAR', 'OUTCAR'],
+    ...         'calculations': {
+    ...             'neutral':   {'incar': {'NELECT': nelect}},
+    ...             'delta_005': {'incar': {'NELECT': nelect - 0.05}},
+    ...             'delta_010': {'incar': {'NELECT': nelect - 0.10}},
+    ...             'delta_015': {'incar': {'NELECT': nelect - 0.15}},
+    ...         },
+    ...     },
+    ... ]
+    >>>
+    >>> result = quick_vasp_sequential(structure=structure, stages=stages, ...)
+    >>>
+    >>> # Access batch results
+    >>> stage_results = get_stage_results(result, 'fukui_minus')
+    >>> for calc_label, calc_data in stage_results['calculations'].items():
+    ...     print(f"{calc_label}: E = {calc_data['energy']} eV")
 """
 
 from .workgraph import (

@@ -19,6 +19,11 @@ def get_results(pk: int) -> dict:
             - misc: dict (parsed VASP outputs)
             - files: FolderData (retrieved files)
             - pk: int (the original PK)
+
+    Example:
+        >>> results = get_results(pk=12345)
+        >>> print(f"Energy: {results['energy']:.4f} eV")
+        >>> relaxed = results['structure']
     """
     node = orm.load_node(pk)
 
@@ -146,6 +151,10 @@ def get_energy(pk: int) -> float:
 
     Raises:
         ValueError: If energy cannot be extracted
+
+    Example:
+        >>> energy = get_energy(pk=12345)
+        >>> print(f"Energy: {energy:.4f} eV")
     """
     results = get_results(pk)
     if results['energy'] is None:
@@ -162,6 +171,12 @@ def get_batch_results(pks: t.Dict[str, int]) -> t.Dict[str, dict]:
 
     Returns:
         Dict mapping keys to result dicts (from get_results)
+
+    Example:
+        >>> pks = {'clean': 123, 'defect': 456}
+        >>> results = get_batch_results(pks)
+        >>> for key, res in results.items():
+        ...     print(f"{key}: {res['energy']:.4f} eV")
     """
     return {key: get_results(pk) for key, pk in pks.items()}
 
@@ -175,6 +190,11 @@ def get_batch_energies(pks: t.Dict[str, int]) -> t.Dict[str, float]:
 
     Returns:
         Dict mapping keys to energies (eV)
+
+    Example:
+        >>> pks = {'clean': 123, 'defect': 456}
+        >>> energies = get_batch_energies(pks)
+        >>> delta_E = energies['defect'] - energies['clean']
     """
     return {key: get_energy(pk) for key, pk in pks.items()}
 
@@ -239,6 +259,11 @@ def get_dos_results(pk: int) -> dict:
             - projectors: ArrayData (projected DOS, if available)
             - files: FolderData (retrieved files from DOS calculation)
             - pk: int (the original PK)
+
+    Example:
+        >>> dos = get_dos_results(pk=12345)
+        >>> print(f"SCF Energy: {dos['energy']:.4f} eV")
+        >>> band_gap = dos['dos_misc']['band_properties']['band_gap']
     """
     node = orm.load_node(pk)
 
@@ -762,12 +787,28 @@ def get_stage_results(sequential_result: dict, stage_name: str) -> dict:
 
     if stage_type == 'dos':
         return _get_dos_stage_results(wg_node, wg_pk, stage_name)
+    elif stage_type == 'batch':
+        return _get_batch_stage_results(wg_node, wg_pk, stage_name)
     else:
         return _get_vasp_stage_results(wg_node, wg_pk, stage_name)
 
 
 def _get_vasp_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
-    """Extract results from a VASP stage."""
+    """Extract results from a VASP stage in a sequential workflow.
+
+    Accesses WorkGraph exposed outputs using the naming convention
+    ``{stage_name}_energy``, ``{stage_name}_structure``, etc.
+    Falls back to link traversal via ``_extract_sequential_stage_from_workgraph()``
+    if direct output access fails.
+
+    Args:
+        wg_node: The WorkGraph ProcessNode.
+        wg_pk: WorkGraph PK (stored in the returned dict).
+        stage_name: Name of the VASP stage.
+
+    Returns:
+        Dict with keys: energy, structure, misc, remote, files, pk, stage, type.
+    """
     result = {
         'energy': None,
         'structure': None,
@@ -826,7 +867,23 @@ def _get_vasp_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
 
 
 def _get_dos_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
-    """Extract results from a DOS stage (BandsWorkChain)."""
+    """Extract results from a DOS stage (BandsWorkChain) in a sequential workflow.
+
+    Accesses WorkGraph exposed outputs for both SCF and DOS sub-calculations
+    using the naming convention ``{stage_name}_scf_misc``,
+    ``{stage_name}_dos_remote``, etc. Falls back to link traversal via
+    ``_extract_from_bands_workchain()`` if direct output access fails.
+
+    Args:
+        wg_node: The WorkGraph ProcessNode.
+        wg_pk: WorkGraph PK (stored in the returned dict).
+        stage_name: Name of the DOS stage.
+
+    Returns:
+        Dict with keys: energy, scf_misc, scf_remote, scf_retrieved,
+        dos_misc, dos_remote, files, pk, stage, type.
+        May also include dos_arraydata and projectors if exposed.
+    """
     result = {
         'energy': None,
         'scf_misc': None,
@@ -893,6 +950,188 @@ def _get_dos_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
         result['energy'] = _extract_energy_from_misc(result['scf_misc'])
 
     return result
+
+
+def _get_batch_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
+    """Extract results from a batch stage (multiple parallel VASP calculations).
+
+    Discovers calculation labels by scanning WorkGraph output attributes for
+    the pattern ``{stage_name}_{calc_label}_energy``. For each discovered
+    calculation, retrieves:
+
+    - energy: Total energy (eV)
+    - misc: Dict with forces, stress, etc.
+    - remote: RemoteData pointing to calculation directory
+    - files: FolderData with retrieved files (CHGCAR, OUTCAR, etc.)
+
+    Args:
+        wg_node: The WorkGraph ProcessNode.
+        wg_pk: WorkGraph PK (stored in the returned dict).
+        stage_name: Name of the batch stage.
+
+    Returns:
+        Dict with keys:
+            - calculations: ``{label: {energy, misc, remote, files}}``
+            - pk: WorkGraph PK
+            - stage: Stage name
+            - type: ``'batch'``
+
+    Falls back to link traversal via
+    :func:`_extract_batch_stage_from_workgraph` if direct output access
+    fails (e.g., WorkGraph outputs not yet populated).
+    """
+    result = {
+        'calculations': {},
+        'pk': wg_pk,
+        'stage': stage_name,
+        'type': 'batch',
+    }
+
+    # Discover calculation labels by scanning output attributes
+    # Pattern: {stage_name}_{calc_label}_energy
+    energy_suffix = '_energy'
+    stage_prefix = f'{stage_name}_'
+
+    if hasattr(wg_node, 'outputs'):
+        outputs = wg_node.outputs
+
+        # Find all output attributes matching the pattern
+        calc_labels = []
+        for attr_name in dir(outputs):
+            if attr_name.startswith(stage_prefix) and attr_name.endswith(energy_suffix):
+                # Extract calc_label from {stage_name}_{calc_label}_energy
+                calc_label = attr_name[len(stage_prefix):-len(energy_suffix)]
+                if calc_label:
+                    calc_labels.append(calc_label)
+
+        for calc_label in calc_labels:
+            calc_result = {
+                'energy': None,
+                'misc': None,
+                'remote': None,
+                'files': None,
+            }
+
+            # Energy
+            energy_attr = f'{stage_name}_{calc_label}_energy'
+            if hasattr(outputs, energy_attr):
+                energy_node = getattr(outputs, energy_attr)
+                if hasattr(energy_node, 'value'):
+                    calc_result['energy'] = energy_node.value
+                else:
+                    calc_result['energy'] = float(energy_node)
+
+            # Misc
+            misc_attr = f'{stage_name}_{calc_label}_misc'
+            if hasattr(outputs, misc_attr):
+                misc_node = getattr(outputs, misc_attr)
+                if hasattr(misc_node, 'get_dict'):
+                    calc_result['misc'] = misc_node.get_dict()
+
+            # Remote folder
+            remote_attr = f'{stage_name}_{calc_label}_remote'
+            if hasattr(outputs, remote_attr):
+                calc_result['remote'] = getattr(outputs, remote_attr)
+
+            # Retrieved files
+            retrieved_attr = f'{stage_name}_{calc_label}_retrieved'
+            if hasattr(outputs, retrieved_attr):
+                calc_result['files'] = getattr(outputs, retrieved_attr)
+
+            # Extract energy from misc if not found directly
+            if calc_result['energy'] is None and calc_result['misc'] is not None:
+                calc_result['energy'] = _extract_energy_from_misc(calc_result['misc'])
+
+            result['calculations'][calc_label] = calc_result
+
+    # Fallback: traverse links if outputs not found
+    if not result['calculations']:
+        _extract_batch_stage_from_workgraph(wg_node, stage_name, result)
+
+    return result
+
+
+def _extract_batch_stage_from_workgraph(
+    wg_node, stage_name: str, result: dict
+) -> None:
+    """Extract batch stage results by traversing WorkGraph links.
+
+    Fallback for :func:`_get_batch_stage_results` when direct output access
+    is unavailable. Walks the WorkGraph's CALL_WORK and CALL_CALC outgoing
+    links to locate child VASP and energy tasks.
+
+    Discovery logic:
+        1. Scan CALL_WORK links for labels matching ``vasp_{stage_name}_{label}``
+           to collect calculation labels.
+        2. For each label, find the VASP task node and extract misc, remote,
+           and retrieved outputs.
+        3. Scan CALL_CALC links for ``energy_{stage_name}_{label}`` and follow
+           CREATE links to the ``result`` node to obtain the energy value.
+        4. If energy is still missing, attempt extraction from the misc dict.
+
+    Args:
+        wg_node: The WorkGraph ProcessNode.
+        stage_name: Name of the batch stage.
+        result: Result dict to populate (modified in place). Updated with
+            ``result['calculations'][label]`` for each discovered calculation.
+    """
+    if not hasattr(wg_node, 'base'):
+        return
+
+    vasp_prefix = f'vasp_{stage_name}_'
+
+    # Collect calc labels from CALL_WORK links
+    calc_labels = set()
+    called = wg_node.base.links.get_outgoing(link_type=LinkType.CALL_WORK)
+    for link in called.all():
+        link_label = link.link_label
+        if link_label.startswith(vasp_prefix):
+            calc_label = link_label[len(vasp_prefix):]
+            calc_labels.add(calc_label)
+
+    for calc_label in calc_labels:
+        calc_result = {
+            'energy': None,
+            'misc': None,
+            'remote': None,
+            'files': None,
+        }
+
+        vasp_task_name = f'vasp_{stage_name}_{calc_label}'
+        energy_task_name = f'energy_{stage_name}_{calc_label}'
+
+        # Find VASP task outputs
+        for link in called.all():
+            if link.link_label == vasp_task_name or vasp_task_name in link.link_label:
+                child_node = link.node
+                if hasattr(child_node, 'outputs'):
+                    outputs = child_node.outputs
+                    if calc_result['misc'] is None and hasattr(outputs, 'misc'):
+                        misc = outputs.misc
+                        if hasattr(misc, 'get_dict'):
+                            calc_result['misc'] = misc.get_dict()
+                    if calc_result['remote'] is None and hasattr(outputs, 'remote_folder'):
+                        calc_result['remote'] = outputs.remote_folder
+                    if calc_result['files'] is None and hasattr(outputs, 'retrieved'):
+                        calc_result['files'] = outputs.retrieved
+
+        # Find energy task outputs
+        called_calc = wg_node.base.links.get_outgoing(link_type=LinkType.CALL_CALC)
+        for link in called_calc.all():
+            if link.link_label == energy_task_name or energy_task_name in link.link_label:
+                created = link.node.base.links.get_outgoing(link_type=LinkType.CREATE)
+                for out_link in created.all():
+                    if out_link.link_label == 'result':
+                        energy_node = out_link.node
+                        if hasattr(energy_node, 'value'):
+                            calc_result['energy'] = energy_node.value
+                        break
+
+        # Extract energy from misc if not found
+        if calc_result['energy'] is None and calc_result['misc'] is not None:
+            calc_result['energy'] = _extract_energy_from_misc(calc_result['misc'])
+
+        result['calculations'][calc_label] = calc_result
 
 
 def _extract_from_bands_workchain(wg_node, stage_name: str, result: dict) -> None:
@@ -1119,6 +1358,11 @@ def print_sequential_results(sequential_result: dict) -> None:
 
     Args:
         sequential_result: Return value from quick_vasp_sequential
+
+    Example:
+        >>> result = quick_vasp_sequential(structure=s, stages=stages, ...)
+        >>> # Wait for completion...
+        >>> print_sequential_results(result)
     """
     from .utils import get_status
 
@@ -1175,6 +1419,34 @@ def print_sequential_results(sequential_result: dict) -> None:
             if stage_result['files'] is not None:
                 files = stage_result['files'].list_object_names()
                 print(f"      DOS Retrieved: {', '.join(files)}")
+
+        elif stage_type == 'batch':
+            # Batch stage output (multiple parallel calculations)
+            print(f"  [{i}] {stage_name} (BATCH)")
+
+            calculations = stage_result.get('calculations', {})
+            if calculations:
+                for calc_label, calc_result in calculations.items():
+                    energy_str = (
+                        f"{calc_result['energy']:.6f} eV"
+                        if calc_result['energy'] is not None
+                        else "N/A"
+                    )
+                    print(f"      [{calc_label}] Energy: {energy_str}")
+
+                    if calc_result.get('misc') is not None:
+                        misc = calc_result['misc']
+                        run_status = misc.get('run_status', 'N/A')
+                        print(f"        Status: {run_status}")
+
+                    if calc_result.get('remote') is not None:
+                        print(f"        Remote folder: PK {calc_result['remote'].pk}")
+
+                    if calc_result.get('files') is not None:
+                        files = calc_result['files'].list_object_names()
+                        print(f"        Retrieved: {', '.join(files)}")
+            else:
+                print("      (No calculation results found)")
 
         else:
             # VASP stage output

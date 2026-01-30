@@ -421,8 +421,11 @@ Follow this standardized workflow when developing new modules:
 
 > **Note:** Only perform production testing when explicitly requested. Local testing is sufficient for most development iterations.
 
-If production testing is needed, use cluster code (e.g., `VASP-6.5.1-idefix-4@obelix`) with PBS scheduler:
+If production testing is needed, use cluster code with PBS scheduler. **The resource key differs by cluster:**
+
+**Obelix cluster** — uses `num_mpiprocs_per_machine`:
 ```python
+code_label = 'VASP-6.5.1-idefix-4@obelix'
 options = {
     'resources': {
         'num_machines': 1,
@@ -435,6 +438,70 @@ options = {
 }
 ```
 
+**Bohr cluster** — uses `num_cores_per_machine` (not `num_mpiprocs_per_machine`):
+- **par40 queue**: 1 node, 40 processors
+- **par120 queue**: 3 nodes, 40 processors per node
+- **teste queue**: 1 node, 5 processors (testing only)
+- **gpu_a100 queue**: 1 node, 56 processors + 1× A100 GPU
+
+```python
+code_label = 'VASP-VTST-6.4.3@bohr'
+# par40 queue (1 node)
+options = {
+    'resources': {
+        'num_machines': 1,
+        'num_cores_per_machine': 40,
+    },
+    'custom_scheduler_commands': '#PBS -q par40\n#PBS -j oe\n#PBS -N MyJobName',
+}
+# par120 queue (3 nodes)
+options = {
+    'resources': {
+        'num_machines': 3,
+        'num_cores_per_machine': 40,
+    },
+    'custom_scheduler_commands': '#PBS -q par120\n#PBS -j oe\n#PBS -N MyJobName',
+}
+```
+
+**Lovelace cluster** — uses `num_cores_per_machine` (same as bohr):
+- **par128 queue**: 1 node, 128 processors
+- **parexp queue**: 1–11 nodes, 48 processors per node
+- **paralela queue**: 2–8 nodes, 128 processors per node (min 256 processors)
+- **testes queue**: 1 node, 2–4 processors (testing only)
+- **umagpu queue**: 1 node, 16 processors + 1 GPU
+- **duasgpus queue**: 1 node, 32 processors + 2 GPUs
+
+```python
+code_label = 'VASP-6.5.0@lovelace'
+# par128 queue (1 node)
+options = {
+    'resources': {
+        'num_machines': 1,
+        'num_cores_per_machine': 128,
+    },
+    'custom_scheduler_commands': '#PBS -q par128\n#PBS -j oe\n#PBS -N MyJobName',
+}
+# parexp queue (e.g. 4 nodes)
+options = {
+    'resources': {
+        'num_machines': 4,
+        'num_cores_per_machine': 48,
+    },
+    'custom_scheduler_commands': '#PBS -q parexp\n#PBS -j oe\n#PBS -N MyJobName',
+}
+# paralela queue (e.g. 2 nodes, min 2)
+options = {
+    'resources': {
+        'num_machines': 2,
+        'num_cores_per_machine': 128,
+    },
+    'custom_scheduler_commands': '#PBS -q paralela\n#PBS -j oe\n#PBS -N MyJobName',
+}
+```
+
+**GAM codes:** AiiDA code labels containing `GAM` (e.g., `VASPGAM-6.5.0@lovelace`, `VASP-6.5.1-idefix-4-GAM@obelix`) use the `vasp_gam` binary instead of `vasp_std`. Use GAM codes for Gamma-only calculations (k-points = [1, 1, 1]) for significant speedup. Use `vasp_std` codes for any calculation with multiple k-points.
+
 Use production-quality parameters (proper ENCUT, converged k-points, appropriate supercell) and verify results match expectations.
 
 #### Common Issues During Development
@@ -443,7 +510,7 @@ Use production-quality parameters (proper ENCUT, converged k-points, appropriate
 |-------|-------|----------|
 | INCAR keys not recognized | AiiDA-VASP requires lowercase | Use `'encut'` not `'ENCUT'` |
 | POTCAR family not found | Wrong family name | Check with `verdi data core.potcar listfamilies` |
-| Job requests too many CPUs | Wrong resource key | Use `num_mpiprocs_per_machine`, not `num_cores_per_machine` |
+| Job requests too many CPUs | Wrong resource key | Cluster-dependent: bohr uses `num_cores_per_machine`; obelix/localwork use `num_mpiprocs_per_machine` |
 | OUTCAR parsing fails | Parser doesn't extract needed data | Parse OUTCAR directly via `retrieved` FolderData |
 | Outputs not in `verdi process show` | Used `wg.add_output()` | Use `wg.outputs.name = socket` instead |
 | Results extraction fails on stored node | Accessing `.tasks` on AiiDA node | Traverse `CALL_CALC` links instead |
