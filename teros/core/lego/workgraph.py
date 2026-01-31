@@ -523,6 +523,7 @@ def quick_vasp_sequential(
     potential_family: str = 'PBE',
     potential_mapping: dict = None,
     options: dict = None,
+    max_concurrent_jobs: int = None,
     name: str = 'quick_vasp_sequential',
     wait: bool = False,
     poll_interval: float = 10.0,
@@ -543,6 +544,9 @@ def quick_vasp_sequential(
         potential_family: POTCAR family (default: 'PBE')
         potential_mapping: Element to POTCAR mapping (e.g., {'Sn': 'Sn_d', 'O': 'O'})
         options: Scheduler options dict with 'resources' key
+        max_concurrent_jobs: Maximum number of VASP jobs running simultaneously
+                            (default: None = unlimited). Useful when batch stages
+                            launch many parallel calculations.
         name: WorkGraph name for identification
         wait: If True, block until calculation finishes (default: False)
         poll_interval: Seconds between status checks when wait=True
@@ -553,6 +557,9 @@ def quick_vasp_sequential(
             - __workgraph_pk__: WorkGraph PK
             - __stage_names__: List of stage names in order
             - __stage_types__: Dict mapping stage names to types ('vasp', 'dos', 'batch', or 'bader')
+            - __stage_outputs__: Dict mapping stage names to lists of exposed output
+              attribute names (e.g., {'relax_rough': ['relax_rough_energy',
+              'relax_rough_structure', 'relax_rough_misc', ...]})
             - <stage_name>: WorkGraph PK (for each stage)
 
     Stage Configuration (VASP stages, type='vasp' or omitted):
@@ -678,10 +685,14 @@ def quick_vasp_sequential(
     # Build WorkGraph
     wg = WorkGraph(name=name)
 
+    if max_concurrent_jobs is not None:
+        wg.max_number_jobs = max_concurrent_jobs
+
     # Track structures and remote folders across stages
     stage_tasks = {}  # name -> {'vasp': task, 'energy': task, 'supercell': task, ...}
     stage_names = []  # Ordered list
     stage_types = {}  # name -> 'vasp', 'dos', 'batch', or 'bader'
+    stage_outputs = {}  # name -> [output_attr_names]
 
     for i, stage in enumerate(stages):
         stage_name = stage['name']
@@ -711,7 +722,8 @@ def quick_vasp_sequential(
         brick = get_brick_module(stage_type)
         tasks_result = brick.create_stage_tasks(wg, stage, stage_name, context)
         stage_tasks[stage_name] = tasks_result
-        brick.expose_stage_outputs(wg, stage_name, tasks_result)
+        output_names = brick.expose_stage_outputs(wg, stage_name, tasks_result)
+        stage_outputs[stage_name] = output_names
 
     # Submit
     wg.submit()
@@ -725,6 +737,7 @@ def quick_vasp_sequential(
         '__workgraph_pk__': wg.pk,
         '__stage_names__': stage_names,
         '__stage_types__': stage_types,
+        '__stage_outputs__': stage_outputs,
         **{name: wg.pk for name in stage_names},
     }
 

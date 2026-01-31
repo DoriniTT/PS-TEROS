@@ -188,6 +188,7 @@ from .results import (
     get_sequential_results,
     get_stage_results,
     print_sequential_results,
+    print_stage_outputs_summary,
 )
 from .utils import (
     get_status,
@@ -218,6 +219,7 @@ __all__ = [
     'get_sequential_results',
     'get_stage_results',
     'print_sequential_results',
+    'print_stage_outputs_summary',
     # Utilities
     'get_status',
     'export_files',

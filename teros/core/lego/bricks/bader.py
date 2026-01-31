@@ -106,17 +106,30 @@ def expose_stage_outputs(wg, stage_name, stage_tasks_result):
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
+
+    Returns:
+        List of output attribute names exposed on the WorkGraph.
     """
     bader_task = stage_tasks_result['bader']
+    output_names = []
 
-    setattr(wg.outputs, f'{stage_name}_charges',
-            bader_task.outputs.charges)
-    setattr(wg.outputs, f'{stage_name}_acf',
-            bader_task.outputs.acf)
-    setattr(wg.outputs, f'{stage_name}_bcf',
-            bader_task.outputs.bcf)
-    setattr(wg.outputs, f'{stage_name}_avf',
-            bader_task.outputs.avf)
+    name = f'{stage_name}_charges'
+    setattr(wg.outputs, name, bader_task.outputs.charges)
+    output_names.append(name)
+
+    name = f'{stage_name}_acf'
+    setattr(wg.outputs, name, bader_task.outputs.acf)
+    output_names.append(name)
+
+    name = f'{stage_name}_bcf'
+    setattr(wg.outputs, name, bader_task.outputs.bcf)
+    output_names.append(name)
+
+    name = f'{stage_name}_avf'
+    setattr(wg.outputs, name, bader_task.outputs.avf)
+    output_names.append(name)
+
+    return output_names
 
 
 def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
