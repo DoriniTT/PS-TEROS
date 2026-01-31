@@ -60,6 +60,8 @@ class TestValidateStages:
              'base_incar': {'NSW': 0},
              'calculations': {'neutral': {'incar': {'NELECT': 100}}}},
             {'name': 'bader', 'type': 'bader', 'charge_from': 'relax'},
+            {'name': 'calc_u', 'type': 'hubbard_u', 'structure_from': 'relax',
+             'target_species': 'Ni'},
         ]
         self._validate(stages)
 
@@ -96,4 +98,13 @@ class TestValidateStages:
             {'name': 'bader', 'type': 'bader'},
         ]
         with pytest.raises(ValueError, match="charge_from"):
+            self._validate(stages)
+
+    def test_delegates_hubbard_u_error(self):
+        """Missing target_species should trigger hubbard_u-brick ValueError."""
+        stages = [
+            {'name': 'relax', 'type': 'vasp', 'incar': {'NSW': 100}, 'restart': None},
+            {'name': 'calc_u', 'type': 'hubbard_u', 'structure_from': 'relax'},
+        ]
+        with pytest.raises(ValueError, match="target_species"):
             self._validate(stages)

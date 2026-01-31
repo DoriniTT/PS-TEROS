@@ -44,6 +44,15 @@ def valid_bader_stage():
 
 
 @pytest.fixture
+def valid_hubbard_u_stage():
+    return {
+        'name': 'calc_u', 'type': 'hubbard_u',
+        'structure_from': 'relax',
+        'target_species': 'Ni',
+    }
+
+
+@pytest.fixture
 def sample_acf_dat_content():
     """Standard ACF.dat content with 2 atoms."""
     return (
@@ -68,11 +77,11 @@ class TestBrickRegistry:
 
     def test_valid_brick_types_tuple(self):
         from teros.core.lego.bricks import VALID_BRICK_TYPES
-        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader')
+        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader', 'hubbard_u')
 
-    def test_registry_has_four_entries(self):
+    def test_registry_has_five_entries(self):
         from teros.core.lego.bricks import BRICK_REGISTRY
-        assert len(BRICK_REGISTRY) == 4
+        assert len(BRICK_REGISTRY) == 5
 
     def test_get_brick_module_valid_types(self):
         from teros.core.lego.bricks import get_brick_module, VALID_BRICK_TYPES
@@ -490,3 +499,121 @@ class TestEnrichAcfDat:
         # Atom 1: bader_charge = 0 - 6.5432 = -6.5432
         atom1_line = lines[2]
         assert '-6.5432' in atom1_line
+
+
+# ---------------------------------------------------------------------------
+# TestHubbardUValidateStage
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestHubbardUValidateStage:
+    """Tests for teros.core.lego.bricks.hubbard_u.validate_stage()."""
+
+    def _validate(self, stage, stage_names=None):
+        from teros.core.lego.bricks.hubbard_u import validate_stage
+        if stage_names is None:
+            stage_names = set()
+        validate_stage(stage, stage_names)
+
+    def test_valid_passes(self, valid_hubbard_u_stage):
+        self._validate(valid_hubbard_u_stage, stage_names={'relax'})
+
+    def test_valid_with_input_structure(self):
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'structure_from': 'input',
+            'target_species': 'Fe',
+        }
+        self._validate(stage)
+
+    def test_valid_with_custom_potentials(self):
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'potential_values': [-0.3, -0.15, 0.15, 0.3],
+        }
+        self._validate(stage)
+
+    def test_valid_with_ldaul_3(self):
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'structure_from': 'input',
+            'target_species': 'Ce',
+            'ldaul': 3,
+        }
+        self._validate(stage)
+
+    def test_missing_target_species_raises(self):
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'structure_from': 'input',
+        }
+        with pytest.raises(ValueError, match="target_species"):
+            self._validate(stage)
+
+    def test_missing_structure_from_raises(self):
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'target_species': 'Ni',
+        }
+        with pytest.raises(ValueError, match="structure_from"):
+            self._validate(stage)
+
+    def test_structure_from_unknown_raises(self):
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'structure_from': 'nope',
+            'target_species': 'Ni',
+        }
+        with pytest.raises(ValueError, match="previous stage name"):
+            self._validate(stage, stage_names={'relax'})
+
+    def test_potential_values_with_zero_raises(self):
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'potential_values': [-0.2, 0.0, 0.2],
+        }
+        with pytest.raises(ValueError, match="must not include 0.0"):
+            self._validate(stage)
+
+    def test_potential_values_too_few_raises(self):
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'potential_values': [0.1],
+        }
+        with pytest.raises(ValueError, match="at least 2"):
+            self._validate(stage)
+
+    def test_potential_values_not_list_raises(self):
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'potential_values': 0.1,
+        }
+        with pytest.raises(ValueError, match="list of floats"):
+            self._validate(stage)
+
+    def test_ldaul_invalid_raises(self):
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'ldaul': 1,
+        }
+        with pytest.raises(ValueError, match="ldaul"):
+            self._validate(stage)
+
+    def test_default_potential_values_not_validated(self):
+        """When potential_values is not provided, no validation on them."""
+        stage = {
+            'name': 'calc_u', 'type': 'hubbard_u',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+        }
+        self._validate(stage)  # should not raise

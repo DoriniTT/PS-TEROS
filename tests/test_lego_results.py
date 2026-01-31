@@ -235,3 +235,71 @@ class TestPrintBaderStageResults:
         out = capsys.readouterr().out
         assert 'Sn' in out
         assert 'valence=14.0' in out
+
+
+# ---------------------------------------------------------------------------
+# TestPrintHubbardUStageResults
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestPrintHubbardUStageResults:
+    """Tests for teros.core.lego.bricks.hubbard_u.print_stage_results()."""
+
+    def _print(self, index, stage_name, stage_result):
+        from teros.core.lego.bricks.hubbard_u import print_stage_results
+        print_stage_results(index, stage_name, stage_result)
+
+    def _base_result(self, **overrides):
+        result = {
+            'summary': None, 'hubbard_u_eV': None,
+            'target_species': None, 'chi_r2': None, 'chi_0_r2': None,
+            'response_data': None, 'pk': 1,
+            'stage': 'calc_u', 'type': 'hubbard_u',
+        }
+        result.update(overrides)
+        return result
+
+    def test_prints_hubbard_u_label(self, capsys):
+        self._print(2, 'calc_u', self._base_result())
+        out = capsys.readouterr().out
+        assert '(HUBBARD U)' in out
+
+    def test_prints_u_value(self, capsys):
+        self._print(2, 'calc_u', self._base_result(hubbard_u_eV=3.456))
+        out = capsys.readouterr().out
+        assert '3.456' in out
+
+    def test_prints_target_species(self, capsys):
+        self._print(2, 'calc_u', self._base_result(target_species='Ni'))
+        out = capsys.readouterr().out
+        assert 'Ni' in out
+
+    def test_prints_r_squared(self, capsys):
+        self._print(2, 'calc_u', self._base_result(
+            chi_r2=0.998765, chi_0_r2=0.999123))
+        out = capsys.readouterr().out
+        assert '0.998765' in out
+        assert '0.999123' in out
+
+    def test_prints_potentials(self, capsys):
+        rd = {'potential_values_eV': [-0.2, -0.1, 0.1, 0.2]}
+        self._print(2, 'calc_u', self._base_result(response_data=rd))
+        out = capsys.readouterr().out
+        assert '-0.2' in out
+        assert '0.2' in out
+
+    def test_prints_avg_d_occupation(self, capsys):
+        summary = {
+            'summary': {'hubbard_u_eV': 3.5, 'target_species': 'Ni'},
+            'ground_state': {'average_d_per_atom': 8.234},
+        }
+        self._print(2, 'calc_u', self._base_result(
+            summary=summary, target_species='Ni'))
+        out = capsys.readouterr().out
+        assert '8.234' in out
+
+    def test_prints_none_values_gracefully(self, capsys):
+        """All None values should not raise."""
+        self._print(1, 'calc_u', self._base_result())
+        out = capsys.readouterr().out
+        assert 'HUBBARD U' in out
