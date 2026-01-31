@@ -11,6 +11,7 @@ Stage types are implemented as "bricks" (see bricks/ subdirectory):
 - dos: DOS calculations via BandsWorkChain
 - batch: Multiple parallel VASP calculations with varying parameters
 - bader: Bader charge analysis
+- hubbard_u: Hubbard U parameter calculation via linear response
 
 Example usage:
 
@@ -173,6 +174,7 @@ from .workgraph import (
     quick_vasp_sequential,
     quick_dos,
     quick_dos_batch,
+    quick_hubbard_u,
     get_batch_results_from_workgraph,
 )
 from .results import (
@@ -204,6 +206,7 @@ __all__ = [
     'quick_vasp_sequential',
     'quick_dos',
     'quick_dos_batch',
+    'quick_hubbard_u',
     # Result extraction
     'get_results',
     'get_energy',

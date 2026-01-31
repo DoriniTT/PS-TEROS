@@ -552,7 +552,7 @@ def quick_vasp_sequential(
         Dict with:
             - __workgraph_pk__: WorkGraph PK
             - __stage_names__: List of stage names in order
-            - __stage_types__: Dict mapping stage names to types ('vasp', 'dos', 'batch', or 'bader')
+            - __stage_types__: Dict mapping stage names to types ('vasp', 'dos', 'batch', 'bader', or 'hubbard_u')
             - <stage_name>: WorkGraph PK (for each stage)
 
     Stage Configuration (VASP stages, type='vasp' or omitted):
@@ -1248,4 +1248,168 @@ def quick_dos(
     # Return dict for consistency with other quick_* functions
     return {
         '__workgraph_pk__': pk,
+    }
+
+
+def quick_hubbard_u(
+    structure: t.Union[orm.StructureData, int] = None,
+    code_label: str = None,
+    target_species: str = None,
+    incar: dict = None,
+    potential_values: t.List[float] = None,
+    ldaul: int = 2,
+    ldauj: float = 0.0,
+    kpoints_spacing: float = 0.03,
+    potential_family: str = 'PBE',
+    potential_mapping: dict = None,
+    options: dict = None,
+    name: str = 'quick_hubbard_u',
+    wait: bool = False,
+    poll_interval: float = 10.0,
+    clean_workdir: bool = False,
+) -> dict:
+    """
+    Submit a Hubbard U parameter calculation using the linear response method.
+
+    This builds and submits a WorkGraph that calculates the Hubbard U parameter
+    for a target species using the linear response approach (Cococcioni & de
+    Gironcoli). The workflow performs:
+
+    1. Ground state calculation (no +U) to establish baseline d-occupancy
+    2. For each potential value V:
+       - Non-SCF response (ICHARG=11): fixed charge
+       - SCF response: charge evolves
+    3. Linear regression of occupation changes to calculate U
+
+    Args:
+        structure: StructureData or PK of the input structure
+        code_label: VASP code label (e.g., 'VASP-6.5.1@localwork')
+        target_species: Element symbol for U calculation (e.g., 'Ni', 'Fe', 'Mn')
+        incar: Base INCAR parameters dict (applied to ground state and responses).
+               Lowercase keys recommended (e.g., {'encut': 520, 'ediff': 1e-6}).
+               The module automatically adds LDAU, LORBIT, LWAVE, LCHARG, etc.
+        potential_values: List of perturbation potentials in eV.
+                         Default: [-0.2, -0.1, 0.1, 0.2]. Must not include 0.0.
+        ldaul: Angular momentum quantum number (2=d electrons, 3=f electrons)
+        ldauj: Exchange J parameter (default: 0.0)
+        kpoints_spacing: K-points spacing in A^-1 (default: 0.03)
+        potential_family: POTCAR family (default: 'PBE')
+        potential_mapping: Element to POTCAR mapping (e.g., {'Ni': 'Ni', 'O': 'O'})
+        options: Scheduler options dict with 'resources' key
+        name: WorkGraph name for identification
+        wait: If True, block until calculation finishes (default: False)
+        poll_interval: Seconds between status checks when wait=True
+        clean_workdir: Whether to clean work directories after completion
+
+    Returns:
+        Dict with '__workgraph_pk__' key containing the WorkGraph PK
+
+    Example:
+        >>> result = quick_hubbard_u(
+        ...     structure=nio_structure,
+        ...     code_label='VASP-6.5.1@localwork',
+        ...     target_species='Ni',
+        ...     incar={'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05},
+        ...     potential_values=[-0.2, -0.1, 0.1, 0.2],
+        ...     ldaul=2,
+        ...     potential_family='PBE',
+        ...     potential_mapping={'Ni': 'Ni', 'O': 'O'},
+        ...     options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},
+        ...     name='NiO_HubbardU',
+        ... )
+        >>> print(f"WorkGraph PK: {result['__workgraph_pk__']}")
+
+    Reference:
+        https://www.vasp.at/wiki/index.php/Calculate_U_for_LSDA+U
+    """
+    from .bricks.hubbard_u import (
+        validate_stage,
+        create_stage_tasks,
+        expose_stage_outputs,
+    )
+    from teros.core.u_calculation.utils import DEFAULT_POTENTIAL_VALUES
+
+    # Validate required inputs
+    if structure is None:
+        raise ValueError("structure is required")
+    if code_label is None:
+        raise ValueError("code_label is required")
+    if target_species is None:
+        raise ValueError(
+            "target_species is required (e.g., 'Ni', 'Fe', 'Mn')")
+    if options is None:
+        raise ValueError("options is required - specify scheduler resources")
+
+    # Load structure if PK
+    if isinstance(structure, int):
+        structure = orm.load_node(structure)
+
+    # Default INCAR
+    if incar is None:
+        incar = {
+            'encut': 520,
+            'ediff': 1e-6,
+            'ismear': 0,
+            'sigma': 0.05,
+            'prec': 'Accurate',
+            'algo': 'Normal',
+            'nelm': 100,
+        }
+
+    if potential_values is None:
+        potential_values = DEFAULT_POTENTIAL_VALUES
+
+    # Load code
+    code = orm.load_code(code_label)
+
+    # Build stage config
+    stage_name = 'hubbard_u'
+    stage = {
+        'name': stage_name,
+        'type': 'hubbard_u',
+        'structure_from': 'input',
+        'target_species': target_species,
+        'potential_values': potential_values,
+        'ldaul': ldaul,
+        'ldauj': ldauj,
+        'incar': incar,
+        'kpoints_spacing': kpoints_spacing,
+    }
+
+    # Validate
+    validate_stage(stage, set())
+
+    # Build WorkGraph
+    wg = WorkGraph(name=name)
+
+    # Build context
+    context = {
+        'wg': wg,
+        'code': code,
+        'potential_family': potential_family,
+        'potential_mapping': potential_mapping or {},
+        'options': options,
+        'base_kpoints_spacing': kpoints_spacing,
+        'clean_workdir': clean_workdir,
+        'stage_tasks': {},
+        'stage_types': {},
+        'stage_names': [],
+        'stages': [stage],
+        'input_structure': structure,
+        'stage_index': 0,
+    }
+
+    # Create tasks and expose outputs
+    tasks_result = create_stage_tasks(wg, stage, stage_name, context)
+    expose_stage_outputs(wg, stage_name, tasks_result)
+
+    # Submit
+    wg.submit()
+
+    # Wait if requested
+    if wait:
+        _wait_for_completion(wg.pk, poll_interval)
+
+    return {
+        '__workgraph_pk__': wg.pk,
     }
