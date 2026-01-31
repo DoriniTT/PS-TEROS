@@ -162,7 +162,19 @@ teros/core/
 ├── utils.py                  # deep_merge_dicts, logging, helpers
 ├── constants.py              # Physical constants, unit conversions
 ├── aimd/                     # Ab initio molecular dynamics submodule
+├── convergence/              # ENCUT/k-points/thickness convergence testing
 ├── custom_calculation/       # Generic VASP calculations
+├── lego/                     # Lightweight incremental VASP workflows (see LEGO section)
+│   ├── workgraph.py          # quick_vasp, quick_vasp_sequential, quick_dos, etc.
+│   ├── tasks.py              # extract_energy, compute_dynamics
+│   ├── utils.py              # get_status, export_files, list_calculations
+│   ├── results.py            # Result extraction and printing
+│   └── bricks/               # Pluggable stage types for sequential workflows
+│       ├── vasp.py           # Standard VASP calculations
+│       ├── dos.py            # DOS via BandsWorkChain
+│       ├── batch.py          # Parallel VASP with varying INCAR
+│       ├── bader.py          # Bader charge analysis
+│       └── thickness.py      # Slab thickness convergence
 ├── surface_energy/           # Metal/intermetallic surface energy
 ├── surface_hydroxylation/    # OH/vacancy studies
 └── builders/                 # Pre-configured parameter sets (Ag2O, Ag3PO4, etc.)
@@ -176,6 +188,100 @@ module_name/
 ├── tasks.py            # @task.calcfunction helpers
 └── utils.py            # Pure Python utilities (optional)
 ```
+
+## LEGO Module
+
+The LEGO module (`teros.core.lego`) provides lightweight, incremental VASP workflows for exploratory work. No presets — always specify INCAR parameters explicitly.
+
+### Entry Points
+
+| Function | Purpose |
+|----------|---------|
+| `quick_vasp()` | Single VASP calculation → PK |
+| `quick_vasp_batch()` | Multiple VASP with shared settings |
+| `quick_vasp_sequential()` | Multi-stage workflow with restart chaining |
+| `quick_dos()` / `quick_dos_batch()` | DOS via BandsWorkChain |
+
+### Brick Architecture (Sequential Stages)
+
+`quick_vasp_sequential()` delegates each stage to a "brick" module. Each brick exports 5 functions:
+
+```python
+validate_stage(stage, stage_names) -> None        # Validate config before build
+create_stage_tasks(wg, stage, stage_name, context) -> dict  # Build WorkGraph tasks
+expose_stage_outputs(wg, stage_name, tasks_result) -> None  # Wire outputs
+get_stage_results(wg_node, wg_pk, stage_name) -> dict       # Extract results
+print_stage_results(index, stage_name, result) -> None      # Pretty-print
+```
+
+### Available Brick Types
+
+| Type | Required Fields | Purpose |
+|------|----------------|---------|
+| `vasp` | `incar`, `restart` | Standard VASP (relax, SCF, etc.) |
+| `dos` | `scf_incar`, `dos_incar`, `structure_from` | DOS calculation |
+| `batch` | `base_incar`, `calculations`, `structure_from` | Parallel VASP with varying params |
+| `bader` | `charge_from` | Bader charge analysis |
+| `thickness` | `structure_from`, `miller_indices`, `layer_counts`, `slab_incar` | Slab thickness convergence |
+
+### Thickness Brick
+
+Determines converged slab thickness via surface free energy. Runs as a single stage in `quick_vasp_sequential()`:
+
+1. Generates slabs at multiple layer counts from a relaxed bulk structure
+2. Relaxes all slabs in parallel (with `max_concurrent_jobs` control)
+3. Computes surface energy γ for each thickness
+4. Analyzes convergence: |Δγ| < threshold between consecutive points
+5. Selects the recommended slab structure
+
+**Exposed outputs:**
+- `{stage_name}_convergence_results` — `Dict` with surface energies, thicknesses, convergence analysis
+- `{stage_name}_recommended_structure` — `StructureData` of the slab at the converged thickness
+
+**Example usage:**
+```python
+from teros.core.lego import quick_vasp_sequential
+
+result = quick_vasp_sequential(
+    structure=bulk_structure,
+    code_label='VASP-6.5.1@localwork',
+    potential_family='PBE',
+    potential_mapping={'Sn': 'Sn_d', 'O': 'O'},
+    stages=[
+        {
+            'name': 'bulk_relax',
+            'type': 'vasp',
+            'incar': {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 3},
+            'restart': None,
+        },
+        {
+            'name': 'thickness_110',
+            'type': 'thickness',
+            'structure_from': 'bulk_relax',
+            'miller_indices': [1, 1, 0],
+            'layer_counts': [3, 5, 7, 9, 11],
+            'slab_incar': {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 2},
+            'convergence_threshold': 0.01,  # J/m²
+            'min_vacuum_thickness': 15.0,
+            'max_concurrent_jobs': 4,
+        },
+    ],
+    options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},
+)
+```
+
+**Optional thickness parameters:** `convergence_threshold` (default 0.01 J/m²), `min_vacuum_thickness` (default 15.0 Å), `termination_index` (default 0), `slab_kpoints_spacing`, `max_concurrent_jobs`, `lll_reduce`, `center_slab`, `primitive`.
+
+### Adding a New Brick
+
+1. Create `teros/core/lego/bricks/my_brick.py` with the 5 required functions
+2. Register in `bricks/__init__.py`: add to `BRICK_REGISTRY` dict and import
+3. Update `resolve_structure_from()` in `bricks/__init__.py` if the brick produces structures
+4. Add tests in `tests/test_lego_bricks.py` (validation) and `tests/test_lego_results.py` (printing)
+
+**Key constraints for brick calcfunctions:**
+- Never return an input node directly from a `@task.calcfunction` — return a copy instead (e.g., `orm.StructureData(ase=input_struct.get_ase())`). Returning a stored input creates a `RETURN` link instead of `CREATE`, which breaks provenance link traversal.
+- Use `@task.graph` wrappers to iterate over dynamic namespaces, since calcfunctions cannot receive namespace sockets directly.
 
 ## VASP Integration
 
