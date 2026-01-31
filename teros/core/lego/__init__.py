@@ -11,7 +11,8 @@ Stage types are implemented as "bricks" (see bricks/ subdirectory):
 - dos: DOS calculations via BandsWorkChain
 - batch: Multiple parallel VASP calculations with varying parameters
 - bader: Bader charge analysis
-- hubbard_u: Hubbard U parameter calculation via linear response
+- hubbard_response: Response calculations for Hubbard U (NSCF + SCF per potential)
+- hubbard_analysis: Linear regression and summary for Hubbard U
 
 Example usage:
 

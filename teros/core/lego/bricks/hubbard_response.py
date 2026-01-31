@@ -1,7 +1,8 @@
-"""Hubbard U brick for the lego module.
+"""Hubbard response brick for the lego module.
 
-Handles Hubbard U parameter calculation stages using the linear response method.
-Wraps the existing teros.core.u_calculation module into the lego brick interface.
+Runs NSCF + SCF response calculations for each perturbation potential V,
+extracts d-electron occupations, and gathers the responses. This brick
+requires a prior ground state (vasp brick) stage to restart from.
 
 Reference: https://www.vasp.at/wiki/index.php/Calculate_U_for_LSDA+U
 """
@@ -14,12 +15,9 @@ from aiida_workgraph import task
 from teros.core.u_calculation.tasks import (
     extract_d_electron_occupation,
     calculate_occupation_response,
-    calculate_hubbard_u_linear_regression,
     gather_responses,
-    compile_u_calculation_summary,
 )
 from teros.core.u_calculation.utils import (
-    prepare_ground_state_incar,
     prepare_response_incar,
     get_species_order_from_structure,
     DEFAULT_POTENTIAL_VALUES,
@@ -28,7 +26,7 @@ from teros.core.utils import get_vasp_parser_settings
 
 
 def validate_stage(stage: dict, stage_names: set) -> None:
-    """Validate a Hubbard U stage configuration.
+    """Validate a hubbard_response stage configuration.
 
     Args:
         stage: Stage configuration dict.
@@ -41,14 +39,27 @@ def validate_stage(stage: dict, stage_names: set) -> None:
 
     if 'target_species' not in stage:
         raise ValueError(
-            f"Stage '{name}': hubbard_u stages require 'target_species' "
+            f"Stage '{name}': hubbard_response stages require 'target_species' "
             f"(element symbol for U calculation, e.g., 'Ni', 'Fe')"
         )
 
-    # structure_from is required (can be 'input' or a previous stage name)
+    if 'ground_state_from' not in stage:
+        raise ValueError(
+            f"Stage '{name}': hubbard_response stages require 'ground_state_from' "
+            f"(name of the ground state vasp stage to restart from)"
+        )
+
+    ground_state_from = stage['ground_state_from']
+    if ground_state_from not in stage_names:
+        raise ValueError(
+            f"Stage '{name}' ground_state_from='{ground_state_from}' must be "
+            f"a previous stage name"
+        )
+
+    # structure_from is required
     if 'structure_from' not in stage:
         raise ValueError(
-            f"Stage '{name}': hubbard_u stages require 'structure_from' "
+            f"Stage '{name}': hubbard_response stages require 'structure_from' "
             f"('input' or a previous stage name)"
         )
 
@@ -87,13 +98,12 @@ def validate_stage(stage: dict, stage_names: set) -> None:
 
 
 def create_stage_tasks(wg, stage, stage_name, context):
-    """Create Hubbard U stage tasks in the WorkGraph.
+    """Create hubbard_response stage tasks in the WorkGraph.
 
-    This creates the full linear response workflow:
-    1. Ground state calculation (no +U)
-    2. For each potential V: NSCF response + SCF response
-    3. Gather responses and calculate U via linear regression
-    4. Compile summary
+    This creates:
+    1. Ground state occupation extraction (from the referenced ground state)
+    2. For each potential V: NSCF response + SCF response + occupation extraction
+    3. Gather all responses into a list
 
     Args:
         wg: WorkGraph to add tasks to.
@@ -113,6 +123,7 @@ def create_stage_tasks(wg, stage, stage_name, context):
     base_kpoints_spacing = context['base_kpoints_spacing']
     clean_workdir = context['clean_workdir']
     input_structure = context['input_structure']
+    stage_tasks = context['stage_tasks']
 
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
     VaspTask = task(VaspWorkChain)
@@ -123,18 +134,7 @@ def create_stage_tasks(wg, stage, stage_name, context):
     ldaul = stage.get('ldaul', 2)
     ldauj = stage.get('ldauj', 0.0)
     stage_kpoints_spacing = stage.get('kpoints_spacing', base_kpoints_spacing)
-
-    # INCAR: the brick uses a single 'incar' key as base parameters
-    # for both ground state and response calculations
-    base_incar = stage.get('incar', {
-        'encut': 520,
-        'ediff': 1e-6,
-        'ismear': 0,
-        'sigma': 0.05,
-        'prec': 'Accurate',
-        'algo': 'Normal',
-        'nelm': 100,
-    })
+    base_incar = stage.get('incar', {})
 
     # Resolve input structure
     structure_from = stage['structure_from']
@@ -145,18 +145,14 @@ def create_stage_tasks(wg, stage, stage_name, context):
         stage_structure = resolve_structure_from(structure_from, context)
 
     # Get species order for LDAU arrays
-    # Note: we need the actual StructureData to get species order.
-    # If stage_structure is a socket (output of previous task), we need
-    # the species from the input structure as a proxy (same composition).
     if isinstance(stage_structure, orm.StructureData):
         all_species = get_species_order_from_structure(stage_structure)
     else:
-        # Use input structure as proxy for species order
         all_species = get_species_order_from_structure(input_structure)
 
     lmaxmix = 4 if ldaul == 2 else 6
 
-    # Parser settings that request orbital data
+    # Parser settings
     settings = get_vasp_parser_settings(
         add_energy=True,
         add_trajectory=True,
@@ -164,52 +160,21 @@ def create_stage_tasks(wg, stage, stage_name, context):
         add_kpoints=True,
     )
 
-    # =========================================================================
-    # STEP 1: Ground State Calculation
-    # =========================================================================
-    gs_incar = prepare_ground_state_incar(
-        base_params=base_incar,
-        lmaxmix=lmaxmix,
-    )
-
-    gs_builder_inputs = _prepare_builder_inputs(
-        incar=gs_incar,
-        kpoints_spacing=stage_kpoints_spacing,
-        potential_family=potential_family,
-        potential_mapping=potential_mapping,
-        options=options,
-        retrieve=['OUTCAR'],
-        restart_folder=None,
-        clean_workdir=False,  # MUST keep CHGCAR/WAVECAR for responses
-    )
-    # Add parser settings
-    if 'settings' in gs_builder_inputs:
-        existing = gs_builder_inputs['settings'].get_dict()
-        existing.update(settings)
-        gs_builder_inputs['settings'] = orm.Dict(dict=existing)
-    else:
-        gs_builder_inputs['settings'] = orm.Dict(dict=settings)
-
-    ground_state = wg.add_task(
-        VaspTask,
-        name=f'gs_{stage_name}',
-        structure=stage_structure,
-        code=code,
-        **gs_builder_inputs,
-    )
+    # Get ground state outputs from the referenced stage
+    ground_state_from = stage['ground_state_from']
+    gs_remote_folder = stage_tasks[ground_state_from]['vasp'].outputs.remote_folder
+    gs_retrieved = stage_tasks[ground_state_from]['vasp'].outputs.retrieved
 
     # Extract ground state d-electron occupation
     gs_occupation = wg.add_task(
         extract_d_electron_occupation,
         name=f'gs_occ_{stage_name}',
-        retrieved=ground_state.outputs.retrieved,
+        retrieved=gs_retrieved,
         target_species=orm.Str(target_species),
         structure=stage_structure,
     )
 
-    # =========================================================================
-    # STEP 2-3: Response Calculations for Each Potential Value
-    # =========================================================================
+    # Response calculations for each potential value
     response_tasks = {}
 
     for i, V in enumerate(potential_values):
@@ -250,7 +215,7 @@ def create_stage_tasks(wg, stage, stage_name, context):
             name=f'nscf_{V_str}_{stage_name}',
             structure=stage_structure,
             code=code,
-            restart={'folder': ground_state.outputs.remote_folder},
+            restart={'folder': gs_remote_folder},
             **nscf_builder_inputs,
         )
 
@@ -296,7 +261,7 @@ def create_stage_tasks(wg, stage, stage_name, context):
             name=f'scf_{V_str}_{stage_name}',
             structure=stage_structure,
             code=code,
-            restart={'folder': ground_state.outputs.remote_folder},
+            restart={'folder': gs_remote_folder},
             **scf_builder_inputs,
         )
 
@@ -320,9 +285,7 @@ def create_stage_tasks(wg, stage, stage_name, context):
 
         response_tasks[label] = response
 
-    # =========================================================================
-    # STEP 4: Gather Responses and Calculate U
-    # =========================================================================
+    # Gather all responses
     gather_kwargs = {
         label: resp_task.outputs.result
         for label, resp_task in response_tasks.items()
@@ -333,132 +296,80 @@ def create_stage_tasks(wg, stage, stage_name, context):
         **gather_kwargs,
     )
 
-    calc_u = wg.add_task(
-        calculate_hubbard_u_linear_regression,
-        name=f'calc_u_{stage_name}',
-        responses=gathered.outputs.result,
-    )
-
-    # =========================================================================
-    # STEP 5: Compile Summary
-    # =========================================================================
-    summary = wg.add_task(
-        compile_u_calculation_summary,
-        name=f'summary_{stage_name}',
-        hubbard_u_result=calc_u.outputs.result,
-        ground_state_occupation=gs_occupation.outputs.result,
-        structure=stage_structure,
-        target_species=orm.Str(target_species),
-        ldaul=orm.Int(ldaul),
-    )
-
     return {
-        'ground_state': ground_state,
+        'responses': gathered,
         'gs_occupation': gs_occupation,
-        'calc_u': calc_u,
-        'summary': summary,
-        'gathered': gathered,
         'structure': stage_structure,
     }
 
 
 def expose_stage_outputs(wg, stage_name, stage_tasks_result):
-    """Expose Hubbard U stage outputs on the WorkGraph.
+    """Expose hubbard_response stage outputs on the WorkGraph.
 
     Args:
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
     """
-    summary = stage_tasks_result['summary']
-    calc_u = stage_tasks_result['calc_u']
-    ground_state = stage_tasks_result['ground_state']
+    gathered = stage_tasks_result['responses']
     gs_occupation = stage_tasks_result['gs_occupation']
-    gathered = stage_tasks_result['gathered']
 
-    setattr(wg.outputs, f'{stage_name}_summary',
-            summary.outputs.result)
-    setattr(wg.outputs, f'{stage_name}_hubbard_u_result',
-            calc_u.outputs.result)
+    setattr(wg.outputs, f'{stage_name}_responses',
+            gathered.outputs.result)
     setattr(wg.outputs, f'{stage_name}_ground_state_occupation',
             gs_occupation.outputs.result)
-    setattr(wg.outputs, f'{stage_name}_ground_state_misc',
-            ground_state.outputs.misc)
-    setattr(wg.outputs, f'{stage_name}_ground_state_remote',
-            ground_state.outputs.remote_folder)
-    setattr(wg.outputs, f'{stage_name}_all_responses',
-            gathered.outputs.result)
 
 
 def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
-    """Extract results from a Hubbard U stage in a sequential workflow.
+    """Extract results from a hubbard_response stage.
 
     Args:
         wg_node: The WorkGraph ProcessNode.
         wg_pk: WorkGraph PK.
-        stage_name: Name of the Hubbard U stage.
+        stage_name: Name of the stage.
 
     Returns:
-        Dict with keys: summary, hubbard_u_eV, target_species, chi_r2,
-        chi_0_r2, response_data, pk, stage, type.
+        Dict with keys: responses, ground_state_occupation, pk, stage, type.
     """
     result = {
-        'summary': None,
-        'hubbard_u_eV': None,
-        'target_species': None,
-        'chi_r2': None,
-        'chi_0_r2': None,
-        'response_data': None,
+        'responses': None,
+        'ground_state_occupation': None,
         'pk': wg_pk,
         'stage': stage_name,
-        'type': 'hubbard_u',
+        'type': 'hubbard_response',
     }
 
-    # Try to access via WorkGraph outputs (exposed outputs)
     if hasattr(wg_node, 'outputs'):
         outputs = wg_node.outputs
 
-        summary_attr = f'{stage_name}_summary'
-        if hasattr(outputs, summary_attr):
-            summary_node = getattr(outputs, summary_attr)
-            if hasattr(summary_node, 'get_dict'):
-                summary_dict = summary_node.get_dict()
-                result['summary'] = summary_dict
-                # Extract key values
-                if 'summary' in summary_dict:
-                    result['hubbard_u_eV'] = summary_dict['summary'].get(
-                        'hubbard_u_eV')
-                    result['target_species'] = summary_dict['summary'].get(
-                        'target_species')
-                if 'linear_fit' in summary_dict:
-                    lf = summary_dict['linear_fit']
-                    result['chi_r2'] = lf.get('chi_scf', {}).get('r_squared')
-                    result['chi_0_r2'] = lf.get('chi_0_nscf', {}).get(
-                        'r_squared')
-                if 'response_data' in summary_dict:
-                    result['response_data'] = summary_dict['response_data']
+        responses_attr = f'{stage_name}_responses'
+        if hasattr(outputs, responses_attr):
+            responses_node = getattr(outputs, responses_attr)
+            if hasattr(responses_node, 'get_list'):
+                result['responses'] = responses_node.get_list()
+
+        gs_occ_attr = f'{stage_name}_ground_state_occupation'
+        if hasattr(outputs, gs_occ_attr):
+            gs_occ_node = getattr(outputs, gs_occ_attr)
+            if hasattr(gs_occ_node, 'get_dict'):
+                result['ground_state_occupation'] = gs_occ_node.get_dict()
 
     # Fallback: traverse links
-    if result['summary'] is None:
-        _extract_hubbard_u_stage_from_workgraph(wg_node, stage_name, result)
+    if result['responses'] is None:
+        _extract_response_stage_from_workgraph(wg_node, stage_name, result)
 
     return result
 
 
-def _extract_hubbard_u_stage_from_workgraph(
+def _extract_response_stage_from_workgraph(
     wg_node, stage_name: str, result: dict
 ) -> None:
-    """Extract Hubbard U stage results by traversing WorkGraph links.
-
-    Args:
-        wg_node: The WorkGraph ProcessNode.
-        stage_name: Name of the Hubbard U stage.
-        result: Result dict to populate (modified in place).
-    """
+    """Extract response stage results by traversing WorkGraph links."""
     if not hasattr(wg_node, 'base'):
         return
 
-    summary_task_name = f'summary_{stage_name}'
+    gather_task_name = f'gather_{stage_name}'
+    gs_occ_task_name = f'gs_occ_{stage_name}'
 
     called_calc = wg_node.base.links.get_outgoing(
         link_type=LinkType.CALL_CALC)
@@ -466,66 +377,42 @@ def _extract_hubbard_u_stage_from_workgraph(
         child_node = link.node
         link_label = link.link_label
 
-        if summary_task_name in link_label or link_label == summary_task_name:
+        if gather_task_name in link_label or link_label == gather_task_name:
             created = child_node.base.links.get_outgoing(
                 link_type=LinkType.CREATE)
             for out_link in created.all():
-                out_label = out_link.link_label
-                out_node = out_link.node
+                if out_link.link_label == 'result' and hasattr(out_link.node, 'get_list'):
+                    result['responses'] = out_link.node.get_list()
 
-                if out_label == 'result' and hasattr(out_node, 'get_dict'):
-                    summary_dict = out_node.get_dict()
-                    result['summary'] = summary_dict
-                    if 'summary' in summary_dict:
-                        result['hubbard_u_eV'] = summary_dict['summary'].get(
-                            'hubbard_u_eV')
-                        result['target_species'] = summary_dict[
-                            'summary'].get('target_species')
-                    if 'linear_fit' in summary_dict:
-                        lf = summary_dict['linear_fit']
-                        result['chi_r2'] = lf.get('chi_scf', {}).get(
-                            'r_squared')
-                        result['chi_0_r2'] = lf.get('chi_0_nscf', {}).get(
-                            'r_squared')
-                    if 'response_data' in summary_dict:
-                        result['response_data'] = summary_dict['response_data']
-            break
+        if gs_occ_task_name in link_label or link_label == gs_occ_task_name:
+            created = child_node.base.links.get_outgoing(
+                link_type=LinkType.CREATE)
+            for out_link in created.all():
+                if out_link.link_label == 'result' and hasattr(out_link.node, 'get_dict'):
+                    result['ground_state_occupation'] = out_link.node.get_dict()
 
 
 def print_stage_results(
     index: int, stage_name: str, stage_result: dict
 ) -> None:
-    """Print formatted results for a Hubbard U stage.
+    """Print formatted results for a hubbard_response stage.
 
     Args:
         index: 1-based stage index.
         stage_name: Name of the stage.
         stage_result: Result dict from get_stage_results.
     """
-    print(f"  [{index}] {stage_name} (HUBBARD U)")
+    print(f"  [{index}] {stage_name} (HUBBARD RESPONSE)")
 
-    if stage_result['hubbard_u_eV'] is not None:
-        print(f"      U = {stage_result['hubbard_u_eV']:.3f} eV")
-
-    if stage_result['target_species'] is not None:
-        print(f"      Target: {stage_result['target_species']}")
-
-    if stage_result['chi_r2'] is not None:
-        print(f"      SCF fit R\u00b2: {stage_result['chi_r2']:.6f}")
-
-    if stage_result['chi_0_r2'] is not None:
-        print(f"      NSCF fit R\u00b2: {stage_result['chi_0_r2']:.6f}")
-
-    if stage_result['response_data'] is not None:
-        rd = stage_result['response_data']
-        potentials = rd.get('potential_values_eV', [])
+    if stage_result['responses'] is not None:
+        responses = stage_result['responses']
+        print(f"      Responses gathered: {len(responses)}")
+        potentials = [r.get('potential', 0.0) for r in responses]
         if potentials:
             print(f"      Potentials: {potentials}")
 
-    if stage_result['summary'] is not None:
-        summary = stage_result['summary']
-        gs = summary.get('ground_state', {})
-        avg_d = gs.get('average_d_per_atom')
-        if avg_d is not None:
-            species = stage_result['target_species'] or '?'
-            print(f"      Avg d-occupation per {species}: {avg_d:.3f}")
+    if stage_result['ground_state_occupation'] is not None:
+        gs = stage_result['ground_state_occupation']
+        species = gs.get('target_species', '?')
+        avg_d = gs.get('total_d_occupation', 0.0) / max(gs.get('atom_count', 1), 1)
+        print(f"      GS avg d-occupation per {species}: {avg_d:.3f}")

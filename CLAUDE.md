@@ -182,7 +182,8 @@ teros/core/
         ├── dos.py             # DOS via BandsWorkChain
         ├── batch.py           # Parallel VASP with varying parameters
         ├── bader.py           # Bader charge analysis
-        └── hubbard_u.py       # Hubbard U parameter (linear response)
+        ├── hubbard_response.py # Hubbard U response calculations (NSCF + SCF)
+        └── hubbard_analysis.py # Hubbard U regression and summary
 ```
 
 **Submodule pattern:**
@@ -218,7 +219,8 @@ Each brick module in `teros/core/lego/bricks/` exports exactly 5 functions:
 | `dos` | `bricks/dos.py` | Density of states via BandsWorkChain |
 | `batch` | `bricks/batch.py` | Parallel VASP runs with varying parameters |
 | `bader` | `bricks/bader.py` | Bader charge analysis |
-| `hubbard_u` | `bricks/hubbard_u.py` | Hubbard U parameter via linear response |
+| `hubbard_response` | `bricks/hubbard_response.py` | Hubbard U response calculations (NSCF + SCF per potential) |
+| `hubbard_analysis` | `bricks/hubbard_analysis.py` | Hubbard U linear regression and summary |
 
 ### Quick Functions
 
@@ -256,15 +258,37 @@ stages = [
         'name': 'relax',
         'type': 'vasp',
         'incar': {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 3},
+        'restart': None,
     },
     {
-        'name': 'hubbard_u',
-        'type': 'hubbard_u',
-        'structure_from': 'relax',       # Use relaxed structure
+        'name': 'ground_state',
+        'type': 'vasp',
+        'structure_from': 'relax',
+        'incar': {
+            'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05,
+            'ldau': False, 'lmaxmix': 4, 'lorbit': 11,
+            'lwave': True, 'lcharg': True,
+        },
+        'restart': None,
+        'retrieve': ['OUTCAR'],
+    },
+    {
+        'name': 'response',
+        'type': 'hubbard_response',
+        'ground_state_from': 'ground_state',
+        'structure_from': 'relax',
+        'target_species': 'Sn',
+        'potential_values': [-0.2, -0.1, 0.1, 0.2],
+        'ldaul': 2,
+        'incar': {'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05},
+    },
+    {
+        'name': 'analysis',
+        'type': 'hubbard_analysis',
+        'response_from': 'response',
+        'structure_from': 'relax',
         'target_species': 'Sn',
         'ldaul': 2,
-        'potential_values': [-0.2, -0.1, 0.1, 0.2],
-        'incar': {'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05},
     },
 ]
 
@@ -273,18 +297,30 @@ wg = quick_vasp_sequential(structure, code_label, stages=stages, ...)
 
 ### Hubbard U Stage Configuration
 
-The `hubbard_u` brick wraps `teros.core.u_calculation` into the Lego interface. Required and optional stage keys:
+The Hubbard U workflow uses two brick types that wrap `teros.core.u_calculation`:
+
+**`hubbard_response` brick** - runs NSCF + SCF response calculations:
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
-| `target_species` | Yes | — | Element symbol (e.g., 'Fe', 'Sn') |
+| `ground_state_from` | Yes | — | Name of the ground state vasp stage |
 | `structure_from` | Yes | — | `'input'` or name of previous stage |
+| `target_species` | Yes | — | Element symbol (e.g., 'Fe', 'Sn') |
 | `potential_values` | No | `[-0.2, -0.1, 0.1, 0.2]` | Perturbation potentials (eV), no 0.0 |
 | `ldaul` | No | `2` | Angular momentum (2=d, 3=f) |
 | `ldauj` | No | `0.0` | Exchange J parameter |
 | `incar` | No | `{}` | Base INCAR parameters |
 
-The brick creates: ground state SCF, NSCF + SCF response per potential, occupation extraction, gather, linear regression, and summary compilation tasks.
+**`hubbard_analysis` brick** - linear regression and summary (no VASP):
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `response_from` | Yes | — | Name of the hubbard_response stage |
+| `structure_from` | Yes | — | `'input'` or name of previous stage |
+| `target_species` | Yes | — | Element symbol (e.g., 'Fe', 'Sn') |
+| `ldaul` | No | `2` | Angular momentum (2=d, 3=f) |
+
+The ground state is a standard vasp brick with `lorbit: 11, lwave: True, lcharg: True, ldau: False`. The `quick_hubbard_u()` convenience function builds all 3 stages automatically.
 
 ### Adding a New Brick
 

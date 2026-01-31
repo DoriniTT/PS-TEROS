@@ -60,7 +60,12 @@ class TestValidateStages:
              'base_incar': {'NSW': 0},
              'calculations': {'neutral': {'incar': {'NELECT': 100}}}},
             {'name': 'bader', 'type': 'bader', 'charge_from': 'relax'},
-            {'name': 'calc_u', 'type': 'hubbard_u', 'structure_from': 'relax',
+            {'name': 'gs', 'type': 'vasp', 'incar': {'NSW': 0}, 'restart': None},
+            {'name': 'response', 'type': 'hubbard_response',
+             'ground_state_from': 'gs', 'structure_from': 'input',
+             'target_species': 'Ni'},
+            {'name': 'analysis', 'type': 'hubbard_analysis',
+             'response_from': 'response', 'structure_from': 'input',
              'target_species': 'Ni'},
         ]
         self._validate(stages)
@@ -100,11 +105,22 @@ class TestValidateStages:
         with pytest.raises(ValueError, match="charge_from"):
             self._validate(stages)
 
-    def test_delegates_hubbard_u_error(self):
-        """Missing target_species should trigger hubbard_u-brick ValueError."""
+    def test_delegates_hubbard_response_error(self):
+        """Missing target_species should trigger hubbard_response-brick ValueError."""
         stages = [
-            {'name': 'relax', 'type': 'vasp', 'incar': {'NSW': 100}, 'restart': None},
-            {'name': 'calc_u', 'type': 'hubbard_u', 'structure_from': 'relax'},
+            {'name': 'gs', 'type': 'vasp', 'incar': {'NSW': 0}, 'restart': None},
+            {'name': 'response', 'type': 'hubbard_response',
+             'ground_state_from': 'gs', 'structure_from': 'input'},
         ]
         with pytest.raises(ValueError, match="target_species"):
+            self._validate(stages)
+
+    def test_delegates_hubbard_analysis_error(self):
+        """Missing response_from should trigger hubbard_analysis-brick ValueError."""
+        stages = [
+            {'name': 'gs', 'type': 'vasp', 'incar': {'NSW': 0}, 'restart': None},
+            {'name': 'analysis', 'type': 'hubbard_analysis',
+             'structure_from': 'input', 'target_species': 'Ni'},
+        ]
+        with pytest.raises(ValueError, match="response_from"):
             self._validate(stages)

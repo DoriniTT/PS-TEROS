@@ -1,12 +1,15 @@
 """
 Sequential workflow: Relax SnO2 bulk, then calculate Hubbard U.
 
-Two-stage sequential workflow:
+Four-stage sequential workflow:
   1. Ionic relaxation (IBRION=2, NSW=50)
-  2. Hubbard U calculation on the relaxed structure
+  2. Ground state SCF (LORBIT=11, LWAVE=True, LCHARG=True)
+  3. Response calculations (NSCF + SCF per potential value)
+  4. Analysis (linear regression to extract U)
 
-This demonstrates the hubbard_u brick used as a stage in
-quick_vasp_sequential, chained after a relaxation stage.
+This demonstrates the hubbard_response and hubbard_analysis bricks used
+as stages in quick_vasp_sequential, chained after relaxation and ground
+state stages.
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -31,19 +34,26 @@ struct_path = Path(__file__).parent / 'sno2.vasp'
 structure = orm.StructureData(ase=read(str(struct_path)))
 
 # ── Define stages ───────────────────────────────────────────────────────
+base_incar = {
+    'encut': 400,
+    'ediff': 1e-5,
+    'ismear': 0,
+    'sigma': 0.05,
+    'prec': 'Accurate',
+    'algo': 'Normal',
+    'nelm': 100,
+}
+
 stages = [
+    # Stage 1: Relax the structure
     {
         'name': 'relax',
         'type': 'vasp',
         'incar': {
-            'encut': 400,
-            'ediff': 1e-5,
-            'ismear': 0,
-            'sigma': 0.05,
+            **base_incar,
             'ibrion': 2,
             'nsw': 50,
             'isif': 3,
-            'prec': 'Accurate',
             'lreal': 'Auto',
             'lwave': False,
             'lcharg': False,
@@ -52,23 +62,45 @@ stages = [
         'kpoints_spacing': 0.05,
         'retrieve': ['CONTCAR', 'OUTCAR'],
     },
+    # Stage 2: Ground state SCF (no +U)
     {
-        'name': 'hubbard_u',
-        'type': 'hubbard_u',
+        'name': 'ground_state',
+        'type': 'vasp',
+        'structure_from': 'relax',
+        'incar': {
+            **base_incar,
+            'nsw': 0,
+            'ibrion': -1,
+            'ldau': False,
+            'lmaxmix': 4,
+            'lorbit': 11,
+            'lwave': True,
+            'lcharg': True,
+        },
+        'restart': None,
+        'kpoints_spacing': 0.05,
+        'retrieve': ['OUTCAR'],
+    },
+    # Stage 3: Response calculations (NSCF + SCF per potential)
+    {
+        'name': 'response',
+        'type': 'hubbard_response',
+        'ground_state_from': 'ground_state',
         'structure_from': 'relax',
         'target_species': 'Sn',
-        'incar': {
-            'encut': 400,
-            'ediff': 1e-5,
-            'ismear': 0,
-            'sigma': 0.05,
-            'prec': 'Accurate',
-            'algo': 'Normal',
-            'nelm': 100,
-        },
+        'incar': base_incar,
         'potential_values': [-0.2, -0.1, 0.1, 0.2],
         'ldaul': 2,
         'kpoints_spacing': 0.05,
+    },
+    # Stage 4: Linear regression and summary
+    {
+        'name': 'analysis',
+        'type': 'hubbard_analysis',
+        'response_from': 'response',
+        'structure_from': 'relax',
+        'target_species': 'Sn',
+        'ldaul': 2,
     },
 ]
 
@@ -102,5 +134,5 @@ print()
 print("Get results when done:")
 print("  from teros.core.lego import print_sequential_results, get_stage_results")
 print(f"  print_sequential_results({result})")
-print(f"  u_result = get_stage_results({result}, 'hubbard_u')")
+print(f"  u_result = get_stage_results({result}, 'analysis')")
 print("  print(f\"U = {u_result['hubbard_u_eV']:.3f} eV\")")
