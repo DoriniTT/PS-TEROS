@@ -9,9 +9,10 @@ This module provides a simple API for exploratory VASP work:
 Stage types are implemented as "bricks" (see bricks/ subdirectory):
 - vasp: Standard VASP calculations (relaxation, SCF, etc.)
 - dos: DOS calculations via BandsWorkChain
-- batch: Multiple parallel VASP calculations with varying parameters
+- batch: Multiple parallel VASP calculations (single-structure or multi-structure mode)
 - bader: Bader charge analysis
-- thickness: Slab thickness convergence (generate slabs, relax, compute surface energy)
+- slab_gen: Slab generation at multiple thicknesses (pure structure generation)
+- thickness: Surface energy convergence analysis (analysis-only, no VASP)
 
 Example usage:
 

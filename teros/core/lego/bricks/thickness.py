@@ -1,10 +1,14 @@
-"""Thickness convergence brick for the lego module.
+"""Thickness convergence analysis brick for the lego module.
 
-Handles slab thickness convergence stages: generates slabs at multiple
-thicknesses, relaxes them in parallel, computes surface energies, and
-determines the converged slab thickness.
+Analysis-only brick: takes relaxed structures and energies from a batch
+stage plus bulk structure/energy from a vasp stage, computes surface
+energies, analyzes convergence, and selects the recommended slab thickness.
 
-Reuses calcfunctions from teros.core.convergence to avoid code duplication.
+Does NOT generate slabs or run VASP calculations — those are handled by
+the slab_gen and batch bricks respectively.
+
+Typical 4-stage workflow:
+    bulk_relax (vasp) → gen_slabs (slab_gen) → relax_slabs (batch) → thickness
 """
 
 import typing as t
@@ -15,7 +19,7 @@ from aiida_workgraph import task, dynamic
 
 
 def validate_stage(stage: dict, stage_names: set) -> None:
-    """Validate a thickness convergence stage configuration.
+    """Validate a thickness analysis stage configuration.
 
     Args:
         stage: Stage configuration dict.
@@ -26,16 +30,29 @@ def validate_stage(stage: dict, stage_names: set) -> None:
     """
     name = stage['name']
 
-    # structure_from is required and must reference a previous VASP stage
-    if 'structure_from' not in stage:
+    # relaxed_from is required — points to a batch stage with relaxed structures
+    if 'relaxed_from' not in stage:
         raise ValueError(
-            f"Stage '{name}': thickness stages require 'structure_from' "
-            f"(name of a previous VASP stage providing bulk structure and energy)"
+            f"Stage '{name}': thickness stages require 'relaxed_from' "
+            f"(name of a batch stage providing relaxed structures and energies)"
         )
-    structure_from = stage['structure_from']
-    if structure_from not in stage_names:
+    relaxed_from = stage['relaxed_from']
+    if relaxed_from not in stage_names:
         raise ValueError(
-            f"Stage '{name}' structure_from='{structure_from}' must reference "
+            f"Stage '{name}' relaxed_from='{relaxed_from}' must reference "
+            f"a previous stage name"
+        )
+
+    # bulk_from is required — points to a vasp stage with bulk structure/energy
+    if 'bulk_from' not in stage:
+        raise ValueError(
+            f"Stage '{name}': thickness stages require 'bulk_from' "
+            f"(name of a VASP stage providing bulk structure and energy)"
+        )
+    bulk_from = stage['bulk_from']
+    if bulk_from not in stage_names:
+        raise ValueError(
+            f"Stage '{name}' bulk_from='{bulk_from}' must reference "
             f"a previous stage name"
         )
 
@@ -43,7 +60,7 @@ def validate_stage(stage: dict, stage_names: set) -> None:
     if 'miller_indices' not in stage:
         raise ValueError(
             f"Stage '{name}': thickness stages require 'miller_indices' "
-            f"(e.g., [1, 1, 1])"
+            f"(e.g., [1, 1, 0])"
         )
     miller = stage['miller_indices']
     if not isinstance(miller, (list, tuple)) or len(miller) != 3:
@@ -52,36 +69,14 @@ def validate_stage(stage: dict, stage_names: set) -> None:
             f"got: {miller}"
         )
 
-    # layer_counts is required with at least 2 values
-    if 'layer_counts' not in stage:
-        raise ValueError(
-            f"Stage '{name}': thickness stages require 'layer_counts' "
-            f"(e.g., [3, 5, 7, 9, 11])"
-        )
-    layers = stage['layer_counts']
-    if not isinstance(layers, (list, tuple)) or len(layers) < 2:
-        raise ValueError(
-            f"Stage '{name}': layer_counts must have at least 2 values, "
-            f"got: {layers}"
-        )
-
-    # slab_incar is required
-    if 'slab_incar' not in stage:
-        raise ValueError(
-            f"Stage '{name}': thickness stages require 'slab_incar' "
-            f"(INCAR parameters for slab relaxations)"
-        )
-
 
 def create_stage_tasks(wg, stage, stage_name, context):
-    """Create thickness convergence stage tasks in the WorkGraph.
+    """Create thickness analysis tasks in the WorkGraph.
 
-    This creates a sub-workflow within the sequential WorkGraph:
-    1. Generate slabs at multiple thicknesses (from bulk structure)
-    2. Relax all slabs in parallel
-    3. Compute surface energy for each thickness
-    4. Analyze convergence and determine recommended thickness
-    5. Select the recommended slab structure
+    Wires up:
+    1. compute_surface_energies — calculates gamma for each slab
+    2. gather_surface_energies — collects results + analyzes convergence
+    3. select_recommended_slab — picks the slab at converged thickness
 
     Args:
         wg: WorkGraph to add tasks to.
@@ -93,89 +88,60 @@ def create_stage_tasks(wg, stage, stage_name, context):
         Dict with task references for later stages.
     """
     from teros.core.convergence import (
-        generate_thickness_series,
-        relax_thickness_series,
         compute_surface_energies,
         gather_surface_energies,
     )
 
     stage_tasks = context['stage_tasks']
     stage_types = context['stage_types']
-    code = context['code']
-    potential_family = context['potential_family']
-    potential_mapping = context['potential_mapping']
-    options = context['options']
-    base_kpoints_spacing = context['base_kpoints_spacing']
-    clean_workdir = context['clean_workdir']
 
-    # --- Resolve bulk structure and energy from referenced VASP stage ---
-    structure_from = stage['structure_from']
-    ref_stage_type = stage_types.get(structure_from, 'vasp')
-    if ref_stage_type != 'vasp':
+    # --- Resolve relaxed structures and energies from batch stage ---
+    relaxed_from = stage['relaxed_from']
+    ref_type = stage_types.get(relaxed_from, 'vasp')
+    if ref_type != 'batch':
         raise ValueError(
-            f"Thickness stage '{stage_name}' structure_from='{structure_from}' "
-            f"must reference a VASP stage (got type='{ref_stage_type}')"
+            f"Thickness stage '{stage_name}' relaxed_from='{relaxed_from}' "
+            f"must reference a batch stage (got type='{ref_type}')"
         )
 
-    bulk_structure = stage_tasks[structure_from]['vasp'].outputs.structure
-    bulk_energy = stage_tasks[structure_from]['energy'].outputs.result
+    batch_result = stage_tasks[relaxed_from]
+    if batch_result.get('mode') != 'multi':
+        raise ValueError(
+            f"Thickness stage '{stage_name}' relaxed_from='{relaxed_from}' "
+            f"must reference a multi-structure batch stage"
+        )
+
+    relaxed_structures = batch_result['relaxed_structures']
+    energies = batch_result['energies']
+
+    # --- Resolve bulk structure and energy from vasp stage ---
+    bulk_from = stage['bulk_from']
+    bulk_ref_type = stage_types.get(bulk_from, 'vasp')
+    if bulk_ref_type != 'vasp':
+        raise ValueError(
+            f"Thickness stage '{stage_name}' bulk_from='{bulk_from}' "
+            f"must reference a VASP stage (got type='{bulk_ref_type}')"
+        )
+
+    bulk_structure = stage_tasks[bulk_from]['vasp'].outputs.structure
+    bulk_energy = stage_tasks[bulk_from]['energy'].outputs.result
 
     # --- Stage configuration ---
     miller_indices = stage['miller_indices']
-    layer_counts = stage['layer_counts']
-    slab_incar = stage['slab_incar']
     convergence_threshold = stage.get('convergence_threshold', 0.01)
-    min_vacuum_thickness = stage.get('min_vacuum_thickness', 15.0)
-    termination_index = stage.get('termination_index', 0)
-    lll_reduce = stage.get('lll_reduce', True)
-    center_slab = stage.get('center_slab', True)
-    primitive = stage.get('primitive', True)
-    slab_kpoints_spacing = stage.get('slab_kpoints_spacing', base_kpoints_spacing)
-    max_concurrent_jobs = stage.get('max_concurrent_jobs', None)
-
-    # --- 1. Generate slabs at multiple thicknesses ---
     miller_list = orm.List(list=[int(m) for m in miller_indices])
-    layers_list = orm.List(list=[int(n) for n in layer_counts])
 
-    slab_gen_task = wg.add_task(
-        generate_thickness_series,
-        name=f'generate_slabs_{stage_name}',
-        bulk_structure=bulk_structure,
-        miller_indices=miller_list,
-        layer_counts=layers_list,
-        min_vacuum_thickness=orm.Float(min_vacuum_thickness),
-        lll_reduce=orm.Bool(lll_reduce),
-        center_slab=orm.Bool(center_slab),
-        primitive=orm.Bool(primitive),
-        termination_index=orm.Int(termination_index),
-    )
-
-    # --- 2. Relax all slabs in parallel ---
-    relax_task = wg.add_task(
-        relax_thickness_series,
-        name=f'relax_slabs_{stage_name}',
-        slabs=slab_gen_task.outputs.slabs,
-        code_pk=code.pk,
-        potential_family=potential_family,
-        potential_mapping=potential_mapping,
-        parameters=slab_incar,
-        options=options,
-        kpoints_spacing=slab_kpoints_spacing,
-        clean_workdir=clean_workdir,
-        max_number_jobs=max_concurrent_jobs,
-    )
-
-    # --- 3. Compute surface energies ---
+    # --- 1. Compute surface energies ---
     surface_energy_task = wg.add_task(
         compute_surface_energies,
         name=f'surface_energies_{stage_name}',
-        slabs=relax_task.outputs.relaxed_structures,
-        energies=relax_task.outputs.energies,
+        slabs=relaxed_structures,
+        energies=energies,
         bulk_structure=bulk_structure,
         bulk_energy=bulk_energy,
     )
 
-    # --- 4. Gather results and analyze convergence ---
+    # --- 2. Gather results and analyze convergence ---
     gather_task = wg.add_task(
         gather_surface_energies,
         name=f'gather_{stage_name}',
@@ -184,17 +150,15 @@ def create_stage_tasks(wg, stage, stage_name, context):
         convergence_threshold=orm.Float(convergence_threshold),
     )
 
-    # --- 5. Select recommended slab structure ---
+    # --- 3. Select recommended slab structure ---
     select_task = wg.add_task(
         select_recommended_slab,
         name=f'select_{stage_name}',
         convergence_results=gather_task.outputs.result,
-        relaxed_structures=relax_task.outputs.relaxed_structures,
+        relaxed_structures=relaxed_structures,
     )
 
     return {
-        'generate_slabs': slab_gen_task,
-        'relax_slabs': relax_task,
         'surface_energies': surface_energy_task,
         'gather': gather_task,
         'select': select_task,
@@ -203,11 +167,11 @@ def create_stage_tasks(wg, stage, stage_name, context):
 
 
 def expose_stage_outputs(wg, stage_name, stage_tasks_result):
-    """Expose thickness convergence stage outputs on the WorkGraph.
+    """Expose thickness analysis stage outputs on the WorkGraph.
 
     Exposes:
-        - {stage_name}_convergence_results: Dict with all slab data,
-          surface energies, and convergence analysis (recommended thickness)
+        - {stage_name}_convergence_results: Dict with surface energies
+          and convergence analysis
         - {stage_name}_recommended_structure: StructureData of the slab
           at the recommended (converged) thickness
 
@@ -232,7 +196,7 @@ def expose_stage_outputs(wg, stage_name, stage_tasks_result):
 
 
 def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
-    """Extract results from a thickness convergence stage.
+    """Extract results from a thickness analysis stage.
 
     Args:
         wg_node: The WorkGraph ProcessNode.

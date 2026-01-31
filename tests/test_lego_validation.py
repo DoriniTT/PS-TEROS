@@ -60,26 +60,35 @@ class TestValidateStages:
              'base_incar': {'NSW': 0},
              'calculations': {'neutral': {'incar': {'NELECT': 100}}}},
             {'name': 'bader', 'type': 'bader', 'charge_from': 'relax'},
+            {'name': 'gen_slabs', 'type': 'slab_gen', 'structure_from': 'relax',
+             'miller_indices': [1, 1, 0], 'layer_counts': [3, 5, 7]},
+            {'name': 'relax_slabs', 'type': 'batch', 'structures_from': 'gen_slabs',
+             'base_incar': {'NSW': 100}},
+            {'name': 'thickness', 'type': 'thickness', 'relaxed_from': 'relax_slabs',
+             'bulk_from': 'relax', 'miller_indices': [1, 1, 0]},
         ]
         self._validate(stages)
 
     def test_thickness_stage_passes(self):
         stages = [
             {'name': 'bulk_relax', 'type': 'vasp', 'incar': {'NSW': 100, 'ISIF': 3}, 'restart': None},
-            {'name': 'thickness_test', 'type': 'thickness', 'structure_from': 'bulk_relax',
-             'miller_indices': [1, 1, 0], 'layer_counts': [3, 5, 7, 9],
-             'slab_incar': {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 2}},
+            {'name': 'gen_slabs', 'type': 'slab_gen', 'structure_from': 'bulk_relax',
+             'miller_indices': [1, 1, 0], 'layer_counts': [3, 5, 7, 9]},
+            {'name': 'relax_slabs', 'type': 'batch', 'structures_from': 'gen_slabs',
+             'base_incar': {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 2}},
+            {'name': 'thickness_test', 'type': 'thickness', 'relaxed_from': 'relax_slabs',
+             'bulk_from': 'bulk_relax', 'miller_indices': [1, 1, 0]},
         ]
         self._validate(stages)
 
     def test_delegates_thickness_error(self):
-        """Missing slab_incar should trigger thickness-brick ValueError."""
+        """Missing relaxed_from should trigger thickness-brick ValueError."""
         stages = [
             {'name': 'bulk_relax', 'type': 'vasp', 'incar': {'NSW': 100}, 'restart': None},
-            {'name': 'thickness_test', 'type': 'thickness', 'structure_from': 'bulk_relax',
-             'miller_indices': [1, 1, 0], 'layer_counts': [3, 5, 7]},
+            {'name': 'thickness_test', 'type': 'thickness', 'bulk_from': 'bulk_relax',
+             'miller_indices': [1, 1, 0]},
         ]
-        with pytest.raises(ValueError, match="slab_incar"):
+        with pytest.raises(ValueError, match="relaxed_from"):
             self._validate(stages)
 
     def test_delegates_vasp_error(self):

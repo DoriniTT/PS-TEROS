@@ -1,6 +1,15 @@
 """Batch brick for the lego module.
 
-Handles batch stages: multiple parallel VASP calculations with varying parameters.
+Handles batch stages in two modes:
+
+1. Single-structure mode (structure_from + calculations):
+   One structure × N INCAR variations. Each entry in 'calculations'
+   produces a separate VASP calculation on the same structure.
+
+2. Multi-structure mode (structures_from + base_incar):
+   N structures × 1 INCAR. Takes a namespace of structures from a
+   previous stage (e.g., slab_gen) and runs the same VASP calculation
+   on each. Returns relaxed_structures and energies namespaces.
 """
 
 import typing as t
@@ -8,14 +17,18 @@ import typing as t
 from aiida import orm
 from aiida.common.links import LinkType
 from aiida.plugins import WorkflowFactory
-from aiida_workgraph import task
+from aiida_workgraph import task, dynamic, namespace, get_current_graph
 
 from ..tasks import extract_energy
-from ...utils import deep_merge_dicts
+from ...utils import deep_merge_dicts, get_vasp_parser_settings, extract_max_jobs_value
 
 
 def validate_stage(stage: dict, stage_names: set) -> None:
     """Validate a batch stage configuration.
+
+    Supports two modes:
+    - Single-structure: requires structure_from + base_incar + calculations
+    - Multi-structure: requires structures_from + base_incar
 
     Args:
         stage: Stage configuration dict.
@@ -26,25 +39,52 @@ def validate_stage(stage: dict, stage_names: set) -> None:
     """
     name = stage['name']
 
-    if 'structure_from' not in stage:
-        raise ValueError(f"Stage '{name}': batch stages require 'structure_from'")
-    if 'base_incar' not in stage:
-        raise ValueError(f"Stage '{name}': batch stages require 'base_incar'")
-    if 'calculations' not in stage or not stage['calculations']:
+    has_structure_from = 'structure_from' in stage
+    has_structures_from = 'structures_from' in stage
+
+    if not has_structure_from and not has_structures_from:
         raise ValueError(
-            f"Stage '{name}': batch stages require non-empty 'calculations' dict"
+            f"Stage '{name}': batch stages require 'structure_from' "
+            f"or 'structures_from'"
         )
 
-    structure_from = stage['structure_from']
-    if structure_from not in stage_names:
+    if has_structure_from and has_structures_from:
         raise ValueError(
-            f"Stage '{name}' structure_from='{structure_from}' must reference "
-            f"a previous stage name"
+            f"Stage '{name}': batch stages cannot have both 'structure_from' "
+            f"and 'structures_from'"
         )
+
+    if 'base_incar' not in stage:
+        raise ValueError(f"Stage '{name}': batch stages require 'base_incar'")
+
+    if has_structure_from:
+        # Single-structure mode: need calculations dict
+        if 'calculations' not in stage or not stage['calculations']:
+            raise ValueError(
+                f"Stage '{name}': single-structure batch stages require "
+                f"non-empty 'calculations' dict"
+            )
+        structure_from = stage['structure_from']
+        if structure_from not in stage_names:
+            raise ValueError(
+                f"Stage '{name}' structure_from='{structure_from}' must "
+                f"reference a previous stage name"
+            )
+
+    if has_structures_from:
+        # Multi-structure mode: calculations not required
+        structures_from = stage['structures_from']
+        if structures_from not in stage_names:
+            raise ValueError(
+                f"Stage '{name}' structures_from='{structures_from}' must "
+                f"reference a previous stage name"
+            )
 
 
 def create_stage_tasks(wg, stage, stage_name, context):
     """Create batch stage tasks in the WorkGraph.
+
+    Dispatches to single-structure or multi-structure mode.
 
     Args:
         wg: WorkGraph to add tasks to.
@@ -54,6 +94,17 @@ def create_stage_tasks(wg, stage, stage_name, context):
 
     Returns:
         Dict with task references for later stages.
+    """
+    if 'structures_from' in stage:
+        return _create_multi_structure_tasks(wg, stage, stage_name, context)
+    else:
+        return _create_single_structure_tasks(wg, stage, stage_name, context)
+
+
+def _create_single_structure_tasks(wg, stage, stage_name, context):
+    """Create single-structure batch tasks (original behavior).
+
+    One structure × N INCAR variations from 'calculations' dict.
     """
     from . import resolve_structure_from
     from ..workgraph import _prepare_builder_inputs
@@ -137,6 +188,61 @@ def create_stage_tasks(wg, stage, stage_name, context):
         'calc_tasks': calc_tasks,
         'energy_tasks': energy_tasks,
         'structure': input_structure,
+        'mode': 'single',
+    }
+
+
+def _create_multi_structure_tasks(wg, stage, stage_name, context):
+    """Create multi-structure batch tasks.
+
+    N structures × 1 INCAR. Uses a @task.graph function to iterate
+    over the dynamic namespace of structures at runtime.
+    """
+    stage_tasks = context['stage_tasks']
+    stage_types = context['stage_types']
+    code = context['code']
+    potential_family = context['potential_family']
+    potential_mapping = context['potential_mapping']
+    options = context['options']
+    base_kpoints_spacing = context['base_kpoints_spacing']
+    clean_workdir = context['clean_workdir']
+
+    # Resolve structures namespace from referenced stage
+    structures_from = stage['structures_from']
+    ref_stage_type = stage_types.get(structures_from, 'vasp')
+
+    if ref_stage_type == 'slab_gen':
+        input_structures = stage_tasks[structures_from]['slabs']
+    else:
+        raise ValueError(
+            f"Batch stage '{stage_name}' structures_from='{structures_from}' "
+            f"must reference a slab_gen stage (got type='{ref_stage_type}')"
+        )
+
+    base_incar = stage['base_incar']
+    kpoints_spacing = stage.get('kpoints_spacing', base_kpoints_spacing)
+    max_concurrent_jobs = stage.get('max_concurrent_jobs', None)
+
+    batch_graph_task = wg.add_task(
+        _run_multi_structure_batch,
+        name=f'batch_{stage_name}',
+        structures=input_structures,
+        code_pk=code.pk,
+        potential_family=potential_family,
+        potential_mapping=potential_mapping,
+        incar_params=base_incar,
+        options=options,
+        kpoints_spacing=kpoints_spacing,
+        clean_workdir=clean_workdir,
+        max_concurrent_jobs=max_concurrent_jobs,
+    )
+
+    return {
+        'batch_graph': batch_graph_task,
+        'relaxed_structures': batch_graph_task.outputs.relaxed_structures,
+        'energies': batch_graph_task.outputs.energies,
+        'structure': input_structures,
+        'mode': 'multi',
     }
 
 
@@ -148,16 +254,23 @@ def expose_stage_outputs(wg, stage_name, stage_tasks_result):
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
     """
-    for calc_label, vasp_task in stage_tasks_result['calc_tasks'].items():
-        energy_task = stage_tasks_result['energy_tasks'][calc_label]
-        setattr(wg.outputs, f'{stage_name}_{calc_label}_energy',
-                energy_task.outputs.result)
-        setattr(wg.outputs, f'{stage_name}_{calc_label}_misc',
-                vasp_task.outputs.misc)
-        setattr(wg.outputs, f'{stage_name}_{calc_label}_remote',
-                vasp_task.outputs.remote_folder)
-        setattr(wg.outputs, f'{stage_name}_{calc_label}_retrieved',
-                vasp_task.outputs.retrieved)
+    mode = stage_tasks_result.get('mode', 'single')
+
+    if mode == 'single':
+        for calc_label, vasp_task in stage_tasks_result['calc_tasks'].items():
+            energy_task = stage_tasks_result['energy_tasks'][calc_label]
+            setattr(wg.outputs, f'{stage_name}_{calc_label}_energy',
+                    energy_task.outputs.result)
+            setattr(wg.outputs, f'{stage_name}_{calc_label}_misc',
+                    vasp_task.outputs.misc)
+            setattr(wg.outputs, f'{stage_name}_{calc_label}_remote',
+                    vasp_task.outputs.remote_folder)
+            setattr(wg.outputs, f'{stage_name}_{calc_label}_retrieved',
+                    vasp_task.outputs.retrieved)
+    else:
+        # Multi-structure mode: no individual outputs exposed.
+        # Downstream stages (e.g., thickness) consume the namespace sockets.
+        pass
 
 
 def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
@@ -345,3 +458,86 @@ def print_stage_results(index: int, stage_name: str, stage_result: dict) -> None
                 print(f"        Retrieved: {', '.join(files)}")
     else:
         print("      (No calculation results found)")
+
+
+# ─── Multi-structure graph task ────────────────────────────────────────────
+
+
+@task.graph
+def _run_multi_structure_batch(
+    structures: t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)],
+    code_pk: int,
+    potential_family: str,
+    potential_mapping: dict,
+    incar_params: dict,
+    options: dict,
+    kpoints_spacing: float = 0.03,
+    clean_workdir: bool = True,
+    max_concurrent_jobs: int = None,
+) -> t.Annotated[dict, namespace(
+    relaxed_structures=dynamic(orm.StructureData),
+    energies=dynamic(orm.Float),
+)]:
+    """Run the same VASP calculation on multiple structures in parallel.
+
+    This graph task iterates over a dynamic namespace of structures
+    (e.g., from slab generation) and runs a VaspWorkChain on each.
+    Concurrency is controlled via max_concurrent_jobs.
+
+    Args:
+        structures: Dynamic namespace of input structures keyed by label.
+        code_pk: PK of AiiDA code for VASP.
+        potential_family: Pseudopotential family.
+        potential_mapping: Element to potential mapping.
+        incar_params: INCAR parameters applied to all calculations.
+        options: Scheduler options.
+        kpoints_spacing: K-points spacing in A^-1.
+        clean_workdir: Whether to clean remote directories.
+        max_concurrent_jobs: Maximum concurrent VASP calculations.
+
+    Returns:
+        Dict with relaxed_structures and energies namespaces.
+    """
+    # Set max_concurrent_jobs on this workgraph to control concurrency
+    if max_concurrent_jobs is not None:
+        wg = get_current_graph()
+        max_jobs_value = extract_max_jobs_value(max_concurrent_jobs)
+        wg.max_number_jobs = max_jobs_value
+
+    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
+    VaspTask = task(VaspWorkChain)
+
+    code = orm.load_node(code_pk)
+    settings = orm.Dict(dict=get_vasp_parser_settings(add_energy=True))
+
+    relaxed: dict[str, orm.StructureData] = {}
+    energies_ns: dict[str, orm.Float] = {}
+
+    for label, structure in structures.items():
+        vasp_inputs = {
+            'structure': structure,
+            'code': code,
+            'parameters': orm.Dict(dict={'incar': dict(incar_params)}),
+            'options': orm.Dict(dict=dict(options)),
+            'potential_family': potential_family,
+            'potential_mapping': orm.Dict(dict=dict(potential_mapping)),
+            'clean_workdir': clean_workdir,
+            'settings': settings,
+        }
+
+        kpts_val = kpoints_spacing
+        if hasattr(kpoints_spacing, 'value'):
+            kpts_val = kpoints_spacing.value
+        vasp_inputs['kpoints_spacing'] = float(kpts_val)
+
+        vasp_calc = VaspTask(**vasp_inputs)
+        relaxed[label] = vasp_calc.structure
+        energies_ns[label] = extract_energy(
+            misc=vasp_calc.misc,
+            retrieved=vasp_calc.retrieved,
+        ).result
+
+    return {
+        'relaxed_structures': relaxed,
+        'energies': energies_ns,
+    }

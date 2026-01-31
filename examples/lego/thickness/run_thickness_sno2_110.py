@@ -1,11 +1,11 @@
 """
 Slab thickness convergence example: SnO2 (110) surface.
 
-Two-stage workflow:
+Four-stage workflow:
   1. Bulk relaxation (full cell + ions, ISIF=3)
-  2. Thickness convergence: generate slabs at 3, 5, 7, 9, 11 layers,
-     relax each slab (ions only, ISIF=2), compute surface energy,
-     and determine converged thickness.
+  2. Slab generation: create slabs at 3, 5, 7, 9, 11 layers
+  3. Slab relaxation: relax all slabs in parallel (ions only, ISIF=2)
+  4. Thickness analysis: compute surface energies and determine convergence
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -49,6 +49,21 @@ OPTIONS = {
     },
 }
 
+# ── Shared INCAR settings ────────────────────────────────────────────
+SLAB_INCAR = {
+    'encut': 520,
+    'ediff': 1e-6,
+    'ismear': 0,
+    'sigma': 0.05,
+    'ibrion': 2,
+    'nsw': 100,
+    'isif': 2,           # Ions only (fixed cell for slab)
+    'prec': 'Accurate',
+    'lreal': 'Auto',
+    'lwave': False,
+    'lcharg': False,
+}
+
 # ── Define stages ─────────────────────────────────────────────────────
 stages = [
     # Stage 1: Bulk relaxation (full cell optimization)
@@ -71,31 +86,33 @@ stages = [
         'restart': None,
         'kpoints_spacing': 0.03,
     },
-    # Stage 2: Thickness convergence for (110) surface
+    # Stage 2: Generate slabs at multiple thicknesses
     {
-        'name': 'thickness_110',
-        'type': 'thickness',
+        'name': 'gen_slabs',
+        'type': 'slab_gen',
         'structure_from': 'bulk_relax',
         'miller_indices': [1, 1, 0],
         'layer_counts': [3, 5, 7, 9, 11],
-        'slab_incar': {
-            'encut': 520,
-            'ediff': 1e-6,
-            'ismear': 0,
-            'sigma': 0.05,
-            'ibrion': 2,
-            'nsw': 100,
-            'isif': 2,       # Ions only (fixed cell for slab)
-            'prec': 'Accurate',
-            'lreal': 'Auto',
-            'lwave': False,
-            'lcharg': False,
-        },
-        'convergence_threshold': 0.01,    # J/m^2
         'min_vacuum_thickness': 15.0,     # Angstroms
         'termination_index': 0,           # First termination
-        'slab_kpoints_spacing': 0.03,
+    },
+    # Stage 3: Relax all slabs in parallel
+    {
+        'name': 'relax_slabs',
+        'type': 'batch',
+        'structures_from': 'gen_slabs',
+        'base_incar': SLAB_INCAR,
+        'kpoints_spacing': 0.03,
         'max_concurrent_jobs': 4,
+    },
+    # Stage 4: Analyze thickness convergence
+    {
+        'name': 'thickness_110',
+        'type': 'thickness',
+        'relaxed_from': 'relax_slabs',
+        'bulk_from': 'bulk_relax',
+        'miller_indices': [1, 1, 0],
+        'convergence_threshold': 0.01,    # J/m^2
     },
 ]
 

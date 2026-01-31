@@ -220,27 +220,29 @@ print_stage_results(index, stage_name, result) -> None      # Pretty-print
 |------|----------------|---------|
 | `vasp` | `incar`, `restart` | Standard VASP (relax, SCF, etc.) |
 | `dos` | `scf_incar`, `dos_incar`, `structure_from` | DOS calculation |
-| `batch` | `base_incar`, `calculations`, `structure_from` | Parallel VASP with varying params |
+| `batch` | `base_incar` + (`structure_from` + `calculations` OR `structures_from`) | Parallel VASP (single- or multi-structure) |
 | `bader` | `charge_from` | Bader charge analysis |
-| `thickness` | `structure_from`, `miller_indices`, `layer_counts`, `slab_incar` | Slab thickness convergence |
+| `slab_gen` | `structure_from`, `miller_indices`, `layer_counts` | Slab generation at multiple thicknesses (pure structure generation) |
+| `thickness` | `relaxed_from`, `bulk_from`, `miller_indices` | Surface energy convergence analysis (analysis-only, no VASP) |
 
-### Thickness Brick
+### Thickness Convergence (4-stage pattern)
 
-Determines converged slab thickness via surface free energy. Runs as a single stage in `quick_vasp_sequential()`:
+Determines converged slab thickness via surface free energy using 4 composable stages:
 
-1. Generates slabs at multiple layer counts from a relaxed bulk structure
-2. Relaxes all slabs in parallel (with `max_concurrent_jobs` control)
-3. Computes surface energy γ for each thickness
-4. Analyzes convergence: |Δγ| < threshold between consecutive points
-5. Selects the recommended slab structure
+1. **bulk_relax** (vasp) — Relax bulk structure
+2. **gen_slabs** (slab_gen) — Generate slabs at multiple layer counts
+3. **relax_slabs** (batch, multi-structure) — Relax all slabs in parallel
+4. **thickness** (thickness) — Compute surface energies and analyze convergence
 
 **Exposed outputs:**
-- `{stage_name}_convergence_results` — `Dict` with surface energies, thicknesses, convergence analysis
-- `{stage_name}_recommended_structure` — `StructureData` of the slab at the converged thickness
+- `{thickness_stage}_convergence_results` — `Dict` with surface energies, thicknesses, convergence analysis
+- `{thickness_stage}_recommended_structure` — `StructureData` of the slab at the converged thickness
 
 **Example usage:**
 ```python
 from teros.core.lego import quick_vasp_sequential
+
+slab_incar = {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 2}
 
 result = quick_vasp_sequential(
     structure=bulk_structure,
@@ -255,22 +257,37 @@ result = quick_vasp_sequential(
             'restart': None,
         },
         {
-            'name': 'thickness_110',
-            'type': 'thickness',
+            'name': 'gen_slabs',
+            'type': 'slab_gen',
             'structure_from': 'bulk_relax',
             'miller_indices': [1, 1, 0],
             'layer_counts': [3, 5, 7, 9, 11],
-            'slab_incar': {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 2},
-            'convergence_threshold': 0.01,  # J/m²
             'min_vacuum_thickness': 15.0,
+        },
+        {
+            'name': 'relax_slabs',
+            'type': 'batch',
+            'structures_from': 'gen_slabs',
+            'base_incar': slab_incar,
+            'kpoints_spacing': 0.03,
             'max_concurrent_jobs': 4,
+        },
+        {
+            'name': 'thickness_110',
+            'type': 'thickness',
+            'relaxed_from': 'relax_slabs',
+            'bulk_from': 'bulk_relax',
+            'miller_indices': [1, 1, 0],
+            'convergence_threshold': 0.01,  # J/m²
         },
     ],
     options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},
 )
 ```
 
-**Optional thickness parameters:** `convergence_threshold` (default 0.01 J/m²), `min_vacuum_thickness` (default 15.0 Å), `termination_index` (default 0), `slab_kpoints_spacing`, `max_concurrent_jobs`, `lll_reduce`, `center_slab`, `primitive`.
+**Optional slab_gen parameters:** `min_vacuum_thickness` (default 15.0 Å), `termination_index` (default 0), `lll_reduce`, `center_slab`, `primitive`.
+
+**Optional thickness parameters:** `convergence_threshold` (default 0.01 J/m²).
 
 ### Adding a New Brick
 

@@ -238,6 +238,63 @@ class TestPrintBaderStageResults:
 
 
 # ---------------------------------------------------------------------------
+# TestPrintSlabGenStageResults
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestPrintSlabGenStageResults:
+    """Tests for teros.core.lego.bricks.slab_gen.print_stage_results()."""
+
+    def _print(self, index, stage_name, stage_result):
+        from teros.core.lego.bricks.slab_gen import print_stage_results
+        print_stage_results(index, stage_name, stage_result)
+
+    def _base_result(self, **overrides):
+        result = {
+            'slab_count': 0,
+            'miller_indices': None,
+            'layer_counts': None,
+            'pk': 1,
+            'stage': 'gen_slabs',
+            'type': 'slab_gen',
+        }
+        result.update(overrides)
+        return result
+
+    def test_prints_slab_gen_label(self, capsys):
+        self._print(2, 'gen_slabs', self._base_result())
+        out = capsys.readouterr().out
+        assert '(SLAB GENERATION)' in out
+
+    def test_prints_index_and_name(self, capsys):
+        self._print(2, 'gen_slabs', self._base_result())
+        out = capsys.readouterr().out
+        assert '[2]' in out
+        assert 'gen_slabs' in out
+
+    def test_prints_miller_indices(self, capsys):
+        self._print(2, 'gen_slabs', self._base_result(miller_indices=[1, 1, 0]))
+        out = capsys.readouterr().out
+        assert 'Miller indices: (1, 1, 0)' in out
+
+    def test_prints_layer_counts(self, capsys):
+        self._print(2, 'gen_slabs', self._base_result(layer_counts=[3, 5, 7, 9]))
+        out = capsys.readouterr().out
+        assert '[3, 5, 7, 9]' in out
+
+    def test_prints_slab_count(self, capsys):
+        self._print(2, 'gen_slabs', self._base_result(slab_count=5))
+        out = capsys.readouterr().out
+        assert 'Slabs generated: 5' in out
+
+    def test_no_miller_indices(self, capsys):
+        """When miller_indices is None, should still print without crash."""
+        self._print(2, 'gen_slabs', self._base_result())
+        out = capsys.readouterr().out
+        assert 'SLAB GENERATION' in out
+
+
+# ---------------------------------------------------------------------------
 # TestPrintThicknessStageResults
 # ---------------------------------------------------------------------------
 
