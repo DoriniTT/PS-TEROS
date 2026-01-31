@@ -165,7 +165,24 @@ teros/core/
 ├── custom_calculation/       # Generic VASP calculations
 ├── surface_energy/           # Metal/intermetallic surface energy
 ├── surface_hydroxylation/    # OH/vacancy studies
-└── builders/                 # Pre-configured parameter sets (Ag2O, Ag3PO4, etc.)
+├── builders/                 # Pre-configured parameter sets (Ag2O, Ag3PO4, etc.)
+├── u_calculation/            # Hubbard U parameter (linear response method)
+│   ├── __init__.py
+│   ├── workgraph.py          # build_u_calculation_workgraph()
+│   ├── tasks.py              # extract_d_electron_occupation, gather_responses, etc.
+│   └── utils.py              # INCAR preparation, LDAU arrays, linear regression
+└── lego/                     # Modular brick-based workflow builder
+    ├── __init__.py            # Public API: quick_vasp, quick_dos, quick_hubbard_u, etc.
+    ├── workgraph.py           # quick_* functions, _prepare_builder_inputs
+    ├── results.py             # Result extraction, print_sequential_results
+    ├── utils.py               # get_status helper
+    └── bricks/                # Pluggable stage types
+        ├── __init__.py        # BRICK_REGISTRY, resolve_structure_from
+        ├── vasp.py            # Standard VASP calculations
+        ├── dos.py             # DOS via BandsWorkChain
+        ├── batch.py           # Parallel VASP with varying parameters
+        ├── bader.py           # Bader charge analysis
+        └── hubbard_u.py       # Hubbard U parameter (linear response)
 ```
 
 **Submodule pattern:**
@@ -176,6 +193,106 @@ module_name/
 ├── tasks.py            # @task.calcfunction helpers
 └── utils.py            # Pure Python utilities (optional)
 ```
+
+## Lego Module
+
+The Lego module (`teros.core.lego`) provides a modular, brick-based system for composing VASP workflows from reusable stage types.
+
+### Brick Architecture
+
+Each brick module in `teros/core/lego/bricks/` exports exactly 5 functions:
+
+| Function | Purpose |
+|----------|---------|
+| `validate_stage(stage, stage_names)` | Validate stage configuration before building |
+| `create_stage_tasks(wg, stage, stage_name, context)` | Create WorkGraph tasks for this stage |
+| `expose_stage_outputs(wg, stage_name, stage_tasks_result)` | Wire task outputs to WorkGraph outputs |
+| `get_stage_results(wg_node, wg_pk, stage_name)` | Extract results from a completed WorkGraph |
+| `print_stage_results(index, stage_name, stage_result)` | Print formatted results |
+
+### Available Brick Types
+
+| Type | Module | Description |
+|------|--------|-------------|
+| `vasp` | `bricks/vasp.py` | Standard VASP calculation (relax, static SCF) |
+| `dos` | `bricks/dos.py` | Density of states via BandsWorkChain |
+| `batch` | `bricks/batch.py` | Parallel VASP runs with varying parameters |
+| `bader` | `bricks/bader.py` | Bader charge analysis |
+| `hubbard_u` | `bricks/hubbard_u.py` | Hubbard U parameter via linear response |
+
+### Quick Functions
+
+Convenience functions for common workflows:
+
+```python
+from teros.core.lego import quick_vasp, quick_dos, quick_hubbard_u, quick_vasp_sequential
+
+# Single VASP calculation
+wg = quick_vasp(structure, code_label, incar={...})
+
+# DOS calculation
+wg = quick_dos(structure, code_label, incar={...})
+
+# Hubbard U calculation
+wg = quick_hubbard_u(
+    structure=structure,
+    code_label='VASP-6.5.1@localwork',
+    target_species='Fe',
+    incar={'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05},
+    potential_values=[-0.2, -0.1, 0.1, 0.2],  # Default
+    ldaul=2,  # 2=d-electrons, 3=f-electrons
+)
+```
+
+### Sequential Workflows
+
+Chain multiple stages with `quick_vasp_sequential`:
+
+```python
+from teros.core.lego import quick_vasp_sequential
+
+stages = [
+    {
+        'name': 'relax',
+        'type': 'vasp',
+        'incar': {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 3},
+    },
+    {
+        'name': 'hubbard_u',
+        'type': 'hubbard_u',
+        'structure_from': 'relax',       # Use relaxed structure
+        'target_species': 'Sn',
+        'ldaul': 2,
+        'potential_values': [-0.2, -0.1, 0.1, 0.2],
+        'incar': {'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05},
+    },
+]
+
+wg = quick_vasp_sequential(structure, code_label, stages=stages, ...)
+```
+
+### Hubbard U Stage Configuration
+
+The `hubbard_u` brick wraps `teros.core.u_calculation` into the Lego interface. Required and optional stage keys:
+
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `target_species` | Yes | — | Element symbol (e.g., 'Fe', 'Sn') |
+| `structure_from` | Yes | — | `'input'` or name of previous stage |
+| `potential_values` | No | `[-0.2, -0.1, 0.1, 0.2]` | Perturbation potentials (eV), no 0.0 |
+| `ldaul` | No | `2` | Angular momentum (2=d, 3=f) |
+| `ldauj` | No | `0.0` | Exchange J parameter |
+| `incar` | No | `{}` | Base INCAR parameters |
+
+The brick creates: ground state SCF, NSCF + SCF response per potential, occupation extraction, gather, linear regression, and summary compilation tasks.
+
+### Adding a New Brick
+
+1. Create `teros/core/lego/bricks/my_brick.py` with the 5 required functions
+2. Register in `bricks/__init__.py`: add to imports, `BRICK_REGISTRY`, and `resolve_structure_from()`
+3. Add `quick_my_brick()` to `lego/workgraph.py` (optional)
+4. Export in `lego/__init__.py`
+5. Add tests in `tests/test_lego_bricks.py` and `tests/test_lego_results.py`
 
 ## VASP Integration
 
