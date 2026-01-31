@@ -11,6 +11,7 @@ Stage types are implemented as "bricks" (see bricks/ subdirectory):
 - dos: DOS calculations via BandsWorkChain
 - batch: Multiple parallel VASP calculations with varying parameters
 - bader: Bader charge analysis
+- thickness: Slab thickness convergence (generate slabs, relax, compute surface energy)
 
 Example usage:
 

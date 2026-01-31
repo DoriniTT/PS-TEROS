@@ -8,7 +8,7 @@ Each brick module exports exactly 5 functions:
     print_stage_results(index, stage_name, stage_result) -> None
 """
 
-from . import vasp, dos, batch, bader
+from . import vasp, dos, batch, bader, thickness
 
 
 BRICK_REGISTRY = {
@@ -16,6 +16,7 @@ BRICK_REGISTRY = {
     'dos': dos,
     'batch': batch,
     'bader': bader,
+    'thickness': thickness,
 }
 
 VALID_BRICK_TYPES = tuple(BRICK_REGISTRY.keys())
@@ -56,7 +57,10 @@ def resolve_structure_from(structure_from: str, context: dict):
     stage_types = context['stage_types']
 
     ref_stage_type = stage_types.get(structure_from, 'vasp')
-    if ref_stage_type in ('dos', 'batch', 'bader'):
+    if ref_stage_type == 'thickness':
+        # Thickness stages expose the recommended slab structure
+        return stage_tasks[structure_from]['structure']
+    elif ref_stage_type in ('dos', 'batch', 'bader'):
         # DOS/batch/bader stages don't modify structure, use their input structure
         return stage_tasks[structure_from]['structure']
     else:
