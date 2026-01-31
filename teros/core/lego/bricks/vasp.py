@@ -119,7 +119,7 @@ def create_stage_tasks(wg, stage, stage_name, context):
         # Use output structure from previous stage
         prev_name = stage_names[i - 1]
         prev_stage_type = stage_types[prev_name]
-        if prev_stage_type in ('dos', 'batch', 'bader'):
+        if prev_stage_type in ('dos', 'batch', 'bader', 'hubbard_u'):
             stage_structure = stage_tasks[prev_name]['structure']
         else:
             stage_structure = stage_tasks[prev_name]['vasp'].outputs.structure
