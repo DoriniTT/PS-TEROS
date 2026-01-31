@@ -163,6 +163,7 @@ teros/core/
 ├── constants.py              # Physical constants, unit conversions
 ├── aimd/                     # Ab initio molecular dynamics submodule
 ├── custom_calculation/       # Generic VASP calculations
+├── lego/                     # Lightweight, incremental VASP calculations
 ├── surface_energy/           # Metal/intermetallic surface energy
 ├── surface_hydroxylation/    # OH/vacancy studies
 └── builders/                 # Pre-configured parameter sets (Ag2O, Ag3PO4, etc.)
@@ -176,6 +177,126 @@ module_name/
 ├── tasks.py            # @task.calcfunction helpers
 └── utils.py            # Pure Python utilities (optional)
 ```
+
+## Lego Module
+
+The lego module (`teros.core.lego`) provides a lightweight API for exploratory, incremental VASP work — submit a calculation, check results, decide next step.
+
+### Lego Module Structure
+
+```
+teros/core/lego/
+├── __init__.py         # Public exports
+├── workgraph.py        # quick_vasp, quick_vasp_batch, quick_vasp_sequential, quick_dos, quick_dos_batch
+├── results.py          # get_results, get_sequential_results, print_sequential_results, etc.
+├── tasks.py            # extract_energy @task.calcfunction
+├── utils.py            # get_status, export_files, list_calculations
+└── bricks/             # Stage type implementations
+    ├── __init__.py     # BRICK_REGISTRY, get_brick_module(), resolve_structure_from()
+    ├── vasp.py         # Standard VASP stages (relaxation, SCF, etc.)
+    ├── dos.py          # DOS stages via BandsWorkChain
+    ├── batch.py        # Parallel VASP calculations with varying parameters
+    └── bader.py        # Bader charge analysis
+```
+
+### Brick Interface Contract
+
+Each brick module in `bricks/` exports exactly 5 functions:
+
+```python
+def validate_stage(stage, stage_names) -> None: ...
+def create_stage_tasks(wg, stage, stage_name, context) -> dict: ...
+def expose_stage_outputs(wg, stage_name, stage_tasks_result) -> list[str]: ...
+def get_stage_results(wg_node, wg_pk, stage_name) -> dict: ...
+def print_stage_results(index, stage_name, stage_result) -> None: ...
+```
+
+`expose_stage_outputs` returns a list of output attribute names it created on the WorkGraph (e.g., `['relax_energy', 'relax_structure', 'relax_misc', ...]`). These are collected into the `__stage_outputs__` key of the return dict.
+
+### Key Functions
+
+| Function | Purpose |
+|----------|---------|
+| `quick_vasp(...)` | Single VASP calculation |
+| `quick_vasp_batch(...)` | Multiple parallel VASP calcs on different structures |
+| `quick_vasp_sequential(...)` | Multi-stage pipeline with restart chaining |
+| `quick_dos(...)` | Single DOS calculation (SCF + DOS) |
+| `quick_dos_batch(...)` | Multiple parallel DOS calcs |
+| `get_results(pk)` | Extract results from single calc |
+| `get_sequential_results(result)` | Extract all stage results |
+| `get_stage_results(result, name)` | Extract one stage's results |
+| `print_sequential_results(result)` | Print formatted results with per-stage outputs |
+| `print_stage_outputs_summary(result)` | Print which outputs belong to each stage |
+
+### quick_vasp_sequential Usage
+
+```python
+from teros.core.lego import quick_vasp_sequential, print_sequential_results
+
+stages = [
+    {
+        'name': 'relax_rough',
+        'incar': {'NSW': 100, 'IBRION': 2, 'ISIF': 2, 'ENCUT': 400},
+        'restart': None,
+        'kpoints_spacing': 0.06,
+        'retrieve': ['CONTCAR', 'OUTCAR'],
+    },
+    {
+        'name': 'relax_fine',
+        'incar': {'NSW': 100, 'IBRION': 2, 'ISIF': 2, 'ENCUT': 520},
+        'kpoints_spacing': 0.03,
+        'retrieve': ['CONTCAR', 'OUTCAR'],
+        # restart='previous' is the default
+    },
+]
+
+result = quick_vasp_sequential(
+    structure=my_structure,
+    stages=stages,
+    code_label='VASP-6.5.1@localwork',
+    potential_family='PBE',
+    potential_mapping={'Sn': 'Sn_d', 'O': 'O'},
+    options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},
+    max_concurrent_jobs=2,  # Limit parallel jobs (useful with batch stages)
+)
+```
+
+### Return Dict Structure
+
+`quick_vasp_sequential` returns:
+
+```python
+{
+    '__workgraph_pk__': 12345,
+    '__stage_names__': ['relax_rough', 'relax_fine'],
+    '__stage_types__': {'relax_rough': 'vasp', 'relax_fine': 'vasp'},
+    '__stage_outputs__': {
+        'relax_rough': ['relax_rough_energy', 'relax_rough_structure',
+                        'relax_rough_misc', 'relax_rough_remote',
+                        'relax_rough_retrieved'],
+        'relax_fine':  ['relax_fine_energy', 'relax_fine_structure',
+                        'relax_fine_misc', 'relax_fine_remote',
+                        'relax_fine_retrieved'],
+    },
+    'relax_rough': 12345,
+    'relax_fine': 12345,
+}
+```
+
+### Stage Types
+
+| Type | Key Outputs per Stage | Notes |
+|------|----------------------|-------|
+| `vasp` (default) | `energy`, `structure`, `misc`, `remote`, `retrieved` | Standard VASP calculation |
+| `dos` | `dos`, `projectors`, `scf_misc`, `scf_remote`, `scf_retrieved`, `dos_misc`, `dos_remote`, `dos_retrieved` | Uses BandsWorkChain; some outputs optional |
+| `batch` | `{calc_label}_energy`, `{calc_label}_misc`, `{calc_label}_remote`, `{calc_label}_retrieved` per calculation | Multiple parallel calcs |
+| `bader` | `charges`, `acf`, `bcf`, `avf` | Bader charge analysis |
+
+All output names are prefixed with the stage name: `{stage_name}_{output}`.
+
+### WorkGraph Output Namespaces (Limitation)
+
+WorkGraph does **not** support nested output namespaces. All outputs appear flat in `verdi process show`. The `__stage_outputs__` mapping in the return dict provides programmatic grouping. Use `print_stage_outputs_summary(result)` to see outputs organized by stage.
 
 ## VASP Integration
 
