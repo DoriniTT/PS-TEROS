@@ -8,7 +8,7 @@ Each brick module exports exactly 5 functions:
     print_stage_results(index, stage_name, stage_result) -> None
 """
 
-from . import vasp, dos, batch, bader
+from . import vasp, dos, batch, bader, convergence
 
 
 BRICK_REGISTRY = {
@@ -16,6 +16,7 @@ BRICK_REGISTRY = {
     'dos': dos,
     'batch': batch,
     'bader': bader,
+    'convergence': convergence,
 }
 
 VALID_BRICK_TYPES = tuple(BRICK_REGISTRY.keys())
@@ -25,7 +26,7 @@ def get_brick_module(brick_type: str):
     """Look up a brick module by type string.
 
     Args:
-        brick_type: One of 'vasp', 'dos', 'batch', 'bader'.
+        brick_type: One of 'vasp', 'dos', 'batch', 'bader', 'convergence'.
 
     Returns:
         The brick module.
@@ -56,7 +57,7 @@ def resolve_structure_from(structure_from: str, context: dict):
     stage_types = context['stage_types']
 
     ref_stage_type = stage_types.get(structure_from, 'vasp')
-    if ref_stage_type in ('dos', 'batch', 'bader'):
+    if ref_stage_type in ('dos', 'batch', 'bader', 'convergence'):
         # DOS/batch/bader stages don't modify structure, use their input structure
         return stage_tasks[structure_from]['structure']
     else:
