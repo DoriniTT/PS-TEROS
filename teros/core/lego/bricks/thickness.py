@@ -94,7 +94,6 @@ def create_stage_tasks(wg, stage, stage_name, context):
     """
     from teros.core.convergence import (
         generate_thickness_series,
-        extract_total_energy,
         relax_thickness_series,
         compute_surface_energies,
         gather_surface_energies,
@@ -514,4 +513,6 @@ def _pick_recommended_structure(
             f"Available: {available}"
         )
 
-    return structures[key]
+    # Return a copy: returning an input node directly would create a RETURN
+    # link instead of CREATE, which breaks provenance link traversal.
+    return orm.StructureData(ase=structures[key].get_ase())
