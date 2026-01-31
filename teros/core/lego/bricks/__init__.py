@@ -3,7 +3,7 @@
 Each brick module exports exactly 5 functions:
     validate_stage(stage, stage_names) -> None
     create_stage_tasks(wg, stage, stage_name, context) -> dict
-    expose_stage_outputs(wg, stage_name, stage_tasks_result) -> None
+    expose_stage_outputs(wg, stage_name, stage_tasks_result) -> list[str]
     get_stage_results(wg_node, wg_pk, stage_name) -> dict
     print_stage_results(index, stage_name, stage_result) -> None
 """

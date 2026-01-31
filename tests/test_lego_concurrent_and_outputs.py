@@ -11,7 +11,7 @@ All tests are tier1 (pure Python, no AiiDA profile needed).
 
 import inspect
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 
 # ---------------------------------------------------------------------------
