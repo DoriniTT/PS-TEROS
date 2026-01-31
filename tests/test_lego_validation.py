@@ -63,6 +63,25 @@ class TestValidateStages:
         ]
         self._validate(stages)
 
+    def test_thickness_stage_passes(self):
+        stages = [
+            {'name': 'bulk_relax', 'type': 'vasp', 'incar': {'NSW': 100, 'ISIF': 3}, 'restart': None},
+            {'name': 'thickness_test', 'type': 'thickness', 'structure_from': 'bulk_relax',
+             'miller_indices': [1, 1, 0], 'layer_counts': [3, 5, 7, 9],
+             'slab_incar': {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 2}},
+        ]
+        self._validate(stages)
+
+    def test_delegates_thickness_error(self):
+        """Missing slab_incar should trigger thickness-brick ValueError."""
+        stages = [
+            {'name': 'bulk_relax', 'type': 'vasp', 'incar': {'NSW': 100}, 'restart': None},
+            {'name': 'thickness_test', 'type': 'thickness', 'structure_from': 'bulk_relax',
+             'miller_indices': [1, 1, 0], 'layer_counts': [3, 5, 7]},
+        ]
+        with pytest.raises(ValueError, match="slab_incar"):
+            self._validate(stages)
+
     def test_delegates_vasp_error(self):
         """Missing incar should trigger VASP-brick ValueError."""
         stages = [{'name': 'relax', 'type': 'vasp', 'restart': None}]

@@ -68,11 +68,11 @@ class TestBrickRegistry:
 
     def test_valid_brick_types_tuple(self):
         from teros.core.lego.bricks import VALID_BRICK_TYPES
-        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader')
+        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader', 'thickness')
 
     def test_registry_has_four_entries(self):
         from teros.core.lego.bricks import BRICK_REGISTRY
-        assert len(BRICK_REGISTRY) == 4
+        assert len(BRICK_REGISTRY) == 5
 
     def test_get_brick_module_valid_types(self):
         from teros.core.lego.bricks import get_brick_module, VALID_BRICK_TYPES
@@ -490,3 +490,103 @@ class TestEnrichAcfDat:
         # Atom 1: bader_charge = 0 - 6.5432 = -6.5432
         atom1_line = lines[2]
         assert '-6.5432' in atom1_line
+
+
+# ---------------------------------------------------------------------------
+# TestThicknessValidateStage
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestThicknessValidateStage:
+    """Tests for teros.core.lego.bricks.thickness.validate_stage()."""
+
+    def _validate(self, stage, stage_names=None):
+        from teros.core.lego.bricks.thickness import validate_stage
+        if stage_names is None:
+            stage_names = set()
+        validate_stage(stage, stage_names)
+
+    def _valid_stage(self, **overrides):
+        base = {
+            'name': 'thickness_test',
+            'type': 'thickness',
+            'structure_from': 'bulk_relax',
+            'miller_indices': [1, 1, 0],
+            'layer_counts': [3, 5, 7, 9],
+            'slab_incar': {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 2},
+        }
+        base.update(overrides)
+        return base
+
+    def test_valid_minimal_passes(self):
+        self._validate(self._valid_stage(), stage_names={'bulk_relax'})
+
+    def test_valid_with_optional_params_passes(self):
+        stage = self._valid_stage(
+            convergence_threshold=0.005,
+            min_vacuum_thickness=20.0,
+            termination_index=1,
+            slab_kpoints_spacing=0.04,
+            max_concurrent_jobs=2,
+            lll_reduce=False,
+            center_slab=True,
+            primitive=False,
+        )
+        self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_missing_structure_from_raises(self):
+        stage = self._valid_stage()
+        del stage['structure_from']
+        with pytest.raises(ValueError, match="structure_from"):
+            self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_structure_from_unknown_raises(self):
+        stage = self._valid_stage(structure_from='nonexistent')
+        with pytest.raises(ValueError, match="previous stage"):
+            self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_structure_from_valid_passes(self):
+        stage = self._valid_stage(structure_from='bulk_relax')
+        self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_missing_miller_indices_raises(self):
+        stage = self._valid_stage()
+        del stage['miller_indices']
+        with pytest.raises(ValueError, match="miller_indices"):
+            self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_miller_indices_wrong_length_raises(self):
+        stage = self._valid_stage(miller_indices=[1, 1])
+        with pytest.raises(ValueError, match="3 integers"):
+            self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_miller_indices_not_list_raises(self):
+        stage = self._valid_stage(miller_indices="110")
+        with pytest.raises(ValueError, match="3 integers"):
+            self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_missing_layer_counts_raises(self):
+        stage = self._valid_stage()
+        del stage['layer_counts']
+        with pytest.raises(ValueError, match="layer_counts"):
+            self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_layer_counts_too_few_raises(self):
+        stage = self._valid_stage(layer_counts=[5])
+        with pytest.raises(ValueError, match="at least 2"):
+            self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_layer_counts_empty_raises(self):
+        stage = self._valid_stage(layer_counts=[])
+        with pytest.raises(ValueError, match="at least 2"):
+            self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_missing_slab_incar_raises(self):
+        stage = self._valid_stage()
+        del stage['slab_incar']
+        with pytest.raises(ValueError, match="slab_incar"):
+            self._validate(stage, stage_names={'bulk_relax'})
+
+    def test_layer_counts_two_values_passes(self):
+        stage = self._valid_stage(layer_counts=[3, 5])
+        self._validate(stage, stage_names={'bulk_relax'})

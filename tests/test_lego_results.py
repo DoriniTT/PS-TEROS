@@ -235,3 +235,134 @@ class TestPrintBaderStageResults:
         out = capsys.readouterr().out
         assert 'Sn' in out
         assert 'valence=14.0' in out
+
+
+# ---------------------------------------------------------------------------
+# TestPrintThicknessStageResults
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestPrintThicknessStageResults:
+    """Tests for teros.core.lego.bricks.thickness.print_stage_results()."""
+
+    def _print(self, index, stage_name, stage_result):
+        from teros.core.lego.bricks.thickness import print_stage_results
+        print_stage_results(index, stage_name, stage_result)
+
+    def _base_result(self, **overrides):
+        result = {
+            'convergence_results': None,
+            'recommended_structure': None,
+            'recommended_layers': None,
+            'converged': False,
+            'surface_energies': {},
+            'pk': 1,
+            'stage': 'thickness_test',
+            'type': 'thickness',
+        }
+        result.update(overrides)
+        return result
+
+    def test_prints_thickness_label(self, capsys):
+        self._print(2, 'thickness_test', self._base_result())
+        out = capsys.readouterr().out
+        assert '(THICKNESS CONVERGENCE)' in out
+
+    def test_prints_index_and_name(self, capsys):
+        self._print(2, 'thickness_test', self._base_result())
+        out = capsys.readouterr().out
+        assert '[2]' in out
+        assert 'thickness_test' in out
+
+    def test_prints_converged_with_layers(self, capsys):
+        conv = {
+            'miller_indices': [1, 1, 0],
+            'summary': {
+                'thicknesses': [3, 5, 7, 9],
+                'surface_energies_J_m2': [1.50, 1.35, 1.32, 1.31],
+                'converged': True,
+                'recommended_layers': 7,
+                'max_tested_layers': 9,
+                'convergence_threshold': 0.01,
+            },
+        }
+        self._print(2, 'thickness_test', self._base_result(convergence_results=conv))
+        out = capsys.readouterr().out
+        assert 'Converged: YES at 7 layers' in out
+        assert '1, 1, 0' in out
+
+    def test_prints_not_converged(self, capsys):
+        conv = {
+            'miller_indices': [1, 1, 1],
+            'summary': {
+                'thicknesses': [3, 5],
+                'surface_energies_J_m2': [2.0, 1.5],
+                'converged': False,
+                'recommended_layers': 5,
+                'max_tested_layers': 5,
+                'convergence_threshold': 0.01,
+            },
+        }
+        self._print(2, 'thickness_test', self._base_result(convergence_results=conv))
+        out = capsys.readouterr().out
+        assert 'Converged: NO' in out
+        assert '5 layers' in out
+
+    def test_prints_surface_energy_table(self, capsys):
+        conv = {
+            'miller_indices': [1, 1, 0],
+            'summary': {
+                'thicknesses': [3, 5, 7],
+                'surface_energies_J_m2': [1.50, 1.35, 1.32],
+                'converged': True,
+                'recommended_layers': 5,
+                'max_tested_layers': 7,
+                'convergence_threshold': 0.05,
+            },
+        }
+        self._print(2, 'thickness_test', self._base_result(convergence_results=conv))
+        out = capsys.readouterr().out
+        assert '1.5000' in out
+        assert '1.3500' in out
+        assert '1.3200' in out
+        # Delta column: |1.35 - 1.50| * 1000 = 150.0
+        assert '150.0' in out
+
+    def test_prints_miller_indices(self, capsys):
+        conv = {
+            'miller_indices': [1, 1, 0],
+            'summary': {
+                'thicknesses': [3, 5],
+                'surface_energies_J_m2': [1.5, 1.3],
+                'converged': False,
+                'recommended_layers': 5,
+                'max_tested_layers': 5,
+                'convergence_threshold': 0.01,
+            },
+        }
+        self._print(2, 'thickness_test', self._base_result(convergence_results=conv))
+        out = capsys.readouterr().out
+        assert 'Miller indices: (1, 1, 0)' in out
+
+    def test_prints_threshold(self, capsys):
+        conv = {
+            'miller_indices': [1, 1, 0],
+            'summary': {
+                'thicknesses': [3, 5],
+                'surface_energies_J_m2': [1.5, 1.3],
+                'converged': False,
+                'recommended_layers': 5,
+                'max_tested_layers': 5,
+                'convergence_threshold': 0.02,
+            },
+        }
+        self._print(2, 'thickness_test', self._base_result(convergence_results=conv))
+        out = capsys.readouterr().out
+        assert '0.02' in out
+
+    def test_no_convergence_results(self, capsys):
+        """When convergence_results is None, should still print the label."""
+        self._print(2, 'thickness_test', self._base_result())
+        out = capsys.readouterr().out
+        assert 'THICKNESS CONVERGENCE' in out
+        # No crash expected
