@@ -194,6 +194,35 @@ module_name/
 
 The lego module (`teros.core.lego`) builds multi-stage sequential VASP workflows. Each stage is a "brick" that connects to other bricks through typed ports.
 
+### Philosophy
+
+The lego system treats computational stages as **physical Lego bricks**. Each brick has **studs** (outputs) and **sockets** (inputs) with specific shapes — you can only snap together pieces that fit. VASP is the "joker brick": it produces every output type (structure, energy, remote folder, retrieved files), so any brick can connect to it. Specialized bricks (DOS, bader, batch, convergence) produce only their domain-specific outputs and cannot serve as structure sources.
+
+This metaphor drives three core principles:
+
+1. **Explicit connections.** Every input declares where its data comes from (`structure_from`, `charge_from`, `restart`). There are no implicit or magical data flows — if a brick needs a structure, the user points it at a stage that produces one.
+
+2. **Fail early with helpful errors.** `validate_connections()` runs before any AiiDA submission. If you wire DOS → bader (incompatible), or forget `laechg: True` for a bader upstream stage, you get a clear error message naming the problem and suggesting which stages *can* provide what you need. No waiting 30 minutes for a cluster job to crash.
+
+3. **Pure Python metadata.** All port declarations and validation logic live in `connections.py`, which has zero AiiDA imports. This means the entire connection system can be tested as tier1 (fast, no database, no daemon). The AiiDA-dependent code (task creation, output wiring) stays in the brick modules themselves.
+
+### How Ports and Connections Work
+
+Each brick type declares a `PORTS` dict in `connections.py` with two sections:
+
+- **inputs** — what the brick needs. Each input has a `type` (must match an output type from another brick), a `source` (which stage config field to read), and optionally `compatible_bricks` and `prerequisites`.
+- **outputs** — what the brick produces. Each output has a `type` and optionally a `conditional` (e.g., VASP structure is only meaningful when `nsw > 0`).
+
+When the user defines a pipeline of stages, `validate_connections()` walks them in order and builds a registry of what each stage produces. For each new stage's inputs, it checks:
+
+1. Does the referenced stage exist? (no forward references)
+2. Does it produce the right type? (type compatibility)
+3. Is it the right kind of brick? (`compatible_bricks`)
+4. Does the upstream stage have the right settings? (`prerequisites`)
+5. Is the output conditional and possibly meaningless? (warning, not error)
+
+The validation is called automatically from `_validate_stages()` in `workgraph.py` before the WorkGraph is assembled and submitted.
+
 ### Brick Types
 
 | Brick | Purpose | Key Config Fields |
@@ -436,6 +465,140 @@ verdi data core.structure export <PK> -o out.cif
 3. Implement `@task.graph` and `build_*_workgraph()` in workgraph.py
 4. Export in `__init__.py` and `teros/core/__init__.py`
 5. Add example in `examples/`
+
+### Adding a New Lego Brick
+
+When adding a new brick type to the lego module, follow this procedure. Every new brick must ship with PORTS, tests, an example script, and updated documentation.
+
+#### Step 1: Declare ports in `connections.py`
+
+Add a `MYBRICK_PORTS` dict to `teros/core/lego/bricks/connections.py`. This file has **no AiiDA imports** — keep it that way.
+
+```python
+MYBRICK_PORTS = {
+    'inputs': {
+        'structure': {
+            'type': 'structure',         # Must be in PORT_TYPES
+            'required': True,
+            'source': 'structure_from',  # Which stage config field to read
+            'description': 'Input structure',
+        },
+        # Add more inputs as needed. Use 'compatible_bricks' and
+        # 'prerequisites' if this brick requires specific upstream settings.
+    },
+    'outputs': {
+        'my_result': {
+            'type': 'misc',              # Or add a new type to PORT_TYPES
+            'description': 'Main output',
+        },
+        # Only declare outputs the brick actually produces.
+        # Do NOT declare 'structure' unless the brick genuinely
+        # creates a new/modified structure (decision: no pass-through).
+    },
+}
+```
+
+Then register it in `ALL_PORTS`:
+
+```python
+ALL_PORTS = {
+    'vasp': VASP_PORTS,
+    'dos': DOS_PORTS,
+    ...
+    'mybrick': MYBRICK_PORTS,   # Add here
+}
+```
+
+If the brick introduces a new output type (e.g., `'phonon_bands'`), add it to `PORT_TYPES` at the top of the file.
+
+#### Step 2: Write unit tests for the ports and connections
+
+Add tests to `tests/test_lego_connections.py` **before** implementing the brick logic. Tests import from `connections.py` directly (no AiiDA needed), so they run fast. Cover at minimum:
+
+- Port type recognition: all input/output types are in `PORT_TYPES`
+- Output count and names match expectations
+- `validate_connections()` passes for a valid pipeline using the new brick
+- `validate_connections()` rejects invalid connections (wrong source brick, missing required field, forward reference)
+- If the brick has `prerequisites`, test that missing prerequisites raise errors
+- If the brick has `compatible_bricks`, test that incompatible sources are rejected
+- Run with: `pytest tests/test_lego_connections.py -v`
+
+#### Step 3: Create the brick module
+
+Create `teros/core/lego/bricks/mybrick.py` with the 5 required functions + PORTS import:
+
+```python
+from .connections import MYBRICK_PORTS as PORTS
+
+
+def validate_stage(stage: dict, stage_names: set) -> None:
+    """Validate brick-specific config (called per-stage before connections)."""
+    ...
+
+def create_stage_tasks(wg, stage, stage_name, context) -> dict:
+    """Create WorkGraph tasks. Use resolve_structure_from() for structures."""
+    from . import resolve_structure_from
+    ...
+
+def expose_stage_outputs(wg, stage_name, stage_tasks_result) -> None:
+    """Wire outputs onto the WorkGraph using: wg.outputs.name = socket"""
+    ...
+
+def get_stage_results(wg_node, wg_pk, stage_name) -> dict:
+    """Extract results from a completed WorkGraph node."""
+    ...
+
+def print_stage_results(index, stage_name, stage_result) -> None:
+    """Print formatted results to stdout."""
+    ...
+```
+
+#### Step 4: Register the brick
+
+In `teros/core/lego/bricks/__init__.py`:
+
+```python
+from . import vasp, dos, batch, bader, convergence, mybrick
+
+BRICK_REGISTRY = {
+    ...
+    'mybrick': mybrick,
+}
+```
+
+Also update the import in `__init__.py` to re-export any new symbols from `connections.py` if needed.
+
+#### Step 5: Create an example script
+
+Add `examples/lego/example_mybrick.py` showing a real pipeline that uses the new brick. The example should be runnable (with the right VASP code configured) and show the typical stage configuration pattern.
+
+#### Step 6: Run all tests and lint
+
+```bash
+pytest tests/test_lego_connections.py -v   # Port/connection tests (tier1, fast)
+pytest tests/test_lego_bricks.py -v        # Brick validate_stage tests (tier1)
+flake8 teros/core/lego/bricks/ --max-line-length=120 --ignore=E501,W503,E402,F401
+```
+
+#### Step 7: Update CLAUDE.md
+
+Update the following sections in this file:
+
+1. **Module Structure tree** — add the new `.py` file under `bricks/`
+2. **Brick Types table** — add a row with the brick name, purpose, and key config fields
+3. **Port types list** — if you added a new port type to `PORT_TYPES`
+
+#### Checklist
+
+- [ ] `MYBRICK_PORTS` in `connections.py` with correct types and sources
+- [ ] Registered in `ALL_PORTS` dict
+- [ ] New port types (if any) added to `PORT_TYPES`
+- [ ] Unit tests in `test_lego_connections.py` (ports, valid pipelines, rejections)
+- [ ] `mybrick.py` with 5 functions + PORTS import
+- [ ] Registered in `BRICK_REGISTRY` in `__init__.py`
+- [ ] Example script in `examples/lego/`
+- [ ] All tests pass, lint clean
+- [ ] CLAUDE.md updated (tree, brick table, port types)
 
 ### Module Development & Testing Procedure
 
