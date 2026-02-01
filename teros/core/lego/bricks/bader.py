@@ -15,6 +15,8 @@ from aiida import orm
 from aiida.common.links import LinkType
 from aiida_workgraph import task
 
+from .connections import BADER_PORTS as PORTS  # noqa: F401
+
 
 def validate_stage(stage: dict, stage_names: set) -> None:
     """Validate a Bader stage configuration.

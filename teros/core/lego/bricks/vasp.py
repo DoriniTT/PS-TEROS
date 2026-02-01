@@ -8,6 +8,8 @@ from aiida.common.links import LinkType
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
 
+from .connections import VASP_PORTS as PORTS  # noqa: F401
+
 from ..tasks import extract_energy, compute_dynamics
 
 
@@ -119,10 +121,17 @@ def create_stage_tasks(wg, stage, stage_name, context):
         # Use output structure from previous stage
         prev_name = stage_names[i - 1]
         prev_stage_type = stage_types[prev_name]
-        if prev_stage_type in ('dos', 'batch', 'bader', 'hubbard_response', 'hubbard_analysis'):
+        if prev_stage_type in ('dos', 'batch', 'bader'):
             stage_structure = stage_tasks[prev_name]['structure']
-        else:
+        elif prev_stage_type == 'vasp':
             stage_structure = stage_tasks[prev_name]['vasp'].outputs.structure
+        else:
+            raise ValueError(
+                f"Stage '{stage['name']}' uses structure_from='previous' "
+                f"but previous stage '{prev_name}' is a '{prev_stage_type}' "
+                f"stage that doesn't produce a structure. Use an explicit "
+                f"'structure_from' pointing to a VASP stage."
+            )
     else:
         # Use output structure from specific stage
         from . import resolve_structure_from

@@ -12,6 +12,8 @@ from aiida.common.links import LinkType
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
 
+from .connections import HUBBARD_RESPONSE_PORTS as PORTS  # noqa: F401
+
 from teros.core.u_calculation.tasks import (
     extract_d_electron_occupation,
     calculate_occupation_response,

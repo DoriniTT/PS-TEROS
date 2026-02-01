@@ -10,6 +10,8 @@ Reference: https://www.vasp.at/wiki/index.php/Calculate_U_for_LSDA+U
 from aiida import orm
 from aiida.common.links import LinkType
 
+from .connections import HUBBARD_ANALYSIS_PORTS as PORTS  # noqa: F401
+
 from teros.core.u_calculation.tasks import (
     calculate_hubbard_u_linear_regression,
     compile_u_calculation_summary,
