@@ -487,7 +487,8 @@ def _validate_stages(stages: t.List[dict]) -> None:
     Raises:
         ValueError: If validation fails
     """
-    from .bricks import get_brick_module, VALID_BRICK_TYPES
+    import warnings as _warnings
+    from .bricks import get_brick_module, VALID_BRICK_TYPES, validate_connections
 
     if not stages:
         raise ValueError("stages list cannot be empty")
@@ -513,6 +514,11 @@ def _validate_stages(stages: t.List[dict]) -> None:
         # Delegate type-specific validation to brick module
         brick = get_brick_module(stage_type)
         brick.validate_stage(stage, stage_names)
+
+    # Validate inter-stage connections using port declarations
+    connection_warnings = validate_connections(stages)
+    for w in connection_warnings:
+        _warnings.warn(w, stacklevel=3)
 
 
 def quick_vasp_sequential(

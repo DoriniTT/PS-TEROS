@@ -9,6 +9,7 @@ from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
 
 from ..tasks import extract_energy, compute_dynamics
+from .connections import VASP_PORTS as PORTS
 
 
 def validate_stage(stage: dict, stage_names: set) -> None:

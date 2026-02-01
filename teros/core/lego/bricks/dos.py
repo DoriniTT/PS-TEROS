@@ -7,6 +7,7 @@ from aiida import orm
 from aiida.common.links import LinkType
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
+from .connections import DOS_PORTS as PORTS
 
 
 def validate_stage(stage: dict, stage_names: set) -> None:

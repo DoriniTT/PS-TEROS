@@ -12,6 +12,7 @@ from aiida_workgraph import task
 
 from ..tasks import extract_energy
 from ...utils import deep_merge_dicts
+from .connections import BATCH_PORTS as PORTS
 
 
 def validate_stage(stage: dict, stage_names: set) -> None:
