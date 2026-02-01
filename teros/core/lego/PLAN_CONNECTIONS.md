@@ -133,6 +133,10 @@ PORTS = {
             'required': True,
             'source': 'charge_from',
             'compatible_bricks': ['vasp'],  # Only VASP produces AECCAR files
+            'prerequisites': {
+                'incar': {'laechg': True, 'lcharg': True},
+                'retrieve': ['AECCAR0', 'AECCAR2', 'CHGCAR', 'OUTCAR'],
+            },
             'description': 'Retrieved folder with AECCAR0, AECCAR2, CHGCAR',
         },
         'structure': {
@@ -445,16 +449,53 @@ graph LR
    Stages that produce 'structure': ['relax'] (type: vasp)
    ```
 
+6. **Validate conditional outputs at definition time.** The system inspects INCAR parameters when relevant. If a downstream stage references `structure` from a VASP stage with `nsw: 0` (static SCF), validation emits a warning:
+   ```
+   Warning: Stage 'scf' has nsw=0 (static calculation). Its 'structure' output
+   may not be meaningful (no relaxation performed). Consider using
+   'structure_from: input' or pointing to a relaxation stage instead.
+   ```
+   This is a **warning**, not an error — static stages do technically produce a structure output (the unmodified input), so it may be intentional.
+
+7. **Brick prerequisites: upstream INCAR/retrieve requirements.**
+   Some bricks impose requirements on the stages they connect to. The most important example: `bader` needs its `charge_from` VASP stage to have `laechg: True` in INCAR and `['AECCAR0', 'AECCAR2', 'CHGCAR', 'OUTCAR']` in the retrieve list. If the user forgets these, the workflow fails deep inside AiiDA with a cryptic missing-file error.
+
+   The port system handles this via a `prerequisites` field on input ports:
+
+   ```python
+   # bricks/bader.py PORTS
+   'inputs': {
+       'charge_files': {
+           'type': 'retrieved',
+           'required': True,
+           'source': 'charge_from',
+           'compatible_bricks': ['vasp'],
+           'prerequisites': {
+               'incar': {'laechg': True, 'lcharg': True},
+               'retrieve': ['AECCAR0', 'AECCAR2', 'CHGCAR', 'OUTCAR'],
+           },
+           'description': 'Retrieved folder with AECCAR0, AECCAR2, CHGCAR',
+       },
+   }
+   ```
+
+   At validation time, the system checks the referenced VASP stage's config:
+   ```
+   Error: Stage 'bader_analysis' connects to stage 'scf' via 'charge_from',
+   but 'scf' is missing required INCAR settings:
+     - laechg: True  (needed for Bader AECCAR files)
+     - lcharg: True  (needed for charge density output)
+   And missing required retrieve files:
+     - AECCAR0, AECCAR2, CHGCAR, OUTCAR
+
+   Add these to your 'scf' stage configuration.
+   ```
+
+   This catches the most common Bader pitfall before submission. The same pattern extends to any brick that has upstream requirements (e.g., a future `bands` brick might require `lwave: True` from its source stage).
+
 ## Remaining Open Questions
 
-1. **How to handle conditional outputs at validation time?**
-   - VASP `structure` output only exists when NSW > 0 (relaxation)
-   - Should validation warn if a downstream stage references `structure` from a static VASP stage?
-   - Or is this too much introspection into INCAR parameters?
-
-2. **Per-stage code/options overrides?**
-   - Some stages may need different VASP versions or resource allocations
-   - This is orthogonal to the port system but worth tracking
+*(none — all design decisions resolved)*
 
 ---
 
@@ -468,3 +509,259 @@ The core change is adding **declarative port metadata** to each brick module. Th
 - No breaking changes to existing run scripts
 
 The VASP brick remains the "joker" with the broadest output set. Specialized bricks have narrow, well-defined ports that constrain what they can connect to.
+
+---
+
+## Full Example: VASP → DOS → Batch → Bader Pipeline
+
+This example shows all four current brick types in a single sequential workflow.
+The pipeline relaxes SnO2, computes DOS on the relaxed structure, runs a batch
+of charge-state calculations, and performs Bader analysis on the neutral SCF.
+
+```python
+"""
+Full pipeline example: VASP → DOS → Batch → Bader on SnO2 (rutile).
+
+Stages:
+  1. relax        (vasp)  — Relax primitive cell
+  2. scf          (vasp)  — Static SCF with LAECHG for Bader
+  3. dos          (dos)   — Electronic DOS on relaxed structure
+  4. charge_scan  (batch) — Parallel SCF at different charge states
+  5. bader        (bader) — Bader charge analysis on the SCF
+
+Connection map:
+  relax ──structure──► scf ──structure──► dos
+    │                   │
+    │                   ├──retrieved──► bader
+    │                   │
+    │                   └──structure──► charge_scan
+    └──(chain)──► scf
+
+Monitor:  verdi process show <PK>
+Results:  print_sequential_results(result)
+"""
+
+from pathlib import Path
+
+from aiida import load_profile, orm
+from pymatgen.core import Structure
+
+load_profile()
+
+from teros.core.lego import quick_vasp_sequential, print_sequential_results
+
+
+# ── Load structure ──────────────────────────────────────────────────────
+
+struct_path = Path(__file__).parent / 'sno2.vasp'
+pmg_struct = Structure.from_file(str(struct_path))
+structure = orm.StructureData(pymatgen=pmg_struct)
+
+
+# ── Common settings ─────────────────────────────────────────────────────
+
+code_label = 'VASP-6.5.1-idefix-4@obelix'
+potential_family = 'PBE'
+potential_mapping = {'Sn': 'Sn_d', 'O': 'O'}
+
+options = {
+    'resources': {
+        'num_machines': 1,
+        'num_mpiprocs_per_machine': 4,
+    },
+    'custom_scheduler_commands': (
+        '#PBS -l cput=90000:00:00\n'
+        '#PBS -l nodes=1:ppn=88:skylake\n'
+        '#PBS -j oe\n'
+        '#PBS -N sno2_full_pipeline'
+    ),
+}
+
+
+# ── Stage definitions ───────────────────────────────────────────────────
+
+stages = [
+
+    # ── Stage 1: relax (vasp) ───────────────────────────────────────────
+    # Relax ions + cell of the primitive SnO2 cell.
+    # Produces: structure, energy, misc, remote_folder, retrieved
+    {
+        'name': 'relax',
+        'type': 'vasp',
+        'incar': {
+            'encut': 520,
+            'ediff': 1e-6,
+            'ismear': 0,
+            'sigma': 0.05,
+            'ibrion': 2,
+            'nsw': 100,
+            'isif': 3,
+            'prec': 'Accurate',
+            'lreal': 'Auto',
+            'lwave': False,
+            'lcharg': False,
+        },
+        'restart': None,
+        'kpoints_spacing': 0.03,
+        'retrieve': ['CONTCAR', 'OUTCAR'],
+    },
+
+    # ── Stage 2: scf (vasp) ────────────────────────────────────────────
+    # Static SCF on the relaxed structure.
+    # LAECHG=True + retrieve AECCAR files → required by the bader stage.
+    # With the port system, if you forget laechg or the retrieve list,
+    # validation catches it:
+    #   "Stage 'bader' connects to 'scf' via charge_from, but 'scf' is
+    #    missing required INCAR: laechg=True"
+    #
+    # Produces: energy, misc, remote_folder, retrieved (with AECCAR files)
+    # Note: nsw=0 → structure output exists but is just the unmodified input.
+    {
+        'name': 'scf',
+        'type': 'vasp',
+        'incar': {
+            'encut': 520,
+            'ediff': 1e-6,
+            'ismear': 0,
+            'sigma': 0.05,
+            'ibrion': -1,
+            'nsw': 0,
+            'prec': 'Accurate',
+            'lreal': 'Auto',
+            'lwave': False,
+            'lcharg': True,
+            'laechg': True,       # ← Bader prerequisite
+        },
+        'restart': None,
+        'kpoints_spacing': 0.03,
+        'retrieve': ['AECCAR0', 'AECCAR2', 'CHGCAR', 'OUTCAR'],  # ← Bader prerequisite
+    },
+
+    # ── Stage 3: dos (dos) ──────────────────────────────────────────────
+    # Electronic DOS on the relaxed structure.
+    # Connects: structure ← relax (not scf, since dos needs a proper
+    #           relaxed structure and scf doesn't modify it)
+    #
+    # Produces: energy, scf_misc, dos_misc, dos, projectors
+    # Does NOT produce: structure (so no downstream stage can use
+    #                   structure_from='dos' — the port system rejects this)
+    {
+        'name': 'dos',
+        'type': 'dos',
+        'structure_from': 'relax',    # ← explicit: points to the relaxation
+        'scf_incar': {
+            'encut': 520,
+            'ediff': 1e-6,
+            'ismear': 0,
+            'sigma': 0.05,
+            'prec': 'Accurate',
+            'nsw': 0,
+            'ibrion': -1,
+        },
+        'dos_incar': {
+            'encut': 520,
+            'prec': 'Accurate',
+            'nedos': 3000,
+            'lorbit': 11,
+            'ismear': -5,
+            'nsw': 0,
+            'ibrion': -1,
+        },
+        'kpoints_spacing': 0.03,
+        'dos_kpoints_spacing': 0.02,
+        'retrieve': ['DOSCAR'],
+    },
+
+    # ── Stage 4: charge_scan (batch) ────────────────────────────────────
+    # Parallel SCF calculations at different total charges (e.g., for Fukui
+    # indices or defect formation). Each sub-calculation inherits the
+    # relaxed structure from 'relax' and applies a different NELECT.
+    #
+    # Connects: structure ← relax
+    # Produces: per-calculation energy, misc, remote_folder, retrieved
+    #           (e.g., charge_scan_neutral_energy, charge_scan_plus1_energy)
+    {
+        'name': 'charge_scan',
+        'type': 'batch',
+        'structure_from': 'relax',    # ← all sub-calcs use relaxed structure
+        'base_incar': {
+            'encut': 520,
+            'ediff': 1e-6,
+            'ismear': 0,
+            'sigma': 0.05,
+            'ibrion': -1,
+            'nsw': 0,
+            'prec': 'Accurate',
+            'lreal': 'Auto',
+        },
+        'calculations': {
+            'neutral': {},                              # base INCAR as-is
+            'plus1':   {'incar': {'nelect': 47}},       # +1 charge (one fewer e)
+            'minus1':  {'incar': {'nelect': 49}},       # -1 charge (one more e)
+        },
+        'kpoints_spacing': 0.03,
+    },
+
+    # ── Stage 5: bader (bader) ──────────────────────────────────────────
+    # Bader charge analysis on the SCF stage.
+    # Connects: charge_files ← scf.retrieved (needs AECCAR0, AECCAR2, CHGCAR)
+    #           structure    ← scf.structure
+    #
+    # The port system validates:
+    #   ✓ 'scf' is type 'vasp' (compatible_bricks check)
+    #   ✓ 'scf' has laechg=True in INCAR (prerequisites check)
+    #   ✓ 'scf' retrieves AECCAR0, AECCAR2, CHGCAR, OUTCAR (prerequisites check)
+    #
+    # Produces: charges (Dict with per-atom Bader charges)
+    {
+        'name': 'bader',
+        'type': 'bader',
+        'charge_from': 'scf',        # ← must point to a vasp stage with LAECHG
+    },
+]
+
+
+# ── Submit ──────────────────────────────────────────────────────────────
+
+if __name__ == '__main__':
+    result = quick_vasp_sequential(
+        structure=structure,
+        stages=stages,
+        code_label=code_label,
+        potential_family=potential_family,
+        potential_mapping=potential_mapping,
+        options=options,
+        name='sno2_full_pipeline',
+    )
+
+    print(f"\nWorkGraph PK: {result['__workgraph_pk__']}")
+    print(f"Stage names:  {result['__stage_names__']}")
+    print(f"Stage types:  {result['__stage_types__']}")
+    print()
+    print("Connection map:")
+    print("  relax ──structure──► scf ──structure──► dos")
+    print("    │                   │")
+    print("    │                   ├──retrieved──► bader")
+    print("    │                   │")
+    print("    │                   └──structure──► charge_scan")
+    print("    └──(chain)──► scf")
+    print()
+    print(f"Monitor: verdi process show {result['__workgraph_pk__']}")
+    print()
+    print("After completion:")
+    print("  from teros.core.lego import print_sequential_results")
+    print(f"  print_sequential_results({result})")
+```
+
+### What the port system validates in this example
+
+| Check | Stage | What it catches |
+|-------|-------|----------------|
+| Type match | `dos.structure_from='relax'` | `relax` (vasp) produces `structure` ✓ |
+| Type rejection | If user wrote `dos.structure_from='dos'` | "Stage 'dos' doesn't produce a 'structure' output. Stages that produce 'structure': ['relax', 'scf']" |
+| Compatible bricks | `bader.charge_from='scf'` | `scf` is type `vasp` ✓ |
+| Brick rejection | If user wrote `bader.charge_from='dos'` | "Input 'charge_files' is only compatible with bricks: ['vasp'], but 'dos' is type 'dos'" |
+| Prerequisites | `bader.charge_from='scf'` | Checks `scf` has `laechg: True` and retrieves AECCAR files ✓ |
+| Prerequisite failure | If user forgot `laechg: True` in scf | "Stage 'scf' is missing required INCAR: laechg=True (needed for Bader AECCAR files)" |
+| Conditional warning | `charge_scan.structure_from='relax'` | `relax` has `nsw=100` → real relaxation ✓ (no warning) |
+| Conditional warning | If user wrote `batch.structure_from='scf'` | "Warning: Stage 'scf' has nsw=0 (static). Its 'structure' output may not be meaningful." |
