@@ -499,6 +499,167 @@ graph LR
 
 ---
 
+## Review: Bugs and Blind Spots
+
+Cross-referencing the plan against the actual brick implementations
+(`bricks/vasp.py`, `bricks/dos.py`, `bricks/batch.py`, `bricks/bader.py`,
+`bricks/convergence.py`, `bricks/__init__.py`) reveals the following issues
+that must be addressed during implementation.
+
+### Critical (will cause incorrect behavior)
+
+**1. `resolve_structure_from()` contradicts "no pass-through" decision.**
+
+`bricks/__init__.py:60-64` currently does this:
+
+```python
+if ref_stage_type in ('dos', 'batch', 'bader', 'convergence'):
+    return stage_tasks[structure_from]['structure']  # returns their INPUT structure
+```
+
+This silently passes through the input structure of non-VASP bricks. So
+`structure_from='dos'` works today — it returns the structure that DOS received.
+But decision #4 says this should be an error. If the new port validation rejects
+`structure_from='dos'` but `resolve_structure_from()` still accepts it, the two
+systems conflict. **Fix:** refactor `resolve_structure_from()` in Phase 3 to
+also check PORTS, or remove the pass-through branch and let it fail.
+
+**2. `source: 'auto'` skips all port validation for VASP structure input.**
+
+The `validate_connections()` pseudocode (line 214) does `continue` when
+`source == 'auto'`. This means the most common connection in any pipeline
+(VASP structure chaining) is never validated by the port system. The `auto`
+resolution in `vasp.py:112-129` handles `'previous'`, `'input'`, explicit
+stage names, and the first-stage special case. Errors like
+`structure_from='nonexistent_stage'` would only be caught by the existing
+`validate_stage()`, not by the new system.
+
+**Fix:** split VASP's structure input into two cases:
+- When `structure_from` is present in the stage config → validate as
+  `source: 'structure_from'` (same as DOS/batch)
+- When it's absent → `source: 'auto'` means "previous stage's structure
+  output or initial input" — validate that the previous stage has a
+  `structure` output (or that it's the first stage)
+
+**3. `restart` resolution hard-codes `['vasp']` access.**
+
+`vasp.py:147` does:
+```python
+restart_folder = stage_tasks[restart]['vasp'].outputs.remote_folder
+```
+
+If someone sets `restart: 'dos_stage'`, this crashes with a KeyError rather
+than a helpful error. The port system declares `restart_folder` with
+`source: 'restart'` and `type: 'remote_folder'`, but the validation
+pseudocode doesn't check this properly — it only checks that the source
+stage exists and has matching output types. The actual resolution still
+bypasses port declarations. **Fix:** `validate_connections()` must also
+verify that the `restart` source stage has a `remote_folder` output.
+
+**4. Multiple inputs from the same `source` field (bader `charge_from`).**
+
+Bader declares both `charge_files` (type: `retrieved`) and `structure`
+(type: `structure`) with `source: 'charge_from'`. A single config field
+resolves to two different output types from the same stage. The validation
+pseudocode iterates over ports individually and checks one type per port,
+which works — but it checks `type` against all outputs of the source stage,
+not specifically. What it misses: it should verify that the source stage
+has BOTH `retrieved` AND `structure` outputs, not just one or the other.
+
+**Fix:** the validation loop already handles this because it checks each
+input port independently. If the source stage has `retrieved` but not
+`structure`, the second check fails. This actually works correctly — just
+needs a test to confirm.
+
+### Medium (incorrect/incomplete port declarations)
+
+**5. DOS PORTS is missing 4 outputs.**
+
+The actual `dos.py:expose_stage_outputs()` exposes 8 outputs, but DOS_PORTS
+only declares 5. Missing from PORTS:
+- `scf_remote` (type: `remote_folder`)
+- `scf_retrieved` (type: `retrieved`)
+- `dos_remote` (type: `remote_folder`)
+- `dos_retrieved` (type: `retrieved`)
+
+A future brick wanting to post-process DOSCAR from the DOS retrieved files
+couldn't validate through the port system. **Fix:** add all 8 outputs to
+DOS_PORTS.
+
+**6. Bader PORTS inconsistency between sections.**
+
+The PORTS in the "Proposed Architecture" section (line 129) only declares
+`charges` as output. The full PORTS in the example section (line 647) adds
+`acf`, `bcf`, `avf`. **Fix:** make the early section match the full version.
+
+**7. Convergence brick has no PORTS declaration.**
+
+The plan covers `vasp`, `dos`, `batch`, and `bader` but never shows
+convergence PORTS. It has unique behavior:
+- `structure_from` is **optional** (falls back to initial structure)
+- Produces: `cutoff_analysis`, `kpoints_analysis`, `recommendations`
+  (all type `convergence` or `dict`)
+- Does not produce a structure output
+
+**Fix:** add CONVERGENCE_PORTS to the reference section.
+
+**8. Batch `{label}` template outputs break validation.**
+
+`validate_connections()` registers outputs as:
+```python
+available_outputs[stage['name']] = {
+    name: port['type'] for name, port in ports['outputs'].items()
+}
+```
+
+For batch, this registers literal keys like `'{label}_energy'`. A downstream
+stage checking for output type `energy` would never match
+`'{label}_energy'`. The `per_calculation: True` template outputs need
+special handling during registration — either expand them against the
+stage's `calculations` dict, or use a flag to indicate "this stage
+produces outputs of type X but with dynamic names."
+
+**Fix:** during output registration, if a port has `per_calculation: True`,
+register the base type (e.g., `energy`) as available, or expand the
+templates against the actual `calculations` keys.
+
+### Low (design gaps to clarify)
+
+**9. `conditional: 'nsw > 0'` evaluation mechanism undefined.**
+
+The plan puts `'conditional': 'nsw > 0'` but never defines how it's
+evaluated. It needs to:
+- Look up the stage's `incar` dict
+- Check if `nsw` exists and its value
+- Handle missing keys (VASP defaults `nsw` to 0)
+
+**Fix:** define a simple evaluator: `conditional` is a dict
+`{'incar_key': 'nsw', 'operator': '>', 'value': 0}` or a callable.
+Avoid string `eval()`.
+
+**10. `get_compatible_bricks('dos')` may return empty list.**
+
+With no pass-through and no current bricks requiring `dos_data` or
+`projectors` as inputs, `get_compatible_bricks('dos')` returns `[]`.
+Technically correct, but surprising. **Fix:** document this behavior, or
+make `get_compatible_bricks()` also list bricks with no required inputs
+(which could follow any stage).
+
+**11. Prerequisites validation needs access to full stage configs.**
+
+The pseudocode only stores `available_outputs` (port types per stage name).
+Prerequisites checking needs the upstream stage's `incar` and `retrieve`
+from its raw config dict. **Fix:** maintain a parallel `stage_configs` dict
+during validation:
+```python
+stage_configs = {}  # stage_name -> raw stage dict
+for stage in stages:
+    ...
+    stage_configs[stage['name']] = stage
+```
+
+---
+
 ## Summary
 
 The core change is adding **declarative port metadata** to each brick module. This enables:
