@@ -8,6 +8,8 @@ from aiida.common.links import LinkType
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
 
+from .connections import DOS_PORTS as PORTS
+
 
 def validate_stage(stage: dict, stage_names: set) -> None:
     """Validate a DOS stage configuration.
@@ -170,68 +172,46 @@ def expose_stage_outputs(wg, stage_name, stage_tasks_result):
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
-
-    Returns:
-        List of output attribute names exposed on the WorkGraph.
     """
     bands_task = stage_tasks_result['bands_task']
-    output_names = []
 
     # Expose BandsWorkChain outputs (optional)
     try:
-        name = f'{stage_name}_dos'
-        setattr(wg.outputs, name, bands_task.outputs.dos)
-        output_names.append(name)
+        setattr(wg.outputs, f'{stage_name}_dos', bands_task.outputs.dos)
     except AttributeError:
         pass
     try:
-        name = f'{stage_name}_projectors'
-        setattr(wg.outputs, name, bands_task.outputs.projectors)
-        output_names.append(name)
+        setattr(wg.outputs, f'{stage_name}_projectors', bands_task.outputs.projectors)
     except AttributeError:
         pass
 
     # Expose internal SCF workchain outputs
     try:
-        name = f'{stage_name}_scf_misc'
-        setattr(wg.outputs, name, bands_task.outputs.scf_misc)
-        output_names.append(name)
+        setattr(wg.outputs, f'{stage_name}_scf_misc', bands_task.outputs.scf_misc)
     except AttributeError:
         pass
     try:
-        name = f'{stage_name}_scf_remote'
-        setattr(wg.outputs, name, bands_task.outputs.scf_remote_folder)
-        output_names.append(name)
+        setattr(wg.outputs, f'{stage_name}_scf_remote', bands_task.outputs.scf_remote_folder)
     except AttributeError:
         pass
     try:
-        name = f'{stage_name}_scf_retrieved'
-        setattr(wg.outputs, name, bands_task.outputs.scf_retrieved)
-        output_names.append(name)
+        setattr(wg.outputs, f'{stage_name}_scf_retrieved', bands_task.outputs.scf_retrieved)
     except AttributeError:
         pass
 
     # Expose internal DOS workchain outputs
     try:
-        name = f'{stage_name}_dos_misc'
-        setattr(wg.outputs, name, bands_task.outputs.dos_misc)
-        output_names.append(name)
+        setattr(wg.outputs, f'{stage_name}_dos_misc', bands_task.outputs.dos_misc)
     except AttributeError:
         pass
     try:
-        name = f'{stage_name}_dos_remote'
-        setattr(wg.outputs, name, bands_task.outputs.dos_remote_folder)
-        output_names.append(name)
+        setattr(wg.outputs, f'{stage_name}_dos_remote', bands_task.outputs.dos_remote_folder)
     except AttributeError:
         pass
     try:
-        name = f'{stage_name}_dos_retrieved'
-        setattr(wg.outputs, name, bands_task.outputs.dos_retrieved)
-        output_names.append(name)
+        setattr(wg.outputs, f'{stage_name}_dos_retrieved', bands_task.outputs.dos_retrieved)
     except AttributeError:
         pass
-
-    return output_names
 
 
 def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:

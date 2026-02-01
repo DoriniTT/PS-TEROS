@@ -11,6 +11,7 @@ Stage types are implemented as "bricks" (see bricks/ subdirectory):
 - dos: DOS calculations via BandsWorkChain
 - batch: Multiple parallel VASP calculations with varying parameters
 - bader: Bader charge analysis
+- convergence: ENCUT and k-points convergence testing
 
 Example usage:
 
@@ -188,7 +189,6 @@ from .results import (
     get_sequential_results,
     get_stage_results,
     print_sequential_results,
-    print_stage_outputs_summary,
 )
 from .utils import (
     get_status,
@@ -219,7 +219,6 @@ __all__ = [
     'get_sequential_results',
     'get_stage_results',
     'print_sequential_results',
-    'print_stage_outputs_summary',
     # Utilities
     'get_status',
     'export_files',

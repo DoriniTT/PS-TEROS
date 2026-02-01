@@ -8,6 +8,7 @@ from aiida.common.links import LinkType
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
 
+from .connections import VASP_PORTS as PORTS
 from ..tasks import extract_energy, compute_dynamics
 
 
@@ -243,36 +244,15 @@ def expose_stage_outputs(wg, stage_name, stage_tasks_result):
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
-
-    Returns:
-        List of output attribute names exposed on the WorkGraph.
     """
     vasp_task = stage_tasks_result['vasp']
     energy_task = stage_tasks_result['energy']
 
-    output_names = []
-
-    name = f'{stage_name}_energy'
-    setattr(wg.outputs, name, energy_task.outputs.result)
-    output_names.append(name)
-
-    name = f'{stage_name}_structure'
-    setattr(wg.outputs, name, vasp_task.outputs.structure)
-    output_names.append(name)
-
-    name = f'{stage_name}_misc'
-    setattr(wg.outputs, name, vasp_task.outputs.misc)
-    output_names.append(name)
-
-    name = f'{stage_name}_remote'
-    setattr(wg.outputs, name, vasp_task.outputs.remote_folder)
-    output_names.append(name)
-
-    name = f'{stage_name}_retrieved'
-    setattr(wg.outputs, name, vasp_task.outputs.retrieved)
-    output_names.append(name)
-
-    return output_names
+    setattr(wg.outputs, f'{stage_name}_energy', energy_task.outputs.result)
+    setattr(wg.outputs, f'{stage_name}_structure', vasp_task.outputs.structure)
+    setattr(wg.outputs, f'{stage_name}_misc', vasp_task.outputs.misc)
+    setattr(wg.outputs, f'{stage_name}_remote', vasp_task.outputs.remote_folder)
+    setattr(wg.outputs, f'{stage_name}_retrieved', vasp_task.outputs.retrieved)
 
 
 def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:

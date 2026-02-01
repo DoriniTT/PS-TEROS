@@ -487,7 +487,7 @@ def _validate_stages(stages: t.List[dict]) -> None:
     Raises:
         ValueError: If validation fails
     """
-    from .bricks import get_brick_module, VALID_BRICK_TYPES
+    from .bricks import get_brick_module, VALID_BRICK_TYPES, validate_connections
 
     if not stages:
         raise ValueError("stages list cannot be empty")
@@ -513,6 +513,9 @@ def _validate_stages(stages: t.List[dict]) -> None:
         # Delegate type-specific validation to brick module
         brick = get_brick_module(stage_type)
         brick.validate_stage(stage, stage_names)
+
+    # Validate inter-stage connections (port types, prerequisites, etc.)
+    validate_connections(stages)
 
 
 def quick_vasp_sequential(
@@ -556,10 +559,8 @@ def quick_vasp_sequential(
         Dict with:
             - __workgraph_pk__: WorkGraph PK
             - __stage_names__: List of stage names in order
-            - __stage_types__: Dict mapping stage names to types ('vasp', 'dos', 'batch', or 'bader')
-            - __stage_outputs__: Dict mapping stage names to lists of exposed output
-              attribute names (e.g., {'relax_rough': ['relax_rough_energy',
-              'relax_rough_structure', 'relax_rough_misc', ...]})
+            - __stage_types__: Dict mapping stage names to types
+              ('vasp', 'dos', 'batch', 'bader', or 'convergence')
             - <stage_name>: WorkGraph PK (for each stage)
 
     Stage Configuration (VASP stages, type='vasp' or omitted):
@@ -691,8 +692,7 @@ def quick_vasp_sequential(
     # Track structures and remote folders across stages
     stage_tasks = {}  # name -> {'vasp': task, 'energy': task, 'supercell': task, ...}
     stage_names = []  # Ordered list
-    stage_types = {}  # name -> 'vasp', 'dos', 'batch', or 'bader'
-    stage_outputs = {}  # name -> [output_attr_names]
+    stage_types = {}  # name -> 'vasp', 'dos', 'batch', 'bader', or 'convergence'
 
     for i, stage in enumerate(stages):
         stage_name = stage['name']
@@ -722,8 +722,7 @@ def quick_vasp_sequential(
         brick = get_brick_module(stage_type)
         tasks_result = brick.create_stage_tasks(wg, stage, stage_name, context)
         stage_tasks[stage_name] = tasks_result
-        output_names = brick.expose_stage_outputs(wg, stage_name, tasks_result)
-        stage_outputs[stage_name] = output_names
+        brick.expose_stage_outputs(wg, stage_name, tasks_result)
 
     # Submit
     wg.submit()
@@ -737,7 +736,6 @@ def quick_vasp_sequential(
         '__workgraph_pk__': wg.pk,
         '__stage_names__': stage_names,
         '__stage_types__': stage_types,
-        '__stage_outputs__': stage_outputs,
         **{name: wg.pk for name in stage_names},
     }
 

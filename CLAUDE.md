@@ -193,25 +193,67 @@ teros/core/lego/
 ├── utils.py            # get_status, export_files, list_calculations
 └── bricks/             # Stage type implementations
     ├── __init__.py     # BRICK_REGISTRY, get_brick_module(), resolve_structure_from()
+    ├── connections.py  # Port declarations, validate_connections() (pure Python)
     ├── vasp.py         # Standard VASP stages (relaxation, SCF, etc.)
     ├── dos.py          # DOS stages via BandsWorkChain
     ├── batch.py        # Parallel VASP calculations with varying parameters
-    └── bader.py        # Bader charge analysis
+    ├── bader.py        # Bader charge analysis
+    └── convergence.py  # ENCUT/k-points convergence testing
 ```
+
+### Philosophy
+
+The lego system treats computational stages as **physical Lego bricks**. Each brick has **studs** (outputs) and **sockets** (inputs) with specific shapes -- you can only snap together pieces that fit. VASP is the "joker brick": it produces every output type (structure, energy, remote folder, retrieved files), so any brick can connect to it. Specialized bricks (DOS, bader, batch, convergence) produce only their domain-specific outputs and cannot serve as structure sources.
+
+Three core principles:
+
+1. **Explicit connections.** Every input declares where its data comes from (`structure_from`, `charge_from`, `restart`). No implicit or magical data flows.
+2. **Fail early with helpful errors.** `validate_connections()` runs before any AiiDA submission. Incompatible wiring (e.g., DOS to bader) gives a clear error naming the problem and suggesting which stages can provide what you need.
+3. **Pure Python metadata.** All port declarations and validation logic live in `connections.py` with zero AiiDA imports, enabling tier1 testing.
 
 ### Brick Interface Contract
 
-Each brick module in `bricks/` exports exactly 5 functions:
+Each brick module in `bricks/` exports a `PORTS` dict plus 5 functions:
 
 ```python
-def validate_stage(stage, stage_names) -> None: ...
-def create_stage_tasks(wg, stage, stage_name, context) -> dict: ...
-def expose_stage_outputs(wg, stage_name, stage_tasks_result) -> list[str]: ...
-def get_stage_results(wg_node, wg_pk, stage_name) -> dict: ...
-def print_stage_results(index, stage_name, stage_result) -> None: ...
+PORTS                    # From connections.py (e.g., VASP_PORTS as PORTS)
+validate_stage()         # Brick-specific config validation
+create_stage_tasks()     # Build WorkGraph tasks
+expose_stage_outputs()   # Wire up WorkGraph outputs
+get_stage_results()      # Extract results from completed WorkGraph
+print_stage_results()    # Format results for display
 ```
 
-`expose_stage_outputs` returns a list of output attribute names it created on the WorkGraph (e.g., `['relax_energy', 'relax_structure', 'relax_misc', ...]`). These are collected into the `__stage_outputs__` key of the return dict.
+### Port System (`connections.py`)
+
+Each brick declares a `PORTS` dict with typed inputs and outputs. The `connections.py` module is **pure Python** (no AiiDA dependency) so it can be imported in tier1 tests.
+
+```python
+from teros.core.lego.bricks.connections import (
+    validate_connections,    # Validate all inter-stage connections
+    get_brick_info,          # Inspect a brick's PORTS
+    ALL_PORTS,               # Registry of all PORTS dicts
+    PORT_TYPES,              # Set of recognized port type strings
+)
+```
+
+**Port types:** `structure`, `energy`, `misc`, `remote_folder`, `retrieved`, `dos_data`, `projectors`, `bader_charges`, `trajectory`, `convergence`, `file`
+
+**Source resolution modes:**
+- `'auto'` -- VASP structure: first stage uses initial, then `'previous'`/`'input'`/explicit stage name
+- `'structure_from'` -- reads `stage['structure_from']` (DOS, batch, convergence)
+- `'charge_from'` -- reads `stage['charge_from']` (bader)
+- `'restart'` -- reads `stage['restart']` (VASP restart folder)
+
+### Connection Validation
+
+`validate_connections(stages)` runs automatically before submission (called from `_validate_stages()`). It checks:
+
+1. **Port type compatibility** -- referenced stage must produce the needed type
+2. **Brick compatibility** -- `compatible_bricks` constraint (e.g., bader only from vasp)
+3. **Prerequisites** -- upstream INCAR/retrieve requirements (e.g., bader needs `laechg: True`)
+4. **Conditional outputs** -- warns when referencing a static stage's structure (nsw=0)
+5. **Stage ordering** -- forward references are rejected
 
 ### Key Functions
 
@@ -225,8 +267,7 @@ def print_stage_results(index, stage_name, stage_result) -> None: ...
 | `get_results(pk)` | Extract results from single calc |
 | `get_sequential_results(result)` | Extract all stage results |
 | `get_stage_results(result, name)` | Extract one stage's results |
-| `print_sequential_results(result)` | Print formatted results with per-stage outputs |
-| `print_stage_outputs_summary(result)` | Print which outputs belong to each stage |
+| `print_sequential_results(result)` | Print formatted results |
 
 ### quick_vasp_sequential Usage
 
@@ -270,33 +311,36 @@ result = quick_vasp_sequential(
     '__workgraph_pk__': 12345,
     '__stage_names__': ['relax_rough', 'relax_fine'],
     '__stage_types__': {'relax_rough': 'vasp', 'relax_fine': 'vasp'},
-    '__stage_outputs__': {
-        'relax_rough': ['relax_rough_energy', 'relax_rough_structure',
-                        'relax_rough_misc', 'relax_rough_remote',
-                        'relax_rough_retrieved'],
-        'relax_fine':  ['relax_fine_energy', 'relax_fine_structure',
-                        'relax_fine_misc', 'relax_fine_remote',
-                        'relax_fine_retrieved'],
-    },
     'relax_rough': 12345,
     'relax_fine': 12345,
 }
 ```
 
-### Stage Types
+### Brick Types
+
+| Brick | Purpose | Key Config Fields |
+|-------|---------|-------------------|
+| `vasp` (default) | VASP relaxation/SCF | `incar`, `restart`, `structure_from` |
+| `dos` | DOS via BandsWorkChain | `scf_incar`, `dos_incar`, `structure_from` |
+| `batch` | Parallel VASP with varying params | `base_incar`, `calculations`, `structure_from` |
+| `bader` | Bader charge analysis | `charge_from` |
+| `convergence` | ENCUT/k-points convergence | `conv_settings`, `structure_from` (optional) |
+
+### Stage Outputs per Brick
 
 | Type | Key Outputs per Stage | Notes |
 |------|----------------------|-------|
-| `vasp` (default) | `energy`, `structure`, `misc`, `remote`, `retrieved` | Standard VASP calculation |
+| `vasp` | `energy`, `structure`, `misc`, `remote`, `retrieved` | Standard VASP calculation |
 | `dos` | `dos`, `projectors`, `scf_misc`, `scf_remote`, `scf_retrieved`, `dos_misc`, `dos_remote`, `dos_retrieved` | Uses BandsWorkChain; some outputs optional |
 | `batch` | `{calc_label}_energy`, `{calc_label}_misc`, `{calc_label}_remote`, `{calc_label}_retrieved` per calculation | Multiple parallel calcs |
 | `bader` | `charges`, `acf`, `bcf`, `avf` | Bader charge analysis |
+| `convergence` | `cutoff_conv_data`, `kpoints_conv_data`, `cutoff_analysis`, `kpoints_analysis`, `recommendations` | Convergence testing |
 
 All output names are prefixed with the stage name: `{stage_name}_{output}`.
 
 ### WorkGraph Output Namespaces (Limitation)
 
-WorkGraph does **not** support nested output namespaces. All outputs appear flat in `verdi process show`. The `__stage_outputs__` mapping in the return dict provides programmatic grouping. Use `print_stage_outputs_summary(result)` to see outputs organized by stage.
+WorkGraph does **not** support nested output namespaces. All outputs appear flat in `verdi process show`. Use `get_brick_info(brick_type)` from `connections.py` to see what outputs each brick produces.
 
 ## VASP Integration
 

@@ -808,7 +808,6 @@ def print_sequential_results(sequential_result: dict) -> None:
     wg_pk = sequential_result['__workgraph_pk__']
     stage_names = sequential_result.get('__stage_names__', [])
     stage_types = sequential_result.get('__stage_types__', {})
-    stage_outputs = sequential_result.get('__stage_outputs__', {})
     status = get_status(wg_pk)
 
     print(f"Sequential VASP Calculation - WorkGraph PK {wg_pk}")
@@ -830,54 +829,4 @@ def print_sequential_results(sequential_result: dict) -> None:
         brick = get_brick_module(stage_type)
         brick.print_stage_results(i, stage_name, stage_result)
 
-        # Show exposed output names for this stage
-        if stage_name in stage_outputs and stage_outputs[stage_name]:
-            output_list = stage_outputs[stage_name]
-            print(f"      Outputs: {', '.join(output_list)}")
-
-        print()
-
-
-def print_stage_outputs_summary(sequential_result: dict) -> None:
-    """
-    Print a summary of all exposed outputs organized by stage.
-
-    Useful for quickly seeing which outputs are available on the WorkGraph
-    for each stage without extracting the actual values.
-
-    Args:
-        sequential_result: Return value from quick_vasp_sequential
-
-    Example:
-        >>> result = quick_vasp_sequential(structure=s, stages=stages, ...)
-        >>> print_stage_outputs_summary(result)
-        Stage outputs for WorkGraph PK 12345:
-          [1] relax_rough (vasp):
-              - relax_rough_energy
-              - relax_rough_structure
-              - relax_rough_misc
-              - relax_rough_remote
-              - relax_rough_retrieved
-          [2] dos_calc (dos):
-              - dos_calc_dos
-              - dos_calc_projectors
-              ...
-    """
-    wg_pk = sequential_result['__workgraph_pk__']
-    stage_names = sequential_result.get('__stage_names__', [])
-    stage_types = sequential_result.get('__stage_types__', {})
-    stage_outputs = sequential_result.get('__stage_outputs__', {})
-
-    print(f"Stage outputs for WorkGraph PK {wg_pk}:")
-
-    for i, stage_name in enumerate(stage_names, 1):
-        stage_type = stage_types.get(stage_name, 'vasp')
-        output_list = stage_outputs.get(stage_name, [])
-
-        print(f"  [{i}] {stage_name} ({stage_type}):")
-        if output_list:
-            for out_name in output_list:
-                print(f"      - {out_name}")
-        else:
-            print("      (no outputs)")
         print()
