@@ -165,7 +165,20 @@ teros/core/
 ├── custom_calculation/       # Generic VASP calculations
 ├── surface_energy/           # Metal/intermetallic surface energy
 ├── surface_hydroxylation/    # OH/vacancy studies
-└── builders/                 # Pre-configured parameter sets (Ag2O, Ag3PO4, etc.)
+├── builders/                 # Pre-configured parameter sets (Ag2O, Ag3PO4, etc.)
+└── lego/                     # Multi-stage sequential workflow builder
+    ├── workgraph.py          # quick_vasp_sequential(), _validate_stages()
+    ├── tasks.py              # extract_energy, compute_dynamics calcfunctions
+    ├── results.py            # Result extraction from completed WorkGraphs
+    ├── utils.py              # Lego-specific helpers
+    └── bricks/               # Modular brick system
+        ├── __init__.py       # BRICK_REGISTRY, get_brick_module(), re-exports
+        ├── connections.py    # PORTS dicts, PORT_TYPES, validate_connections() (pure Python)
+        ├── vasp.py           # VASP brick (relaxation, SCF, etc.)
+        ├── dos.py            # DOS brick (BandsWorkChain wrapper)
+        ├── batch.py          # Batch brick (parallel VASP with varying params)
+        ├── bader.py          # Bader brick (charge analysis)
+        └── convergence.py    # Convergence brick (ENCUT/k-points testing)
 ```
 
 **Submodule pattern:**
@@ -175,6 +188,123 @@ module_name/
 ├── workgraph.py        # Main WorkGraph builder
 ├── tasks.py            # @task.calcfunction helpers
 └── utils.py            # Pure Python utilities (optional)
+```
+
+## Lego Module (Multi-Stage Sequential Workflows)
+
+The lego module (`teros.core.lego`) builds multi-stage sequential VASP workflows. Each stage is a "brick" that connects to other bricks through typed ports.
+
+### Brick Types
+
+| Brick | Purpose | Key Config Fields |
+|-------|---------|-------------------|
+| `vasp` | VASP relaxation/SCF (default type) | `incar`, `restart`, `structure_from` |
+| `dos` | DOS via BandsWorkChain | `scf_incar`, `dos_incar`, `structure_from` |
+| `batch` | Parallel VASP with varying params | `base_incar`, `calculations`, `structure_from` |
+| `bader` | Bader charge analysis | `charge_from` |
+| `convergence` | ENCUT/k-points convergence | `conv_settings`, `structure_from` (optional) |
+
+### Port System (`connections.py`)
+
+Each brick declares a `PORTS` dict with typed inputs and outputs. The `connections.py` module is **pure Python** (no AiiDA dependency) so it can be imported in tier1 tests.
+
+```python
+from teros.core.lego.bricks.connections import (
+    validate_connections,    # Validate all inter-stage connections
+    get_brick_info,          # Inspect a brick's PORTS
+    ALL_PORTS,               # Registry of all PORTS dicts
+    PORT_TYPES,              # Set of recognized port type strings
+)
+```
+
+**Port types:** `structure`, `energy`, `misc`, `remote_folder`, `retrieved`, `dos_data`, `projectors`, `bader_charges`, `trajectory`, `convergence`, `file`
+
+### PORTS Declaration Pattern
+
+```python
+# In connections.py — each brick has a *_PORTS dict:
+VASP_PORTS = {
+    'inputs': {
+        'structure': {
+            'type': 'structure',       # Must be in PORT_TYPES
+            'required': True,
+            'source': 'auto',          # How the connection is resolved
+            'description': '...',
+        },
+        'restart_folder': {
+            'type': 'remote_folder',
+            'required': False,
+            'source': 'restart',       # Reads from stage['restart']
+        },
+    },
+    'outputs': {
+        'structure': {
+            'type': 'structure',
+            'conditional': {'incar_key': 'nsw', 'operator': '>', 'value': 0},
+        },
+        'energy': {'type': 'energy'},
+        'misc': {'type': 'misc'},
+        'remote_folder': {'type': 'remote_folder'},
+        'retrieved': {'type': 'retrieved'},
+    },
+}
+```
+
+**Source resolution modes:**
+- `'auto'` — VASP structure: first stage uses initial, then `'previous'`/`'input'`/explicit stage name
+- `'structure_from'` — reads `stage['structure_from']` (DOS, batch, convergence)
+- `'charge_from'` — reads `stage['charge_from']` (bader)
+- `'restart'` — reads `stage['restart']` (VASP restart folder)
+
+### Connection Validation
+
+`validate_connections(stages)` runs automatically before submission (called from `_validate_stages()`). It checks:
+
+1. **Port type compatibility** — referenced stage must produce the needed type
+2. **Brick compatibility** — `compatible_bricks` constraint (e.g., bader only from vasp)
+3. **Prerequisites** — upstream INCAR/retrieve requirements (e.g., bader needs `laechg: True`)
+4. **Conditional outputs** — warns when referencing a static stage's structure (nsw=0)
+5. **Stage ordering** — forward references are rejected
+
+```python
+# Returns warnings, raises ValueError on errors
+warnings = validate_connections(stages)
+```
+
+### Stage Configuration (Three Sections)
+
+Each stage dict follows the pattern: **identity** / **connections** / **configuration**:
+
+```python
+stages = [
+    # ── Identity ──────── Connections ────── Configuration ──────
+    {'name': 'relax',      'restart': None,   'incar': {'nsw': 100, 'isif': 3, 'encut': 520}},
+    {'name': 'scf',        'restart': 'relax', 'incar': {'nsw': 0, 'laechg': True, 'lcharg': True},
+                                                'retrieve': ['AECCAR0', 'AECCAR2', 'CHGCAR', 'OUTCAR']},
+    {'name': 'dos', 'type': 'dos',
+                           'structure_from': 'relax',
+                                                'scf_incar': {'encut': 520}, 'dos_incar': {'nedos': 2000}},
+    {'name': 'bader', 'type': 'bader',
+                           'charge_from': 'scf'},
+]
+```
+
+### Key Design Decisions
+
+- **No pass-through:** `structure_from='dos'` raises an error — DOS doesn't produce structures. Point to a VASP stage instead.
+- **Separate field names:** kept `structure_from`, `charge_from`, `restart` (not a unified `connect` dict)
+- **Conditional warnings:** referencing a static stage's structure warns but doesn't error
+- **Pure Python validation:** `connections.py` has zero AiiDA imports, enabling tier1 testing
+
+### Each Brick Module Exports
+
+```python
+PORTS                    # From connections.py (e.g., VASP_PORTS as PORTS)
+validate_stage()         # Brick-specific config validation
+create_stage_tasks()     # Build WorkGraph tasks
+expose_stage_outputs()   # Wire up WorkGraph outputs
+get_stage_results()      # Extract results from completed WorkGraph
+print_stage_results()    # Format results for display
 ```
 
 ## VASP Integration
