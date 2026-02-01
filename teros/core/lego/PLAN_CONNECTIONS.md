@@ -426,42 +426,35 @@ graph LR
 
 ---
 
-## Open Questions
+## Design Decisions (Resolved)
 
-1. **Should port declarations be a dict or a class?**
-   - Dict: simpler, consistent with the module-based (not class-based) brick pattern
-   - Class (e.g., `Port`, `InputPort`, `OutputPort`): more structured, IDE-friendly
-   - **Leaning toward:** Dict for now, can always wrap later
+1. **Port declarations: dicts (not classes).**
+   Consistent with the module-based (not class-based) brick pattern. Simple, no extra abstractions. Can always wrap in classes later if needed.
 
-2. **How to handle conditional outputs?**
-   - VASP `structure` output only exists when NSW > 0
-   - Options: (a) `conditional` field with a simple expression, (b) always declare it and handle missing gracefully, (c) separate "static vasp" and "relaxation vasp" brick types
-   - **Leaning toward:** (b) — declare it, but add `conditional` hint for docs/validation warnings
+2. **Conditional outputs:** Declare them with a `conditional` hint for documentation/warnings, but always include them in the port declaration. Handle missing outputs gracefully at runtime.
 
-3. **Should `structure_from` / `charge_from` / `restart` be unified into a single `connections` dict?**
-   - Current: each brick has its own field names (`structure_from`, `charge_from`)
-   - Unified alternative:
-     ```python
-     {
-         'name': 'charges',
-         'type': 'bader',
-         'connect': {
-             'charge_files': 'relax.retrieved',
-             'structure': 'relax.structure',
-         },
-     }
-     ```
-   - **Leaning toward:** Keep current field names for backward compatibility, but add optional `connect` dict as a more explicit alternative. The port system validates both styles.
+3. **Keep separate field names (`structure_from`, `charge_from`, `restart`).**
+   No unified `connect` dict. Each brick keeps its own familiar field names. The port system maps each field name to the corresponding input port internally via the `source` key, but the user-facing API stays as-is.
 
-4. **How to handle the "pass-through structure" pattern?**
-   - DOS doesn't modify structure, so if a later stage needs structure, it should look through DOS to its source
-   - Options: (a) explicit `structure` pass-through port, (b) `resolve_structure_from` walks the chain, (c) user must point to the original vasp stage
-   - **Leaning toward:** (c) — keep it explicit, the user writes `structure_from: 'relax'` not `structure_from: 'dos'`
+4. **No pass-through structures.** If a brick doesn't produce a `structure` output (like `dos`), the user must point to the stage that actually produced the structure. Writing `structure_from: 'dos'` is an error.
 
-5. **Port type strictness?**
-   - Should the system reject `structure_from: 'dos'` (since DOS has no structure output)?
-   - Or should it allow it and resolve the chain automatically?
-   - **Leaning toward:** Reject with a helpful message: "Stage 'dos' doesn't produce a structure. Did you mean 'relax'?"
+5. **Strict port type checking with helpful errors.** The system rejects invalid connections like `structure_from: 'dos'` with a clear message:
+   ```
+   Stage 'my_stage': 'structure_from=dos' references stage 'dos' (type: dos),
+   which doesn't produce a 'structure' output.
+   Stages that produce 'structure': ['relax'] (type: vasp)
+   ```
+
+## Remaining Open Questions
+
+1. **How to handle conditional outputs at validation time?**
+   - VASP `structure` output only exists when NSW > 0 (relaxation)
+   - Should validation warn if a downstream stage references `structure` from a static VASP stage?
+   - Or is this too much introspection into INCAR parameters?
+
+2. **Per-stage code/options overrides?**
+   - Some stages may need different VASP versions or resource allocations
+   - This is orthogonal to the port system but worth tracking
 
 ---
 
