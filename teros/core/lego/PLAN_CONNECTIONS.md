@@ -658,6 +658,153 @@ for stage in stages:
     stage_configs[stage['name']] = stage
 ```
 
+### Additional Issues (second review)
+
+**12. VASP brick has two hidden magic values for `structure_from`.**
+
+`vasp.py:42` and `vasp.py:112` support `structure_from='previous'`
+(default) and `structure_from='input'` as special strings. These are
+not stage names — they're keywords that mean "previous stage" and
+"the initial structure passed to quick_vasp_sequential()". The PORTS
+declaration uses `source: 'auto'` which supposedly covers this, but:
+
+- The `validate_connections()` pseudocode never validates `'auto'` at all
+- If it did, it would need to know about `'previous'` and `'input'` as
+  special values, not stage names
+- A downstream brick checking `available_outputs` for a stage with
+  `structure_from='input'` would not know the structure came from
+  outside the pipeline
+
+**Fix:** `auto` validation must handle these three sub-cases explicitly:
+(a) first stage → always valid (uses initial structure),
+(b) `structure_from` absent or `'previous'` → check previous stage has
+    `structure` output,
+(c) `structure_from` is a stage name → validate same as DOS/batch,
+(d) `structure_from='input'` → always valid (uses initial structure).
+
+**13. Bader structure resolution has its own NSW-aware logic.**
+
+`bader.py:76-86` already does its own conditional structure resolution:
+```python
+if charge_from_incar.get('nsw', 0) > 0:
+    stage_structure = charge_from_stage['vasp'].outputs.structure
+else:
+    stage_structure = charge_from_stage.get('input_structure', ...)
+```
+
+This is a form of "pass-through" — when `nsw=0`, bader uses the VASP
+stage's *input* structure instead of its output. The plan's conditional
+warning (decision #6) would warn about referencing a static stage's
+structure, but bader silently works around it. This means:
+
+- The port system would warn: "scf has nsw=0, structure may not be
+  meaningful" — but bader already handles this correctly
+- The warning would be a false alarm for bader specifically
+- Other bricks referencing `structure_from='scf'` should get the warning
+
+**Fix:** conditional warnings should be suppressed when the downstream
+brick is bader (since it has its own NSW-aware resolution). Or:
+the bader PORTS `structure` input could have a flag like
+`'handles_conditional': True` to silence the warning.
+
+**14. Proposed error message suggests wrong stages.**
+
+Validation table row "Output missing" says:
+```
+"Stage 'dos' has no 'structure' output. Try: 'relax', 'scf'"
+```
+
+But `scf` has `nsw=0`, so its structure output triggers a conditional
+warning. Suggesting `scf` as an alternative is misleading — the user
+would get a warning immediately after following the suggestion.
+
+**Fix:** the "Did you mean...?" suggestions should filter out stages
+whose relevant output is conditional-warned. Or at minimum, annotate:
+"Try: 'relax', 'scf' (warning: nsw=0)"
+
+**15. `compatible_bricks` on `charge_files` but not on `structure`.**
+
+Bader's `structure` input port (line 142-146) has `source: 'charge_from'`
+but no `compatible_bricks` constraint. The `charge_files` port (line 131)
+has `compatible_bricks: ['vasp']`. Both resolve from the same `charge_from`
+field, so if `charge_files` passes the brick compatibility check, `structure`
+will too. But if someone refactored to allow bader to get structure from a
+different stage than charge_files, the structure port would have no brick
+constraint of its own.
+
+This is not a bug today, but it's a latent inconsistency. **Fix:** either
+add `compatible_bricks: ['vasp']` to the structure port too, or document
+that both ports are coupled through the shared `charge_from` source and
+the check on one implicitly covers the other.
+
+**16. `PORT_TYPES` registry is declared but never used.**
+
+Lines 162-176 define a `PORT_TYPES` dict mapping type names to
+descriptions. But `validate_connections()` never references it — it only
+compares port `type` strings directly. If someone typos a type name
+in a PORTS declaration (e.g., `'retrived'` instead of `'retrieved'`),
+nothing catches it.
+
+**Fix:** `PORT_TYPES` should be used to validate that every port's
+`type` field is a recognized type. Add a check in Phase 1 when loading
+PORTS dicts:
+```python
+for port_name, port in brick.PORTS['outputs'].items():
+    if port['type'] not in PORT_TYPES:
+        raise ValueError(f"Unknown port type '{port['type']}' in {brick}.{port_name}")
+```
+
+**17. `validate_connections()` pseudocode has `ref_brick_type = ...` placeholder.**
+
+Line 247 in the pseudocode:
+```python
+ref_brick_type = ... # look up from stages
+```
+
+This is an unresolved placeholder. It needs to look up the referenced
+stage's `type` field from the stages list. Requires either the
+`stage_configs` dict from issue #11 or a `stage_types` dict:
+```python
+stage_types = {}  # stage_name -> brick type string
+for stage in stages:
+    stage_types[stage['name']] = stage.get('type', 'vasp')
+```
+
+**18. The topology diagram in the example docstring is wrong.**
+
+The docstring (line 862) shows:
+```
+relax ──structure──► scf ──structure──► dos
+```
+
+But `dos` has `structure_from: 'relax'`, not `structure_from: 'scf'`.
+The DOS stage gets its structure from `relax`, not from `scf`. The
+correct diagram should be:
+```
+relax ──structure──► scf ──retrieved──► bader
+  │
+  ├──structure──► dos
+  │
+  └──structure──► charge_scan
+```
+
+This matches the topology diagram at line 1123 but contradicts the
+docstring at line 862. The docstring is misleading — a user reading it
+would think DOS chains through SCF.
+
+**19. Implementation phases don't account for review issues ordering.**
+
+Phase 2 (validation refactor) depends on fixes from the review:
+- Issue #2 (auto validation) must be resolved before Phase 2 works
+- Issue #11 (stage_configs) must be resolved before prerequisites work
+- Issue #8 (batch templates) must be resolved before batch validation works
+
+Phase 3 (connection resolution refactor) depends on:
+- Issue #1 (resolve_structure_from contradiction)
+- Issue #3 (restart hard-coding)
+
+The phases should note which review issues are prerequisites for each.
+
 ---
 
 ## Summary
@@ -859,10 +1006,10 @@ Full pipeline: VASP -> DOS -> Batch -> Bader on SnO2 (rutile).
 
 Pipeline topology:
 
-  relax ──structure──► scf ──structure──► dos
-    │                   │
-    │                   ├──retrieved──► bader
-    │                   │
+  relax ──structure──► scf ──retrieved──► bader
+    │
+    ├──structure──────► dos
+    │
     └──structure──────► charge_scan
 
 Monitor:  verdi process show <PK>
