@@ -693,6 +693,8 @@ def quick_vasp_sequential(
     stage_tasks = {}  # name -> {'vasp': task, 'energy': task, 'supercell': task, ...}
     stage_names = []  # Ordered list
     stage_types = {}  # name -> 'vasp', 'dos', 'batch', 'bader', or 'convergence'
+    stage_namespaces = {}  # name -> namespace_map (e.g. {'main': 'stage1'})
+    stage_counter = 1  # Sequential namespace counter
 
     for i, stage in enumerate(stages):
         stage_name = stage['name']
@@ -722,7 +724,18 @@ def quick_vasp_sequential(
         brick = get_brick_module(stage_type)
         tasks_result = brick.create_stage_tasks(wg, stage, stage_name, context)
         stage_tasks[stage_name] = tasks_result
-        brick.expose_stage_outputs(wg, stage_name, tasks_result)
+
+        # Build namespace_map based on brick type
+        # DOS uses the same stage number — scf and dos are sub-namespaces
+        # of a single stage, not separate stages.
+        namespace_map = {'main': f'stage{stage_counter}'}
+        if stage_type == 'dos':
+            namespace_map['scf'] = f'stage{stage_counter}'
+            namespace_map['dos'] = f'stage{stage_counter}'
+        stage_counter += 1
+
+        stage_namespaces[stage_name] = namespace_map
+        brick.expose_stage_outputs(wg, stage_name, tasks_result, namespace_map)
 
     # Submit
     wg.submit()
@@ -736,6 +749,7 @@ def quick_vasp_sequential(
         '__workgraph_pk__': wg.pk,
         '__stage_names__': stage_names,
         '__stage_types__': stage_types,
+        '__stage_namespaces__': stage_namespaces,
         **{name: wg.pk for name in stage_names},
     }
 

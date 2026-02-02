@@ -165,62 +165,109 @@ def create_stage_tasks(wg, stage, stage_name, context):
     }
 
 
-def expose_stage_outputs(wg, stage_name, stage_tasks_result):
+def expose_stage_outputs(wg, stage_name, stage_tasks_result, namespace_map=None):
     """Expose DOS stage outputs on the WorkGraph.
 
     Args:
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'scf': 'stage2', 'dos': 'stage3'}. If None,
+                      falls back to flat naming with stage_name prefix.
     """
     bands_task = stage_tasks_result['bands_task']
 
-    # Expose BandsWorkChain outputs (optional)
-    try:
-        setattr(wg.outputs, f'{stage_name}_dos', bands_task.outputs.dos)
-    except AttributeError:
-        pass
-    try:
-        setattr(wg.outputs, f'{stage_name}_projectors', bands_task.outputs.projectors)
-    except AttributeError:
-        pass
+    if namespace_map is not None:
+        scf_ns = namespace_map['scf']
+        dos_ns = namespace_map['dos']
 
-    # Expose internal SCF workchain outputs
-    try:
-        setattr(wg.outputs, f'{stage_name}_scf_misc', bands_task.outputs.scf_misc)
-    except AttributeError:
-        pass
-    try:
-        setattr(wg.outputs, f'{stage_name}_scf_remote', bands_task.outputs.scf_remote_folder)
-    except AttributeError:
-        pass
-    try:
-        setattr(wg.outputs, f'{stage_name}_scf_retrieved', bands_task.outputs.scf_retrieved)
-    except AttributeError:
-        pass
+        # SCF outputs
+        try:
+            setattr(wg.outputs, f'{scf_ns}.scf.misc', bands_task.outputs.scf_misc)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{scf_ns}.scf.remote', bands_task.outputs.scf_remote_folder)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{scf_ns}.scf.retrieved', bands_task.outputs.scf_retrieved)
+        except AttributeError:
+            pass
 
-    # Expose internal DOS workchain outputs
-    try:
-        setattr(wg.outputs, f'{stage_name}_dos_misc', bands_task.outputs.dos_misc)
-    except AttributeError:
-        pass
-    try:
-        setattr(wg.outputs, f'{stage_name}_dos_remote', bands_task.outputs.dos_remote_folder)
-    except AttributeError:
-        pass
-    try:
-        setattr(wg.outputs, f'{stage_name}_dos_retrieved', bands_task.outputs.dos_retrieved)
-    except AttributeError:
-        pass
+        # DOS outputs
+        try:
+            setattr(wg.outputs, f'{dos_ns}.dos.dos', bands_task.outputs.dos)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{dos_ns}.dos.projectors', bands_task.outputs.projectors)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{dos_ns}.dos.misc', bands_task.outputs.dos_misc)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{dos_ns}.dos.remote', bands_task.outputs.dos_remote_folder)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{dos_ns}.dos.retrieved', bands_task.outputs.dos_retrieved)
+        except AttributeError:
+            pass
+    else:
+        # Expose BandsWorkChain outputs (optional)
+        try:
+            setattr(wg.outputs, f'{stage_name}_dos', bands_task.outputs.dos)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{stage_name}_projectors', bands_task.outputs.projectors)
+        except AttributeError:
+            pass
+
+        # Expose internal SCF workchain outputs
+        try:
+            setattr(wg.outputs, f'{stage_name}_scf_misc', bands_task.outputs.scf_misc)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{stage_name}_scf_remote', bands_task.outputs.scf_remote_folder)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{stage_name}_scf_retrieved', bands_task.outputs.scf_retrieved)
+        except AttributeError:
+            pass
+
+        # Expose internal DOS workchain outputs
+        try:
+            setattr(wg.outputs, f'{stage_name}_dos_misc', bands_task.outputs.dos_misc)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{stage_name}_dos_remote', bands_task.outputs.dos_remote_folder)
+        except AttributeError:
+            pass
+        try:
+            setattr(wg.outputs, f'{stage_name}_dos_retrieved', bands_task.outputs.dos_retrieved)
+        except AttributeError:
+            pass
 
 
-def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
+def get_stage_results(wg_node, wg_pk: int, stage_name: str,
+                      namespace_map: dict = None) -> dict:
     """Extract results from a DOS stage in a sequential workflow.
 
     Args:
         wg_node: The WorkGraph ProcessNode.
         wg_pk: WorkGraph PK.
         stage_name: Name of the DOS stage.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'scf': 'stage2', 'dos': 'stage3'}. If None,
+                      uses flat naming.
 
     Returns:
         Dict with keys: energy, scf_misc, scf_remote, scf_retrieved,
@@ -244,45 +291,80 @@ def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
     if hasattr(wg_node, 'outputs'):
         outputs = wg_node.outputs
 
-        # DOS ArrayData
-        dos_attr = f'{stage_name}_dos'
-        if hasattr(outputs, dos_attr):
-            result['dos_arraydata'] = getattr(outputs, dos_attr)
+        if namespace_map is not None:
+            scf_ns = namespace_map['scf']
+            dos_ns = namespace_map['dos']
 
-        # Projectors ArrayData
-        projectors_attr = f'{stage_name}_projectors'
-        if hasattr(outputs, projectors_attr):
-            result['projectors'] = getattr(outputs, projectors_attr)
+            # SCF namespace outputs: stage_ns.scf.output
+            stage_scf = getattr(outputs, scf_ns, None)
+            scf_outputs = getattr(stage_scf, 'scf', None) if stage_scf is not None else None
+            if scf_outputs is not None:
+                if hasattr(scf_outputs, 'misc'):
+                    misc_node = scf_outputs.misc
+                    if hasattr(misc_node, 'get_dict'):
+                        result['scf_misc'] = misc_node.get_dict()
+                if hasattr(scf_outputs, 'remote'):
+                    result['scf_remote'] = scf_outputs.remote
+                if hasattr(scf_outputs, 'retrieved'):
+                    result['scf_retrieved'] = scf_outputs.retrieved
 
-        # SCF outputs
-        scf_misc_attr = f'{stage_name}_scf_misc'
-        if hasattr(outputs, scf_misc_attr):
-            misc_node = getattr(outputs, scf_misc_attr)
-            if hasattr(misc_node, 'get_dict'):
-                result['scf_misc'] = misc_node.get_dict()
+            # DOS namespace outputs: stage_ns.dos.output
+            stage_dos = getattr(outputs, dos_ns, None)
+            dos_outputs = getattr(stage_dos, 'dos', None) if stage_dos is not None else None
+            if dos_outputs is not None:
+                if hasattr(dos_outputs, 'dos'):
+                    result['dos_arraydata'] = dos_outputs.dos
+                if hasattr(dos_outputs, 'projectors'):
+                    result['projectors'] = dos_outputs.projectors
+                if hasattr(dos_outputs, 'misc'):
+                    misc_node = dos_outputs.misc
+                    if hasattr(misc_node, 'get_dict'):
+                        result['dos_misc'] = misc_node.get_dict()
+                if hasattr(dos_outputs, 'remote'):
+                    result['dos_remote'] = dos_outputs.remote
+                if hasattr(dos_outputs, 'retrieved'):
+                    result['files'] = dos_outputs.retrieved
+        else:
+            # Flat naming fallback
+            # DOS ArrayData
+            dos_attr = f'{stage_name}_dos'
+            if hasattr(outputs, dos_attr):
+                result['dos_arraydata'] = getattr(outputs, dos_attr)
 
-        scf_remote_attr = f'{stage_name}_scf_remote'
-        if hasattr(outputs, scf_remote_attr):
-            result['scf_remote'] = getattr(outputs, scf_remote_attr)
+            # Projectors ArrayData
+            projectors_attr = f'{stage_name}_projectors'
+            if hasattr(outputs, projectors_attr):
+                result['projectors'] = getattr(outputs, projectors_attr)
 
-        scf_retrieved_attr = f'{stage_name}_scf_retrieved'
-        if hasattr(outputs, scf_retrieved_attr):
-            result['scf_retrieved'] = getattr(outputs, scf_retrieved_attr)
+            # SCF outputs
+            scf_misc_attr = f'{stage_name}_scf_misc'
+            if hasattr(outputs, scf_misc_attr):
+                misc_node = getattr(outputs, scf_misc_attr)
+                if hasattr(misc_node, 'get_dict'):
+                    result['scf_misc'] = misc_node.get_dict()
 
-        # DOS outputs
-        dos_misc_attr = f'{stage_name}_dos_misc'
-        if hasattr(outputs, dos_misc_attr):
-            misc_node = getattr(outputs, dos_misc_attr)
-            if hasattr(misc_node, 'get_dict'):
-                result['dos_misc'] = misc_node.get_dict()
+            scf_remote_attr = f'{stage_name}_scf_remote'
+            if hasattr(outputs, scf_remote_attr):
+                result['scf_remote'] = getattr(outputs, scf_remote_attr)
 
-        dos_remote_attr = f'{stage_name}_dos_remote'
-        if hasattr(outputs, dos_remote_attr):
-            result['dos_remote'] = getattr(outputs, dos_remote_attr)
+            scf_retrieved_attr = f'{stage_name}_scf_retrieved'
+            if hasattr(outputs, scf_retrieved_attr):
+                result['scf_retrieved'] = getattr(outputs, scf_retrieved_attr)
 
-        dos_retrieved_attr = f'{stage_name}_dos_retrieved'
-        if hasattr(outputs, dos_retrieved_attr):
-            result['files'] = getattr(outputs, dos_retrieved_attr)
+            # DOS outputs
+            dos_misc_attr = f'{stage_name}_dos_misc'
+            if hasattr(outputs, dos_misc_attr):
+                misc_node = getattr(outputs, dos_misc_attr)
+                if hasattr(misc_node, 'get_dict'):
+                    result['dos_misc'] = misc_node.get_dict()
+
+            dos_remote_attr = f'{stage_name}_dos_remote'
+            if hasattr(outputs, dos_remote_attr):
+                result['dos_remote'] = getattr(outputs, dos_remote_attr)
+
+            dos_retrieved_attr = f'{stage_name}_dos_retrieved'
+            if hasattr(outputs, dos_retrieved_attr):
+                result['files'] = getattr(outputs, dos_retrieved_attr)
 
     # Fallback: Traverse links
     if result['scf_misc'] is None or result['dos_misc'] is None:

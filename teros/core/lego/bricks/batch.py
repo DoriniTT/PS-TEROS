@@ -141,34 +141,51 @@ def create_stage_tasks(wg, stage, stage_name, context):
     }
 
 
-def expose_stage_outputs(wg, stage_name, stage_tasks_result):
+def expose_stage_outputs(wg, stage_name, stage_tasks_result, namespace_map=None):
     """Expose batch stage outputs on the WorkGraph.
 
     Args:
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, falls back to
+                      flat naming with stage_name prefix.
     """
     for calc_label, vasp_task in stage_tasks_result['calc_tasks'].items():
         energy_task = stage_tasks_result['energy_tasks'][calc_label]
 
-        setattr(wg.outputs, f'{stage_name}_{calc_label}_energy',
-                energy_task.outputs.result)
-        setattr(wg.outputs, f'{stage_name}_{calc_label}_misc',
-                vasp_task.outputs.misc)
-        setattr(wg.outputs, f'{stage_name}_{calc_label}_remote',
-                vasp_task.outputs.remote_folder)
-        setattr(wg.outputs, f'{stage_name}_{calc_label}_retrieved',
-                vasp_task.outputs.retrieved)
+        if namespace_map is not None:
+            ns = namespace_map['main']
+            setattr(wg.outputs, f'{ns}.batch.{calc_label}.energy',
+                    energy_task.outputs.result)
+            setattr(wg.outputs, f'{ns}.batch.{calc_label}.misc',
+                    vasp_task.outputs.misc)
+            setattr(wg.outputs, f'{ns}.batch.{calc_label}.remote',
+                    vasp_task.outputs.remote_folder)
+            setattr(wg.outputs, f'{ns}.batch.{calc_label}.retrieved',
+                    vasp_task.outputs.retrieved)
+        else:
+            setattr(wg.outputs, f'{stage_name}_{calc_label}_energy',
+                    energy_task.outputs.result)
+            setattr(wg.outputs, f'{stage_name}_{calc_label}_misc',
+                    vasp_task.outputs.misc)
+            setattr(wg.outputs, f'{stage_name}_{calc_label}_remote',
+                    vasp_task.outputs.remote_folder)
+            setattr(wg.outputs, f'{stage_name}_{calc_label}_retrieved',
+                    vasp_task.outputs.retrieved)
 
 
-def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
+def get_stage_results(wg_node, wg_pk: int, stage_name: str,
+                      namespace_map: dict = None) -> dict:
     """Extract results from a batch stage in a sequential workflow.
 
     Args:
         wg_node: The WorkGraph ProcessNode.
         wg_pk: WorkGraph PK.
         stage_name: Name of the batch stage.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, uses flat naming.
 
     Returns:
         Dict with keys: calculations, pk, stage, type.
@@ -182,59 +199,104 @@ def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
         'type': 'batch',
     }
 
-    energy_suffix = '_energy'
-    stage_prefix = f'{stage_name}_'
-
     if hasattr(wg_node, 'outputs'):
         outputs = wg_node.outputs
 
-        # Find all output attributes matching the pattern
-        calc_labels = []
-        for attr_name in dir(outputs):
-            if attr_name.startswith(stage_prefix) and attr_name.endswith(energy_suffix):
-                calc_label = attr_name[len(stage_prefix):-len(energy_suffix)]
-                if calc_label:
-                    calc_labels.append(calc_label)
+        if namespace_map is not None:
+            ns = namespace_map['main']
+            stage_ns = getattr(outputs, ns, None)
+            brick_ns = getattr(stage_ns, 'batch', None) if stage_ns is not None else None
+            if brick_ns is not None:
+                # Each calc_label is a sub-namespace of brick_ns
+                # with .energy, .misc, .remote, .retrieved inside
+                for calc_label in dir(brick_ns):
+                    if calc_label.startswith('_'):
+                        continue
+                    calc_ns = getattr(brick_ns, calc_label, None)
+                    if calc_ns is None or not hasattr(calc_ns, 'energy'):
+                        continue
 
-        for calc_label in calc_labels:
-            calc_result = {
-                'energy': None,
-                'misc': None,
-                'remote': None,
-                'files': None,
-            }
+                    calc_result = {
+                        'energy': None,
+                        'misc': None,
+                        'remote': None,
+                        'files': None,
+                    }
 
-            # Energy
-            energy_attr = f'{stage_name}_{calc_label}_energy'
-            if hasattr(outputs, energy_attr):
-                energy_node = getattr(outputs, energy_attr)
-                if hasattr(energy_node, 'value'):
-                    calc_result['energy'] = energy_node.value
-                else:
-                    calc_result['energy'] = float(energy_node)
+                    if hasattr(calc_ns, 'energy'):
+                        energy_node = calc_ns.energy
+                        if hasattr(energy_node, 'value'):
+                            calc_result['energy'] = energy_node.value
+                        else:
+                            calc_result['energy'] = float(energy_node)
 
-            # Misc
-            misc_attr = f'{stage_name}_{calc_label}_misc'
-            if hasattr(outputs, misc_attr):
-                misc_node = getattr(outputs, misc_attr)
-                if hasattr(misc_node, 'get_dict'):
-                    calc_result['misc'] = misc_node.get_dict()
+                    if hasattr(calc_ns, 'misc'):
+                        misc_node = calc_ns.misc
+                        if hasattr(misc_node, 'get_dict'):
+                            calc_result['misc'] = misc_node.get_dict()
 
-            # Remote folder
-            remote_attr = f'{stage_name}_{calc_label}_remote'
-            if hasattr(outputs, remote_attr):
-                calc_result['remote'] = getattr(outputs, remote_attr)
+                    if hasattr(calc_ns, 'remote'):
+                        calc_result['remote'] = calc_ns.remote
 
-            # Retrieved files
-            retrieved_attr = f'{stage_name}_{calc_label}_retrieved'
-            if hasattr(outputs, retrieved_attr):
-                calc_result['files'] = getattr(outputs, retrieved_attr)
+                    if hasattr(calc_ns, 'retrieved'):
+                        calc_result['files'] = calc_ns.retrieved
 
-            # Extract energy from misc if not found directly
-            if calc_result['energy'] is None and calc_result['misc'] is not None:
-                calc_result['energy'] = _extract_energy_from_misc(calc_result['misc'])
+                    if calc_result['energy'] is None and calc_result['misc'] is not None:
+                        calc_result['energy'] = _extract_energy_from_misc(calc_result['misc'])
 
-            result['calculations'][calc_label] = calc_result
+                    result['calculations'][calc_label] = calc_result
+        else:
+            # Flat naming fallback
+            energy_suffix = '_energy'
+            stage_prefix = f'{stage_name}_'
+
+            # Find all output attributes matching the pattern
+            calc_labels = []
+            for attr_name in dir(outputs):
+                if attr_name.startswith(stage_prefix) and attr_name.endswith(energy_suffix):
+                    calc_label = attr_name[len(stage_prefix):-len(energy_suffix)]
+                    if calc_label:
+                        calc_labels.append(calc_label)
+
+            for calc_label in calc_labels:
+                calc_result = {
+                    'energy': None,
+                    'misc': None,
+                    'remote': None,
+                    'files': None,
+                }
+
+                # Energy
+                energy_attr = f'{stage_name}_{calc_label}_energy'
+                if hasattr(outputs, energy_attr):
+                    energy_node = getattr(outputs, energy_attr)
+                    if hasattr(energy_node, 'value'):
+                        calc_result['energy'] = energy_node.value
+                    else:
+                        calc_result['energy'] = float(energy_node)
+
+                # Misc
+                misc_attr = f'{stage_name}_{calc_label}_misc'
+                if hasattr(outputs, misc_attr):
+                    misc_node = getattr(outputs, misc_attr)
+                    if hasattr(misc_node, 'get_dict'):
+                        calc_result['misc'] = misc_node.get_dict()
+
+                # Remote folder
+                remote_attr = f'{stage_name}_{calc_label}_remote'
+                if hasattr(outputs, remote_attr):
+                    calc_result['remote'] = getattr(outputs, remote_attr)
+
+                # Retrieved files
+                retrieved_attr = f'{stage_name}_{calc_label}_retrieved'
+                if hasattr(outputs, retrieved_attr):
+                    calc_result['files'] = getattr(outputs, retrieved_attr)
+
+                # Extract energy from misc if not found directly
+                if calc_result['energy'] is None and calc_result['misc'] is not None:
+                    calc_result['energy'] = _extract_energy_from_misc(calc_result['misc'])
+
+                result['calculations'][calc_label] = calc_result
 
     # Fallback: traverse links if outputs not found
     if not result['calculations']:

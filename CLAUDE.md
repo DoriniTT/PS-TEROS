@@ -311,10 +311,18 @@ result = quick_vasp_sequential(
     '__workgraph_pk__': 12345,
     '__stage_names__': ['relax_rough', 'relax_fine'],
     '__stage_types__': {'relax_rough': 'vasp', 'relax_fine': 'vasp'},
+    '__stage_namespaces__': {
+        'relax_rough': {'main': 'stage1'},
+        'relax_fine': {'main': 'stage2'},
+    },
     'relax_rough': 12345,
     'relax_fine': 12345,
 }
 ```
+
+The `__stage_namespaces__` dict maps each stage name to its namespace mapping. The mapping keys depend on brick type:
+- `vasp`, `batch`, `bader`, `convergence`: `{'main': 'stageN'}`
+- `dos`: `{'scf': 'stageN', 'dos': 'stageN'}` (both share the same stage number)
 
 ### Brick Types
 
@@ -326,21 +334,87 @@ result = quick_vasp_sequential(
 | `bader` | Bader charge analysis | `charge_from` |
 | `convergence` | ENCUT/k-points convergence | `conv_settings`, `structure_from` (optional) |
 
-### Stage Outputs per Brick
+### Stage Output Namespaces
 
-| Type | Key Outputs per Stage | Notes |
-|------|----------------------|-------|
-| `vasp` | `energy`, `structure`, `misc`, `remote`, `retrieved` | Standard VASP calculation |
-| `dos` | `dos`, `projectors`, `scf_misc`, `scf_remote`, `scf_retrieved`, `dos_misc`, `dos_remote`, `dos_retrieved` | Uses BandsWorkChain; some outputs optional |
-| `batch` | `{calc_label}_energy`, `{calc_label}_misc`, `{calc_label}_remote`, `{calc_label}_retrieved` per calculation | Multiple parallel calcs |
-| `bader` | `charges`, `acf`, `bcf`, `avf` | Bader charge analysis |
-| `convergence` | `cutoff_conv_data`, `kpoints_conv_data`, `cutoff_analysis`, `kpoints_analysis`, `recommendations` | Convergence testing |
+Outputs are grouped under nested namespaces: `stageN.{brick_type}.{output}`. Each stage gets an auto-incremented stage number. `verdi process show` displays them hierarchically:
 
-All output names are prefixed with the stage name: `{stage_name}_{output}`.
+#### vasp brick
 
-### WorkGraph Output Namespaces (Limitation)
+```
+stageN
+  vasp
+    energy         Float
+    structure      StructureData
+    misc           Dict
+    remote         RemoteData
+    retrieved      FolderData
+```
 
-WorkGraph does **not** support nested output namespaces. All outputs appear flat in `verdi process show`. Use `get_brick_info(brick_type)` from `connections.py` to see what outputs each brick produces.
+#### dos brick
+
+DOS is a single stage with two sub-namespaces (SCF + non-SCF DOS):
+
+```
+stageN
+  scf
+    misc           Dict
+    remote         RemoteData
+    retrieved      FolderData
+  dos
+    dos            ArrayData
+    projectors     ArrayData      (optional)
+    misc           Dict
+    remote         RemoteData
+    retrieved      FolderData
+```
+
+#### batch brick
+
+Each calculation label becomes its own sub-namespace:
+
+```
+stageN
+  batch
+    neutral
+      energy       Float
+      misc         Dict
+      remote       RemoteData
+      retrieved    FolderData
+    charged
+      energy       Float
+      misc         Dict
+      remote       RemoteData
+      retrieved    FolderData
+```
+
+#### bader brick
+
+```
+stageN
+  bader
+    charges        ArrayData
+    acf            SinglefileData
+    bcf            SinglefileData
+    avf            SinglefileData
+```
+
+#### convergence brick
+
+```
+stageN
+  convergence
+    cutoff_conv_data     Dict
+    kpoints_conv_data    Dict
+    cutoff_analysis      Dict
+    kpoints_analysis     Dict
+    recommendations      Dict
+```
+
+#### How it works
+
+Dotted `setattr` calls like `setattr(wg.outputs, 'stage1.vasp.energy', socket)` create nested namespace sockets via `_set_socket_value` in WorkGraph. AiiDA stores them as `stage1__vasp__energy` link labels (using `__` separator) and `verdi process show` displays them grouped. Use `get_brick_info(brick_type)` from `connections.py` to inspect a brick's port declarations.
+
+When `namespace_map` is `None` (e.g., standalone `quick_vasp` calls), outputs fall back to flat naming with stage name prefix: `{stage_name}_{output}`.
 
 ## VASP Integration
 
