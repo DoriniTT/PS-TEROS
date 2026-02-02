@@ -45,12 +45,7 @@ def valid_bader_stage():
 
 @pytest.fixture
 def valid_convergence_stage():
-    return {
-        'name': 'conv_test', 'type': 'convergence',
-        'incar': {'ismear': 0, 'ediff': 1e-6},
-        'conv_settings': {'cutoff_start': 300, 'cutoff_stop': 700},
-        'convergence_threshold': 0.001,
-    }
+    return {'name': 'conv', 'type': 'convergence'}
 
 
 @pytest.fixture
@@ -80,7 +75,7 @@ class TestBrickRegistry:
         from teros.core.lego.bricks import VALID_BRICK_TYPES
         assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader', 'convergence')
 
-    def test_registry_has_four_entries(self):
+    def test_registry_has_five_entries(self):
         from teros.core.lego.bricks import BRICK_REGISTRY
         assert len(BRICK_REGISTRY) == 5
 
@@ -556,3 +551,58 @@ class TestEnrichAcfDat:
         # Atom 1: bader_charge = 0 - 6.5432 = -6.5432
         atom1_line = lines[2]
         assert '-6.5432' in atom1_line
+
+
+# ---------------------------------------------------------------------------
+# TestConvergenceValidateStage
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestConvergenceValidateStage:
+    """Tests for teros.core.lego.bricks.convergence.validate_stage()."""
+
+    def _validate(self, stage, stage_names=None):
+        from teros.core.lego.bricks.convergence import validate_stage
+        if stage_names is None:
+            stage_names = set()
+        validate_stage(stage, stage_names)
+
+    def test_valid_minimal_passes(self, valid_convergence_stage):
+        self._validate(valid_convergence_stage)
+
+    def test_structure_from_valid_passes(self):
+        stage = {'name': 'conv', 'structure_from': 'relax'}
+        self._validate(stage, stage_names={'relax'})
+
+    def test_structure_from_unknown_raises(self):
+        stage = {'name': 'conv', 'structure_from': 'nope'}
+        with pytest.raises(ValueError, match="previous stage"):
+            self._validate(stage, stage_names={'relax'})
+
+    def test_conv_settings_not_dict_raises(self):
+        stage = {'name': 'conv', 'conv_settings': 'bad'}
+        with pytest.raises(ValueError, match="conv_settings"):
+            self._validate(stage)
+
+    def test_conv_settings_dict_passes(self):
+        stage = {'name': 'conv', 'conv_settings': {'cutoff_start': 300}}
+        self._validate(stage)
+
+    def test_threshold_positive_passes(self):
+        stage = {'name': 'conv', 'convergence_threshold': 0.005}
+        self._validate(stage)
+
+    def test_threshold_zero_raises(self):
+        stage = {'name': 'conv', 'convergence_threshold': 0}
+        with pytest.raises(ValueError, match="positive"):
+            self._validate(stage)
+
+    def test_threshold_negative_raises(self):
+        stage = {'name': 'conv', 'convergence_threshold': -0.001}
+        with pytest.raises(ValueError, match="positive"):
+            self._validate(stage)
+
+    def test_threshold_non_numeric_raises(self):
+        stage = {'name': 'conv', 'convergence_threshold': 'bad'}
+        with pytest.raises(ValueError, match="number"):
+            self._validate(stage)

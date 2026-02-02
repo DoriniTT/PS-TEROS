@@ -210,8 +210,9 @@ quick_vasp_sequential()
         └── bricks/bader.py
 ```
 
-Each brick module exports exactly 5 functions:
+Each brick module exports a PORTS dict plus 5 functions:
 ```python
+PORTS                    # From connections.py (e.g., VASP_PORTS as PORTS)
 def validate_stage(stage, stage_names): ...
 def create_stage_tasks(wg, stage, stage_name, context): ...
 def expose_stage_outputs(wg, stage_name, tasks_result): ...

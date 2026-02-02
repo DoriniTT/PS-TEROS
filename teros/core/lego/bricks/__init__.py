@@ -1,7 +1,7 @@
 """Brick registry and shared helpers for the lego module.
 
-Each brick module exports exactly 5 functions plus a PORTS dict:
-    PORTS: dict with 'inputs' and 'outputs' port declarations
+Each brick module exports a PORTS dict plus 5 functions:
+    PORTS: dict with 'inputs' and 'outputs' port declarations (from connections.py)
     validate_stage(stage, stage_names) -> None
     create_stage_tasks(wg, stage, stage_name, context) -> dict
     expose_stage_outputs(wg, stage_name, stage_tasks_result) -> None
@@ -79,7 +79,7 @@ def resolve_structure_from(structure_from: str, context: dict):
     if ref_stage_type == 'vasp':
         return stage_tasks[structure_from]['vasp'].outputs.structure
     else:
-        # Non-VASP bricks don't produce structures (decision #4)
+        # Non-VASP bricks don't produce structures
         raise ValueError(
             f"structure_from='{structure_from}' references a '{ref_stage_type}' "
             f"stage, which doesn't produce a structure output. "

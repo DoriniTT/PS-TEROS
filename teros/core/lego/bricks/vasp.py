@@ -8,6 +8,7 @@ from aiida.common.links import LinkType
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
 
+from .connections import VASP_PORTS as PORTS
 from ..tasks import extract_energy, compute_dynamics
 from .connections import VASP_PORTS as PORTS
 
@@ -237,31 +238,45 @@ def create_stage_tasks(wg, stage, stage_name, context):
     }
 
 
-def expose_stage_outputs(wg, stage_name, stage_tasks_result):
+def expose_stage_outputs(wg, stage_name, stage_tasks_result, namespace_map=None):
     """Expose VASP stage outputs on the WorkGraph.
 
     Args:
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, falls back to
+                      flat naming with stage_name prefix.
     """
     vasp_task = stage_tasks_result['vasp']
     energy_task = stage_tasks_result['energy']
 
-    setattr(wg.outputs, f'{stage_name}_energy', energy_task.outputs.result)
-    setattr(wg.outputs, f'{stage_name}_structure', vasp_task.outputs.structure)
-    setattr(wg.outputs, f'{stage_name}_misc', vasp_task.outputs.misc)
-    setattr(wg.outputs, f'{stage_name}_remote', vasp_task.outputs.remote_folder)
-    setattr(wg.outputs, f'{stage_name}_retrieved', vasp_task.outputs.retrieved)
+    if namespace_map is not None:
+        ns = namespace_map['main']
+        setattr(wg.outputs, f'{ns}.vasp.energy', energy_task.outputs.result)
+        setattr(wg.outputs, f'{ns}.vasp.structure', vasp_task.outputs.structure)
+        setattr(wg.outputs, f'{ns}.vasp.misc', vasp_task.outputs.misc)
+        setattr(wg.outputs, f'{ns}.vasp.remote', vasp_task.outputs.remote_folder)
+        setattr(wg.outputs, f'{ns}.vasp.retrieved', vasp_task.outputs.retrieved)
+    else:
+        setattr(wg.outputs, f'{stage_name}_energy', energy_task.outputs.result)
+        setattr(wg.outputs, f'{stage_name}_structure', vasp_task.outputs.structure)
+        setattr(wg.outputs, f'{stage_name}_misc', vasp_task.outputs.misc)
+        setattr(wg.outputs, f'{stage_name}_remote', vasp_task.outputs.remote_folder)
+        setattr(wg.outputs, f'{stage_name}_retrieved', vasp_task.outputs.retrieved)
 
 
-def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
+def get_stage_results(wg_node, wg_pk: int, stage_name: str,
+                      namespace_map: dict = None) -> dict:
     """Extract results from a VASP stage in a sequential workflow.
 
     Args:
         wg_node: The WorkGraph ProcessNode.
         wg_pk: WorkGraph PK.
         stage_name: Name of the VASP stage.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, uses flat naming.
 
     Returns:
         Dict with keys: energy, structure, misc, remote, files, pk, stage, type.
@@ -283,36 +298,60 @@ def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
     if hasattr(wg_node, 'outputs'):
         outputs = wg_node.outputs
 
-        # Energy
-        energy_attr = f'{stage_name}_energy'
-        if hasattr(outputs, energy_attr):
-            energy_node = getattr(outputs, energy_attr)
-            if hasattr(energy_node, 'value'):
-                result['energy'] = energy_node.value
-            else:
-                result['energy'] = float(energy_node)
+        if namespace_map is not None:
+            # Namespaced outputs: access via stage_ns.vasp.output
+            ns = namespace_map['main']
+            stage_ns = getattr(outputs, ns, None)
+            brick_ns = getattr(stage_ns, 'vasp', None) if stage_ns is not None else None
+            if brick_ns is not None:
+                if hasattr(brick_ns, 'energy'):
+                    energy_node = brick_ns.energy
+                    if hasattr(energy_node, 'value'):
+                        result['energy'] = energy_node.value
+                    else:
+                        result['energy'] = float(energy_node)
+                if hasattr(brick_ns, 'structure'):
+                    result['structure'] = brick_ns.structure
+                if hasattr(brick_ns, 'misc'):
+                    misc_node = brick_ns.misc
+                    if hasattr(misc_node, 'get_dict'):
+                        result['misc'] = misc_node.get_dict()
+                if hasattr(brick_ns, 'remote'):
+                    result['remote'] = brick_ns.remote
+                if hasattr(brick_ns, 'retrieved'):
+                    result['files'] = brick_ns.retrieved
+        else:
+            # Flat naming fallback
+            # Energy
+            energy_attr = f'{stage_name}_energy'
+            if hasattr(outputs, energy_attr):
+                energy_node = getattr(outputs, energy_attr)
+                if hasattr(energy_node, 'value'):
+                    result['energy'] = energy_node.value
+                else:
+                    result['energy'] = float(energy_node)
 
-        # Structure
-        struct_attr = f'{stage_name}_structure'
-        if hasattr(outputs, struct_attr):
-            result['structure'] = getattr(outputs, struct_attr)
+            # Structure
+            struct_attr = f'{stage_name}_structure'
+            if hasattr(outputs, struct_attr):
+                result['structure'] = getattr(outputs, struct_attr)
 
-        # Misc
-        misc_attr = f'{stage_name}_misc'
-        if hasattr(outputs, misc_attr):
-            misc_node = getattr(outputs, misc_attr)
-            if hasattr(misc_node, 'get_dict'):
-                result['misc'] = misc_node.get_dict()
+            # Misc
+            misc_attr = f'{stage_name}_misc'
+            if hasattr(outputs, misc_attr):
+                misc_node = getattr(outputs, misc_attr)
+                if hasattr(misc_node, 'get_dict'):
+                    result['misc'] = misc_node.get_dict()
 
-        # Remote folder
-        remote_attr = f'{stage_name}_remote'
-        if hasattr(outputs, remote_attr):
-            result['remote'] = getattr(outputs, remote_attr)
+            # Remote folder
+            remote_attr = f'{stage_name}_remote'
+            if hasattr(outputs, remote_attr):
+                result['remote'] = getattr(outputs, remote_attr)
 
-        # Retrieved files
-        retrieved_attr = f'{stage_name}_retrieved'
-        if hasattr(outputs, retrieved_attr):
-            result['files'] = getattr(outputs, retrieved_attr)
+            # Retrieved files
+            retrieved_attr = f'{stage_name}_retrieved'
+            if hasattr(outputs, retrieved_attr):
+                result['files'] = getattr(outputs, retrieved_attr)
 
     # Fallback: Traverse links to find VaspWorkChain outputs (for stored nodes)
     if result['energy'] is None or result['misc'] is None:

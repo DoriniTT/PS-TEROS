@@ -487,7 +487,6 @@ def _validate_stages(stages: t.List[dict]) -> None:
     Raises:
         ValueError: If validation fails
     """
-    import warnings as _warnings
     from .bricks import get_brick_module, VALID_BRICK_TYPES, validate_connections
 
     if not stages:
@@ -515,10 +514,8 @@ def _validate_stages(stages: t.List[dict]) -> None:
         brick = get_brick_module(stage_type)
         brick.validate_stage(stage, stage_names)
 
-    # Validate inter-stage connections using port declarations
-    connection_warnings = validate_connections(stages)
-    for w in connection_warnings:
-        _warnings.warn(w, stacklevel=3)
+    # Validate inter-stage connections (port types, prerequisites, etc.)
+    validate_connections(stages)
 
 
 def quick_vasp_sequential(
@@ -529,6 +526,7 @@ def quick_vasp_sequential(
     potential_family: str = 'PBE',
     potential_mapping: dict = None,
     options: dict = None,
+    max_concurrent_jobs: int = None,
     name: str = 'quick_vasp_sequential',
     wait: bool = False,
     poll_interval: float = 10.0,
@@ -549,6 +547,9 @@ def quick_vasp_sequential(
         potential_family: POTCAR family (default: 'PBE')
         potential_mapping: Element to POTCAR mapping (e.g., {'Sn': 'Sn_d', 'O': 'O'})
         options: Scheduler options dict with 'resources' key
+        max_concurrent_jobs: Maximum number of VASP jobs running simultaneously
+                            (default: None = unlimited). Useful when batch stages
+                            launch many parallel calculations.
         name: WorkGraph name for identification
         wait: If True, block until calculation finishes (default: False)
         poll_interval: Seconds between status checks when wait=True
@@ -558,7 +559,8 @@ def quick_vasp_sequential(
         Dict with:
             - __workgraph_pk__: WorkGraph PK
             - __stage_names__: List of stage names in order
-            - __stage_types__: Dict mapping stage names to types ('vasp', 'dos', 'batch', or 'bader')
+            - __stage_types__: Dict mapping stage names to types
+              ('vasp', 'dos', 'batch', 'bader', or 'convergence')
             - <stage_name>: WorkGraph PK (for each stage)
 
     Stage Configuration (VASP stages, type='vasp' or omitted):
@@ -684,10 +686,15 @@ def quick_vasp_sequential(
     # Build WorkGraph
     wg = WorkGraph(name=name)
 
+    if max_concurrent_jobs is not None:
+        wg.max_number_jobs = max_concurrent_jobs
+
     # Track structures and remote folders across stages
     stage_tasks = {}  # name -> {'vasp': task, 'energy': task, 'supercell': task, ...}
     stage_names = []  # Ordered list
-    stage_types = {}  # name -> 'vasp', 'dos', 'batch', or 'bader'
+    stage_types = {}  # name -> 'vasp', 'dos', 'batch', 'bader', or 'convergence'
+    stage_namespaces = {}  # name -> namespace_map (e.g. {'main': 'stage1'})
+    stage_counter = 1  # Sequential namespace counter
 
     for i, stage in enumerate(stages):
         stage_name = stage['name']
@@ -717,7 +724,18 @@ def quick_vasp_sequential(
         brick = get_brick_module(stage_type)
         tasks_result = brick.create_stage_tasks(wg, stage, stage_name, context)
         stage_tasks[stage_name] = tasks_result
-        brick.expose_stage_outputs(wg, stage_name, tasks_result)
+
+        # Build namespace_map based on brick type
+        # DOS uses the same stage number — scf and dos are sub-namespaces
+        # of a single stage, not separate stages.
+        namespace_map = {'main': f'stage{stage_counter}'}
+        if stage_type == 'dos':
+            namespace_map['scf'] = f'stage{stage_counter}'
+            namespace_map['dos'] = f'stage{stage_counter}'
+        stage_counter += 1
+
+        stage_namespaces[stage_name] = namespace_map
+        brick.expose_stage_outputs(wg, stage_name, tasks_result, namespace_map)
 
     # Submit
     wg.submit()
@@ -731,6 +749,7 @@ def quick_vasp_sequential(
         '__workgraph_pk__': wg.pk,
         '__stage_names__': stage_names,
         '__stage_types__': stage_types,
+        '__stage_namespaces__': stage_namespaces,
         **{name: wg.pk for name in stage_names},
     }
 

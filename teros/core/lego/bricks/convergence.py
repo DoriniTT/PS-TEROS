@@ -150,38 +150,57 @@ def create_stage_tasks(wg, stage, stage_name, context):
     }
 
 
-def expose_stage_outputs(wg, stage_name, stage_tasks_result):
+def expose_stage_outputs(wg, stage_name, stage_tasks_result, namespace_map=None):
     """Expose convergence stage outputs on the WorkGraph.
 
     Args:
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, falls back to
+                      flat naming with stage_name prefix.
     """
     converge = stage_tasks_result['converge']
     cutoff_task = stage_tasks_result['analyze_cutoff']
     kpoints_task = stage_tasks_result['analyze_kpoints']
     recommend_task = stage_tasks_result['recommendations']
 
-    setattr(wg.outputs, f'{stage_name}_cutoff_conv_data',
-            converge.outputs.cutoff_conv_data)
-    setattr(wg.outputs, f'{stage_name}_kpoints_conv_data',
-            converge.outputs.kpoints_conv_data)
-    setattr(wg.outputs, f'{stage_name}_cutoff_analysis',
-            cutoff_task.outputs.result)
-    setattr(wg.outputs, f'{stage_name}_kpoints_analysis',
-            kpoints_task.outputs.result)
-    setattr(wg.outputs, f'{stage_name}_recommendations',
-            recommend_task.outputs.result)
+    if namespace_map is not None:
+        ns = namespace_map['main']
+        setattr(wg.outputs, f'{ns}.convergence.cutoff_conv_data',
+                converge.outputs.cutoff_conv_data)
+        setattr(wg.outputs, f'{ns}.convergence.kpoints_conv_data',
+                converge.outputs.kpoints_conv_data)
+        setattr(wg.outputs, f'{ns}.convergence.cutoff_analysis',
+                cutoff_task.outputs.result)
+        setattr(wg.outputs, f'{ns}.convergence.kpoints_analysis',
+                kpoints_task.outputs.result)
+        setattr(wg.outputs, f'{ns}.convergence.recommendations',
+                recommend_task.outputs.result)
+    else:
+        setattr(wg.outputs, f'{stage_name}_cutoff_conv_data',
+                converge.outputs.cutoff_conv_data)
+        setattr(wg.outputs, f'{stage_name}_kpoints_conv_data',
+                converge.outputs.kpoints_conv_data)
+        setattr(wg.outputs, f'{stage_name}_cutoff_analysis',
+                cutoff_task.outputs.result)
+        setattr(wg.outputs, f'{stage_name}_kpoints_analysis',
+                kpoints_task.outputs.result)
+        setattr(wg.outputs, f'{stage_name}_recommendations',
+                recommend_task.outputs.result)
 
 
-def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
+def get_stage_results(wg_node, wg_pk: int, stage_name: str,
+                      namespace_map: dict = None) -> dict:
     """Extract results from a convergence stage in a sequential workflow.
 
     Args:
         wg_node: The WorkGraph ProcessNode.
         wg_pk: WorkGraph PK.
         stage_name: Name of the convergence stage.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, uses flat naming.
 
     Returns:
         Dict with keys: cutoff_analysis, kpoints_analysis, recommendations,
@@ -199,26 +218,45 @@ def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
     if hasattr(wg_node, 'outputs'):
         outputs = wg_node.outputs
 
-        # Cutoff analysis
-        cutoff_attr = f'{stage_name}_cutoff_analysis'
-        if hasattr(outputs, cutoff_attr):
-            node = getattr(outputs, cutoff_attr)
-            if hasattr(node, 'get_dict'):
-                result['cutoff_analysis'] = node.get_dict()
+        if namespace_map is not None:
+            ns = namespace_map['main']
+            stage_ns = getattr(outputs, ns, None)
+            brick_ns = getattr(stage_ns, 'convergence', None) if stage_ns is not None else None
+            if brick_ns is not None:
+                if hasattr(brick_ns, 'cutoff_analysis'):
+                    node = brick_ns.cutoff_analysis
+                    if hasattr(node, 'get_dict'):
+                        result['cutoff_analysis'] = node.get_dict()
+                if hasattr(brick_ns, 'kpoints_analysis'):
+                    node = brick_ns.kpoints_analysis
+                    if hasattr(node, 'get_dict'):
+                        result['kpoints_analysis'] = node.get_dict()
+                if hasattr(brick_ns, 'recommendations'):
+                    node = brick_ns.recommendations
+                    if hasattr(node, 'get_dict'):
+                        result['recommendations'] = node.get_dict()
+        else:
+            # Flat naming fallback
+            # Cutoff analysis
+            cutoff_attr = f'{stage_name}_cutoff_analysis'
+            if hasattr(outputs, cutoff_attr):
+                node = getattr(outputs, cutoff_attr)
+                if hasattr(node, 'get_dict'):
+                    result['cutoff_analysis'] = node.get_dict()
 
-        # K-points analysis
-        kpoints_attr = f'{stage_name}_kpoints_analysis'
-        if hasattr(outputs, kpoints_attr):
-            node = getattr(outputs, kpoints_attr)
-            if hasattr(node, 'get_dict'):
-                result['kpoints_analysis'] = node.get_dict()
+            # K-points analysis
+            kpoints_attr = f'{stage_name}_kpoints_analysis'
+            if hasattr(outputs, kpoints_attr):
+                node = getattr(outputs, kpoints_attr)
+                if hasattr(node, 'get_dict'):
+                    result['kpoints_analysis'] = node.get_dict()
 
-        # Recommendations
-        rec_attr = f'{stage_name}_recommendations'
-        if hasattr(outputs, rec_attr):
-            node = getattr(outputs, rec_attr)
-            if hasattr(node, 'get_dict'):
-                result['recommendations'] = node.get_dict()
+            # Recommendations
+            rec_attr = f'{stage_name}_recommendations'
+            if hasattr(outputs, rec_attr):
+                node = getattr(outputs, rec_attr)
+                if hasattr(node, 'get_dict'):
+                    result['recommendations'] = node.get_dict()
 
     # Fallback: traverse links
     if result['recommendations'] is None:

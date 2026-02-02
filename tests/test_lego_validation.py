@@ -60,6 +60,7 @@ class TestValidateStages:
              'base_incar': {'NSW': 0},
              'calculations': {'neutral': {'incar': {'NELECT': 100}}}},
             {'name': 'bader', 'type': 'bader', 'charge_from': 'relax'},
+            {'name': 'conv', 'type': 'convergence'},
         ]
         self._validate(stages)
 

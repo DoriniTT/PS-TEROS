@@ -11,6 +11,7 @@ Stage types are implemented as "bricks" (see bricks/ subdirectory):
 - dos: DOS calculations via BandsWorkChain
 - batch: Multiple parallel VASP calculations with varying parameters
 - bader: Bader charge analysis
+- convergence: ENCUT and k-points convergence testing
 
 Example usage:
 

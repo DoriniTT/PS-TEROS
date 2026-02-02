@@ -7,8 +7,6 @@ validation pipeline.
 All tests are tier1 (pure Python, no AiiDA profile needed).
 """
 
-import warnings
-
 import pytest
 
 # Import from connections.py directly (no AiiDA dependency).
