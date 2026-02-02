@@ -23,20 +23,17 @@ from teros.core.lego import quick_vasp_sequential, print_sequential_results
 structure_file = Path(__file__).parent / 'sno2.vasp'
 structure = orm.StructureData(ase=read(str(structure_file), format='vasp'))
 
-# Obelix cluster configuration
-code_label = 'VASP-6.5.1-idefix-4@obelix'
+# Bohr cluster configuration (par40 queue)
+code_label = 'VASP-VTST-6.4.3@bohr'
 potential_family = 'PBE'
 potential_mapping = {'Sn': 'Sn_d', 'O': 'O'}
 
 options = {
     'resources': {
         'num_machines': 1,
-        'num_mpiprocs_per_machine': 4,  # PROCESS_MPI=4 (hybrid MPI+OpenMP)
+        'num_cores_per_machine': 40,
     },
-    'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N sno2_dos''',
+    'custom_scheduler_commands': '#PBS -q par40\n#PBS -j oe\n#PBS -N sno2_dos',
 }
 
 # Light INCAR for testing (6-atom cell)
@@ -54,22 +51,29 @@ incar_relax = {
     'lcharg': True,
 }
 
-# Stage definitions
+# Stage definitions (three-section pattern: identity / connections / configuration)
 stages = [
     # Stage 1: VASP relaxation
     {
+        # ── Identity ──
         'name': 'relax',
-        'type': 'vasp',  # Optional, default is 'vasp'
-        'incar': incar_relax,
+        # type: 'vasp' (default)
+        # ── Connections ──
         'restart': None,
+        # structure: auto (first stage → uses initial input)
+        # ── Configuration ──
+        'incar': incar_relax,
         'kpoints_spacing': 0.06,
         'retrieve': ['CONTCAR', 'OUTCAR'],
     },
     # Stage 2: DOS calculation on relaxed structure
     {
+        # ── Identity ──
         'name': 'dos',
         'type': 'dos',
-        'structure_from': 'relax',  # Use relaxed structure
+        # ── Connections ──
+        'structure_from': 'relax',  # Use relaxed structure (VASP brick → structure port)
+        # ── Configuration ──
         'scf_incar': {
             # SCF step: generate charge density
             # Note: BandsWorkChain handles lwave/lcharg internally

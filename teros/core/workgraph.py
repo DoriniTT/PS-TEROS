@@ -1337,10 +1337,16 @@ def build_core_workgraph(
                     "Previous node has no slab_structures, will generate new slabs"
                 )
 
-            # Override input_slabs with slabs from previous run
+            # Use slabs from previous run only if input_slabs was not provided
             if restart_slabs:
-                input_slabs = restart_slabs
-                logger.info("  → Using slabs from previous run")
+                if input_slabs is not None:
+                    logger.info(
+                        "  → input_slabs provided, keeping user-specified slabs: %s",
+                        list(input_slabs.keys()),
+                    )
+                else:
+                    input_slabs = restart_slabs
+                    logger.info("  → Using slabs from previous run")
 
             logger.info("=" * 70)
 
