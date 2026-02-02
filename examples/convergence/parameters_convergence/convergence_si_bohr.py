@@ -114,7 +114,7 @@ def submit_convergence_test():
         # K-points convergence scan
         'kspacing_start': 0.08,   # Å⁻¹ - coarsest grid
         'kspacing_stop': 0.02,    # Å⁻¹ - finest grid
-        'kspacing_step': -0.01,   # Å⁻¹ - step (negative = getting finer)
+        'kspacing_step': 0.01,    # Å⁻¹ - step size (positive; code subtracts internally)
 
         # Fixed values for the other scan
         'cutoff_kconv': 450,      # eV - ENCUT used during k-points scan

@@ -12,6 +12,7 @@ Stage types are implemented as "bricks" (see bricks/ subdirectory):
 - batch: Multiple parallel VASP calculations with varying parameters
 - bader: Bader charge analysis
 - convergence: ENCUT and k-points convergence testing
+- thickness: Slab thickness convergence testing
 
 Example usage:
 

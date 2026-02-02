@@ -73,11 +73,11 @@ class TestBrickRegistry:
 
     def test_valid_brick_types_tuple(self):
         from teros.core.lego.bricks import VALID_BRICK_TYPES
-        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader', 'convergence')
+        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader', 'convergence', 'thickness')
 
-    def test_registry_has_five_entries(self):
+    def test_registry_has_six_entries(self):
         from teros.core.lego.bricks import BRICK_REGISTRY
-        assert len(BRICK_REGISTRY) == 5
+        assert len(BRICK_REGISTRY) == 6
 
     def test_get_brick_module_valid_types(self):
         from teros.core.lego.bricks import get_brick_module, VALID_BRICK_TYPES
@@ -606,3 +606,222 @@ class TestConvergenceValidateStage:
         stage = {'name': 'conv', 'convergence_threshold': 'bad'}
         with pytest.raises(ValueError, match="number"):
             self._validate(stage)
+
+
+# ---------------------------------------------------------------------------
+# TestThicknessValidateStage
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestThicknessValidateStage:
+    """Tests for teros.core.lego.bricks.thickness.validate_stage()."""
+
+    def _validate(self, stage, stage_names=None):
+        from teros.core.lego.bricks.thickness import validate_stage
+        if stage_names is None:
+            stage_names = set()
+        validate_stage(stage, stage_names)
+
+    def test_valid_mode_a_passes(self):
+        """Mode A: structure_from + energy_from both set."""
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0],
+            'layer_counts': [3, 5, 7],
+        }
+        self._validate(stage, stage_names={'bulk'})
+
+    def test_valid_mode_b_passes(self):
+        """Mode B: standalone with bulk_incar."""
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'miller_indices': [1, 1, 0],
+            'layer_counts': [3, 5, 7],
+            'bulk_incar': {'encut': 520, 'nsw': 100, 'isif': 3},
+        }
+        self._validate(stage)
+
+    def test_structure_from_without_energy_from_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="both set or both unset"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_energy_from_without_structure_from_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="both set or both unset"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_structure_from_unknown_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'nope', 'energy_from': 'nope',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="previous stage"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_energy_from_unknown_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'nope',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="previous stage"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_standalone_missing_bulk_incar_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="bulk_incar"):
+            self._validate(stage)
+
+    def test_missing_miller_indices_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="miller_indices"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_miller_indices_wrong_length_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1],
+            'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="3 integers"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_miller_indices_not_ints_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1.0, 1, 0],
+            'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="integers"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_missing_layer_counts_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0],
+        }
+        with pytest.raises(ValueError, match="layer_counts"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_layer_counts_too_short_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0],
+            'layer_counts': [3],
+        }
+        with pytest.raises(ValueError, match="at least 2"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_layer_counts_non_positive_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0],
+            'layer_counts': [3, 0, 5],
+        }
+        with pytest.raises(ValueError, match="positive integers"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_layer_counts_negative_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0],
+            'layer_counts': [3, -1, 5],
+        }
+        with pytest.raises(ValueError, match="positive integers"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_threshold_positive_passes(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+            'convergence_threshold': 0.02,
+        }
+        self._validate(stage, stage_names={'bulk'})
+
+    def test_threshold_zero_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+            'convergence_threshold': 0,
+        }
+        with pytest.raises(ValueError, match="positive"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_threshold_negative_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+            'convergence_threshold': -0.01,
+        }
+        with pytest.raises(ValueError, match="positive"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_threshold_non_numeric_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+            'convergence_threshold': 'bad',
+        }
+        with pytest.raises(ValueError, match="number"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_slab_incar_not_dict_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+            'slab_incar': 'bad',
+        }
+        with pytest.raises(ValueError, match="slab_incar.*dict"):
+            self._validate(stage, stage_names={'bulk'})
+
+    def test_bulk_incar_not_dict_raises(self):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+            'bulk_incar': 'bad',
+        }
+        with pytest.raises(ValueError, match="bulk_incar.*dict"):
+            self._validate(stage)
+
+    def test_full_config_passes(self):
+        """Full configuration with all optional fields."""
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'bulk', 'energy_from': 'bulk',
+            'miller_indices': [1, 1, 0],
+            'layer_counts': [3, 5, 7, 9, 11],
+            'convergence_threshold': 0.02,
+            'slab_incar': {'encut': 520, 'nsw': 100, 'isif': 2},
+            'min_vacuum_thickness': 15.0,
+            'termination_index': 0,
+        }
+        self._validate(stage, stage_names={'bulk'})

@@ -222,6 +222,31 @@ CONVERGENCE_PORTS = {
     },
 }
 
+THICKNESS_PORTS = {
+    'inputs': {
+        'structure': {
+            'type': 'structure',
+            'required': False,
+            'source': 'structure_from',
+            'description': 'Bulk structure (optional, falls back to initial)',
+        },
+        'energy': {
+            'type': 'energy',
+            'required': False,
+            'source': 'energy_from',
+            'compatible_bricks': ['vasp'],
+            'description': 'Bulk energy from a previous VASP stage',
+        },
+    },
+    'outputs': {
+        'convergence_results': {
+            'type': 'convergence',
+            'description': 'Thickness convergence analysis with surface energies',
+        },
+        # NOTE: no 'structure' output — produces convergence analysis only
+    },
+}
+
 # Registry mapping brick type name -> PORTS dict
 ALL_PORTS = {
     'vasp': VASP_PORTS,
@@ -229,6 +254,7 @@ ALL_PORTS = {
     'batch': BATCH_PORTS,
     'bader': BADER_PORTS,
     'convergence': CONVERGENCE_PORTS,
+    'thickness': THICKNESS_PORTS,
 }
 
 

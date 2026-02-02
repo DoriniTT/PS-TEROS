@@ -12,7 +12,7 @@ Port declarations and validation logic live in connections.py (pure Python,
 no AiiDA dependency) so they can be imported in tier1 tests.
 """
 
-from . import vasp, dos, batch, bader, convergence
+from . import vasp, dos, batch, bader, convergence, thickness
 from .connections import (  # noqa: F401
     PORT_TYPES,
     ALL_PORTS,
@@ -29,6 +29,7 @@ BRICK_REGISTRY = {
     'batch': batch,
     'bader': bader,
     'convergence': convergence,
+    'thickness': thickness,
 }
 
 VALID_BRICK_TYPES = tuple(BRICK_REGISTRY.keys())
@@ -38,7 +39,8 @@ def get_brick_module(brick_type: str):
     """Look up a brick module by type string.
 
     Args:
-        brick_type: One of 'vasp', 'dos', 'batch', 'bader', 'convergence'.
+        brick_type: One of the valid brick types (vasp, dos, batch,
+            bader, convergence, thickness).
 
     Returns:
         The brick module.
@@ -59,8 +61,8 @@ def resolve_structure_from(structure_from: str, context: dict):
     """Resolve a structure socket from a previous stage.
 
     Only VASP stages produce a meaningful structure output. Referencing
-    a non-VASP stage (dos, batch, bader, convergence) raises an error
-    because those bricks don't produce structures.
+    a non-VASP stage (dos, batch, bader, convergence, thickness) raises
+    an error because those bricks don't produce structures.
 
     Args:
         structure_from: Name of the stage to get structure from.
@@ -83,5 +85,35 @@ def resolve_structure_from(structure_from: str, context: dict):
         raise ValueError(
             f"structure_from='{structure_from}' references a '{ref_stage_type}' "
             f"stage, which doesn't produce a structure output. "
+            f"Point to a VASP stage instead."
+        )
+
+
+def resolve_energy_from(energy_from: str, context: dict):
+    """Resolve an energy socket from a previous stage.
+
+    Only VASP stages produce a meaningful energy output. Referencing
+    a non-VASP stage raises an error.
+
+    Args:
+        energy_from: Name of the stage to get energy from.
+        context: The context dict passed to create_stage_tasks.
+
+    Returns:
+        Energy socket (Float or task output socket).
+
+    Raises:
+        ValueError: If the referenced stage doesn't produce an energy.
+    """
+    stage_tasks = context['stage_tasks']
+    stage_types = context['stage_types']
+
+    ref_stage_type = stage_types.get(energy_from, 'vasp')
+    if ref_stage_type == 'vasp':
+        return stage_tasks[energy_from]['energy'].outputs.result
+    else:
+        raise ValueError(
+            f"energy_from='{energy_from}' references a '{ref_stage_type}' "
+            f"stage, which doesn't produce an energy output. "
             f"Point to a VASP stage instead."
         )

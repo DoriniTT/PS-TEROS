@@ -5,6 +5,72 @@ from aiida_workgraph import task
 
 
 @task.calcfunction
+def gather_cutoff_results(cutoff_values: orm.List, **kwargs) -> orm.Dict:
+    """Gather cutoff convergence scan results into a summary Dict.
+
+    Collects energy from individual VASP misc outputs keyed as c_0, c_1, ...
+    and assembles them into the format expected by analyze_cutoff_convergence.
+
+    Args:
+        cutoff_values: Ordered list of ENCUT values tested.
+        **kwargs: c_0, c_1, ... orm.Dict nodes containing VASP misc output.
+
+    Returns:
+        Dict with 'cutoff' and 'energy' lists.
+    """
+    cutoffs = cutoff_values.get_list()
+    energies = []
+
+    for i in range(len(cutoffs)):
+        misc = kwargs[f'c_{i}']
+        data = misc.get_dict()
+        total_energies = data.get('total_energies', {})
+        energy = total_energies.get(
+            'energy_extrapolated',
+            total_energies.get('energy_no_entropy'),
+        )
+        energies.append(energy)
+
+    return orm.Dict(dict={
+        'cutoff': cutoffs,
+        'energy': energies,
+    })
+
+
+@task.calcfunction
+def gather_kpoints_results(kspacing_values: orm.List, **kwargs) -> orm.Dict:
+    """Gather k-points convergence scan results into a summary Dict.
+
+    Collects energy from individual VASP misc outputs keyed as k_0, k_1, ...
+    and assembles them into the format expected by analyze_kpoints_convergence.
+
+    Args:
+        kspacing_values: Ordered list of k-spacing values tested.
+        **kwargs: k_0, k_1, ... orm.Dict nodes containing VASP misc output.
+
+    Returns:
+        Dict with 'kpoints_spacing' and 'energy' lists.
+    """
+    spacings = kspacing_values.get_list()
+    energies = []
+
+    for i in range(len(spacings)):
+        misc = kwargs[f'k_{i}']
+        data = misc.get_dict()
+        total_energies = data.get('total_energies', {})
+        energy = total_energies.get(
+            'energy_extrapolated',
+            total_energies.get('energy_no_entropy'),
+        )
+        energies.append(energy)
+
+    return orm.Dict(dict={
+        'kpoints_spacing': spacings,
+        'energy': energies,
+    })
+
+
+@task.calcfunction
 def analyze_cutoff_convergence(
     conv_data: orm.Dict,
     threshold: orm.Float,

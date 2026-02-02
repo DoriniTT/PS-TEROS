@@ -179,7 +179,8 @@ teros/core/
         ├── dos.py            # DOS brick (BandsWorkChain wrapper)
         ├── batch.py          # Batch brick (parallel VASP with varying params)
         ├── bader.py          # Bader brick (charge analysis)
-        └── convergence.py    # Convergence brick (ENCUT/k-points testing)
+        ├── convergence.py    # Convergence brick (ENCUT/k-points testing)
+        └── thickness.py      # Thickness brick (slab thickness convergence)
 ```
 
 **Submodule pattern:**
@@ -211,7 +212,8 @@ teros/core/lego/
     ├── dos.py          # DOS stages via BandsWorkChain
     ├── batch.py        # Parallel VASP calculations with varying parameters
     ├── bader.py        # Bader charge analysis
-    └── convergence.py  # ENCUT/k-points convergence testing
+    ├── convergence.py  # ENCUT/k-points convergence testing
+    └── thickness.py    # Slab thickness convergence testing
 ```
 
 ### Philosophy
@@ -334,7 +336,7 @@ result = quick_vasp_sequential(
 ```
 
 The `__stage_namespaces__` dict maps each stage name to its namespace mapping. The mapping keys depend on brick type:
-- `vasp`, `batch`, `bader`, `convergence`: `{'main': 'stageN'}`
+- `vasp`, `batch`, `bader`, `convergence`, `thickness`: `{'main': 'stageN'}`
 - `dos`: `{'scf': 'stageN', 'dos': 'stageN'}` (both share the same stage number)
 
 ### Brick Types
@@ -346,6 +348,7 @@ The `__stage_namespaces__` dict maps each stage name to its namespace mapping. T
 | `batch` | Parallel VASP with varying params | `base_incar`, `calculations`, `structure_from` |
 | `bader` | Bader charge analysis | `charge_from` |
 | `convergence` | ENCUT/k-points convergence | `conv_settings`, `structure_from` (optional) |
+| `thickness` | Slab thickness convergence | `miller_indices`, `layer_counts`, `slab_incar`, `structure_from`/`energy_from` (optional) |
 
 ### Stage Output Namespaces
 
@@ -423,6 +426,14 @@ stageN
     recommendations      Dict
 ```
 
+#### thickness brick
+
+```
+stageN
+  thickness
+    convergence_results  Dict
+```
+
 #### How it works
 
 Dotted `setattr` calls like `setattr(wg.outputs, 'stage1.vasp.energy', socket)` create nested namespace sockets via `_set_socket_value` in WorkGraph. AiiDA stores them as `stage1__vasp__energy` link labels (using `__` separator) and `verdi process show` displays them grouped. Use `get_brick_info(brick_type)` from `connections.py` to inspect a brick's port declarations.
@@ -473,12 +484,12 @@ energy = misc_dict['total_energies']['energy_extrapolated']  # Recommended
 
 | Working Directory | Testing Strategy | Code Label |
 |-------------------|------------------|------------|
-| `/home/thiagotd` (home computer) | Jump directly to production on obelix | `VASP-6.5.1-idefix@obelix` |
-| `/home/trevizam` (work computer) | 1. Test locally first, then production | `vasp-6.5.1-std@localhost` → `VASP-6.5.1-idefix@obelix` |
+| `/home/thiagotd` (home computer) | Jump directly to production on obelix | `VASP-6.5.1-idefix-4@obelix` |
+| `/home/trevizam` (work computer) | 1. Test locally first, then production | `vasp-6.5.1-std@localhost` → `VASP-6.5.1-idefix-4@obelix` |
 
 **Obelix cluster configuration:**
 ```python
-code_label = 'VASP-6.5.1-idefix@obelix'
+code_label = 'VASP-6.5.1-idefix-4@obelix'
 options = {
     'resources': {
         'num_machines': 1,

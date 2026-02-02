@@ -59,7 +59,7 @@ def submit_convergence_test():
         'cutoff_step': 50,
         'kspacing_start': 0.12,
         'kspacing_stop': 0.06,
-        'kspacing_step': -0.02,
+        'kspacing_step': 0.02,
         'cutoff_kconv': 300,
         'kspacing_cutconv': 0.08,
     }
