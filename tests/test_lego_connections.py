@@ -31,6 +31,7 @@ DOS_PORTS = _connections.DOS_PORTS
 BATCH_PORTS = _connections.BATCH_PORTS
 BADER_PORTS = _connections.BADER_PORTS
 CONVERGENCE_PORTS = _connections.CONVERGENCE_PORTS
+THICKNESS_PORTS = _connections.THICKNESS_PORTS
 validate_connections = _connections.validate_connections
 _validate_port_types = _connections._validate_port_types
 _evaluate_conditional = _connections._evaluate_conditional
@@ -123,6 +124,35 @@ def convergence_stage():
         'name': 'conv',
         'type': 'convergence',
         'conv_settings': {'cutoff_start': 300},
+    }
+
+
+@pytest.fixture
+def thickness_stage():
+    """Valid thickness stage pointing at a bulk relax."""
+    return {
+        'name': 'thick_conv',
+        'type': 'thickness',
+        'structure_from': 'relax',
+        'energy_from': 'relax',
+        'miller_indices': [1, 1, 0],
+        'layer_counts': [3, 5, 7, 9],
+        'convergence_threshold': 0.02,
+        'slab_incar': {'encut': 520, 'nsw': 100},
+    }
+
+
+@pytest.fixture
+def thickness_stage_standalone():
+    """Valid thickness stage in standalone mode (no structure_from)."""
+    return {
+        'name': 'thick_conv',
+        'type': 'thickness',
+        'miller_indices': [1, 1, 0],
+        'layer_counts': [3, 5, 7],
+        'convergence_threshold': 0.01,
+        'bulk_incar': {'encut': 520, 'nsw': 100, 'isif': 3},
+        'slab_incar': {'encut': 520, 'nsw': 100, 'isif': 2},
     }
 
 
@@ -868,3 +898,142 @@ class TestValidateConnectionsEdgeCases:
             'restart': None,
         }
         validate_connections([stage])
+
+
+# ---------------------------------------------------------------------------
+# TestThicknessConnections
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestThicknessConnections:
+    """Tests for thickness brick port declarations and connection validation."""
+
+    # -- Port declarations --
+
+    def test_all_thickness_output_types_recognized(self):
+        for port_name, port in THICKNESS_PORTS['outputs'].items():
+            assert port['type'] in PORT_TYPES, \
+                f"Thickness output '{port_name}' has unrecognized type '{port['type']}'"
+
+    def test_all_thickness_input_types_recognized(self):
+        for port_name, port in THICKNESS_PORTS['inputs'].items():
+            assert port['type'] in PORT_TYPES, \
+                f"Thickness input '{port_name}' has unrecognized type '{port['type']}'"
+
+    def test_thickness_has_one_output(self):
+        assert len(THICKNESS_PORTS['outputs']) == 1
+
+    def test_thickness_output_is_convergence_results(self):
+        assert 'convergence_results' in THICKNESS_PORTS['outputs']
+
+    def test_thickness_has_two_inputs(self):
+        assert len(THICKNESS_PORTS['inputs']) == 2
+
+    def test_thickness_structure_input_is_optional(self):
+        assert THICKNESS_PORTS['inputs']['structure']['required'] is False
+
+    def test_thickness_energy_input_is_optional(self):
+        assert THICKNESS_PORTS['inputs']['energy']['required'] is False
+
+    def test_thickness_energy_compatible_with_vasp_only(self):
+        assert THICKNESS_PORTS['inputs']['energy']['compatible_bricks'] == ['vasp']
+
+    def test_thickness_has_no_structure_output(self):
+        assert 'structure' not in THICKNESS_PORTS['outputs']
+
+    def test_thickness_registered_in_all_ports(self):
+        assert 'thickness' in ALL_PORTS
+        assert ALL_PORTS['thickness'] is THICKNESS_PORTS
+
+    # -- Connection validation: Mode A (from previous VASP stage) --
+
+    def test_vasp_then_thickness_passes(self, relax_stage, thickness_stage):
+        warnings = validate_connections([relax_stage, thickness_stage])
+        assert isinstance(warnings, list)
+
+    def test_thickness_structure_from_unknown_rejected(self, relax_stage):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'nonexistent', 'energy_from': 'relax',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="unknown stage"):
+            validate_connections([relax_stage, stage])
+
+    def test_thickness_energy_from_unknown_rejected(self, relax_stage):
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'relax', 'energy_from': 'nonexistent',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="unknown stage"):
+            validate_connections([relax_stage, stage])
+
+    def test_thickness_energy_from_dos_rejected(self, relax_stage, dos_stage):
+        """DOS brick is not in compatible_bricks for energy input."""
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'relax', 'energy_from': 'dos',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="compatible with bricks.*vasp"):
+            validate_connections([relax_stage, dos_stage, stage])
+
+    def test_thickness_energy_from_convergence_rejected(
+        self, relax_stage, convergence_stage
+    ):
+        """Convergence doesn't produce 'energy' type."""
+        conv = {**convergence_stage, 'structure_from': 'relax'}
+        stage = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'relax', 'energy_from': 'conv',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+        }
+        with pytest.raises(ValueError, match="doesn't produce it"):
+            validate_connections([relax_stage, conv, stage])
+
+    # -- Connection validation: Mode B (standalone) --
+
+    def test_thickness_standalone_passes(self, thickness_stage_standalone):
+        """Standalone thickness (no structure_from/energy_from) is valid."""
+        warnings = validate_connections([thickness_stage_standalone])
+        assert warnings == []
+
+    # -- Connection validation: downstream --
+
+    def test_vasp_after_thickness_auto_fails(self, relax_stage, thickness_stage):
+        """Thickness has no structure output → auto(previous) should fail."""
+        vasp_after = {
+            'name': 'post', 'type': 'vasp',
+            'incar': {'encut': 520, 'nsw': 0},
+            'restart': None,
+        }
+        with pytest.raises(ValueError, match="doesn't produce.*structure"):
+            validate_connections([relax_stage, thickness_stage, vasp_after])
+
+    def test_dos_after_thickness_with_explicit_structure_from(
+        self, relax_stage, thickness_stage
+    ):
+        """DOS after thickness must use structure_from pointing at relax."""
+        dos = {
+            'name': 'dos', 'type': 'dos', 'structure_from': 'relax',
+            'scf_incar': {'encut': 520}, 'dos_incar': {'nedos': 3000},
+        }
+        validate_connections([relax_stage, thickness_stage, dos])
+
+    # -- Forward reference --
+
+    def test_thickness_forward_reference_fails(self, relax_stage):
+        """Thickness can't reference a stage that comes after it."""
+        thick = {
+            'name': 'thick', 'type': 'thickness',
+            'structure_from': 'late_relax', 'energy_from': 'late_relax',
+            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+        }
+        late_relax = {
+            'name': 'late_relax', 'type': 'vasp',
+            'incar': {'encut': 520, 'nsw': 100},
+            'restart': None,
+        }
+        with pytest.raises(ValueError, match="unknown stage"):
+            validate_connections([relax_stage, thick, late_relax])

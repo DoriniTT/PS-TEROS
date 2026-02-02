@@ -318,7 +318,7 @@ conv_settings = {
     # K-points scan range
     'kspacing_start': 0.08,    # Å⁻¹ - coarsest grid
     'kspacing_stop': 0.02,     # Å⁻¹ - finest grid
-    'kspacing_step': -0.01,    # Å⁻¹ - step (negative = finer)
+    'kspacing_step': 0.01,     # Å⁻¹ - step size (positive; code subtracts internally)
 
     # Fixed values during the other scan
     'cutoff_kconv': 450,       # ENCUT used during k-points scan
@@ -334,7 +334,7 @@ conv_settings = {
 | `cutoff_step` | 50 | ENCUT step (eV) |
 | `kspacing_start` | 0.08 | Coarsest k-spacing (Å⁻¹) |
 | `kspacing_stop` | 0.02 | Finest k-spacing (Å⁻¹) |
-| `kspacing_step` | -0.01 | K-spacing step (Å⁻¹) |
+| `kspacing_step` | 0.01 | K-spacing step (Å⁻¹) |
 | `cutoff_kconv` | 520 | Fixed ENCUT for k-points scan |
 | `kspacing_cutconv` | 0.03 | Fixed k-spacing for ENCUT scan |
 
@@ -393,7 +393,7 @@ conv_settings = {
     'cutoff_step': 50,
     'kspacing_start': 0.08,
     'kspacing_stop': 0.02,
-    'kspacing_step': -0.01,
+    'kspacing_step': 0.01,
     'cutoff_kconv': 450,
     'kspacing_cutconv': 0.03,
 }

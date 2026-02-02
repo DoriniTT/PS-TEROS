@@ -20,6 +20,8 @@ from .tasks import (
     analyze_cutoff_convergence,
     analyze_kpoints_convergence,
     extract_recommended_parameters,
+    gather_cutoff_results,
+    gather_kpoints_results,
 )
 from .slabs import generate_thickness_series
 from ..utils import deep_merge_dicts, get_vasp_parser_settings, extract_max_jobs_value
@@ -35,10 +37,173 @@ DEFAULT_CONV_SETTINGS = {
     'cutoff_step': 50,
     'kspacing_start': 0.08,
     'kspacing_stop': 0.02,
-    'kspacing_step': -0.01,
+    'kspacing_step': 0.01,
     'cutoff_kconv': 520,
     'kspacing_cutconv': 0.03,
 }
+
+
+def _build_cutoff_list(settings: dict) -> list:
+    """Build list of ENCUT values to scan.
+
+    Replicates the logic from VaspConvergenceWorkChain.setup() so we can
+    replace that workchain with individual VaspTasks.
+
+    Args:
+        settings: Convergence settings dict with cutoff_start/stop/step.
+
+    Returns:
+        List of ENCUT values, or empty list if start >= stop.
+    """
+    start = settings['cutoff_start']
+    stop = settings['cutoff_stop']
+    step = settings['cutoff_step']
+
+    if start >= stop:
+        return []
+
+    cutoff_list = [start]
+    cut = start
+    while True:
+        cut += step
+        if cut < stop:
+            cutoff_list.append(cut)
+        else:
+            cutoff_list.append(stop)
+            break
+
+    return cutoff_list
+
+
+def _build_kspacing_list(settings: dict) -> list:
+    """Build list of k-spacing values to scan.
+
+    Replicates the logic from VaspConvergenceWorkChain.setup() with the
+    corrected sign convention (step is positive, subtracted internally).
+
+    Args:
+        settings: Convergence settings dict with kspacing_start/stop/step.
+
+    Returns:
+        List of k-spacing values (descending, coarse to fine),
+        or empty list if start <= stop.
+    """
+    start = settings['kspacing_start']
+    stop = settings['kspacing_stop']
+    step = settings['kspacing_step']
+
+    if start <= stop:
+        return []
+
+    kspacing_list = [start]
+    spacing = start
+    while True:
+        spacing -= step  # step is positive; subtracting moves toward finer grid
+        if spacing > stop:
+            kspacing_list.append(round(spacing, 6))
+        else:
+            kspacing_list.append(stop)
+            break
+
+    return kspacing_list
+
+
+@task.graph(outputs=['cutoff_conv_data', 'kpoints_conv_data'])
+def convergence_scan(
+    structure: orm.StructureData,
+    code_pk: int,
+    base_incar: dict,
+    options: dict,
+    potential_family: str,
+    potential_mapping: dict,
+    conv_settings: dict,
+    clean_workdir: bool = True,
+    max_number_jobs: int = None,
+):
+    """Run ENCUT and k-points convergence scans with concurrency control.
+
+    Replaces VaspConvergenceWorkChain with individual VaspTasks that respect
+    max_number_jobs for concurrency control. Produces the same outputs:
+    cutoff_conv_data and kpoints_conv_data.
+
+    Args:
+        structure: Input structure.
+        code_pk: PK of AiiDA VASP code.
+        base_incar: Base INCAR parameters dict.
+        options: Scheduler options dict.
+        potential_family: Pseudopotential family name.
+        potential_mapping: Element to potential mapping dict.
+        conv_settings: Convergence scan settings dict.
+        clean_workdir: Clean work directories after completion.
+        max_number_jobs: Maximum concurrent VASP calculations.
+
+    Returns:
+        Dict with cutoff_conv_data and kpoints_conv_data.
+    """
+    if max_number_jobs is not None:
+        wg = get_current_graph()
+        wg.max_number_jobs = extract_max_jobs_value(max_number_jobs)
+
+    settings_dict = (
+        conv_settings if isinstance(conv_settings, dict)
+        else conv_settings.get_dict()
+    )
+    cutoff_list = _build_cutoff_list(settings_dict)
+    kspacing_list = _build_kspacing_list(settings_dict)
+
+    code = orm.load_node(code_pk)
+    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
+    VaspTask = task(VaspWorkChain)
+    parser_settings = orm.Dict(dict=get_vasp_parser_settings(add_energy=True))
+
+    # ── Cutoff convergence scans ──────────────────────────────────────
+    cutoff_kwargs = {'cutoff_values': orm.List(list=cutoff_list)}
+    kspacing_for_cutconv = settings_dict.get('kspacing_cutconv', 0.03)
+
+    for i, cutoff in enumerate(cutoff_list):
+        incar = dict(base_incar)
+        incar['encut'] = cutoff
+        vasp = VaspTask(
+            structure=structure,
+            code=code,
+            parameters={'incar': incar},
+            options=dict(options),
+            kpoints_spacing=kspacing_for_cutconv,
+            potential_family=potential_family,
+            potential_mapping=orm.Dict(dict=dict(potential_mapping)),
+            clean_workdir=clean_workdir,
+            settings=parser_settings,
+        )
+        cutoff_kwargs[f'c_{i}'] = vasp.misc
+
+    cutoff_conv = gather_cutoff_results(**cutoff_kwargs)
+
+    # ── K-spacing convergence scans ───────────────────────────────────
+    kpoints_kwargs = {'kspacing_values': orm.List(list=kspacing_list)}
+    cutoff_for_kconv = settings_dict.get('cutoff_kconv', 520)
+    k_incar = dict(base_incar)
+    k_incar['encut'] = cutoff_for_kconv
+
+    for i, ksp in enumerate(kspacing_list):
+        vasp = VaspTask(
+            structure=structure,
+            code=code,
+            parameters={'incar': k_incar},
+            options=dict(options),
+            kpoints_spacing=ksp,
+            potential_family=potential_family,
+            potential_mapping=orm.Dict(dict=dict(potential_mapping)),
+            clean_workdir=clean_workdir,
+            settings=parser_settings,
+        )
+        kpoints_kwargs[f'k_{i}'] = vasp.misc
+
+    kpoints_conv = gather_kpoints_results(**kpoints_kwargs)
+
+    return {
+        'cutoff_conv_data': cutoff_conv.result,
+        'kpoints_conv_data': kpoints_conv.result,
+    }
 
 
 def _prepare_convergence_inputs(
@@ -113,13 +278,15 @@ def build_convergence_workgraph(
     builder_inputs: dict,
     conv_settings: dict = None,
     convergence_threshold: float = 0.001,
+    max_concurrent_jobs: int = None,
     name: str = 'convergence_test',
 ) -> WorkGraph:
     """
     Build a WorkGraph for VASP convergence testing.
 
-    This wraps the aiida-vasp vasp.v2.converge workchain to perform
-    systematic testing of ENCUT and k-points parameters.
+    Uses individual VaspTasks with concurrency control via max_number_jobs,
+    replacing VaspConvergenceWorkChain which launched all calculations
+    simultaneously without any concurrency limit.
 
     Args:
         structure: StructureData to test convergence on
@@ -138,11 +305,13 @@ def build_convergence_workgraph(
             - cutoff_step: int (default: 50 eV)
             - kspacing_start: float (default: 0.08 A^-1)
             - kspacing_stop: float (default: 0.02 A^-1)
-            - kspacing_step: float (default: -0.01 A^-1)
+            - kspacing_step: float (default: 0.01 A^-1)
             - cutoff_kconv: int (cutoff for k-points convergence, default: 520 eV)
             - kspacing_cutconv: float (k-spacing for cutoff convergence, default: 0.03 A^-1)
         convergence_threshold: float, energy threshold in eV/atom for determining
             convergence (default: 0.001 = 1 meV/atom)
+        max_concurrent_jobs: int, maximum number of parallel VASP jobs
+            (default: None = unlimited)
         name: str, WorkGraph name
 
     Returns:
@@ -167,6 +336,7 @@ def build_convergence_workgraph(
         ...         'cutoff_step': 50,
         ...     },
         ...     convergence_threshold=0.001,  # 1 meV/atom
+        ...     max_concurrent_jobs=4,
         ... )
         >>> wg.submit()
     """
@@ -176,17 +346,6 @@ def build_convergence_workgraph(
     code = orm.load_code(code_label)
     logger.info(f"  Using code: {code_label}")
 
-    # Load the convergence workchain
-    try:
-        ConvergeWorkChain = WorkflowFactory('vasp.v2.converge')
-    except Exception as e:
-        raise ImportError(
-            "vasp.v2.converge workchain not found. "
-            "Please ensure aiida-vasp >= 3.0 is installed."
-        ) from e
-
-    ConvergeTask = task(ConvergeWorkChain)
-
     # Merge conv_settings with defaults
     if conv_settings is not None:
         merged_settings = deep_merge_dicts(DEFAULT_CONV_SETTINGS, conv_settings)
@@ -195,19 +354,26 @@ def build_convergence_workgraph(
 
     logger.info(f"  Convergence settings: {merged_settings}")
 
-    # Prepare builder inputs (under 'vasp' namespace)
-    prepared_inputs = _prepare_convergence_inputs(builder_inputs, code)
+    # Extract INCAR from builder_inputs
+    params = builder_inputs.get('parameters', {})
+    base_incar = params.get('incar', {}) if isinstance(params, dict) else {}
 
     # Build WorkGraph
     wg = WorkGraph(name=name)
 
-    # Add convergence workchain task
+    # Add convergence scan task (uses individual VaspTasks with concurrency control)
     converge_task = wg.add_task(
-        ConvergeTask,
+        convergence_scan,
         name='convergence_scan',
         structure=structure,
-        conv_settings=orm.Dict(dict=merged_settings),
-        **prepared_inputs,
+        code_pk=code.pk,
+        base_incar=base_incar,
+        options=builder_inputs.get('options', {}),
+        potential_family=builder_inputs.get('potential_family', 'PBE'),
+        potential_mapping=builder_inputs.get('potential_mapping', {}),
+        conv_settings=merged_settings,
+        clean_workdir=builder_inputs.get('clean_workdir', True),
+        max_number_jobs=max_concurrent_jobs,
     )
 
     # Store threshold for analysis tasks

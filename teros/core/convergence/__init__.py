@@ -39,6 +39,7 @@ from .workgraph import (
     # ENCUT/k-points convergence
     build_convergence_workgraph,
     get_convergence_results,
+    convergence_scan,
     # Thickness convergence
     build_thickness_convergence_workgraph,
     get_thickness_convergence_results,
@@ -68,6 +69,7 @@ __all__ = [
     # ENCUT/k-points convergence
     'build_convergence_workgraph',
     'get_convergence_results',
+    'convergence_scan',
     # ENCUT/k-points visualization and export
     'print_convergence_summary',
     'plot_convergence',

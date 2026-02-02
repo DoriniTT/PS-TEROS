@@ -717,6 +717,7 @@ def quick_vasp_sequential(
             'stages': stages,
             'input_structure': structure,
             'stage_index': i,
+            'max_concurrent_jobs': max_concurrent_jobs,
         }
 
         # Delegate to brick module

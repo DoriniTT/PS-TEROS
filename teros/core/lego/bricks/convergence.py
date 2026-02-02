@@ -57,6 +57,10 @@ def validate_stage(stage: dict, stage_names: set) -> None:
 def create_stage_tasks(wg, stage, stage_name, context):
     """Create convergence stage tasks in the WorkGraph.
 
+    Uses individual VaspTasks inside a convergence_scan @task.graph,
+    which supports max_number_jobs for concurrency control. This replaces
+    the VaspConvergenceWorkChain which launched all calculations at once.
+
     Args:
         wg: WorkGraph to add tasks to.
         stage: Stage configuration dict.
@@ -67,10 +71,8 @@ def create_stage_tasks(wg, stage, stage_name, context):
         Dict with task references for later stages.
     """
     from aiida import orm
-    from aiida.plugins import WorkflowFactory
-    from aiida_workgraph import task as wg_task
     from teros.core.convergence.workgraph import (
-        _prepare_convergence_inputs, DEFAULT_CONV_SETTINGS,
+        convergence_scan, DEFAULT_CONV_SETTINGS,
     )
     from teros.core.convergence.tasks import (
         analyze_cutoff_convergence,
@@ -87,31 +89,25 @@ def create_stage_tasks(wg, stage, stage_name, context):
     else:
         structure = context['input_structure']
 
-    # Prepare VASP inputs
-    incar = stage.get('incar', {})
-    builder_inputs = {
-        'parameters': {'incar': incar},
-        'options': context['options'],
-        'kpoints_spacing': context['base_kpoints_spacing'],
-        'potential_family': context['potential_family'],
-        'potential_mapping': context['potential_mapping'],
-        'clean_workdir': context['clean_workdir'],
-    }
-    prepared = _prepare_convergence_inputs(builder_inputs, context['code'])
-
     # Merge convergence settings
     user_settings = stage.get('conv_settings', {})
     merged_settings = deep_merge_dicts(DEFAULT_CONV_SETTINGS, user_settings)
 
-    # Add converge workchain
-    ConvergeWorkChain = WorkflowFactory('vasp.v2.converge')
-    ConvergeTask = wg_task(ConvergeWorkChain)
+    incar = stage.get('incar', {})
+
+    # Add convergence scan task (individual VaspTasks with concurrency control)
     converge = wg.add_task(
-        ConvergeTask,
+        convergence_scan,
         name=f'converge_{stage_name}',
         structure=structure,
-        conv_settings=orm.Dict(dict=merged_settings),
-        **prepared,
+        code_pk=context['code'].pk,
+        base_incar=incar,
+        options=context['options'],
+        potential_family=context['potential_family'],
+        potential_mapping=context['potential_mapping'],
+        conv_settings=merged_settings,
+        clean_workdir=context['clean_workdir'],
+        max_number_jobs=context.get('max_concurrent_jobs'),
     )
 
     # Analysis tasks
