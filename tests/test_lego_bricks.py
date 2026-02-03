@@ -44,8 +44,23 @@ def valid_bader_stage():
 
 
 @pytest.fixture
-def valid_convergence_stage():
-    return {'name': 'conv', 'type': 'convergence'}
+def valid_hubbard_response_stage():
+    return {
+        'name': 'response', 'type': 'hubbard_response',
+        'ground_state_from': 'ground_state',
+        'structure_from': 'input',
+        'target_species': 'Ni',
+    }
+
+
+@pytest.fixture
+def valid_hubbard_analysis_stage():
+    return {
+        'name': 'analysis', 'type': 'hubbard_analysis',
+        'response_from': 'response',
+        'structure_from': 'input',
+        'target_species': 'Ni',
+    }
 
 
 @pytest.fixture
@@ -73,7 +88,7 @@ class TestBrickRegistry:
 
     def test_valid_brick_types_tuple(self):
         from teros.core.lego.bricks import VALID_BRICK_TYPES
-        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader', 'convergence', 'thickness')
+        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader', 'hubbard_response', 'hubbard_analysis')
 
     def test_registry_has_six_entries(self):
         from teros.core.lego.bricks import BRICK_REGISTRY
@@ -381,62 +396,6 @@ class TestBaderValidateStage:
 
 
 # ---------------------------------------------------------------------------
-# TestConvergenceValidateStage
-# ---------------------------------------------------------------------------
-
-@pytest.mark.tier1
-class TestConvergenceValidateStage:
-    """Tests for teros.core.lego.bricks.convergence.validate_stage()."""
-
-    def _validate(self, stage, stage_names=None):
-        from teros.core.lego.bricks.convergence import validate_stage
-        if stage_names is None:
-            stage_names = set()
-        validate_stage(stage, stage_names)
-
-    def test_valid_minimal_passes(self):
-        stage = {'name': 'conv', 'type': 'convergence'}
-        self._validate(stage)
-
-    def test_valid_full_passes(self, valid_convergence_stage):
-        self._validate(valid_convergence_stage)
-
-    def test_structure_from_valid_passes(self):
-        stage = {'name': 'conv', 'type': 'convergence', 'structure_from': 'relax'}
-        self._validate(stage, stage_names={'relax'})
-
-    def test_structure_from_unknown_raises(self):
-        stage = {'name': 'conv', 'type': 'convergence', 'structure_from': 'nope'}
-        with pytest.raises(ValueError, match="previous stage"):
-            self._validate(stage, stage_names={'relax'})
-
-    def test_conv_settings_not_dict_raises(self):
-        stage = {'name': 'conv', 'type': 'convergence', 'conv_settings': 'bad'}
-        with pytest.raises(ValueError, match="conv_settings"):
-            self._validate(stage)
-
-    def test_threshold_negative_raises(self):
-        stage = {'name': 'conv', 'type': 'convergence', 'convergence_threshold': -0.1}
-        with pytest.raises(ValueError, match="positive"):
-            self._validate(stage)
-
-    def test_threshold_zero_raises(self):
-        stage = {'name': 'conv', 'type': 'convergence', 'convergence_threshold': 0}
-        with pytest.raises(ValueError, match="positive"):
-            self._validate(stage)
-
-    def test_threshold_string_raises(self):
-        stage = {'name': 'conv', 'type': 'convergence', 'convergence_threshold': 'bad'}
-        with pytest.raises(ValueError, match="number"):
-            self._validate(stage)
-
-    def test_conv_settings_dict_passes(self):
-        stage = {'name': 'conv', 'type': 'convergence',
-                 'conv_settings': {'cutoff_start': 300}}
-        self._validate(stage)
-
-
-# ---------------------------------------------------------------------------
 # TestParseAcfDat
 # ---------------------------------------------------------------------------
 
@@ -554,274 +513,236 @@ class TestEnrichAcfDat:
 
 
 # ---------------------------------------------------------------------------
-# TestConvergenceValidateStage
+# TestHubbardResponseValidateStage
 # ---------------------------------------------------------------------------
 
 @pytest.mark.tier1
-class TestConvergenceValidateStage:
-    """Tests for teros.core.lego.bricks.convergence.validate_stage()."""
+class TestHubbardResponseValidateStage:
+    """Tests for teros.core.lego.bricks.hubbard_response.validate_stage()."""
 
     def _validate(self, stage, stage_names=None):
-        from teros.core.lego.bricks.convergence import validate_stage
+        from teros.core.lego.bricks.hubbard_response import validate_stage
         if stage_names is None:
             stage_names = set()
         validate_stage(stage, stage_names)
 
-    def test_valid_minimal_passes(self, valid_convergence_stage):
-        self._validate(valid_convergence_stage)
+    def test_valid_passes(self, valid_hubbard_response_stage):
+        self._validate(valid_hubbard_response_stage,
+                       stage_names={'ground_state'})
 
-    def test_structure_from_valid_passes(self):
-        stage = {'name': 'conv', 'structure_from': 'relax'}
-        self._validate(stage, stage_names={'relax'})
+    def test_valid_with_input_structure(self):
+        stage = {
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'structure_from': 'input',
+            'target_species': 'Fe',
+        }
+        self._validate(stage, stage_names={'gs'})
 
-    def test_structure_from_unknown_raises(self):
-        stage = {'name': 'conv', 'structure_from': 'nope'}
-        with pytest.raises(ValueError, match="previous stage"):
-            self._validate(stage, stage_names={'relax'})
+    def test_valid_with_custom_potentials(self):
+        stage = {
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'potential_values': [-0.3, -0.15, 0.15, 0.3],
+        }
+        self._validate(stage, stage_names={'gs'})
 
-    def test_conv_settings_not_dict_raises(self):
-        stage = {'name': 'conv', 'conv_settings': 'bad'}
-        with pytest.raises(ValueError, match="conv_settings"):
+    def test_valid_with_ldaul_3(self):
+        stage = {
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'structure_from': 'input',
+            'target_species': 'Ce',
+            'ldaul': 3,
+        }
+        self._validate(stage, stage_names={'gs'})
+
+    def test_missing_target_species_raises(self):
+        stage = {
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'structure_from': 'input',
+        }
+        with pytest.raises(ValueError, match="target_species"):
+            self._validate(stage, stage_names={'gs'})
+
+    def test_missing_ground_state_from_raises(self):
+        stage = {
+            'name': 'response', 'type': 'hubbard_response',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+        }
+        with pytest.raises(ValueError, match="ground_state_from"):
             self._validate(stage)
 
-    def test_conv_settings_dict_passes(self):
-        stage = {'name': 'conv', 'conv_settings': {'cutoff_start': 300}}
-        self._validate(stage)
-
-    def test_threshold_positive_passes(self):
-        stage = {'name': 'conv', 'convergence_threshold': 0.005}
-        self._validate(stage)
-
-    def test_threshold_zero_raises(self):
-        stage = {'name': 'conv', 'convergence_threshold': 0}
-        with pytest.raises(ValueError, match="positive"):
-            self._validate(stage)
-
-    def test_threshold_negative_raises(self):
-        stage = {'name': 'conv', 'convergence_threshold': -0.001}
-        with pytest.raises(ValueError, match="positive"):
-            self._validate(stage)
-
-    def test_threshold_non_numeric_raises(self):
-        stage = {'name': 'conv', 'convergence_threshold': 'bad'}
-        with pytest.raises(ValueError, match="number"):
-            self._validate(stage)
-
-
-# ---------------------------------------------------------------------------
-# TestThicknessValidateStage
-# ---------------------------------------------------------------------------
-
-@pytest.mark.tier1
-class TestThicknessValidateStage:
-    """Tests for teros.core.lego.bricks.thickness.validate_stage()."""
-
-    def _validate(self, stage, stage_names=None):
-        from teros.core.lego.bricks.thickness import validate_stage
-        if stage_names is None:
-            stage_names = set()
-        validate_stage(stage, stage_names)
-
-    def test_valid_mode_a_passes(self):
-        """Mode A: structure_from + energy_from both set."""
+    def test_ground_state_from_unknown_raises(self):
         stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0],
-            'layer_counts': [3, 5, 7],
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'nope',
+            'structure_from': 'input',
+            'target_species': 'Ni',
         }
-        self._validate(stage, stage_names={'bulk'})
+        with pytest.raises(ValueError, match="previous stage name"):
+            self._validate(stage, stage_names={'gs'})
 
-    def test_valid_mode_b_passes(self):
-        """Mode B: standalone with bulk_incar."""
+    def test_missing_structure_from_raises(self):
         stage = {
-            'name': 'thick', 'type': 'thickness',
-            'miller_indices': [1, 1, 0],
-            'layer_counts': [3, 5, 7],
-            'bulk_incar': {'encut': 520, 'nsw': 100, 'isif': 3},
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'target_species': 'Ni',
         }
-        self._validate(stage)
-
-    def test_structure_from_without_energy_from_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
-        }
-        with pytest.raises(ValueError, match="both set or both unset"):
-            self._validate(stage, stage_names={'bulk'})
-
-    def test_energy_from_without_structure_from_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
-        }
-        with pytest.raises(ValueError, match="both set or both unset"):
-            self._validate(stage, stage_names={'bulk'})
+        with pytest.raises(ValueError, match="structure_from"):
+            self._validate(stage, stage_names={'gs'})
 
     def test_structure_from_unknown_raises(self):
         stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'nope', 'energy_from': 'nope',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'structure_from': 'nope',
+            'target_species': 'Ni',
         }
-        with pytest.raises(ValueError, match="previous stage"):
-            self._validate(stage, stage_names={'bulk'})
+        with pytest.raises(ValueError, match="previous stage name"):
+            self._validate(stage, stage_names={'gs'})
 
-    def test_energy_from_unknown_raises(self):
+    def test_potential_values_with_zero_raises(self):
         stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'nope',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'potential_values': [-0.2, 0.0, 0.2],
         }
-        with pytest.raises(ValueError, match="previous stage"):
-            self._validate(stage, stage_names={'bulk'})
+        with pytest.raises(ValueError, match="must not include 0.0"):
+            self._validate(stage, stage_names={'gs'})
 
-    def test_standalone_missing_bulk_incar_raises(self):
+    def test_potential_values_too_few_raises(self):
         stage = {
-            'name': 'thick', 'type': 'thickness',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
-        }
-        with pytest.raises(ValueError, match="bulk_incar"):
-            self._validate(stage)
-
-    def test_missing_miller_indices_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'layer_counts': [3, 5],
-        }
-        with pytest.raises(ValueError, match="miller_indices"):
-            self._validate(stage, stage_names={'bulk'})
-
-    def test_miller_indices_wrong_length_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1],
-            'layer_counts': [3, 5],
-        }
-        with pytest.raises(ValueError, match="3 integers"):
-            self._validate(stage, stage_names={'bulk'})
-
-    def test_miller_indices_not_ints_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1.0, 1, 0],
-            'layer_counts': [3, 5],
-        }
-        with pytest.raises(ValueError, match="integers"):
-            self._validate(stage, stage_names={'bulk'})
-
-    def test_missing_layer_counts_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0],
-        }
-        with pytest.raises(ValueError, match="layer_counts"):
-            self._validate(stage, stage_names={'bulk'})
-
-    def test_layer_counts_too_short_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0],
-            'layer_counts': [3],
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'potential_values': [0.1],
         }
         with pytest.raises(ValueError, match="at least 2"):
-            self._validate(stage, stage_names={'bulk'})
+            self._validate(stage, stage_names={'gs'})
 
-    def test_layer_counts_non_positive_raises(self):
+    def test_potential_values_not_list_raises(self):
         stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0],
-            'layer_counts': [3, 0, 5],
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'potential_values': 0.1,
         }
-        with pytest.raises(ValueError, match="positive integers"):
-            self._validate(stage, stage_names={'bulk'})
+        with pytest.raises(ValueError, match="list of floats"):
+            self._validate(stage, stage_names={'gs'})
 
-    def test_layer_counts_negative_raises(self):
+    def test_ldaul_invalid_raises(self):
         stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0],
-            'layer_counts': [3, -1, 5],
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'ldaul': 1,
         }
-        with pytest.raises(ValueError, match="positive integers"):
-            self._validate(stage, stage_names={'bulk'})
+        with pytest.raises(ValueError, match="ldaul"):
+            self._validate(stage, stage_names={'gs'})
 
-    def test_threshold_positive_passes(self):
+    def test_default_potential_values_not_validated(self):
+        """When potential_values is not provided, no validation on them."""
         stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
-            'convergence_threshold': 0.02,
+            'name': 'response', 'type': 'hubbard_response',
+            'ground_state_from': 'gs',
+            'structure_from': 'input',
+            'target_species': 'Ni',
         }
-        self._validate(stage, stage_names={'bulk'})
+        self._validate(stage, stage_names={'gs'})  # should not raise
 
-    def test_threshold_zero_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
-            'convergence_threshold': 0,
-        }
-        with pytest.raises(ValueError, match="positive"):
-            self._validate(stage, stage_names={'bulk'})
 
-    def test_threshold_negative_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
-            'convergence_threshold': -0.01,
-        }
-        with pytest.raises(ValueError, match="positive"):
-            self._validate(stage, stage_names={'bulk'})
+# ---------------------------------------------------------------------------
+# TestHubbardAnalysisValidateStage
+# ---------------------------------------------------------------------------
 
-    def test_threshold_non_numeric_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
-            'convergence_threshold': 'bad',
-        }
-        with pytest.raises(ValueError, match="number"):
-            self._validate(stage, stage_names={'bulk'})
+@pytest.mark.tier1
+class TestHubbardAnalysisValidateStage:
+    """Tests for teros.core.lego.bricks.hubbard_analysis.validate_stage()."""
 
-    def test_slab_incar_not_dict_raises(self):
-        stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
-            'slab_incar': 'bad',
-        }
-        with pytest.raises(ValueError, match="slab_incar.*dict"):
-            self._validate(stage, stage_names={'bulk'})
+    def _validate(self, stage, stage_names=None):
+        from teros.core.lego.bricks.hubbard_analysis import validate_stage
+        if stage_names is None:
+            stage_names = set()
+        validate_stage(stage, stage_names)
 
-    def test_bulk_incar_not_dict_raises(self):
+    def test_valid_passes(self, valid_hubbard_analysis_stage):
+        self._validate(valid_hubbard_analysis_stage,
+                       stage_names={'response'})
+
+    def test_missing_response_from_raises(self):
         stage = {
-            'name': 'thick', 'type': 'thickness',
-            'miller_indices': [1, 1, 0], 'layer_counts': [3, 5],
-            'bulk_incar': 'bad',
+            'name': 'analysis', 'type': 'hubbard_analysis',
+            'structure_from': 'input',
+            'target_species': 'Ni',
         }
-        with pytest.raises(ValueError, match="bulk_incar.*dict"):
+        with pytest.raises(ValueError, match="response_from"):
             self._validate(stage)
 
-    def test_full_config_passes(self):
-        """Full configuration with all optional fields."""
+    def test_response_from_unknown_raises(self):
         stage = {
-            'name': 'thick', 'type': 'thickness',
-            'structure_from': 'bulk', 'energy_from': 'bulk',
-            'miller_indices': [1, 1, 0],
-            'layer_counts': [3, 5, 7, 9, 11],
-            'convergence_threshold': 0.02,
-            'slab_incar': {'encut': 520, 'nsw': 100, 'isif': 2},
-            'min_vacuum_thickness': 15.0,
-            'termination_index': 0,
+            'name': 'analysis', 'type': 'hubbard_analysis',
+            'response_from': 'nope',
+            'structure_from': 'input',
+            'target_species': 'Ni',
         }
-        self._validate(stage, stage_names={'bulk'})
+        with pytest.raises(ValueError, match="previous stage name"):
+            self._validate(stage, stage_names={'response'})
+
+    def test_missing_target_species_raises(self):
+        stage = {
+            'name': 'analysis', 'type': 'hubbard_analysis',
+            'response_from': 'response',
+            'structure_from': 'input',
+        }
+        with pytest.raises(ValueError, match="target_species"):
+            self._validate(stage, stage_names={'response'})
+
+    def test_missing_structure_from_raises(self):
+        stage = {
+            'name': 'analysis', 'type': 'hubbard_analysis',
+            'response_from': 'response',
+            'target_species': 'Ni',
+        }
+        with pytest.raises(ValueError, match="structure_from"):
+            self._validate(stage, stage_names={'response'})
+
+    def test_structure_from_unknown_raises(self):
+        stage = {
+            'name': 'analysis', 'type': 'hubbard_analysis',
+            'response_from': 'response',
+            'structure_from': 'nope',
+            'target_species': 'Ni',
+        }
+        with pytest.raises(ValueError, match="previous stage name"):
+            self._validate(stage, stage_names={'response'})
+
+    def test_ldaul_invalid_raises(self):
+        stage = {
+            'name': 'analysis', 'type': 'hubbard_analysis',
+            'response_from': 'response',
+            'structure_from': 'input',
+            'target_species': 'Ni',
+            'ldaul': 1,
+        }
+        with pytest.raises(ValueError, match="ldaul"):
+            self._validate(stage, stage_names={'response'})
+
+    def test_valid_with_ldaul_3(self):
+        stage = {
+            'name': 'analysis', 'type': 'hubbard_analysis',
+            'response_from': 'response',
+            'structure_from': 'input',
+            'target_species': 'Ce',
+            'ldaul': 3,
+        }
+        self._validate(stage, stage_names={'response'})

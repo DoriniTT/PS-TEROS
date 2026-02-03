@@ -167,20 +167,30 @@ teros/core/
 ├── surface_energy/           # Metal/intermetallic surface energy
 ├── surface_hydroxylation/    # OH/vacancy studies
 ├── builders/                 # Pre-configured parameter sets (Ag2O, Ag3PO4, etc.)
+├── u_calculation/            # Hubbard U parameter (linear response method)
+│   ├── __init__.py
+│   ├── workgraph.py          # build_u_calculation_workgraph()
+│   ├── tasks.py              # extract_d_electron_occupation, gather_responses, etc.
+│   │                         # NOTE: Fixed 2026-02-02 - chi/chi_0 labels + sign convention
+│   └── utils.py              # INCAR preparation, LDAU arrays, linear regression
+│                             # NOTE: Fixed 2026-02-02 - potential sign negation
 └── lego/                     # Multi-stage sequential workflow builder
-    ├── workgraph.py          # quick_vasp_sequential(), _validate_stages()
-    ├── tasks.py              # extract_energy, compute_dynamics calcfunctions
-    ├── results.py            # Result extraction from completed WorkGraphs
-    ├── utils.py              # Lego-specific helpers
-    └── bricks/               # Modular brick system
-        ├── __init__.py       # BRICK_REGISTRY, get_brick_module(), re-exports
-        ├── connections.py    # PORTS dicts, PORT_TYPES, validate_connections() (pure Python)
-        ├── vasp.py           # VASP brick (relaxation, SCF, etc.)
-        ├── dos.py            # DOS brick (BandsWorkChain wrapper)
-        ├── batch.py          # Batch brick (parallel VASP with varying params)
-        ├── bader.py          # Bader brick (charge analysis)
-        ├── convergence.py    # Convergence brick (ENCUT/k-points testing)
-        └── thickness.py      # Thickness brick (slab thickness convergence)
+    ├── __init__.py            # Public API: quick_vasp, quick_dos, quick_hubbard_u, etc.
+    ├── workgraph.py           # quick_vasp_sequential(), _validate_stages(), _prepare_builder_inputs
+    ├── tasks.py               # extract_energy, compute_dynamics calcfunctions
+    ├── results.py             # Result extraction from completed WorkGraphs
+    ├── utils.py               # get_status helper, lego-specific helpers
+    └── bricks/                # Pluggable stage types (modular brick system)
+        ├── __init__.py        # BRICK_REGISTRY, get_brick_module(), resolve_structure_from
+        ├── connections.py     # PORTS dicts, PORT_TYPES, validate_connections() (pure Python)
+        ├── vasp.py            # VASP brick (relaxation, SCF, etc.)
+        ├── dos.py             # DOS brick (BandsWorkChain wrapper)
+        ├── batch.py           # Batch brick (parallel VASP with varying params)
+        ├── bader.py           # Bader brick (charge analysis)
+        ├── convergence.py     # Convergence brick (ENCUT/k-points testing)
+        ├── thickness.py       # Thickness brick (slab thickness convergence)
+        ├── hubbard_response.py # Hubbard U response calculations (NSCF + SCF)
+        └── hubbard_analysis.py # Hubbard U regression and summary
 ```
 
 **Submodule pattern:**
@@ -194,27 +204,7 @@ module_name/
 
 ## Lego Module
 
-The lego module (`teros.core.lego`) provides a lightweight API for exploratory, incremental VASP work — submit a calculation, check results, decide next step.
-
-### Lego Module Structure
-
-```
-teros/core/lego/
-├── __init__.py         # Public exports
-├── workgraph.py        # quick_vasp, quick_vasp_batch, quick_vasp_sequential, quick_dos, quick_dos_batch
-├── results.py          # get_results, get_sequential_results, print_sequential_results, etc.
-├── tasks.py            # extract_energy @task.calcfunction
-├── utils.py            # get_status, export_files, list_calculations
-└── bricks/             # Stage type implementations
-    ├── __init__.py     # BRICK_REGISTRY, get_brick_module(), resolve_structure_from()
-    ├── connections.py  # Port declarations, validate_connections() (pure Python)
-    ├── vasp.py         # Standard VASP stages (relaxation, SCF, etc.)
-    ├── dos.py          # DOS stages via BandsWorkChain
-    ├── batch.py        # Parallel VASP calculations with varying parameters
-    ├── bader.py        # Bader charge analysis
-    ├── convergence.py  # ENCUT/k-points convergence testing
-    └── thickness.py    # Slab thickness convergence testing
-```
+The Lego module (`teros.core.lego`) provides a modular, brick-based system for composing VASP workflows from reusable stage types.
 
 ### Philosophy
 
@@ -239,6 +229,19 @@ get_stage_results()      # Extract results from completed WorkGraph
 print_stage_results()    # Format results for display
 ```
 
+### Available Brick Types
+
+| Type | Module | Description |
+|------|--------|-------------|
+| `vasp` | `bricks/vasp.py` | Standard VASP calculation (relax, static SCF) |
+| `dos` | `bricks/dos.py` | Density of states via BandsWorkChain |
+| `batch` | `bricks/batch.py` | Parallel VASP runs with varying parameters |
+| `bader` | `bricks/bader.py` | Bader charge analysis |
+| `convergence` | `bricks/convergence.py` | ENCUT and k-points convergence testing |
+| `thickness` | `bricks/thickness.py` | Slab thickness convergence testing |
+| `hubbard_response` | `bricks/hubbard_response.py` | Hubbard U response calculations (NSCF + SCF per potential) |
+| `hubbard_analysis` | `bricks/hubbard_analysis.py` | Hubbard U linear regression and summary |
+
 ### Port System (`connections.py`)
 
 Each brick declares a `PORTS` dict with typed inputs and outputs. The `connections.py` module is **pure Python** (no AiiDA dependency) so it can be imported in tier1 tests.
@@ -252,13 +255,15 @@ from teros.core.lego.bricks.connections import (
 )
 ```
 
-**Port types:** `structure`, `energy`, `misc`, `remote_folder`, `retrieved`, `dos_data`, `projectors`, `bader_charges`, `trajectory`, `convergence`, `file`
+**Port types:** `structure`, `energy`, `misc`, `remote_folder`, `retrieved`, `dos_data`, `projectors`, `bader_charges`, `trajectory`, `convergence`, `file`, `hubbard_responses`, `hubbard_occupation`, `hubbard_result`
 
 **Source resolution modes:**
 - `'auto'` -- VASP structure: first stage uses initial, then `'previous'`/`'input'`/explicit stage name
-- `'structure_from'` -- reads `stage['structure_from']` (DOS, batch, convergence)
+- `'structure_from'` -- reads `stage['structure_from']` (DOS, batch, convergence, hubbard)
 - `'charge_from'` -- reads `stage['charge_from']` (bader)
 - `'restart'` -- reads `stage['restart']` (VASP restart folder)
+- `'ground_state_from'` -- reads `stage['ground_state_from']` (hubbard_response)
+- `'response_from'` -- reads `stage['response_from']` (hubbard_analysis)
 
 ### Connection Validation
 
@@ -279,166 +284,158 @@ from teros.core.lego.bricks.connections import (
 | `quick_vasp_sequential(...)` | Multi-stage pipeline with restart chaining |
 | `quick_dos(...)` | Single DOS calculation (SCF + DOS) |
 | `quick_dos_batch(...)` | Multiple parallel DOS calcs |
+| `quick_hubbard_u(...)` | Hubbard U calculation (ground state + response + analysis) |
 | `get_results(pk)` | Extract results from single calc |
 | `get_sequential_results(result)` | Extract all stage results |
 | `get_stage_results(result, name)` | Extract one stage's results |
 | `print_sequential_results(result)` | Print formatted results |
 
-### quick_vasp_sequential Usage
+### Quick Functions
+
+Convenience functions for common workflows:
 
 ```python
-from teros.core.lego import quick_vasp_sequential, print_sequential_results
+from teros.core.lego import quick_vasp, quick_dos, quick_hubbard_u, quick_vasp_sequential
 
-stages = [
-    {
-        'name': 'relax_rough',
-        'incar': {'NSW': 100, 'IBRION': 2, 'ISIF': 2, 'ENCUT': 400},
-        'restart': None,
-        'kpoints_spacing': 0.06,
-        'retrieve': ['CONTCAR', 'OUTCAR'],
-    },
-    {
-        'name': 'relax_fine',
-        'incar': {'NSW': 100, 'IBRION': 2, 'ISIF': 2, 'ENCUT': 520},
-        'kpoints_spacing': 0.03,
-        'retrieve': ['CONTCAR', 'OUTCAR'],
-        # restart='previous' is the default
-    },
-]
+# Single VASP calculation
+wg = quick_vasp(structure, code_label, incar={...})
 
-result = quick_vasp_sequential(
-    structure=my_structure,
-    stages=stages,
+# DOS calculation
+wg = quick_dos(structure, code_label, incar={...})
+
+# Hubbard U calculation
+wg = quick_hubbard_u(
+    structure=structure,
     code_label='VASP-6.5.1@localwork',
-    potential_family='PBE',
-    potential_mapping={'Sn': 'Sn_d', 'O': 'O'},
-    options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},
-    max_concurrent_jobs=2,  # Limit parallel jobs (useful with batch stages)
+    target_species='Fe',
+    incar={'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05},
+    potential_values=[-0.2, -0.1, 0.1, 0.2],  # Default
+    ldaul=2,  # 2=d-electrons, 3=f-electrons
 )
 ```
 
-### Return Dict Structure
+### Sequential Workflows
 
-`quick_vasp_sequential` returns:
+Chain multiple stages with `quick_vasp_sequential`:
 
 ```python
-{
-    '__workgraph_pk__': 12345,
-    '__stage_names__': ['relax_rough', 'relax_fine'],
-    '__stage_types__': {'relax_rough': 'vasp', 'relax_fine': 'vasp'},
-    '__stage_namespaces__': {
-        'relax_rough': {'main': 'stage1'},
-        'relax_fine': {'main': 'stage2'},
+from teros.core.lego import quick_vasp_sequential
+
+stages = [
+    {
+        'name': 'relax',
+        'type': 'vasp',
+        'incar': {'encut': 520, 'ibrion': 2, 'nsw': 100, 'isif': 3},
+        'restart': None,
     },
-    'relax_rough': 12345,
-    'relax_fine': 12345,
-}
+    {
+        'name': 'ground_state',
+        'type': 'vasp',
+        'structure_from': 'relax',
+        'incar': {
+            'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05,
+            'ldau': False, 'lmaxmix': 4, 'lorbit': 11,
+            'lwave': True, 'lcharg': True,
+        },
+        'restart': None,
+        'retrieve': ['OUTCAR'],
+    },
+    {
+        'name': 'response',
+        'type': 'hubbard_response',
+        'ground_state_from': 'ground_state',
+        'structure_from': 'relax',
+        'target_species': 'Sn',
+        'potential_values': [-0.2, -0.1, 0.1, 0.2],
+        'ldaul': 2,
+        'incar': {'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05},
+    },
+    {
+        'name': 'analysis',
+        'type': 'hubbard_analysis',
+        'response_from': 'response',
+        'structure_from': 'relax',
+        'target_species': 'Sn',
+        'ldaul': 2,
+    },
+]
+
+wg = quick_vasp_sequential(structure, code_label, stages=stages, ...)
 ```
 
-The `__stage_namespaces__` dict maps each stage name to its namespace mapping. The mapping keys depend on brick type:
-- `vasp`, `batch`, `bader`, `convergence`, `thickness`: `{'main': 'stageN'}`
-- `dos`: `{'scf': 'stageN', 'dos': 'stageN'}` (both share the same stage number)
+### Output Namespace Naming
 
-### Brick Types
-
-| Brick | Purpose | Key Config Fields |
-|-------|---------|-------------------|
-| `vasp` (default) | VASP relaxation/SCF | `incar`, `restart`, `structure_from` |
-| `dos` | DOS via BandsWorkChain | `scf_incar`, `dos_incar`, `structure_from` |
-| `batch` | Parallel VASP with varying params | `base_incar`, `calculations`, `structure_from` |
-| `bader` | Bader charge analysis | `charge_from` |
-| `convergence` | ENCUT/k-points convergence | `conv_settings`, `structure_from` (optional) |
-| `thickness` | Slab thickness convergence | `miller_indices`, `layer_counts`, `slab_incar`, `structure_from`/`energy_from` (optional) |
-
-### Stage Output Namespaces
-
-Outputs are grouped under nested namespaces: `stageN.{brick_type}.{output}`. Each stage gets an auto-incremented stage number. `verdi process show` displays them hierarchically:
-
-#### vasp brick
+Sequential workflow outputs use indexed prefixes for ordered display in `verdi process show`:
 
 ```
-stageN
-  vasp
-    energy         Float
-    structure      StructureData
-    misc           Dict
-    remote         RemoteData
-    retrieved      FolderData
+Outputs                       PK     Type
+---------------------------   -----  -------------
+s01_relax_2x2_rough
+    vasp
+        structure             34781  StructureData
+        misc                  34780  Dict
+        remote                34778  RemoteData
+        retrieved             34779  FolderData
+        energy                34785  Float
+s02_relax_2x2_fine
+    vasp
+        ...
+s03_dos_2x2
+    scf
+        misc                  35207  Dict
+        ...
+    dos
+        misc                  35225  Dict
+        ...
+s04_fukui_minus_calcs_2x2
+    batch
+        delta_005
+            misc              35143  Dict
+            ...
+        neutral
+            ...
 ```
 
-#### dos brick
+**Format:** `s{index:02d}_{stage_name}` (e.g., `s01_relax_rough`, `s02_dos`)
 
-DOS is a single stage with two sub-namespaces (SCF + non-SCF DOS):
+- The `s` prefix ensures valid Python identifiers (required by AiiDA link labels)
+- Zero-padded index (`01`, `02`, ...) ensures alphabetical sort matches stage execution order
+- Stage name provides descriptive context
 
-```
-stageN
-  scf
-    misc           Dict
-    remote         RemoteData
-    retrieved      FolderData
-  dos
-    dos            ArrayData
-    projectors     ArrayData      (optional)
-    misc           Dict
-    remote         RemoteData
-    retrieved      FolderData
-```
+**Brick-specific output structure:**
 
-#### batch brick
+| Brick Type | Output Namespace Structure |
+|------------|---------------------------|
+| `vasp` | `s{N}_{name}.vasp.{energy,structure,misc,remote,retrieved}` |
+| `dos` | `s{N}_{name}.scf.{misc,remote,retrieved}` + `s{N}_{name}.dos.{misc,remote,retrieved}` |
+| `batch` | `s{N}_{name}.batch.{calc_label}.{energy,misc,remote,retrieved}` |
 
-Each calculation label becomes its own sub-namespace:
+### Hubbard U Stage Configuration
 
-```
-stageN
-  batch
-    neutral
-      energy       Float
-      misc         Dict
-      remote       RemoteData
-      retrieved    FolderData
-    charged
-      energy       Float
-      misc         Dict
-      remote       RemoteData
-      retrieved    FolderData
-```
+The Hubbard U workflow uses two brick types that wrap `teros.core.u_calculation`:
 
-#### bader brick
+**`hubbard_response` brick** - runs NSCF + SCF response calculations:
 
-```
-stageN
-  bader
-    charges        ArrayData
-    acf            SinglefileData
-    bcf            SinglefileData
-    avf            SinglefileData
-```
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `ground_state_from` | Yes | — | Name of the ground state vasp stage |
+| `structure_from` | Yes | — | `'input'` or name of previous stage |
+| `target_species` | Yes | — | Element symbol (e.g., 'Fe', 'Sn') |
+| `potential_values` | No | `[-0.2, -0.1, 0.1, 0.2]` | Perturbation potentials (eV), no 0.0 |
+| `ldaul` | No | `2` | Angular momentum (2=d, 3=f) |
+| `ldauj` | No | `0.0` | Exchange J parameter |
+| `incar` | No | `{}` | Base INCAR parameters |
 
-#### convergence brick
+**`hubbard_analysis` brick** - linear regression and summary (no VASP):
 
-```
-stageN
-  convergence
-    cutoff_conv_data     Dict
-    kpoints_conv_data    Dict
-    cutoff_analysis      Dict
-    kpoints_analysis     Dict
-    recommendations      Dict
-```
+| Key | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `response_from` | Yes | — | Name of the hubbard_response stage |
+| `structure_from` | Yes | — | `'input'` or name of previous stage |
+| `target_species` | Yes | — | Element symbol (e.g., 'Fe', 'Sn') |
+| `ldaul` | No | `2` | Angular momentum (2=d, 3=f) |
 
-#### thickness brick
-
-```
-stageN
-  thickness
-    convergence_results  Dict
-```
-
-#### How it works
-
-Dotted `setattr` calls like `setattr(wg.outputs, 'stage1.vasp.energy', socket)` create nested namespace sockets via `_set_socket_value` in WorkGraph. AiiDA stores them as `stage1__vasp__energy` link labels (using `__` separator) and `verdi process show` displays them grouped. Use `get_brick_info(brick_type)` from `connections.py` to inspect a brick's port declarations.
-
-When `namespace_map` is `None` (e.g., standalone `quick_vasp` calls), outputs fall back to flat naming with stage name prefix: `{stage_name}_{output}`.
+The ground state is a standard vasp brick with `lorbit: 11, lwave: True, lcharg: True, ldau: False`. The `quick_hubbard_u()` convenience function builds all 3 stages automatically.
 ## VASP Integration
 
 ### VaspWorkChain Outputs

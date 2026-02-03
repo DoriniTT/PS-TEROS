@@ -13,6 +13,8 @@ Stage types are implemented as "bricks" (see bricks/ subdirectory):
 - bader: Bader charge analysis
 - convergence: ENCUT and k-points convergence testing
 - thickness: Slab thickness convergence testing
+- hubbard_response: Response calculations for Hubbard U (NSCF + SCF per potential)
+- hubbard_analysis: Linear regression and summary for Hubbard U
 
 Example usage:
 
@@ -175,6 +177,7 @@ from .workgraph import (
     quick_vasp_sequential,
     quick_dos,
     quick_dos_batch,
+    quick_hubbard_u,
     get_batch_results_from_workgraph,
 )
 from .results import (
@@ -206,6 +209,7 @@ __all__ = [
     'quick_vasp_sequential',
     'quick_dos',
     'quick_dos_batch',
+    'quick_hubbard_u',
     # Result extraction
     'get_results',
     'get_energy',

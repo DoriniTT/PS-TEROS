@@ -24,6 +24,9 @@ PORT_TYPES = {
     'trajectory',
     'convergence',
     'file',
+    'hubbard_responses',
+    'hubbard_occupation',
+    'hubbard_result',
 }
 
 
@@ -196,6 +199,82 @@ BADER_PORTS = {
     },
 }
 
+HUBBARD_RESPONSE_PORTS = {
+    'inputs': {
+        'structure': {
+            'type': 'structure',
+            'required': True,
+            'source': 'structure_from',
+            'description': 'Structure for response calculations',
+        },
+        'ground_state_remote': {
+            'type': 'remote_folder',
+            'required': True,
+            'source': 'ground_state_from',
+            'compatible_bricks': ['vasp'],
+            'prerequisites': {
+                'incar': {'lorbit': 11, 'lwave': True, 'lcharg': True},
+                'retrieve': ['OUTCAR'],
+            },
+            'description': 'Ground state remote folder for WAVECAR/CHGCAR restart',
+        },
+        'ground_state_retrieved': {
+            'type': 'retrieved',
+            'required': True,
+            'source': 'ground_state_from',
+            'compatible_bricks': ['vasp'],
+            'description': 'Ground state retrieved files (OUTCAR for occupation)',
+        },
+    },
+    'outputs': {
+        'responses': {
+            'type': 'hubbard_responses',
+            'description': 'Gathered response data (List of dicts)',
+        },
+        'ground_state_occupation': {
+            'type': 'hubbard_occupation',
+            'description': 'Ground state d-electron occupation',
+        },
+        # NOTE: no 'structure' output — responses don't modify structure
+    },
+}
+
+HUBBARD_ANALYSIS_PORTS = {
+    'inputs': {
+        'responses': {
+            'type': 'hubbard_responses',
+            'required': True,
+            'source': 'response_from',
+            'compatible_bricks': ['hubbard_response'],
+            'description': 'Gathered response data from hubbard_response stage',
+        },
+        'ground_state_occupation': {
+            'type': 'hubbard_occupation',
+            'required': True,
+            'source': 'response_from',
+            'compatible_bricks': ['hubbard_response'],
+            'description': 'Ground state occupation from hubbard_response stage',
+        },
+        'structure': {
+            'type': 'structure',
+            'required': True,
+            'source': 'structure_from',
+            'description': 'Structure for summary metadata',
+        },
+    },
+    'outputs': {
+        'summary': {
+            'type': 'hubbard_result',
+            'description': 'Full U calculation summary (Dict)',
+        },
+        'hubbard_u_result': {
+            'type': 'hubbard_result',
+            'description': 'Linear regression result (Dict)',
+        },
+        # NOTE: no 'structure' output
+    },
+}
+
 CONVERGENCE_PORTS = {
     'inputs': {
         'structure': {
@@ -253,6 +332,8 @@ ALL_PORTS = {
     'dos': DOS_PORTS,
     'batch': BATCH_PORTS,
     'bader': BADER_PORTS,
+    'hubbard_response': HUBBARD_RESPONSE_PORTS,
+    'hubbard_analysis': HUBBARD_ANALYSIS_PORTS,
     'convergence': CONVERGENCE_PORTS,
     'thickness': THICKNESS_PORTS,
 }
@@ -513,6 +594,10 @@ def validate_connections(stages: list) -> list:
                         f"Stage '{name}': input '{input_name}' requires "
                         f"'{source_key}' field but it's missing"
                     )
+                continue
+
+            # 'input' means use initial structure → always valid
+            if ref_stage_name == 'input':
                 continue
 
             # Check referenced stage exists

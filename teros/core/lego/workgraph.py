@@ -487,6 +487,7 @@ def _validate_stages(stages: t.List[dict]) -> None:
     Raises:
         ValueError: If validation fails
     """
+    import warnings as _warnings
     from .bricks import get_brick_module, VALID_BRICK_TYPES, validate_connections
 
     if not stages:
@@ -514,8 +515,10 @@ def _validate_stages(stages: t.List[dict]) -> None:
         brick = get_brick_module(stage_type)
         brick.validate_stage(stage, stage_names)
 
-    # Validate inter-stage connections (port types, prerequisites, etc.)
-    validate_connections(stages)
+    # Validate inter-stage connections using port declarations
+    connection_warnings = validate_connections(stages)
+    for w in connection_warnings:
+        _warnings.warn(w, stacklevel=3)
 
 
 def quick_vasp_sequential(
@@ -560,7 +563,9 @@ def quick_vasp_sequential(
             - __workgraph_pk__: WorkGraph PK
             - __stage_names__: List of stage names in order
             - __stage_types__: Dict mapping stage names to types
-              ('vasp', 'dos', 'batch', 'bader', or 'convergence')
+              ('vasp', 'dos', 'batch', 'bader', 'convergence', 'thickness',
+               'hubbard_response', or 'hubbard_analysis')
+            - __stage_namespaces__: Dict mapping stage names to namespace_map dicts
             - <stage_name>: WorkGraph PK (for each stage)
 
     Stage Configuration (VASP stages, type='vasp' or omitted):
@@ -692,8 +697,8 @@ def quick_vasp_sequential(
     # Track structures and remote folders across stages
     stage_tasks = {}  # name -> {'vasp': task, 'energy': task, 'supercell': task, ...}
     stage_names = []  # Ordered list
-    stage_types = {}  # name -> 'vasp', 'dos', 'batch', 'bader', or 'convergence'
-    stage_namespaces = {}  # name -> namespace_map (e.g. {'main': 'stage1'})
+    stage_types = {}  # name -> 'vasp', 'dos', 'batch', 'bader', etc.
+    stage_namespaces = {}  # name -> namespace_map (e.g. {'main': 's01_relax_2x2_rough'})
     stage_counter = 1  # Sequential namespace counter
 
     for i, stage in enumerate(stages):
@@ -726,14 +731,13 @@ def quick_vasp_sequential(
         tasks_result = brick.create_stage_tasks(wg, stage, stage_name, context)
         stage_tasks[stage_name] = tasks_result
 
-        # Build namespace_map based on brick type
-        # DOS uses the same stage number — scf and dos are sub-namespaces
-        # of a single stage, not separate stages.
-        namespace_map = {'main': f'stage{stage_counter}'}
+        # Build namespace_map with index prefix for ordered display
+        # Use 's' prefix (stage) since Python identifiers can't start with digits
+        indexed_name = f's{i+1:02d}_{stage_name}'
+        namespace_map = {'main': indexed_name}
         if stage_type == 'dos':
-            namespace_map['scf'] = f'stage{stage_counter}'
-            namespace_map['dos'] = f'stage{stage_counter}'
-        stage_counter += 1
+            namespace_map['scf'] = indexed_name
+            namespace_map['dos'] = indexed_name
 
         stage_namespaces[stage_name] = namespace_map
         brick.expose_stage_outputs(wg, stage_name, tasks_result, namespace_map)
@@ -1275,3 +1279,158 @@ def quick_dos(
     return {
         '__workgraph_pk__': pk,
     }
+
+
+def quick_hubbard_u(
+    structure: t.Union[orm.StructureData, int] = None,
+    code_label: str = None,
+    target_species: str = None,
+    incar: dict = None,
+    potential_values: t.List[float] = None,
+    ldaul: int = 2,
+    ldauj: float = 0.0,
+    kpoints_spacing: float = 0.03,
+    potential_family: str = 'PBE',
+    potential_mapping: dict = None,
+    options: dict = None,
+    name: str = 'quick_hubbard_u',
+    wait: bool = False,
+    poll_interval: float = 10.0,
+    clean_workdir: bool = False,
+) -> dict:
+    """
+    Submit a Hubbard U parameter calculation using the linear response method.
+
+    This is a convenience function that internally builds a 3-stage sequential
+    workflow using quick_vasp_sequential:
+
+    1. ground_state (vasp brick): SCF with LORBIT=11, LWAVE=True, LCHARG=True
+    2. response (hubbard_response brick): NSCF + SCF per potential, occupation
+       extraction, gather responses
+    3. analysis (hubbard_analysis brick): linear regression, summary compilation
+
+    Args:
+        structure: StructureData or PK of the input structure
+        code_label: VASP code label (e.g., 'VASP-6.5.1@localwork')
+        target_species: Element symbol for U calculation (e.g., 'Ni', 'Fe', 'Mn')
+        incar: Base INCAR parameters dict (applied to ground state and responses).
+               Lowercase keys recommended (e.g., {'encut': 520, 'ediff': 1e-6}).
+               The module automatically adds LDAU, LORBIT, LWAVE, LCHARG, etc.
+        potential_values: List of perturbation potentials in eV.
+                         Default: [-0.2, -0.1, 0.1, 0.2]. Must not include 0.0.
+        ldaul: Angular momentum quantum number (2=d electrons, 3=f electrons)
+        ldauj: Exchange J parameter (default: 0.0)
+        kpoints_spacing: K-points spacing in A^-1 (default: 0.03)
+        potential_family: POTCAR family (default: 'PBE')
+        potential_mapping: Element to POTCAR mapping (e.g., {'Ni': 'Ni', 'O': 'O'})
+        options: Scheduler options dict with 'resources' key
+        name: WorkGraph name for identification
+        wait: If True, block until calculation finishes (default: False)
+        poll_interval: Seconds between status checks when wait=True
+        clean_workdir: Whether to clean work directories after completion
+
+    Returns:
+        Dict with quick_vasp_sequential result keys including '__workgraph_pk__'
+
+    Example:
+        >>> result = quick_hubbard_u(
+        ...     structure=nio_structure,
+        ...     code_label='VASP-6.5.1@localwork',
+        ...     target_species='Ni',
+        ...     incar={'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05},
+        ...     potential_values=[-0.2, -0.1, 0.1, 0.2],
+        ...     ldaul=2,
+        ...     potential_family='PBE',
+        ...     potential_mapping={'Ni': 'Ni', 'O': 'O'},
+        ...     options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},
+        ...     name='NiO_HubbardU',
+        ... )
+        >>> print(f"WorkGraph PK: {result['__workgraph_pk__']}")
+
+    Reference:
+        https://www.vasp.at/wiki/index.php/Calculate_U_for_LSDA+U
+    """
+    from teros.core.u_calculation.utils import (
+        DEFAULT_POTENTIAL_VALUES,
+        prepare_ground_state_incar,
+    )
+
+    # Validate required inputs
+    if structure is None:
+        raise ValueError("structure is required")
+    if code_label is None:
+        raise ValueError("code_label is required")
+    if target_species is None:
+        raise ValueError(
+            "target_species is required (e.g., 'Ni', 'Fe', 'Mn')")
+    if options is None:
+        raise ValueError("options is required - specify scheduler resources")
+
+    # Default INCAR
+    if incar is None:
+        incar = {
+            'encut': 520,
+            'ediff': 1e-6,
+            'ismear': 0,
+            'sigma': 0.05,
+            'prec': 'Accurate',
+            'algo': 'Normal',
+            'nelm': 100,
+        }
+
+    if potential_values is None:
+        potential_values = DEFAULT_POTENTIAL_VALUES
+
+    lmaxmix = 4 if ldaul == 2 else 6
+
+    # Build ground state INCAR from the base incar
+    gs_incar = prepare_ground_state_incar(
+        base_params=incar,
+        lmaxmix=lmaxmix,
+    )
+
+    # Build 3-stage workflow
+    stages = [
+        {
+            'name': 'ground_state',
+            'type': 'vasp',
+            'incar': gs_incar,
+            'restart': None,
+            'kpoints_spacing': kpoints_spacing,
+            'retrieve': ['OUTCAR'],
+        },
+        {
+            'name': 'response',
+            'type': 'hubbard_response',
+            'ground_state_from': 'ground_state',
+            'structure_from': 'input',
+            'target_species': target_species,
+            'potential_values': potential_values,
+            'ldaul': ldaul,
+            'ldauj': ldauj,
+            'incar': incar,
+            'kpoints_spacing': kpoints_spacing,
+        },
+        {
+            'name': 'analysis',
+            'type': 'hubbard_analysis',
+            'response_from': 'response',
+            'structure_from': 'input',
+            'target_species': target_species,
+            'ldaul': ldaul,
+        },
+    ]
+
+    return quick_vasp_sequential(
+        structure=structure,
+        stages=stages,
+        code_label=code_label,
+        kpoints_spacing=kpoints_spacing,
+        potential_family=potential_family,
+        potential_mapping=potential_mapping,
+        options=options,
+        name=name,
+        wait=wait,
+        poll_interval=poll_interval,
+        clean_workdir=clean_workdir,
+    )

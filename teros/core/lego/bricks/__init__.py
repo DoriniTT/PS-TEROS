@@ -12,7 +12,7 @@ Port declarations and validation logic live in connections.py (pure Python,
 no AiiDA dependency) so they can be imported in tier1 tests.
 """
 
-from . import vasp, dos, batch, bader, convergence, thickness
+from . import vasp, dos, batch, bader, convergence, thickness, hubbard_response, hubbard_analysis
 from .connections import (  # noqa: F401
     PORT_TYPES,
     ALL_PORTS,
@@ -30,6 +30,8 @@ BRICK_REGISTRY = {
     'bader': bader,
     'convergence': convergence,
     'thickness': thickness,
+    'hubbard_response': hubbard_response,
+    'hubbard_analysis': hubbard_analysis,
 }
 
 VALID_BRICK_TYPES = tuple(BRICK_REGISTRY.keys())
@@ -40,7 +42,7 @@ def get_brick_module(brick_type: str):
 
     Args:
         brick_type: One of the valid brick types (vasp, dos, batch,
-            bader, convergence, thickness).
+            bader, convergence, thickness, hubbard_response, hubbard_analysis).
 
     Returns:
         The brick module.
@@ -61,8 +63,9 @@ def resolve_structure_from(structure_from: str, context: dict):
     """Resolve a structure socket from a previous stage.
 
     Only VASP stages produce a meaningful structure output. Referencing
-    a non-VASP stage (dos, batch, bader, convergence, thickness) raises
-    an error because those bricks don't produce structures.
+    a non-VASP stage (dos, batch, bader, convergence, thickness,
+    hubbard_response, hubbard_analysis) raises an error because those
+    bricks don't produce structures.
 
     Args:
         structure_from: Name of the stage to get structure from.

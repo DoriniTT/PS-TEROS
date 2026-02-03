@@ -235,3 +235,135 @@ class TestPrintBaderStageResults:
         out = capsys.readouterr().out
         assert 'Sn' in out
         assert 'valence=14.0' in out
+
+
+# ---------------------------------------------------------------------------
+# TestPrintHubbardResponseStageResults
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestPrintHubbardResponseStageResults:
+    """Tests for teros.core.lego.bricks.hubbard_response.print_stage_results()."""
+
+    def _print(self, index, stage_name, stage_result):
+        from teros.core.lego.bricks.hubbard_response import print_stage_results
+        print_stage_results(index, stage_name, stage_result)
+
+    def _base_result(self, **overrides):
+        result = {
+            'responses': None,
+            'ground_state_occupation': None,
+            'pk': 1,
+            'stage': 'response', 'type': 'hubbard_response',
+        }
+        result.update(overrides)
+        return result
+
+    def test_prints_response_label(self, capsys):
+        self._print(2, 'response', self._base_result())
+        out = capsys.readouterr().out
+        assert '(HUBBARD RESPONSE)' in out
+
+    def test_prints_response_count(self, capsys):
+        responses = [
+            {'potential': -0.2, 'delta_n_scf': 0.01, 'delta_n_nscf': 0.005},
+            {'potential': 0.2, 'delta_n_scf': -0.01, 'delta_n_nscf': -0.005},
+        ]
+        self._print(2, 'response', self._base_result(responses=responses))
+        out = capsys.readouterr().out
+        assert '2' in out
+
+    def test_prints_potentials(self, capsys):
+        responses = [
+            {'potential': -0.2}, {'potential': 0.2},
+        ]
+        self._print(2, 'response', self._base_result(responses=responses))
+        out = capsys.readouterr().out
+        assert '-0.2' in out
+        assert '0.2' in out
+
+    def test_prints_gs_occupation(self, capsys):
+        gs_occ = {
+            'total_d_occupation': 16.468,
+            'atom_count': 2,
+            'target_species': 'Ni',
+        }
+        self._print(2, 'response', self._base_result(
+            ground_state_occupation=gs_occ))
+        out = capsys.readouterr().out
+        assert '8.234' in out
+        assert 'Ni' in out
+
+    def test_prints_none_values_gracefully(self, capsys):
+        """All None values should not raise."""
+        self._print(1, 'response', self._base_result())
+        out = capsys.readouterr().out
+        assert 'HUBBARD RESPONSE' in out
+
+
+# ---------------------------------------------------------------------------
+# TestPrintHubbardAnalysisStageResults
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestPrintHubbardAnalysisStageResults:
+    """Tests for teros.core.lego.bricks.hubbard_analysis.print_stage_results()."""
+
+    def _print(self, index, stage_name, stage_result):
+        from teros.core.lego.bricks.hubbard_analysis import print_stage_results
+        print_stage_results(index, stage_name, stage_result)
+
+    def _base_result(self, **overrides):
+        result = {
+            'summary': None, 'hubbard_u_eV': None,
+            'target_species': None, 'chi_r2': None, 'chi_0_r2': None,
+            'response_data': None, 'pk': 1,
+            'stage': 'analysis', 'type': 'hubbard_analysis',
+        }
+        result.update(overrides)
+        return result
+
+    def test_prints_analysis_label(self, capsys):
+        self._print(3, 'analysis', self._base_result())
+        out = capsys.readouterr().out
+        assert '(HUBBARD ANALYSIS)' in out
+
+    def test_prints_u_value(self, capsys):
+        self._print(3, 'analysis', self._base_result(hubbard_u_eV=3.456))
+        out = capsys.readouterr().out
+        assert '3.456' in out
+
+    def test_prints_target_species(self, capsys):
+        self._print(3, 'analysis', self._base_result(target_species='Ni'))
+        out = capsys.readouterr().out
+        assert 'Ni' in out
+
+    def test_prints_r_squared(self, capsys):
+        self._print(3, 'analysis', self._base_result(
+            chi_r2=0.998765, chi_0_r2=0.999123))
+        out = capsys.readouterr().out
+        assert '0.998765' in out
+        assert '0.999123' in out
+
+    def test_prints_potentials(self, capsys):
+        rd = {'potential_values_eV': [-0.2, -0.1, 0.1, 0.2]}
+        self._print(3, 'analysis', self._base_result(response_data=rd))
+        out = capsys.readouterr().out
+        assert '-0.2' in out
+        assert '0.2' in out
+
+    def test_prints_avg_d_occupation(self, capsys):
+        summary = {
+            'summary': {'hubbard_u_eV': 3.5, 'target_species': 'Ni'},
+            'ground_state': {'average_d_per_atom': 8.234},
+        }
+        self._print(3, 'analysis', self._base_result(
+            summary=summary, target_species='Ni'))
+        out = capsys.readouterr().out
+        assert '8.234' in out
+
+    def test_prints_none_values_gracefully(self, capsys):
+        """All None values should not raise."""
+        self._print(1, 'analysis', self._base_result())
+        out = capsys.readouterr().out
+        assert 'HUBBARD ANALYSIS' in out

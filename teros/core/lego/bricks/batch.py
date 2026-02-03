@@ -10,7 +10,7 @@ from aiida.common.links import LinkType
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
 
-from .connections import BATCH_PORTS as PORTS
+from .connections import BATCH_PORTS as PORTS  # noqa: F401
 from ..tasks import extract_energy
 from ...utils import deep_merge_dicts
 

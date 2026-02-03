@@ -61,6 +61,13 @@ class TestValidateStages:
              'calculations': {'neutral': {'incar': {'NELECT': 100}}}},
             {'name': 'bader', 'type': 'bader', 'charge_from': 'relax'},
             {'name': 'conv', 'type': 'convergence'},
+            {'name': 'gs', 'type': 'vasp', 'incar': {'NSW': 0}, 'restart': None},
+            {'name': 'response', 'type': 'hubbard_response',
+             'ground_state_from': 'gs', 'structure_from': 'input',
+             'target_species': 'Ni'},
+            {'name': 'analysis', 'type': 'hubbard_analysis',
+             'response_from': 'response', 'structure_from': 'input',
+             'target_species': 'Ni'},
         ]
         self._validate(stages)
 
@@ -120,4 +127,24 @@ class TestValidateStages:
             {'name': 'conv', 'type': 'convergence', 'conv_settings': 'bad'},
         ]
         with pytest.raises(ValueError, match="conv_settings"):
+            self._validate(stages)
+
+    def test_delegates_hubbard_response_error(self):
+        """Missing target_species should trigger hubbard_response-brick ValueError."""
+        stages = [
+            {'name': 'gs', 'type': 'vasp', 'incar': {'NSW': 0}, 'restart': None},
+            {'name': 'response', 'type': 'hubbard_response',
+             'ground_state_from': 'gs', 'structure_from': 'input'},
+        ]
+        with pytest.raises(ValueError, match="target_species"):
+            self._validate(stages)
+
+    def test_delegates_hubbard_analysis_error(self):
+        """Missing response_from should trigger hubbard_analysis-brick ValueError."""
+        stages = [
+            {'name': 'gs', 'type': 'vasp', 'incar': {'NSW': 0}, 'restart': None},
+            {'name': 'analysis', 'type': 'hubbard_analysis',
+             'structure_from': 'input', 'target_species': 'Ni'},
+        ]
+        with pytest.raises(ValueError, match="response_from"):
             self._validate(stages)
