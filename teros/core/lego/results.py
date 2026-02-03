@@ -783,12 +783,14 @@ def get_stage_results(sequential_result: dict, stage_name: str) -> dict:
         )
 
     stage_type = stage_types.get(stage_name, 'vasp')
+    stage_namespaces = sequential_result.get('__stage_namespaces__', {})
+    namespace_map = stage_namespaces.get(stage_name)
     wg_node = orm.load_node(wg_pk)
 
     # Delegate to brick module
     from .bricks import get_brick_module
     brick = get_brick_module(stage_type)
-    return brick.get_stage_results(wg_node, wg_pk, stage_name)
+    return brick.get_stage_results(wg_node, wg_pk, stage_name, namespace_map)
 
 
 def print_sequential_results(sequential_result: dict) -> None:

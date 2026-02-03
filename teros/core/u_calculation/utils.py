@@ -116,7 +116,9 @@ def build_ldau_arrays(
     for species in all_species:
         if species == target_species:
             ldaul.append(ldaul_value)
-            ldauu.append(potential_value)
+            # Negate potential to match VASP convention:
+            # Positive V should increase d-occupation
+            ldauu.append(-potential_value)
             ldauj.append(ldauj_value)
         else:
             ldaul.append(-1)  # No LDA+U for this species
@@ -228,6 +230,9 @@ def prepare_response_incar(
     # Non-SCF: Read and fix charge density
     if not is_scf:
         incar['icharg'] = 11
+        incar['istart'] = 0  # CRITICAL: Start from new wavefunctions, not WAVECAR
+        # This ensures eigenvalues are recalculated with the perturbed +U potential,
+        # giving the correct "bare" response
 
     return incar
 

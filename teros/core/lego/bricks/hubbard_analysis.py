@@ -132,30 +132,43 @@ def create_stage_tasks(wg, stage, stage_name, context):
     }
 
 
-def expose_stage_outputs(wg, stage_name, stage_tasks_result):
+def expose_stage_outputs(wg, stage_name, stage_tasks_result, namespace_map=None):
     """Expose hubbard_analysis stage outputs on the WorkGraph.
 
     Args:
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, falls back to
+                      flat naming with stage_name prefix.
     """
     summary = stage_tasks_result['summary']
     calc_u = stage_tasks_result['calc_u']
 
-    setattr(wg.outputs, f'{stage_name}_summary',
-            summary.outputs.result)
-    setattr(wg.outputs, f'{stage_name}_hubbard_u_result',
-            calc_u.outputs.result)
+    if namespace_map is not None:
+        ns = namespace_map['main']
+        setattr(wg.outputs, f'{ns}.hubbard_analysis.summary',
+                summary.outputs.result)
+        setattr(wg.outputs, f'{ns}.hubbard_analysis.hubbard_u_result',
+                calc_u.outputs.result)
+    else:
+        setattr(wg.outputs, f'{stage_name}_summary',
+                summary.outputs.result)
+        setattr(wg.outputs, f'{stage_name}_hubbard_u_result',
+                calc_u.outputs.result)
 
 
-def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
+def get_stage_results(wg_node, wg_pk: int, stage_name: str,
+                      namespace_map: dict = None) -> dict:
     """Extract results from a hubbard_analysis stage.
 
     Args:
         wg_node: The WorkGraph ProcessNode.
         wg_pk: WorkGraph PK.
         stage_name: Name of the stage.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, uses flat naming.
 
     Returns:
         Dict with keys: summary, hubbard_u_eV, target_species, chi_r2,
@@ -173,27 +186,38 @@ def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
         'type': 'hubbard_analysis',
     }
 
+    summary_node = None
+
     if hasattr(wg_node, 'outputs'):
         outputs = wg_node.outputs
 
-        summary_attr = f'{stage_name}_summary'
-        if hasattr(outputs, summary_attr):
-            summary_node = getattr(outputs, summary_attr)
-            if hasattr(summary_node, 'get_dict'):
-                summary_dict = summary_node.get_dict()
-                result['summary'] = summary_dict
-                if 'summary' in summary_dict:
-                    result['hubbard_u_eV'] = summary_dict['summary'].get(
-                        'hubbard_u_eV')
-                    result['target_species'] = summary_dict['summary'].get(
-                        'target_species')
-                if 'linear_fit' in summary_dict:
-                    lf = summary_dict['linear_fit']
-                    result['chi_r2'] = lf.get('chi_scf', {}).get('r_squared')
-                    result['chi_0_r2'] = lf.get('chi_0_nscf', {}).get(
-                        'r_squared')
-                if 'response_data' in summary_dict:
-                    result['response_data'] = summary_dict['response_data']
+        if namespace_map is not None:
+            ns = namespace_map['main']
+            stage_ns = getattr(outputs, ns, None)
+            brick_ns = getattr(stage_ns, 'hubbard_analysis', None) if stage_ns is not None else None
+            if brick_ns is not None:
+                if hasattr(brick_ns, 'summary'):
+                    summary_node = brick_ns.summary
+        else:
+            summary_attr = f'{stage_name}_summary'
+            if hasattr(outputs, summary_attr):
+                summary_node = getattr(outputs, summary_attr)
+
+    if summary_node is not None and hasattr(summary_node, 'get_dict'):
+        summary_dict = summary_node.get_dict()
+        result['summary'] = summary_dict
+        if 'summary' in summary_dict:
+            result['hubbard_u_eV'] = summary_dict['summary'].get(
+                'hubbard_u_eV')
+            result['target_species'] = summary_dict['summary'].get(
+                'target_species')
+        if 'linear_fit' in summary_dict:
+            lf = summary_dict['linear_fit']
+            result['chi_r2'] = lf.get('chi_scf', {}).get('r_squared')
+            result['chi_0_r2'] = lf.get('chi_0_nscf', {}).get(
+                'r_squared')
+        if 'response_data' in summary_dict:
+            result['response_data'] = summary_dict['response_data']
 
     # Fallback: traverse links
     if result['summary'] is None:

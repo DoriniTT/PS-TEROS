@@ -101,33 +101,46 @@ def create_stage_tasks(wg, stage, stage_name, context):
     }
 
 
-def expose_stage_outputs(wg, stage_name, stage_tasks_result):
+def expose_stage_outputs(wg, stage_name, stage_tasks_result, namespace_map=None):
     """Expose Bader stage outputs on the WorkGraph.
 
     Args:
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, falls back to
+                      flat naming with stage_name prefix.
     """
     bader_task = stage_tasks_result['bader']
 
-    setattr(wg.outputs, f'{stage_name}_charges',
-            bader_task.outputs.charges)
-    setattr(wg.outputs, f'{stage_name}_acf',
-            bader_task.outputs.acf)
-    setattr(wg.outputs, f'{stage_name}_bcf',
-            bader_task.outputs.bcf)
-    setattr(wg.outputs, f'{stage_name}_avf',
-            bader_task.outputs.avf)
+    if namespace_map is not None:
+        ns = namespace_map['main']
+        setattr(wg.outputs, f'{ns}.bader.charges', bader_task.outputs.charges)
+        setattr(wg.outputs, f'{ns}.bader.acf', bader_task.outputs.acf)
+        setattr(wg.outputs, f'{ns}.bader.bcf', bader_task.outputs.bcf)
+        setattr(wg.outputs, f'{ns}.bader.avf', bader_task.outputs.avf)
+    else:
+        setattr(wg.outputs, f'{stage_name}_charges',
+                bader_task.outputs.charges)
+        setattr(wg.outputs, f'{stage_name}_acf',
+                bader_task.outputs.acf)
+        setattr(wg.outputs, f'{stage_name}_bcf',
+                bader_task.outputs.bcf)
+        setattr(wg.outputs, f'{stage_name}_avf',
+                bader_task.outputs.avf)
 
 
-def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
+def get_stage_results(wg_node, wg_pk: int, stage_name: str,
+                      namespace_map: dict = None) -> dict:
     """Extract results from a Bader stage in a sequential workflow.
 
     Args:
         wg_node: The WorkGraph ProcessNode.
         wg_pk: WorkGraph PK.
         stage_name: Name of the Bader stage.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, uses flat naming.
 
     Returns:
         Dict with keys: charges, dat_files, pk, stage, type.
@@ -143,18 +156,32 @@ def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
     if hasattr(wg_node, 'outputs'):
         outputs = wg_node.outputs
 
-        # Charges Dict
-        charges_attr = f'{stage_name}_charges'
-        if hasattr(outputs, charges_attr):
-            charges_node = getattr(outputs, charges_attr)
-            if hasattr(charges_node, 'get_dict'):
-                result['charges'] = charges_node.get_dict()
+        if namespace_map is not None:
+            ns = namespace_map['main']
+            stage_ns = getattr(outputs, ns, None)
+            brick_ns = getattr(stage_ns, 'bader', None) if stage_ns is not None else None
+            if brick_ns is not None:
+                if hasattr(brick_ns, 'charges'):
+                    charges_node = brick_ns.charges
+                    if hasattr(charges_node, 'get_dict'):
+                        result['charges'] = charges_node.get_dict()
+                for dat_key in ('acf', 'bcf', 'avf'):
+                    if hasattr(brick_ns, dat_key):
+                        result['dat_files'][dat_key] = getattr(brick_ns, dat_key)
+        else:
+            # Flat naming fallback
+            # Charges Dict
+            charges_attr = f'{stage_name}_charges'
+            if hasattr(outputs, charges_attr):
+                charges_node = getattr(outputs, charges_attr)
+                if hasattr(charges_node, 'get_dict'):
+                    result['charges'] = charges_node.get_dict()
 
-        # .dat files: acf, bcf, avf
-        for dat_key in ('acf', 'bcf', 'avf'):
-            dat_attr = f'{stage_name}_{dat_key}'
-            if hasattr(outputs, dat_attr):
-                result['dat_files'][dat_key] = getattr(outputs, dat_attr)
+            # .dat files: acf, bcf, avf
+            for dat_key in ('acf', 'bcf', 'avf'):
+                dat_attr = f'{stage_name}_{dat_key}'
+                if hasattr(outputs, dat_attr):
+                    result['dat_files'][dat_key] = getattr(outputs, dat_attr)
 
     # Fallback: traverse links
     if result['charges'] is None:

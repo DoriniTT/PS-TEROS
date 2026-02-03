@@ -170,7 +170,9 @@ teros/core/
 │   ├── __init__.py
 │   ├── workgraph.py          # build_u_calculation_workgraph()
 │   ├── tasks.py              # extract_d_electron_occupation, gather_responses, etc.
+│   │                         # NOTE: Fixed 2026-02-02 - chi/chi_0 labels + sign convention
 │   └── utils.py              # INCAR preparation, LDAU arrays, linear regression
+│                             # NOTE: Fixed 2026-02-02 - potential sign negation
 └── lego/                     # Modular brick-based workflow builder
     ├── __init__.py            # Public API: quick_vasp, quick_dos, quick_hubbard_u, etc.
     ├── workgraph.py           # quick_* functions, _prepare_builder_inputs
@@ -294,6 +296,53 @@ stages = [
 
 wg = quick_vasp_sequential(structure, code_label, stages=stages, ...)
 ```
+
+### Output Namespace Naming
+
+Sequential workflow outputs use indexed prefixes for ordered display in `verdi process show`:
+
+```
+Outputs                       PK     Type
+---------------------------   -----  -------------
+s01_relax_2x2_rough
+    vasp
+        structure             34781  StructureData
+        misc                  34780  Dict
+        remote                34778  RemoteData
+        retrieved             34779  FolderData
+        energy                34785  Float
+s02_relax_2x2_fine
+    vasp
+        ...
+s03_dos_2x2
+    scf
+        misc                  35207  Dict
+        ...
+    dos
+        misc                  35225  Dict
+        ...
+s04_fukui_minus_calcs_2x2
+    batch
+        delta_005
+            misc              35143  Dict
+            ...
+        neutral
+            ...
+```
+
+**Format:** `s{index:02d}_{stage_name}` (e.g., `s01_relax_rough`, `s02_dos`)
+
+- The `s` prefix ensures valid Python identifiers (required by AiiDA link labels)
+- Zero-padded index (`01`, `02`, ...) ensures alphabetical sort matches stage execution order
+- Stage name provides descriptive context
+
+**Brick-specific output structure:**
+
+| Brick Type | Output Namespace Structure |
+|------------|---------------------------|
+| `vasp` | `s{N}_{name}.vasp.{energy,structure,misc,remote,retrieved}` |
+| `dos` | `s{N}_{name}.scf.{misc,remote,retrieved}` + `s{N}_{name}.dos.{misc,remote,retrieved}` |
+| `batch` | `s{N}_{name}.batch.{calc_label}.{energy,misc,remote,retrieved}` |
 
 ### Hubbard U Stage Configuration
 

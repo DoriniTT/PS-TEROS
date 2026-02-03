@@ -10,6 +10,7 @@ accurate U calculation.
 
 import re
 import typing as t
+import warnings
 
 from aiida import orm
 from aiida_workgraph import task
@@ -20,6 +21,13 @@ from .utils import linear_regression
 def _parse_total_charge_from_outcar(outcar_content: str) -> t.List[t.Dict[str, float]]:
     """
     Parse the 'total charge' section from VASP OUTCAR content.
+
+    For spin-polarized calculations (ISPIN=2), VASP writes multiple sections:
+    - First "total charge": spin-up + spin-down (TOTAL) ← Use this!
+    - Second "magnetization": spin-up - spin-down (difference)
+
+    This function automatically detects ISPIN and uses the appropriate section
+    to ensure d-occupations represent the total electron count.
 
     The OUTCAR contains a section like:
         total charge
@@ -34,11 +42,16 @@ def _parse_total_charge_from_outcar(outcar_content: str) -> t.List[t.Dict[str, f
 
     Returns:
         List of dicts, one per ion, with keys 's', 'p', 'd', 'tot'
+        For ISPIN=2: values are spin-summed (total charge per orbital)
 
     Raises:
         ValueError: If total charge section not found
     """
-    # Find the "total charge" section (last occurrence)
+    # Detect ISPIN from OUTCAR
+    ispin_match = re.search(r'ISPIN\s*=\s*(\d)', outcar_content)
+    ispin = int(ispin_match.group(1)) if ispin_match else 1
+
+    # Find the "total charge" section
     # Pattern: "total charge" followed by header and data lines
     pattern = r'total charge\s*\n\s*#\s*of ion\s+s\s+p\s+d\s+tot\s*\n[-]+\s*\n((?:\s*\d+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s+[\d.-]+\s*\n)+)'
 
@@ -50,9 +63,17 @@ def _parse_total_charge_from_outcar(outcar_content: str) -> t.List[t.Dict[str, f
             "Ensure LORBIT=11 is set in INCAR."
         )
 
-    # Use the last match (final SCF cycle)
-    last_match = matches[-1]
-    data_block = last_match.group(1)
+    # Strategy depends on ISPIN
+    if ispin == 2 and len(matches) >= 2:
+        # For spin-polarized: First match is total charge (sum)
+        # Second match may be magnetization (difference) - ignore
+        target_match = matches[0]  # Take FIRST, not last!
+        print("INFO: ISPIN=2 detected, using first 'total charge' section (spin-summed)")
+    else:
+        # For non-spin-polarized or single match: use last (final SCF)
+        target_match = matches[-1]
+
+    data_block = target_match.group(1)
 
     charges = []
     for line in data_block.strip().split('\n'):
@@ -86,6 +107,9 @@ def extract_d_electron_occupation(
     Parses the 'total charge' section of OUTCAR to get orbital-resolved
     occupations. Requires LORBIT=11 in VASP INCAR.
 
+    For spin-polarized calculations (ISPIN=2), the function automatically
+    uses spin-summed values (total charge) rather than magnetization.
+
     Args:
         retrieved: FolderData from VASP calculation containing OUTCAR
         target_species: Element symbol to extract occupations for (e.g., 'Fe')
@@ -97,6 +121,8 @@ def extract_d_electron_occupation(
             - per_atom_d_occupation: List of d-occupation per atom
             - atom_indices: 0-based indices of target atoms
             - atom_count: Number of target atoms
+            - target_species: Element symbol
+            - ispin: ISPIN value from OUTCAR (1 or 2)
 
     Raises:
         ValueError: If OUTCAR not found or d-occupation data cannot be parsed
@@ -141,12 +167,32 @@ def extract_d_electron_occupation(
 
     total_d_occ = sum(per_atom_d_occ)
 
+    # Detect ISPIN from OUTCAR for validation
+    ispin_match = re.search(r'ISPIN\s*=\s*(\d)', outcar_content)
+    ispin = int(ispin_match.group(1)) if ispin_match else 1
+
+    # Validation for spin-polarized calculations
+    if ispin == 2:
+        print("INFO: ISPIN=2 detected (spin-polarized calculation)")
+        print(f"  Extracted total d-occupation: {total_d_occ:.4f}")
+        print(f"  Per-atom: {per_atom_d_occ}")
+
+        # Sanity check: for transition metals, d-occupation should be 0-10 per atom
+        avg_d = total_d_occ / len(target_indices)
+        if avg_d < 0.1 or avg_d > 10.5:
+            warnings.warn(
+                f"Average d-occupation per {species} atom is {avg_d:.2f}, "
+                f"which is outside typical range (0-10). "
+                f"Check OUTCAR parsing for spin-polarized calculations."
+            )
+
     return orm.Dict(dict={
         'total_d_occupation': total_d_occ,
         'per_atom_d_occupation': per_atom_d_occ,
         'atom_indices': target_indices,
         'atom_count': len(target_indices),
         'target_species': species,
+        'ispin': ispin,  # Track if spin-polarized
     })
 
 
@@ -312,13 +358,18 @@ def calculate_hubbard_u_linear_regression(
         delta_n_nscf_vals.append(resp['delta_n_nscf'])
         delta_n_scf_vals.append(resp['delta_n_scf'])
 
-    # Linear regression for chi_0 (NSCF response)
-    chi_0_slope, chi_0_intercept, chi_0_r2 = linear_regression(
+    # Convention: chi (screened) from NSCF, chi_0 (bare) from SCF
+    # - NSCF (ICHARG=11): Frozen charge → system cannot respond → screened → chi (small)
+    # - SCF (relaxed): Charge can relax → full system response → bare → chi_0 (large)
+    # Expected: chi < chi_0 (screened < bare)
+
+    # Linear regression for chi (NSCF response, screened)
+    chi_slope, chi_intercept, chi_r2 = linear_regression(
         potentials, delta_n_nscf_vals
     )
 
-    # Linear regression for chi (SCF response)
-    chi_slope, chi_intercept, chi_r2 = linear_regression(
+    # Linear regression for chi_0 (SCF response, bare)
+    chi_0_slope, chi_0_intercept, chi_0_r2 = linear_regression(
         potentials, delta_n_scf_vals
     )
 
@@ -331,6 +382,31 @@ def calculate_hubbard_u_linear_regression(
         )
 
     U = (1.0 / chi_slope) - (1.0 / chi_0_slope)
+
+    # Validation checks
+    if chi_slope <= 0:
+        warnings.warn(
+            f"chi slope is non-positive ({chi_slope:.4f}). "
+            "This suggests sign convention issues in the response calculations."
+        )
+
+    if chi_0_slope <= 0:
+        warnings.warn(
+            f"chi_0 slope is non-positive ({chi_0_slope:.4f}). "
+            "This suggests sign convention issues in the response calculations."
+        )
+
+    if chi_slope >= chi_0_slope:
+        warnings.warn(
+            f"chi ({chi_slope:.4f}) >= chi_0 ({chi_0_slope:.4f}). "
+            "Expected chi < chi_0 (screened < bare). Check calculation setup."
+        )
+
+    if U < 0 or U > 50:
+        warnings.warn(
+            f"U = {U:.2f} eV is outside typical range (0-20 eV). "
+            "Check response calculations and potential values."
+        )
 
     return orm.Dict(dict={
         'U': U,

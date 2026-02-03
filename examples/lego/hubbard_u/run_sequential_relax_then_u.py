@@ -62,7 +62,8 @@ stages = [
         'kpoints_spacing': 0.05,
         'retrieve': ['CONTCAR', 'OUTCAR'],
     },
-    # Stage 2: Ground state SCF (no +U)
+    # Stage 2: Ground state SCF (+U with U=0)
+    # CRITICAL: LDAU=True with LDAUU=0 is required for ICHARG=11 compatibility
     {
         'name': 'ground_state',
         'type': 'vasp',
@@ -71,7 +72,11 @@ stages = [
             **base_incar,
             'nsw': 0,
             'ibrion': -1,
-            'ldau': False,
+            'ldau': True,           # FIXED: was False
+            'ldautype': 3,          # ADDED
+            'ldaul': [2, -1],       # ADDED: d for Sn, none for O
+            'ldauj': [0.0, 0.0],    # ADDED
+            'ldauu': [0.0, 0.0],    # ADDED: U=0 for ground state
             'lmaxmix': 4,
             'lorbit': 11,
             'lwave': True,

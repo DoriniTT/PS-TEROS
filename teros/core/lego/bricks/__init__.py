@@ -86,3 +86,33 @@ def resolve_structure_from(structure_from: str, context: dict):
             f"stage, which doesn't produce a structure output. "
             f"Point to a VASP stage instead."
         )
+
+
+def resolve_energy_from(energy_from: str, context: dict):
+    """Resolve an energy socket from a previous stage.
+
+    Only VASP stages produce a meaningful energy output. Referencing
+    a non-VASP stage raises an error.
+
+    Args:
+        energy_from: Name of the stage to get energy from.
+        context: The context dict passed to create_stage_tasks.
+
+    Returns:
+        Energy socket (Float or task output socket).
+
+    Raises:
+        ValueError: If the referenced stage doesn't produce an energy.
+    """
+    stage_tasks = context['stage_tasks']
+    stage_types = context['stage_types']
+
+    ref_stage_type = stage_types.get(energy_from, 'vasp')
+    if ref_stage_type == 'vasp':
+        return stage_tasks[energy_from]['energy'].outputs.result
+    else:
+        raise ValueError(
+            f"energy_from='{energy_from}' references a '{ref_stage_type}' "
+            f"stage, which doesn't produce an energy output. "
+            f"Point to a VASP stage instead."
+        )

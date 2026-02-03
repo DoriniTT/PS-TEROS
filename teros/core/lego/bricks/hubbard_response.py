@@ -5,11 +5,25 @@ extracts d-electron occupations, and gathers the responses. This brick
 requires a prior ground state (vasp brick) stage to restart from.
 
 Reference: https://www.vasp.at/wiki/index.php/Calculate_U_for_LSDA+U
+
+KNOWN ISSUE / WORKAROUND:
+There is a bug in AiiDA (2.7.1) + aiida-vasp (5.0.0) where VaspCalculation
+with restart_folder input doesn't produce remote_folder output. This causes
+the standard VaspWorkChain to fail with exit code 11 ("missing required output").
+
+Solution: We define VaspWorkChainNoRemote, a custom wrapper that makes the
+remote_folder output optional. This allows the workflow to continue since
+the response calculations don't need their own remote_folder (both NSCF and
+SCF restart from the ground state's remote folder, not from each other).
+
+See: https://github.com/aiidateam/aiida-core/issues/XXXX
+See: https://github.com/aiidateam/aiida-vasp/issues/XXXX
 """
 
 from aiida import orm
 from aiida.common.links import LinkType
-from aiida.plugins import WorkflowFactory
+from aiida.engine import WorkChain
+from aiida_vasp.workchains.v2.vasp import VaspWorkChain as OriginalVaspWC
 from aiida_workgraph import task
 
 from .connections import HUBBARD_RESPONSE_PORTS as PORTS  # noqa: F401
@@ -25,6 +39,25 @@ from teros.core.u_calculation.utils import (
     DEFAULT_POTENTIAL_VALUES,
 )
 from teros.core.utils import get_vasp_parser_settings
+
+
+class VaspWorkChainNoRemote(OriginalVaspWC):
+    """VaspWorkChain wrapper that makes remote_folder output optional.
+
+    This works around the AiiDA bug where VaspCalculation with restart_folder
+    input doesn't produce remote_folder output, which would cause the original
+    VaspWorkChain to fail with exit code 11.
+
+    Since the hubbard_response workflow doesn't need remote_folder from the
+    response calculations (both NSCF and SCF restart from the ground state's
+    remote folder), making this output optional allows the workflow to proceed.
+    """
+
+    @classmethod
+    def define(cls, spec):
+        super().define(spec)
+        # Make remote_folder output not required
+        spec.outputs['remote_folder'].required = False
 
 
 def validate_stage(stage: dict, stage_names: set) -> None:
@@ -127,8 +160,8 @@ def create_stage_tasks(wg, stage, stage_name, context):
     input_structure = context['input_structure']
     stage_tasks = context['stage_tasks']
 
-    VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
-    VaspTask = task(VaspWorkChain)
+    # Use custom wrapper that makes remote_folder output optional
+    VaspTask = task(VaspWorkChainNoRemote)
 
     # Stage configuration
     target_species = stage['target_species']
@@ -177,7 +210,11 @@ def create_stage_tasks(wg, stage, stage_name, context):
     )
 
     # Response calculations for each potential value
+    # Note: tasks are created with sequential dependencies to avoid AiiDA race
+    # conditions when multiple VaspCalculations upload to the same computer
+    # simultaneously. Each NSCF+SCF pair waits for the previous pair to complete.
     response_tasks = {}
+    prev_response = None  # Track previous response task for serialization
 
     for i, V in enumerate(potential_values):
         label = f'V_{i}'
@@ -217,9 +254,16 @@ def create_stage_tasks(wg, stage, stage_name, context):
             name=f'nscf_{V_str}_{stage_name}',
             structure=stage_structure,
             code=code,
-            restart={'folder': gs_remote_folder},
+            restart_folder=gs_remote_folder,
             **nscf_builder_inputs,
         )
+
+        # Add sequential dependency: wait for previous response to complete
+        # This avoids AiiDA race conditions with concurrent calcjob uploads when
+        # multiple VaspCalculations access the same remote restart folder simultaneously.
+        # Each NSCF waits for the previous complete response cycle (NSCF+SCF+extraction).
+        if prev_response is not None:
+            wg.add_link(prev_response.outputs._wait, nscf_task.inputs._wait)
 
         nscf_occ = wg.add_task(
             extract_d_electron_occupation,
@@ -263,9 +307,19 @@ def create_stage_tasks(wg, stage, stage_name, context):
             name=f'scf_{V_str}_{stage_name}',
             structure=stage_structure,
             code=code,
-            restart={'folder': gs_remote_folder},
+            restart_folder=gs_remote_folder,
             **scf_builder_inputs,
         )
+
+        # Note: Both NSCF (ICHARG=11) and SCF restart from ground state's remote_folder.
+        # NSCF reads the charge density but doesn't modify it; SCF reads WAVECAR/CHGCAR.
+        # We do NOT add a dependency between NSCF and SCF here because:
+        # 1. Both independently need only the GS remote folder (no intermediate products)
+        # 2. Adding this link created a broken chain due to AiiDA bug where VaspCalculation
+        #    with restart_folder input doesn't produce remote_folder output.
+        # See: https://github.com/aiidateam/aiida-core/issues/
+        # Serialization is maintained at the prev_response level above (each new V waits
+        # for previous V's complete response to finish).
 
         scf_occ = wg.add_task(
             extract_d_electron_occupation,
@@ -286,6 +340,7 @@ def create_stage_tasks(wg, stage, stage_name, context):
         )
 
         response_tasks[label] = response
+        prev_response = response  # Track for next iteration's dependency
 
     # Gather all responses
     gather_kwargs = {
@@ -305,30 +360,43 @@ def create_stage_tasks(wg, stage, stage_name, context):
     }
 
 
-def expose_stage_outputs(wg, stage_name, stage_tasks_result):
+def expose_stage_outputs(wg, stage_name, stage_tasks_result, namespace_map=None):
     """Expose hubbard_response stage outputs on the WorkGraph.
 
     Args:
         wg: WorkGraph instance.
         stage_name: Unique stage identifier.
         stage_tasks_result: Dict returned by create_stage_tasks.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, falls back to
+                      flat naming with stage_name prefix.
     """
     gathered = stage_tasks_result['responses']
     gs_occupation = stage_tasks_result['gs_occupation']
 
-    setattr(wg.outputs, f'{stage_name}_responses',
-            gathered.outputs.result)
-    setattr(wg.outputs, f'{stage_name}_ground_state_occupation',
-            gs_occupation.outputs.result)
+    if namespace_map is not None:
+        ns = namespace_map['main']
+        setattr(wg.outputs, f'{ns}.hubbard_response.responses',
+                gathered.outputs.result)
+        setattr(wg.outputs, f'{ns}.hubbard_response.ground_state_occupation',
+                gs_occupation.outputs.result)
+    else:
+        setattr(wg.outputs, f'{stage_name}_responses',
+                gathered.outputs.result)
+        setattr(wg.outputs, f'{stage_name}_ground_state_occupation',
+                gs_occupation.outputs.result)
 
 
-def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
+def get_stage_results(wg_node, wg_pk: int, stage_name: str,
+                      namespace_map: dict = None) -> dict:
     """Extract results from a hubbard_response stage.
 
     Args:
         wg_node: The WorkGraph ProcessNode.
         wg_pk: WorkGraph PK.
         stage_name: Name of the stage.
+        namespace_map: Dict mapping output group to namespace string,
+                      e.g. {'main': 'stage1'}. If None, uses flat naming.
 
     Returns:
         Dict with keys: responses, ground_state_occupation, pk, stage, type.
@@ -344,17 +412,31 @@ def get_stage_results(wg_node, wg_pk: int, stage_name: str) -> dict:
     if hasattr(wg_node, 'outputs'):
         outputs = wg_node.outputs
 
-        responses_attr = f'{stage_name}_responses'
-        if hasattr(outputs, responses_attr):
-            responses_node = getattr(outputs, responses_attr)
-            if hasattr(responses_node, 'get_list'):
-                result['responses'] = responses_node.get_list()
+        if namespace_map is not None:
+            ns = namespace_map['main']
+            stage_ns = getattr(outputs, ns, None)
+            brick_ns = getattr(stage_ns, 'hubbard_response', None) if stage_ns is not None else None
+            if brick_ns is not None:
+                if hasattr(brick_ns, 'responses'):
+                    responses_node = brick_ns.responses
+                    if hasattr(responses_node, 'get_list'):
+                        result['responses'] = responses_node.get_list()
+                if hasattr(brick_ns, 'ground_state_occupation'):
+                    gs_occ_node = brick_ns.ground_state_occupation
+                    if hasattr(gs_occ_node, 'get_dict'):
+                        result['ground_state_occupation'] = gs_occ_node.get_dict()
+        else:
+            responses_attr = f'{stage_name}_responses'
+            if hasattr(outputs, responses_attr):
+                responses_node = getattr(outputs, responses_attr)
+                if hasattr(responses_node, 'get_list'):
+                    result['responses'] = responses_node.get_list()
 
-        gs_occ_attr = f'{stage_name}_ground_state_occupation'
-        if hasattr(outputs, gs_occ_attr):
-            gs_occ_node = getattr(outputs, gs_occ_attr)
-            if hasattr(gs_occ_node, 'get_dict'):
-                result['ground_state_occupation'] = gs_occ_node.get_dict()
+            gs_occ_attr = f'{stage_name}_ground_state_occupation'
+            if hasattr(outputs, gs_occ_attr):
+                gs_occ_node = getattr(outputs, gs_occ_attr)
+                if hasattr(gs_occ_node, 'get_dict'):
+                    result['ground_state_occupation'] = gs_occ_node.get_dict()
 
     # Fallback: traverse links
     if result['responses'] is None:

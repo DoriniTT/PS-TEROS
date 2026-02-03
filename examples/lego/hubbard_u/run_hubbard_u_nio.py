@@ -1,25 +1,25 @@
 """
-Hubbard U calculation for NiO (rocksalt) using the Lego module.
+Hubbard U calculation for NiO - FIXED VERSION
+
+CRITICAL FIX: Ground state now has LDAU=True with LDAUU=0.
+Previously had LDAU=False which caused incompatible charge density
+when restarting NSCF (ICHARG=11) calculations.
+
+According to VASP Wiki (https://www.vasp.at/wiki/index.php/Calculate_U_for_LSDA+U):
+- Ground state: DFT+U with U=0 (LDAU=.TRUE., LDAUU=0)
+- Response: DFT+U with U=α (LDAU=.TRUE., LDAUU=α)
 
 Four-stage sequential workflow:
-  1. Ionic relaxation (IBRION=2, ISIF=3)
-  2. Ground state SCF (LORBIT=11, LWAVE=True, LCHARG=True, no +U)
+  1. Ionic relaxation (IBRION=2, ISIF=3, spin-polarized)
+  2. Ground state SCF (LORBIT=11, LWAVE=True, LCHARG=True, +U with U=0)
   3. Response calculations (NSCF + SCF per perturbation potential)
   4. Analysis (linear regression to extract U = 1/chi - 1/chi_0)
-
-NiO is a prototypical correlated oxide where Hubbard U corrections are
-essential for reproducing the insulating ground state. Literature values
-for U(Ni-3d) are typically 5-8 eV depending on the method and functional.
 
 Usage:
     source ~/envs/aiida/bin/activate
     verdi daemon restart
-    python examples/lego/hubbard_u/run_hubbard_u_nio.py
+    python examples/lego/hubbard_u/run_hubbard_u_nio_FIXED.py
     verdi process show <PK>
-
-Viewing results:
-    from teros.core.lego import print_sequential_results
-    print_sequential_results(<PK>)
 """
 
 from pathlib import Path
@@ -42,6 +42,9 @@ base_incar = {
     'prec': 'Accurate',
     'algo': 'Normal',
     'nelm': 200,
+    'ispin': 2,
+    'magmom': [2.0] * 4 + [0.6] * 4,  # 4 Ni + 4 O
+    'lmaxmix': 4,
 }
 
 # ── Define stages ───────────────────────────────────────────────────────
@@ -62,9 +65,9 @@ stages = [
         'restart': None,
         'retrieve': ['CONTCAR', 'OUTCAR'],
     },
-    # Stage 2: Ground state SCF (produces WAVECAR, CHGCAR, OUTCAR)
-    # Prerequisites for hubbard_response: lorbit=11, lwave=True,
-    # lcharg=True, and retrieve=['OUTCAR']
+    # Stage 2: Ground state SCF with +U but U=0
+    # CRITICAL FIX: Set ldau=True with ldauu=[0, 0]
+    # This ensures charge density is compatible with ICHARG=11 response
     {
         'name': 'ground_state',
         'type': 'vasp',
@@ -73,8 +76,11 @@ stages = [
             **base_incar,
             'nsw': 0,
             'ibrion': -1,
-            'ldau': False,
-            'lmaxmix': 4,
+            'ldau': True,           # FIXED: was False
+            'ldautype': 3,          # ADDED
+            'ldaul': [2, -1],       # ADDED: d-orbitals for Ni, none for O
+            'ldauj': [0.0, 0.0],    # ADDED
+            'ldauu': [0.0, 0.0],    # ADDED: U=0 for ground state
             'lorbit': 11,
             'lwave': True,
             'lcharg': True,
@@ -83,7 +89,6 @@ stages = [
         'retrieve': ['OUTCAR'],
     },
     # Stage 3: Response calculations (NSCF + SCF per potential V)
-    # Runs 4 pairs of calculations with perturbation potentials
     {
         'name': 'response',
         'type': 'hubbard_response',
@@ -95,7 +100,6 @@ stages = [
         'incar': base_incar,
     },
     # Stage 4: Linear regression to extract U
-    # No VASP calculations — pure data analysis
     {
         'name': 'analysis',
         'type': 'hubbard_analysis',
@@ -107,32 +111,43 @@ stages = [
 ]
 
 # ── Submit ──────────────────────────────────────────────────────────────
-from teros.core.lego import quick_vasp_sequential, print_sequential_results
+from teros.core.lego import quick_vasp_sequential
 
 result = quick_vasp_sequential(
     structure=structure,
     stages=stages,
-    code_label='VASP-6.5.1@localwork',
+    code_label='VASP-6.5.1-idefix-4@obelix',
     kpoints_spacing=0.04,
     potential_family='PBE',
     potential_mapping={'Ni': 'Ni_pv', 'O': 'O'},
     options={
         'resources': {
             'num_machines': 1,
-            'num_mpiprocs_per_machine': 8,
+            'num_mpiprocs_per_machine': 4,
         },
+        'custom_scheduler_commands': (
+            '#PBS -l cput=90000:00:00\n'
+            '#PBS -l nodes=1:ppn=88:skylake\n'
+            '#PBS -j oe\n'
+            '#PBS -N nio_hubbard_u_fixed'
+        ),
     },
-    name='nio_hubbard_u',
+    max_concurrent_jobs=2,
+    name='nio_hubbard_u_fixed',
 )
 
 pk = result['__workgraph_pk__']
 print(f"Submitted WorkGraph PK: {pk}")
 print(f"Stages: {result['__stage_names__']}")
 print()
+print("FIXED: Ground state now has LDAU=True with LDAUU=[0,0]")
+print("Expected: NSCF response (chi_0) > SCF response (chi)")
+print()
 print("Monitor with:")
 print(f"  verdi process show {pk}")
-print(f"  verdi process report {pk}")
 print()
-print("View results when finished:")
-print("  from teros.core.lego import print_sequential_results")
+print("View results:")
+print("  from teros.core.lego import print_sequential_results, get_stage_results")
 print(f"  print_sequential_results({pk})")
+print(f"  u_result = get_stage_results({pk}, 'analysis')")
+print("  print(f\"U = {u_result['summary']['hubbard_u_eV']:.3f} eV\")")
