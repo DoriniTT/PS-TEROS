@@ -88,11 +88,11 @@ class TestBrickRegistry:
 
     def test_valid_brick_types_tuple(self):
         from teros.core.lego.bricks import VALID_BRICK_TYPES
-        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader', 'hubbard_response', 'hubbard_analysis')
+        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader', 'convergence', 'thickness', 'hubbard_response', 'hubbard_analysis', 'aimd', 'qe', 'cp2k')
 
-    def test_registry_has_six_entries(self):
+    def test_registry_has_eleven_entries(self):
         from teros.core.lego.bricks import BRICK_REGISTRY
-        assert len(BRICK_REGISTRY) == 6
+        assert len(BRICK_REGISTRY) == 11
 
     def test_get_brick_module_valid_types(self):
         from teros.core.lego.bricks import get_brick_module, VALID_BRICK_TYPES
@@ -746,3 +746,461 @@ class TestHubbardAnalysisValidateStage:
             'ldaul': 3,
         }
         self._validate(stage, stage_names={'response'})
+
+
+# ---------------------------------------------------------------------------
+# TestAimdValidateStage
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def valid_aimd_stage():
+    return {
+        'name': 'equilibration', 'type': 'aimd',
+        'tebeg': 300, 'nsw': 100, 'restart': None,
+    }
+
+
+@pytest.mark.tier1
+class TestAimdValidateStage:
+    """Tests for teros.core.lego.bricks.aimd.validate_stage()."""
+
+    def _validate(self, stage, stage_names=None):
+        from teros.core.lego.bricks.aimd import validate_stage
+        if stage_names is None:
+            stage_names = set()
+        validate_stage(stage, stage_names)
+
+    def test_valid_minimal_passes(self, valid_aimd_stage):
+        self._validate(valid_aimd_stage)
+
+    def test_valid_full_config_passes(self):
+        stage = {
+            'name': 'prod', 'type': 'aimd',
+            'tebeg': 600, 'nsw': 5000, 'teend': 300,
+            'potim': 1.5, 'mdalgo': 2, 'smass': 0.0,
+            'restart': None,
+            'incar': {'encut': 400, 'ediff': 1e-5},
+        }
+        self._validate(stage)
+
+    def test_missing_tebeg_raises(self):
+        stage = {'name': 'md', 'nsw': 100, 'restart': None}
+        with pytest.raises(ValueError, match="tebeg"):
+            self._validate(stage)
+
+    def test_missing_nsw_raises(self):
+        stage = {'name': 'md', 'tebeg': 300, 'restart': None}
+        with pytest.raises(ValueError, match="nsw"):
+            self._validate(stage)
+
+    def test_missing_restart_raises(self):
+        stage = {'name': 'md', 'tebeg': 300, 'nsw': 100}
+        with pytest.raises(ValueError, match="restart"):
+            self._validate(stage)
+
+    def test_tebeg_zero_raises(self):
+        stage = {'name': 'md', 'tebeg': 0, 'nsw': 100, 'restart': None}
+        with pytest.raises(ValueError, match="tebeg"):
+            self._validate(stage)
+
+    def test_tebeg_negative_raises(self):
+        stage = {'name': 'md', 'tebeg': -100, 'nsw': 100, 'restart': None}
+        with pytest.raises(ValueError, match="tebeg"):
+            self._validate(stage)
+
+    def test_nsw_zero_raises(self):
+        stage = {'name': 'md', 'tebeg': 300, 'nsw': 0, 'restart': None}
+        with pytest.raises(ValueError, match="nsw"):
+            self._validate(stage)
+
+    def test_nsw_negative_raises(self):
+        stage = {'name': 'md', 'tebeg': 300, 'nsw': -10, 'restart': None}
+        with pytest.raises(ValueError, match="nsw"):
+            self._validate(stage)
+
+    def test_potim_zero_raises(self):
+        stage = {'name': 'md', 'tebeg': 300, 'nsw': 100, 'potim': 0, 'restart': None}
+        with pytest.raises(ValueError, match="potim"):
+            self._validate(stage)
+
+    def test_potim_negative_raises(self):
+        stage = {'name': 'md', 'tebeg': 300, 'nsw': 100, 'potim': -1, 'restart': None}
+        with pytest.raises(ValueError, match="potim"):
+            self._validate(stage)
+
+    def test_restart_none_passes(self, valid_aimd_stage):
+        self._validate(valid_aimd_stage)
+
+    def test_restart_valid_stage_passes(self):
+        stage = {'name': 'prod', 'tebeg': 300, 'nsw': 500, 'restart': 'equil'}
+        self._validate(stage, stage_names={'equil'})
+
+    def test_restart_unknown_stage_raises(self):
+        stage = {'name': 'prod', 'tebeg': 300, 'nsw': 500, 'restart': 'nope'}
+        with pytest.raises(ValueError, match="unknown"):
+            self._validate(stage, stage_names={'equil'})
+
+    def test_structure_from_previous_passes(self, valid_aimd_stage):
+        valid_aimd_stage['structure_from'] = 'previous'
+        self._validate(valid_aimd_stage)
+
+    def test_structure_from_input_passes(self, valid_aimd_stage):
+        valid_aimd_stage['structure_from'] = 'input'
+        self._validate(valid_aimd_stage)
+
+    def test_structure_from_valid_name_passes(self):
+        stage = {
+            'name': 'md', 'tebeg': 300, 'nsw': 100,
+            'restart': None, 'structure_from': 'relax',
+        }
+        self._validate(stage, stage_names={'relax'})
+
+    def test_structure_from_invalid_raises(self):
+        stage = {
+            'name': 'md', 'tebeg': 300, 'nsw': 100,
+            'restart': None, 'structure_from': 'unknown',
+        }
+        with pytest.raises(ValueError, match="structure_from"):
+            self._validate(stage)
+
+    def test_supercell_valid_passes(self, valid_aimd_stage):
+        valid_aimd_stage['supercell'] = [2, 2, 1]
+        self._validate(valid_aimd_stage)
+
+    def test_supercell_wrong_length_raises(self, valid_aimd_stage):
+        valid_aimd_stage['supercell'] = [2, 2]
+        with pytest.raises(ValueError, match="supercell"):
+            self._validate(valid_aimd_stage)
+
+    def test_supercell_zero_raises(self, valid_aimd_stage):
+        valid_aimd_stage['supercell'] = [2, 0, 1]
+        with pytest.raises(ValueError, match="positive integers"):
+            self._validate(valid_aimd_stage)
+
+    def test_supercell_float_raises(self, valid_aimd_stage):
+        valid_aimd_stage['supercell'] = [2.0, 2, 1]
+        with pytest.raises(ValueError, match="positive integers"):
+            self._validate(valid_aimd_stage)
+
+
+# ---------------------------------------------------------------------------
+# TestQeValidateStage
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def valid_qe_stage():
+    return {
+        'name': 'relax',
+        'type': 'qe',
+        'parameters': {
+            'CONTROL': {'calculation': 'relax'},
+            'SYSTEM': {'ecutwfc': 50, 'ecutrho': 400},
+            'ELECTRONS': {'conv_thr': 1e-8},
+        },
+        'restart': None,
+    }
+
+
+@pytest.mark.tier1
+class TestQeValidateStage:
+    """Tests for teros.core.lego.bricks.qe.validate_stage()."""
+
+    def _validate(self, stage, stage_names=None):
+        from teros.core.lego.bricks.qe import validate_stage
+        if stage_names is None:
+            stage_names = set()
+        validate_stage(stage, stage_names)
+
+    def test_valid_minimal_passes(self, valid_qe_stage):
+        self._validate(valid_qe_stage)
+
+    def test_missing_parameters_raises(self):
+        stage = {'name': 'relax', 'restart': None}
+        with pytest.raises(ValueError, match="parameters"):
+            self._validate(stage)
+
+    def test_missing_restart_raises(self):
+        stage = {
+            'name': 'relax',
+            'parameters': {'CONTROL': {'calculation': 'relax'}},
+        }
+        with pytest.raises(ValueError, match="restart"):
+            self._validate(stage)
+
+    def test_restart_none_passes(self):
+        stage = {
+            'name': 'relax',
+            'parameters': {'CONTROL': {'calculation': 'relax'}},
+            'restart': None,
+        }
+        self._validate(stage)
+
+    def test_restart_valid_stage_passes(self):
+        stage = {
+            'name': 'scf',
+            'parameters': {'CONTROL': {'calculation': 'scf'}},
+            'restart': 'relax',
+        }
+        self._validate(stage, stage_names={'relax'})
+
+    def test_restart_unknown_stage_raises(self):
+        stage = {
+            'name': 'scf',
+            'parameters': {'CONTROL': {'calculation': 'scf'}},
+            'restart': 'nope',
+        }
+        with pytest.raises(ValueError, match="unknown"):
+            self._validate(stage, stage_names={'relax'})
+
+    def test_structure_from_previous_passes(self):
+        stage = {
+            'name': 'relax',
+            'parameters': {'CONTROL': {'calculation': 'relax'}},
+            'restart': None,
+            'structure_from': 'previous',
+        }
+        self._validate(stage)
+
+    def test_structure_from_input_passes(self):
+        stage = {
+            'name': 'relax',
+            'parameters': {'CONTROL': {'calculation': 'relax'}},
+            'restart': None,
+            'structure_from': 'input',
+        }
+        self._validate(stage)
+
+    def test_structure_from_valid_name_passes(self):
+        stage = {
+            'name': 'scf',
+            'parameters': {'CONTROL': {'calculation': 'scf'}},
+            'restart': None,
+            'structure_from': 'relax',
+        }
+        self._validate(stage, stage_names={'relax'})
+
+    def test_structure_from_invalid_raises(self):
+        stage = {
+            'name': 'scf',
+            'parameters': {'CONTROL': {'calculation': 'scf'}},
+            'restart': None,
+            'structure_from': 'unknown',
+        }
+        with pytest.raises(ValueError, match="structure_from"):
+            self._validate(stage)
+
+
+# ---------------------------------------------------------------------------
+# TestCp2kValidateStage
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def valid_cp2k_stage():
+    return {
+        'name': 'geo_opt',
+        'type': 'cp2k',
+        'parameters': {
+            'GLOBAL': {'RUN_TYPE': 'GEO_OPT'},
+            'FORCE_EVAL': {
+                'METHOD': 'QUICKSTEP',
+                'DFT': {
+                    'BASIS_SET_FILE_NAME': 'BASIS_MOLOPT',
+                    'POTENTIAL_FILE_NAME': 'GTH_POTENTIALS',
+                },
+            },
+        },
+        'restart': None,
+        'file': {
+            'basis': '/path/to/BASIS_MOLOPT',
+            'pseudo': '/path/to/GTH_POTENTIALS',
+        },
+    }
+
+
+@pytest.mark.tier1
+class TestCp2kValidateStage:
+    """Tests for teros.core.lego.bricks.cp2k.validate_stage()."""
+
+    def _validate(self, stage, stage_names=None):
+        from teros.core.lego.bricks.cp2k import validate_stage
+        if stage_names is None:
+            stage_names = set()
+        validate_stage(stage, stage_names)
+
+    def test_valid_minimal_passes(self, valid_cp2k_stage):
+        self._validate(valid_cp2k_stage)
+
+    def test_valid_with_basis_pseudo_files_passes(self):
+        stage = {
+            'name': 'geo_opt',
+            'type': 'cp2k',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}},
+            'restart': None,
+            'basis_file': '/path/to/BASIS_MOLOPT',
+            'pseudo_file': '/path/to/GTH_POTENTIALS',
+        }
+        self._validate(stage)
+
+    def test_missing_parameters_raises(self):
+        stage = {
+            'name': 'geo_opt',
+            'restart': None,
+            'file': {'basis': '/path/b', 'pseudo': '/path/p'},
+        }
+        with pytest.raises(ValueError, match="parameters"):
+            self._validate(stage)
+
+    def test_missing_restart_raises(self):
+        stage = {
+            'name': 'geo_opt',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}},
+            'file': {'basis': '/path/b', 'pseudo': '/path/p'},
+        }
+        with pytest.raises(ValueError, match="restart"):
+            self._validate(stage)
+
+    def test_missing_file_and_basis_pseudo_raises(self):
+        stage = {
+            'name': 'geo_opt',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}},
+            'restart': None,
+        }
+        with pytest.raises(ValueError, match="file.*basis_file.*pseudo_file"):
+            self._validate(stage)
+
+    def test_missing_pseudo_file_raises(self):
+        stage = {
+            'name': 'geo_opt',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}},
+            'restart': None,
+            'basis_file': '/path/to/BASIS_MOLOPT',
+        }
+        with pytest.raises(ValueError, match="file.*basis_file.*pseudo_file"):
+            self._validate(stage)
+
+    def test_missing_basis_file_raises(self):
+        stage = {
+            'name': 'geo_opt',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}},
+            'restart': None,
+            'pseudo_file': '/path/to/GTH_POTENTIALS',
+        }
+        with pytest.raises(ValueError, match="file.*basis_file.*pseudo_file"):
+            self._validate(stage)
+
+    def test_file_dict_missing_basis_raises(self):
+        stage = {
+            'name': 'geo_opt',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}},
+            'restart': None,
+            'file': {'pseudo': '/path/p'},
+        }
+        with pytest.raises(ValueError, match="basis.*pseudo"):
+            self._validate(stage)
+
+    def test_file_dict_missing_pseudo_raises(self):
+        stage = {
+            'name': 'geo_opt',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}},
+            'restart': None,
+            'file': {'basis': '/path/b'},
+        }
+        with pytest.raises(ValueError, match="basis.*pseudo"):
+            self._validate(stage)
+
+    def test_file_not_dict_raises(self):
+        stage = {
+            'name': 'geo_opt',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}},
+            'restart': None,
+            'file': '/path/to/file',
+        }
+        with pytest.raises(ValueError, match="file.*must be a dict"):
+            self._validate(stage)
+
+    def test_restart_none_passes(self, valid_cp2k_stage):
+        self._validate(valid_cp2k_stage)
+
+    def test_restart_valid_stage_passes(self, valid_cp2k_stage):
+        valid_cp2k_stage['restart'] = 'prev_stage'
+        self._validate(valid_cp2k_stage, stage_names={'prev_stage'})
+
+    def test_restart_unknown_stage_raises(self, valid_cp2k_stage):
+        valid_cp2k_stage['restart'] = 'nope'
+        with pytest.raises(ValueError, match="unknown"):
+            self._validate(valid_cp2k_stage, stage_names={'other'})
+
+    def test_structure_from_previous_passes(self, valid_cp2k_stage):
+        valid_cp2k_stage['structure_from'] = 'previous'
+        self._validate(valid_cp2k_stage)
+
+    def test_structure_from_input_passes(self, valid_cp2k_stage):
+        valid_cp2k_stage['structure_from'] = 'input'
+        self._validate(valid_cp2k_stage)
+
+    def test_structure_from_valid_name_passes(self, valid_cp2k_stage):
+        valid_cp2k_stage['structure_from'] = 'relax'
+        self._validate(valid_cp2k_stage, stage_names={'relax'})
+
+    def test_structure_from_invalid_raises(self, valid_cp2k_stage):
+        valid_cp2k_stage['structure_from'] = 'unknown'
+        with pytest.raises(ValueError, match="structure_from"):
+            self._validate(valid_cp2k_stage)
+
+    def test_fix_type_valid_passes(self, valid_cp2k_stage):
+        for fix_type in ('bottom', 'center', 'top'):
+            valid_cp2k_stage['fix_type'] = fix_type
+            valid_cp2k_stage['fix_thickness'] = 3.0
+            self._validate(valid_cp2k_stage)
+
+    def test_fix_type_invalid_raises(self, valid_cp2k_stage):
+        valid_cp2k_stage['fix_type'] = 'left'
+        valid_cp2k_stage['fix_thickness'] = 3.0
+        with pytest.raises(ValueError, match="fix_type"):
+            self._validate(valid_cp2k_stage)
+
+    def test_fix_type_zero_thickness_raises(self, valid_cp2k_stage):
+        valid_cp2k_stage['fix_type'] = 'bottom'
+        valid_cp2k_stage['fix_thickness'] = 0
+        with pytest.raises(ValueError, match="fix_thickness"):
+            self._validate(valid_cp2k_stage)
+
+    def test_fix_type_negative_thickness_raises(self, valid_cp2k_stage):
+        valid_cp2k_stage['fix_type'] = 'top'
+        valid_cp2k_stage['fix_thickness'] = -1
+        with pytest.raises(ValueError, match="fix_thickness"):
+            self._validate(valid_cp2k_stage)
+
+    def test_fix_type_none_no_check(self, valid_cp2k_stage):
+        """When fix_type is not set, no thickness validation happens."""
+        self._validate(valid_cp2k_stage)
+
+    def test_supercell_valid_passes(self, valid_cp2k_stage):
+        valid_cp2k_stage['supercell'] = [2, 2, 1]
+        self._validate(valid_cp2k_stage)
+
+    def test_supercell_wrong_length_raises(self, valid_cp2k_stage):
+        valid_cp2k_stage['supercell'] = [2, 2]
+        with pytest.raises(ValueError, match="supercell"):
+            self._validate(valid_cp2k_stage)
+
+    def test_supercell_not_list_raises(self, valid_cp2k_stage):
+        valid_cp2k_stage['supercell'] = '2x2x1'
+        with pytest.raises(ValueError, match="supercell"):
+            self._validate(valid_cp2k_stage)
+
+    def test_supercell_zero_raises(self, valid_cp2k_stage):
+        valid_cp2k_stage['supercell'] = [2, 0, 1]
+        with pytest.raises(ValueError, match="positive integers"):
+            self._validate(valid_cp2k_stage)
+
+    def test_supercell_negative_raises(self, valid_cp2k_stage):
+        valid_cp2k_stage['supercell'] = [2, -1, 1]
+        with pytest.raises(ValueError, match="positive integers"):
+            self._validate(valid_cp2k_stage)
+
+    def test_supercell_float_raises(self, valid_cp2k_stage):
+        valid_cp2k_stage['supercell'] = [2.0, 2, 1]
+        with pytest.raises(ValueError, match="positive integers"):
+            self._validate(valid_cp2k_stage)
+

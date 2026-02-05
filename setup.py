@@ -27,6 +27,14 @@ setup(
             "flake8",
         ]
     },
+    entry_points={
+        'aiida.calculations': [
+            'teros.aimd_vasp = teros.core.lego.calcs.aimd_vasp:AimdVaspCalculation',
+        ],
+        'aiida.workflows': [
+            'teros.aimd_vasp_workchain = teros.core.lego.calcs.aimd_vasp:AimdVaspWorkChain',
+        ],
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

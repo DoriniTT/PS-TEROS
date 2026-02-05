@@ -1,8 +1,8 @@
-"""Lego module for lightweight, incremental VASP calculations.
+"""Lego module for lightweight, incremental VASP/QE calculations.
 
-This module provides a simple API for exploratory VASP work:
+This module provides a simple API for exploratory computational work:
 - Submit a calculation, check results, decide next step, optionally restart
-- No presets - always specify INCAR manually for maximum flexibility
+- No presets - always specify parameters manually for maximum flexibility
 - Specific file retrieval - get exactly the files you need
 - Non-blocking default - submit and return immediately
 
@@ -15,6 +15,8 @@ Stage types are implemented as "bricks" (see bricks/ subdirectory):
 - thickness: Slab thickness convergence testing
 - hubbard_response: Response calculations for Hubbard U (NSCF + SCF per potential)
 - hubbard_analysis: Linear regression and summary for Hubbard U
+- aimd: Ab initio molecular dynamics (IBRION=0)
+- qe: Quantum ESPRESSO calculations (PwBaseWorkChain)
 
 Example usage:
 
@@ -178,6 +180,9 @@ from .workgraph import (
     quick_dos,
     quick_dos_batch,
     quick_hubbard_u,
+    quick_aimd,
+    quick_qe,
+    quick_qe_sequential,
     get_batch_results_from_workgraph,
 )
 from .results import (
@@ -210,6 +215,9 @@ __all__ = [
     'quick_dos',
     'quick_dos_batch',
     'quick_hubbard_u',
+    'quick_aimd',
+    'quick_qe',
+    'quick_qe_sequential',
     # Result extraction
     'get_results',
     'get_energy',

@@ -12,7 +12,7 @@ Port declarations and validation logic live in connections.py (pure Python,
 no AiiDA dependency) so they can be imported in tier1 tests.
 """
 
-from . import vasp, dos, batch, bader, convergence, thickness, hubbard_response, hubbard_analysis
+from . import vasp, dos, batch, bader, convergence, thickness, hubbard_response, hubbard_analysis, aimd, qe, cp2k
 from .connections import (  # noqa: F401
     PORT_TYPES,
     ALL_PORTS,
@@ -32,6 +32,9 @@ BRICK_REGISTRY = {
     'thickness': thickness,
     'hubbard_response': hubbard_response,
     'hubbard_analysis': hubbard_analysis,
+    'aimd': aimd,
+    'qe': qe,
+    'cp2k': cp2k,
 }
 
 VALID_BRICK_TYPES = tuple(BRICK_REGISTRY.keys())
@@ -62,10 +65,10 @@ def get_brick_module(brick_type: str):
 def resolve_structure_from(structure_from: str, context: dict):
     """Resolve a structure socket from a previous stage.
 
-    Only VASP stages produce a meaningful structure output. Referencing
-    a non-VASP stage (dos, batch, bader, convergence, thickness,
-    hubbard_response, hubbard_analysis) raises an error because those
-    bricks don't produce structures.
+    Only VASP, AIMD, QE, and CP2K stages produce a meaningful structure output.
+    Referencing a non-VASP/AIMD/QE/CP2K stage (dos, batch, bader, convergence,
+    thickness, hubbard_response, hubbard_analysis) raises an error
+    because those bricks don't produce structures.
 
     Args:
         structure_from: Name of the stage to get structure from.
@@ -81,22 +84,26 @@ def resolve_structure_from(structure_from: str, context: dict):
     stage_types = context['stage_types']
 
     ref_stage_type = stage_types.get(structure_from, 'vasp')
-    if ref_stage_type == 'vasp':
+    if ref_stage_type in ('vasp', 'aimd'):
         return stage_tasks[structure_from]['vasp'].outputs.structure
+    elif ref_stage_type == 'qe':
+        return stage_tasks[structure_from]['qe'].outputs.output_structure
+    elif ref_stage_type == 'cp2k':
+        return stage_tasks[structure_from]['cp2k'].outputs.output_structure
     else:
-        # Non-VASP bricks don't produce structures
+        # Non-VASP/AIMD/QE/CP2K bricks don't produce structures
         raise ValueError(
             f"structure_from='{structure_from}' references a '{ref_stage_type}' "
             f"stage, which doesn't produce a structure output. "
-            f"Point to a VASP stage instead."
+            f"Point to a VASP, AIMD, QE, or CP2K stage instead."
         )
 
 
 def resolve_energy_from(energy_from: str, context: dict):
     """Resolve an energy socket from a previous stage.
 
-    Only VASP stages produce a meaningful energy output. Referencing
-    a non-VASP stage raises an error.
+    Only VASP and AIMD stages produce a meaningful energy output.
+    Referencing a non-VASP/AIMD stage raises an error.
 
     Args:
         energy_from: Name of the stage to get energy from.
@@ -112,11 +119,11 @@ def resolve_energy_from(energy_from: str, context: dict):
     stage_types = context['stage_types']
 
     ref_stage_type = stage_types.get(energy_from, 'vasp')
-    if ref_stage_type == 'vasp':
+    if ref_stage_type in ('vasp', 'aimd', 'cp2k'):
         return stage_tasks[energy_from]['energy'].outputs.result
     else:
         raise ValueError(
             f"energy_from='{energy_from}' references a '{ref_stage_type}' "
             f"stage, which doesn't produce an energy output. "
-            f"Point to a VASP stage instead."
+            f"Point to a VASP, AIMD, or CP2K stage instead."
         )

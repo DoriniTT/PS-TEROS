@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to any coding agent when working with code in this repository.
 
 ## Quick Reference
 
@@ -190,10 +190,7 @@ teros/core/
         ├── convergence.py     # Convergence brick (ENCUT/k-points testing)
         ├── thickness.py       # Thickness brick (slab thickness convergence)
         ├── hubbard_response.py # Hubbard U response calculations (NSCF + SCF)
-        ├── hubbard_analysis.py # Hubbard U regression and summary
-        ├── aimd.py            # Ab initio molecular dynamics
-        ├── qe.py              # Quantum ESPRESSO (PwBaseWorkChain)
-        └── cp2k.py            # CP2K (Cp2kBaseWorkChain)
+        └── hubbard_analysis.py # Hubbard U regression and summary
 ```
 
 **Submodule pattern:**
@@ -244,9 +241,6 @@ print_stage_results()    # Format results for display
 | `thickness` | `bricks/thickness.py` | Slab thickness convergence testing |
 | `hubbard_response` | `bricks/hubbard_response.py` | Hubbard U response calculations (NSCF + SCF per potential) |
 | `hubbard_analysis` | `bricks/hubbard_analysis.py` | Hubbard U linear regression and summary |
-| `aimd` | `bricks/aimd.py` | Ab initio molecular dynamics (IBRION=0) |
-| `qe` | `bricks/qe.py` | Quantum ESPRESSO pw.x calculations (SCF, relax, vc-relax) |
-| `cp2k` | `bricks/cp2k.py` | CP2K calculations (ENERGY, GEO_OPT, CELL_OPT, MD) |
 
 ### Port System (`connections.py`)
 
@@ -291,9 +285,6 @@ from teros.core.lego.bricks.connections import (
 | `quick_dos(...)` | Single DOS calculation (SCF + DOS) |
 | `quick_dos_batch(...)` | Multiple parallel DOS calcs |
 | `quick_hubbard_u(...)` | Hubbard U calculation (ground state + response + analysis) |
-| `quick_aimd(...)` | AIMD simulation (molecular dynamics) |
-| `quick_qe(...)` | Single QE pw.x calculation |
-| `quick_qe_sequential(...)` | Multi-stage QE pipeline with restart chaining |
 | `get_results(pk)` | Extract results from single calc |
 | `get_sequential_results(result)` | Extract all stage results |
 | `get_stage_results(result, name)` | Extract one stage's results |
@@ -304,7 +295,7 @@ from teros.core.lego.bricks.connections import (
 Convenience functions for common workflows:
 
 ```python
-from teros.core.lego import quick_vasp, quick_dos, quick_hubbard_u, quick_qe, quick_vasp_sequential
+from teros.core.lego import quick_vasp, quick_dos, quick_hubbard_u, quick_vasp_sequential
 
 # Single VASP calculation
 wg = quick_vasp(structure, code_label, incar={...})
@@ -320,16 +311,6 @@ wg = quick_hubbard_u(
     incar={'encut': 520, 'ediff': 1e-6, 'ismear': 0, 'sigma': 0.05},
     potential_values=[-0.2, -0.1, 0.1, 0.2],  # Default
     ldaul=2,  # 2=d-electrons, 3=f-electrons
-)
-
-# Single QE calculation
-pk = quick_qe(
-    structure=structure,
-    code_label='pw@localhost',
-    parameters={'CONTROL': {'calculation': 'scf'}, 'SYSTEM': {'ecutwfc': 50}},
-    pseudo_family='SSSP/1.3/PBE/efficiency',
-    kpoints_spacing=0.15,
-    options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 4}},
 )
 ```
 
@@ -455,40 +436,6 @@ The Hubbard U workflow uses two brick types that wrap `teros.core.u_calculation`
 | `ldaul` | No | `2` | Angular momentum (2=d, 3=f) |
 
 The ground state is a standard vasp brick with `lorbit: 11, lwave: True, lcharg: True, ldau: False`. The `quick_hubbard_u()` convenience function builds all 3 stages automatically.
-
-### CP2K Stage Configuration
-
-The CP2K brick wraps `Cp2kBaseWorkChain` from aiida-cp2k. Key differences from VASP:
-- Parameters are nested dicts (GLOBAL, FORCE_EVAL, MOTION)
-- Energy is in Hartree, auto-converted to eV
-- Restart uses `parent_calc_folder` (RemoteData)
-- Fixed atoms use `MOTION.CONSTRAINT.FIXED_ATOMS` with 1-based LIST
-
-**`cp2k` brick** - CP2K calculations (ENERGY, GEO_OPT, CELL_OPT, MD):
-
-| Key | Required | Default | Description |
-|-----|----------|---------|-------------|
-| `parameters` | Yes | — | Nested CP2K dict (GLOBAL, FORCE_EVAL, MOTION) |
-| `restart` | Yes | — | None or previous CP2K stage name |
-| `file` | Yes* | — | Dict with 'basis' and 'pseudo' keys |
-| `basis_file` | Yes* | — | Path or SinglefileData for BASIS_MOLOPT |
-| `pseudo_file` | Yes* | — | Path or SinglefileData for GTH_POTENTIALS |
-| `structure_from` | No | 'previous' | 'input', 'previous', or stage name |
-| `fix_type` | No | None | 'bottom', 'center', 'top' |
-| `fix_thickness` | No | 0.0 | Thickness in Å (required if fix_type set) |
-| `fix_components` | No | 'XYZ' | Components to fix ('XYZ', 'XY', 'Z') |
-| `supercell` | No | None | [nx, ny, nz] for supercell transformation |
-| `max_iterations` | No | 3 | Max workchain iterations |
-| `retrieve` | No | [] | Additional files to retrieve |
-| `code_label` | No | context | Override default code for this stage |
-| `options` | No | context | Override scheduler options for this stage |
-
-*Either `file` dict or both `basis_file` + `pseudo_file` required.
-
-**Conditional outputs:**
-- `structure` only available when `RUN_TYPE` is GEO_OPT, CELL_OPT, or MD
-- `trajectory` only available when `RUN_TYPE` is MD
-
 ## VASP Integration
 
 ### VaspWorkChain Outputs

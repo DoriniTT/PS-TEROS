@@ -296,3 +296,94 @@ def prepare_restart_settings(
         restart_settings['incar_additions']['ICHARG'] = 1
 
     return structure, restart_settings
+
+def merge_velocities_into_structure_data(
+    structure: orm.StructureData,
+    velocities_dict: orm.Dict,
+) -> t.Dict[str, t.Any]:
+    """
+    Merge velocity data into structure information for POSCAR generation.
+
+    This prepares velocity vectors from a previous AIMD stage's CONTCAR
+    to be injected into the POSCAR of the next stage, enabling continuous
+    MD with proper velocity continuation.
+
+    Args:
+        structure: StructureData from previous calculation.
+        velocities_dict: Dict output from extract_velocities_from_contcar calcfunction.
+                        Contains keys: velocities, has_velocities, n_atoms.
+
+    Returns:
+        Dict with keys:
+            - 'structure': The input StructureData
+            - 'velocities': numpy array of shape (n_atoms, 3) or None
+            - 'has_velocities': bool indicating if velocities were found
+            - 'n_atoms': number of atoms
+    """
+    import numpy as np
+
+    vel_dict = velocities_dict.get_dict()
+    has_vels = vel_dict.get('has_velocities', False)
+    vels_list = vel_dict.get('velocities', [])
+    n_atoms = vel_dict.get('n_atoms', 0)
+
+    result = {
+        'structure': structure,
+        'velocities': None,
+        'has_velocities': has_vels,
+        'n_atoms': n_atoms,
+    }
+
+    if has_vels and len(vels_list) == len(structure.sites):
+        result['velocities'] = np.array(vels_list, dtype=float)
+
+    return result
+
+
+def build_poscar_with_velocities(
+    structure: orm.StructureData,
+    velocities: t.Optional[t.Any] = None,
+    selective_dynamics: t.Optional[t.Dict[int, t.List[bool]]] = None,
+) -> str:
+    """
+    Build POSCAR string from structure with optional velocities block.
+
+    This creates a VASP POSCAR format string that includes velocity data
+    from the previous MD step, enabling continued MD simulations without
+    thermal re-initialization.
+
+    Args:
+        structure: AiiDA StructureData.
+        velocities: Optional numpy array of shape (n_atoms, 3) with velocities in Å/fs.
+        selective_dynamics: Optional dict {atom_idx: [Tx, Ty, Tz]} for fixed atoms.
+
+    Returns:
+        POSCAR string with velocities block if provided.
+
+    Example:
+        >>> poscar_str = build_poscar_with_velocities(
+        ...     structure=struct,
+        ...     velocities=np.array([[0.01, -0.02, 0.001], ...]),
+        ... )
+    """
+    import numpy as np
+    from pymatgen.io.vasp import Poscar
+
+    # Get Pymatgen structure from AiiDA
+    pmg_structure = structure.get_pymatgen()
+
+    # Create POSCAR from pymatgen structure
+    poscar = Poscar(pmg_structure, selective_dynamics=selective_dynamics)
+
+    # Get the POSCAR string
+    poscar_str = str(poscar)
+
+    # Append velocities if provided
+    if velocities is not None and len(velocities) > 0:
+        poscar_str += '\n'
+        poscar_str += '\n'.join([
+            f'{vel[0]:22.16e} {vel[1]:22.16e} {vel[2]:22.16e}'
+            for vel in velocities
+        ])
+
+    return poscar_str

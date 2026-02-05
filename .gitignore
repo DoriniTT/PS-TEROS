@@ -184,7 +184,7 @@ __pycache__/
 # Environment
 .env
 venv/
-.worktree*.worktree/
+.worktree/
 *.txt
 git-commit.sh
 

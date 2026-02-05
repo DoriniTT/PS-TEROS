@@ -286,6 +286,90 @@ def print_stage_results(index, stage_name, stage_result): ...
 - [ ] Write tests
 - [ ] Update documentation
 
+### Step 2b: Implement Fukui Analysis Brick (Priority: HIGH)
+
+**Goal:** Add `type: 'fukui_analysis'` brick that takes 4 CHGCAR files from a `batch` stage, runs FukuiGrid `Fukui_interpolation`, and exposes `CHGCAR_FUKUI.vasp` as `SinglefileData`.
+
+**Stage Configuration:**
+```python
+{
+    'name': 'fukui_minus_analysis',
+    'type': 'fukui_analysis',
+    'batch_from': 'fukui_minus_calcs',   # references a batch stage
+    'fukui_type': 'minus',               # 'minus' (f⁻, negate δN) or 'plus' (f⁺)
+    'delta_n_map': {                     # calc_label → |δN| value (exactly 4 entries)
+        'neutral':   0.00,
+        'delta_005': 0.05,
+        'delta_010': 0.10,
+        'delta_015': 0.15,
+    },
+}
+```
+
+**Files to create/modify:**
+
+1. **Create `bricks/fukui_analysis.py`** — New brick module with:
+   - `PORTS` (imported from `connections.py` as `FUKUI_ANALYSIS_PORTS`)
+   - `validate_stage()` — Check `batch_from` references a previous stage, `fukui_type` is 'minus'|'plus', `delta_n_map` has exactly 4 entries
+   - `create_stage_tasks()`:
+     - Get batch stage's `calc_tasks` from `context['stage_tasks'][batch_from]`
+     - Sort calc_labels by delta_n descending (FukuiGrid requirement)
+     - Apply sign convention: negate δN for `fukui_type='minus'`, keep positive for `'plus'`
+     - Build `orm.Dict` config with sorted delta_n array
+     - Wire the 4 sorted `retrieved` FolderData outputs → `run_fukui_interpolation` calcfunction
+   - `run_fukui_interpolation` calcfunction (`@task.calcfunction(outputs=['fukui_chgcar'])`):
+     - Inputs: `retrieved_1..4` (`orm.FolderData`), `config` (`orm.Dict`)
+     - Extract CHGCAR from each FolderData → tempdir
+     - Import FukuiGrid via path relative to teros: `Path(__file__).parents[3] / 'external' / 'FukuiGrid'`
+     - Call `Fukui_interpolation(file1, file2, file3, file4, dn=sorted_dn)`
+     - Return `{'fukui_chgcar': orm.SinglefileData(file='CHGCAR_FUKUI.vasp')}`
+   - `expose_stage_outputs()` — Expose `fukui_chgcar` on wg.outputs (namespace + flat naming)
+   - `get_stage_results()` — Extract SinglefileData from outputs (direct + link traversal fallback)
+   - `print_stage_results()` — Print file PK and size
+
+2. **Modify `bricks/connections.py`**:
+   - Add `FUKUI_ANALYSIS_PORTS` dict:
+     ```python
+     FUKUI_ANALYSIS_PORTS = {
+         'inputs': {
+             'batch_retrieved': {
+                 'type': 'retrieved',
+                 'required': True,
+                 'source': 'batch_from',
+                 'compatible_bricks': ['batch'],
+                 'prerequisites': {'retrieve': ['CHGCAR']},
+                 'description': 'Retrieved folders from batch stage (must contain CHGCAR)',
+             },
+         },
+         'outputs': {
+             'fukui_chgcar': {
+                 'type': 'file',
+                 'description': 'Interpolated Fukui function (CHGCAR_FUKUI.vasp as SinglefileData)',
+             },
+         },
+     }
+     ```
+   - Add `'fukui_analysis': FUKUI_ANALYSIS_PORTS` to `ALL_PORTS`
+
+3. **Modify `bricks/__init__.py`**:
+   - Import `fukui_analysis` module
+   - Add `'fukui_analysis': fukui_analysis` to `BRICK_REGISTRY`
+
+**Design decisions:**
+- Exactly 4 calculations (matches FukuiGrid's `Fukui_interpolation` signature)
+- `delta_n_map` provided explicitly by user (no inference from labels)
+- FukuiGrid located via path relative to teros package (`Path(__file__).parents[3] / 'external/FukuiGrid'`)
+
+**Delta-N sorting convention:**
+- FukuiGrid expects files sorted by |δN| descending
+- For f⁻: δN = [-0.15, -0.10, -0.05, 0.00]
+- For f⁺: δN = [0.15, 0.10, 0.05, 0.00]
+
+**Verification:**
+- [ ] `validate_stage` catches missing `batch_from`, invalid `fukui_type`, wrong number of entries in `delta_n_map`
+- [ ] `validate_connections()` validates batch → fukui_analysis connection (compatible_bricks + prerequisites)
+- [ ] Integration: add fukui_analysis stage after batch in a workflow, verify CHGCAR_FUKUI.vasp appears as SinglefileData output
+
 ### Step 3: Additional Bricks
 - [ ] New bricks added by creating module + registering in `bricks/__init__.py`
 - [ ] Unified validation via brick dispatcher

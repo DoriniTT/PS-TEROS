@@ -32,6 +32,9 @@ BATCH_PORTS = _connections.BATCH_PORTS
 BADER_PORTS = _connections.BADER_PORTS
 HUBBARD_RESPONSE_PORTS = _connections.HUBBARD_RESPONSE_PORTS
 HUBBARD_ANALYSIS_PORTS = _connections.HUBBARD_ANALYSIS_PORTS
+AIMD_PORTS = _connections.AIMD_PORTS
+QE_PORTS = _connections.QE_PORTS
+CP2K_PORTS = _connections.CP2K_PORTS
 validate_connections = _connections.validate_connections
 _validate_port_types = _connections._validate_port_types
 _evaluate_conditional = _connections._evaluate_conditional
@@ -1072,3 +1075,621 @@ class TestValidateConnectionsEdgeCases:
             'restart': None,
         }
         validate_connections([stage])
+
+
+# ---------------------------------------------------------------------------
+# AIMD Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def aimd_stage():
+    """Valid AIMD stage."""
+    return {
+        'name': 'equilibration',
+        'type': 'aimd',
+        'tebeg': 300,
+        'nsw': 100,
+        'potim': 2.0,
+        'incar': {'encut': 400, 'ediff': 1e-5},
+        'restart': None,
+    }
+
+
+@pytest.fixture
+def qe_relax_stage():
+    """Valid QE relax stage."""
+    return {
+        'name': 'relax',
+        'type': 'qe',
+        'parameters': {
+            'CONTROL': {'calculation': 'relax'},
+            'SYSTEM': {'ecutwfc': 50, 'ecutrho': 400},
+            'ELECTRONS': {'conv_thr': 1e-8},
+            'IONS': {},
+        },
+        'restart': None,
+    }
+
+
+@pytest.fixture
+def qe_scf_stage():
+    """Valid QE SCF stage."""
+    return {
+        'name': 'scf',
+        'type': 'qe',
+        'parameters': {
+            'CONTROL': {'calculation': 'scf'},
+            'SYSTEM': {'ecutwfc': 50, 'ecutrho': 400},
+            'ELECTRONS': {'conv_thr': 1e-8},
+        },
+        'restart': None,
+    }
+
+
+@pytest.fixture
+def cp2k_geo_opt_stage():
+    """Valid CP2K GEO_OPT stage."""
+    return {
+        'name': 'geo_opt',
+        'type': 'cp2k',
+        'parameters': {
+            'GLOBAL': {'RUN_TYPE': 'GEO_OPT'},
+            'FORCE_EVAL': {'METHOD': 'QS'},
+        },
+        'restart': None,
+    }
+
+
+@pytest.fixture
+def cp2k_energy_stage():
+    """Valid CP2K ENERGY stage."""
+    return {
+        'name': 'energy',
+        'type': 'cp2k',
+        'parameters': {
+            'GLOBAL': {'RUN_TYPE': 'ENERGY'},
+            'FORCE_EVAL': {'METHOD': 'QS'},
+        },
+        'restart': None,
+    }
+
+
+@pytest.fixture
+def cp2k_md_stage():
+    """Valid CP2K MD stage."""
+    return {
+        'name': 'md',
+        'type': 'cp2k',
+        'parameters': {
+            'GLOBAL': {'RUN_TYPE': 'MD'},
+            'FORCE_EVAL': {'METHOD': 'QS'},
+            'MOTION': {'MD': {'STEPS': 100}},
+        },
+        'restart': None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# TestAimdPortDeclarations
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestAimdPortDeclarations:
+    """Verify AIMD PORTS declarations."""
+
+    def test_all_aimd_output_types_recognized(self):
+        for port_name, port in AIMD_PORTS['outputs'].items():
+            assert port['type'] in PORT_TYPES, \
+                f"AIMD output '{port_name}' has unrecognized type '{port['type']}'"
+
+    def test_all_aimd_input_types_recognized(self):
+        for port_name, port in AIMD_PORTS['inputs'].items():
+            assert port['type'] in PORT_TYPES, \
+                f"AIMD input '{port_name}' has unrecognized type '{port['type']}'"
+
+    def test_aimd_has_six_outputs(self):
+        assert len(AIMD_PORTS['outputs']) == 6
+
+    def test_aimd_outputs_include_structure(self):
+        assert 'structure' in AIMD_PORTS['outputs']
+
+    def test_aimd_outputs_include_trajectory(self):
+        assert 'trajectory' in AIMD_PORTS['outputs']
+
+    def test_aimd_structure_is_unconditional(self):
+        """AIMD always has NSW > 0, so structure is unconditional."""
+        assert 'conditional' not in AIMD_PORTS['outputs']['structure']
+
+    def test_aimd_has_auto_structure_source(self):
+        assert AIMD_PORTS['inputs']['structure']['source'] == 'auto'
+
+    def test_aimd_has_restart_input(self):
+        assert 'restart_folder' in AIMD_PORTS['inputs']
+        assert AIMD_PORTS['inputs']['restart_folder']['source'] == 'restart'
+
+    def test_aimd_restart_is_optional(self):
+        assert AIMD_PORTS['inputs']['restart_folder']['required'] is False
+
+
+# ---------------------------------------------------------------------------
+# TestValidateConnectionsAimd
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestValidateConnectionsAimd:
+    """AIMD-specific connection validation tests."""
+
+    def test_single_aimd_stage_passes(self, aimd_stage):
+        warnings = validate_connections([aimd_stage])
+        assert warnings == []
+
+    def test_vasp_then_aimd_passes(self, relax_stage, aimd_stage):
+        aimd = {**aimd_stage, 'structure_from': 'relax'}
+        validate_connections([relax_stage, aimd])
+
+    def test_aimd_chain_passes(self, aimd_stage):
+        """Two AIMD stages chained with restart."""
+        aimd2 = {
+            'name': 'production',
+            'type': 'aimd',
+            'tebeg': 300,
+            'nsw': 500,
+            'restart': 'equilibration',
+            'incar': {},
+        }
+        validate_connections([aimd_stage, aimd2])
+
+    def test_aimd_then_vasp_auto_previous_passes(self, aimd_stage):
+        """VASP after AIMD with auto(previous) should work since AIMD produces structure."""
+        vasp_after = {
+            'name': 'scf',
+            'type': 'vasp',
+            'incar': {'encut': 520, 'nsw': 0},
+            'restart': None,
+        }
+        validate_connections([aimd_stage, vasp_after])
+
+    def test_aimd_then_dos_structure_from_passes(self, aimd_stage):
+        """DOS with structure_from pointing to AIMD should work."""
+        dos = {
+            'name': 'dos',
+            'type': 'dos',
+            'structure_from': 'equilibration',
+            'scf_incar': {'encut': 520},
+            'dos_incar': {'nedos': 3000},
+        }
+        validate_connections([aimd_stage, dos])
+
+    def test_aimd_structure_from_input_passes(self):
+        """AIMD with structure_from='input' works."""
+        aimd = {
+            'name': 'md',
+            'type': 'aimd',
+            'tebeg': 300,
+            'nsw': 100,
+            'restart': None,
+            'structure_from': 'input',
+            'incar': {},
+        }
+        validate_connections([aimd])
+
+    def test_aimd_structure_from_dos_rejected(self, relax_stage, dos_stage, aimd_stage):
+        """AIMD can't get structure from DOS (no structure output)."""
+        aimd = {
+            **aimd_stage,
+            'name': 'md',
+            'structure_from': 'dos',
+        }
+        with pytest.raises(ValueError, match="doesn't produce.*structure"):
+            validate_connections([relax_stage, dos_stage, aimd])
+
+    def test_relax_aimd_vasp_pipeline(self, relax_stage, aimd_stage):
+        """Full pipeline: relax → AIMD → SCF."""
+        aimd = {**aimd_stage, 'structure_from': 'relax'}
+        scf = {
+            'name': 'scf',
+            'type': 'vasp',
+            'incar': {'encut': 520, 'nsw': 0},
+            'restart': None,
+        }
+        warnings = validate_connections([relax_stage, aimd, scf])
+        assert isinstance(warnings, list)
+
+
+# ---------------------------------------------------------------------------
+# QE Port Declarations
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestQePortDeclarations:
+    """Verify QE PORTS declarations."""
+
+    def test_all_qe_output_types_recognized(self):
+        for port_name, port in QE_PORTS['outputs'].items():
+            assert port['type'] in PORT_TYPES, \
+                f"QE output '{port_name}' has unrecognized type '{port['type']}'"
+
+    def test_all_qe_input_types_recognized(self):
+        for port_name, port in QE_PORTS['inputs'].items():
+            assert port['type'] in PORT_TYPES, \
+                f"QE input '{port_name}' has unrecognized type '{port['type']}'"
+
+    def test_qe_has_five_outputs(self):
+        assert len(QE_PORTS['outputs']) == 5
+
+    def test_qe_outputs_include_structure(self):
+        assert 'structure' in QE_PORTS['outputs']
+
+    def test_qe_structure_is_conditional(self):
+        assert 'conditional' in QE_PORTS['outputs']['structure']
+
+    def test_qe_structure_conditional_uses_config_path(self):
+        cond = QE_PORTS['outputs']['structure']['conditional']
+        assert 'config_path' in cond
+        assert cond['config_path'] == ['parameters', 'CONTROL', 'calculation']
+
+    def test_qe_structure_conditional_uses_in_operator(self):
+        cond = QE_PORTS['outputs']['structure']['conditional']
+        assert cond['operator'] == 'in'
+        assert 'relax' in cond['value']
+        assert 'vc-relax' in cond['value']
+
+    def test_qe_has_auto_structure_source(self):
+        assert QE_PORTS['inputs']['structure']['source'] == 'auto'
+
+    def test_qe_has_restart_input(self):
+        assert 'restart_folder' in QE_PORTS['inputs']
+        assert QE_PORTS['inputs']['restart_folder']['source'] == 'restart'
+
+    def test_qe_restart_is_optional(self):
+        assert QE_PORTS['inputs']['restart_folder']['required'] is False
+
+
+# ---------------------------------------------------------------------------
+# TestConditionalEvaluationConfigPath
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestConditionalEvaluationConfigPath:
+    """Test config_path conditional evaluation for QE."""
+
+    def test_config_path_relax_true(self):
+        cond = {'config_path': ['parameters', 'CONTROL', 'calculation'],
+                'operator': 'in', 'value': ['relax', 'vc-relax']}
+        stage = {'parameters': {'CONTROL': {'calculation': 'relax'}}}
+        assert _evaluate_conditional(cond, stage) is True
+
+    def test_config_path_vc_relax_true(self):
+        cond = {'config_path': ['parameters', 'CONTROL', 'calculation'],
+                'operator': 'in', 'value': ['relax', 'vc-relax']}
+        stage = {'parameters': {'CONTROL': {'calculation': 'vc-relax'}}}
+        assert _evaluate_conditional(cond, stage) is True
+
+    def test_config_path_scf_false(self):
+        cond = {'config_path': ['parameters', 'CONTROL', 'calculation'],
+                'operator': 'in', 'value': ['relax', 'vc-relax']}
+        stage = {'parameters': {'CONTROL': {'calculation': 'scf'}}}
+        assert _evaluate_conditional(cond, stage) is False
+
+    def test_config_path_missing_key_defaults_false(self):
+        cond = {'config_path': ['parameters', 'CONTROL', 'calculation'],
+                'operator': 'in', 'value': ['relax', 'vc-relax']}
+        stage = {'parameters': {'CONTROL': {}}}
+        assert _evaluate_conditional(cond, stage) is False
+
+    def test_config_path_missing_nested_dict_defaults_false(self):
+        cond = {'config_path': ['parameters', 'CONTROL', 'calculation'],
+                'operator': 'in', 'value': ['relax', 'vc-relax']}
+        stage = {'parameters': {}}
+        assert _evaluate_conditional(cond, stage) is False
+
+    def test_config_path_not_list_raises(self):
+        cond = {'config_path': 'parameters.CONTROL.calculation',
+                'operator': 'in', 'value': ['relax']}
+        stage = {'parameters': {'CONTROL': {'calculation': 'relax'}}}
+        with pytest.raises(ValueError, match="config_path must be a list"):
+            _evaluate_conditional(cond, stage)
+
+    def test_in_operator_requires_list(self):
+        cond = {'config_path': ['parameters', 'CONTROL', 'calculation'],
+                'operator': 'in', 'value': 'relax'}
+        stage = {'parameters': {'CONTROL': {'calculation': 'relax'}}}
+        with pytest.raises(ValueError, match="'in' operator requires value to be a list"):
+            _evaluate_conditional(cond, stage)
+
+
+# ---------------------------------------------------------------------------
+# TestValidateConnectionsQe
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestValidateConnectionsQe:
+    """QE-specific connection validation tests."""
+
+    def test_single_qe_stage_passes(self, qe_relax_stage):
+        warnings = validate_connections([qe_relax_stage])
+        assert warnings == []
+
+    def test_two_qe_stages_chain_passes(self, qe_relax_stage, qe_scf_stage):
+        scf = {**qe_scf_stage, 'structure_from': 'relax'}
+        warnings = validate_connections([qe_relax_stage, scf])
+        assert warnings == []
+
+    def test_qe_chain_with_restart_passes(self, qe_relax_stage):
+        scf = {
+            'name': 'scf', 'type': 'qe',
+            'parameters': {'CONTROL': {'calculation': 'scf'}},
+            'restart': 'relax',
+        }
+        validate_connections([qe_relax_stage, scf])
+
+    def test_qe_restart_from_nonexistent_rejected(self, qe_relax_stage):
+        scf = {
+            'name': 'scf', 'type': 'qe',
+            'parameters': {'CONTROL': {'calculation': 'scf'}},
+            'restart': 'nope',
+        }
+        with pytest.raises(ValueError, match="unknown stage"):
+            validate_connections([qe_relax_stage, scf])
+
+    def test_qe_relax_then_dos_passes(self, qe_relax_stage):
+        """DOS can get structure from QE relax (has structure output)."""
+        dos = {
+            'name': 'dos', 'type': 'dos',
+            'structure_from': 'relax',
+            'scf_incar': {'encut': 520}, 'dos_incar': {'nedos': 3000},
+        }
+        validate_connections([qe_relax_stage, dos])
+
+    def test_qe_scf_then_qe_relax_auto_warns(self, qe_scf_stage):
+        """QE SCF (calculation='scf') has conditional structure output → auto(previous) should warn."""
+        qe_relax = {
+            'name': 'relax2', 'type': 'qe',
+            'parameters': {'CONTROL': {'calculation': 'relax'}},
+            'restart': None,
+        }
+        warnings = validate_connections([qe_scf_stage, qe_relax])
+        assert len(warnings) == 1
+        assert 'scf' in warnings[0]
+
+    def test_qe_relax_then_qe_relax_no_warning(self, qe_relax_stage):
+        """QE relax → QE relax auto(previous) should not warn (relax has structure)."""
+        qe_relax2 = {
+            'name': 'relax2', 'type': 'qe',
+            'parameters': {'CONTROL': {'calculation': 'relax'}},
+            'restart': None,
+        }
+        warnings = validate_connections([qe_relax_stage, qe_relax2])
+        assert len(warnings) == 0
+
+    def test_qe_vc_relax_then_qe_relax_no_warning(self):
+        """QE vc-relax → QE relax auto(previous) should not warn (vc-relax has structure)."""
+        vc_relax = {
+            'name': 'vc_relax', 'type': 'qe',
+            'parameters': {'CONTROL': {'calculation': 'vc-relax'}},
+            'restart': None,
+        }
+        relax = {
+            'name': 'relax', 'type': 'qe',
+            'parameters': {'CONTROL': {'calculation': 'relax'}},
+            'restart': None,
+        }
+        warnings = validate_connections([vc_relax, relax])
+        assert len(warnings) == 0
+
+    def test_qe_scf_structure_from_input_no_warning(self, qe_scf_stage):
+        """QE SCF with structure_from='input' should not warn (not using previous)."""
+        relax = {
+            'name': 'relax', 'type': 'qe',
+            'parameters': {'CONTROL': {'calculation': 'relax'}},
+            'restart': None, 'structure_from': 'input',
+        }
+        warnings = validate_connections([qe_scf_stage, relax])
+        assert len(warnings) == 0
+
+    def test_mixed_vasp_qe_pipeline(self, relax_stage, qe_scf_stage):
+        """VASP relax → QE SCF with explicit structure_from."""
+        qe = {**qe_scf_stage, 'structure_from': 'relax'}
+        validate_connections([relax_stage, qe])
+
+
+# ---------------------------------------------------------------------------
+# TestCp2kPortDeclarations
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestCp2kPortDeclarations:
+    """Verify CP2K PORTS declarations."""
+
+    def test_all_cp2k_output_types_recognized(self):
+        for port_name, port in CP2K_PORTS['outputs'].items():
+            assert port['type'] in PORT_TYPES, \
+                f"CP2K output '{port_name}' has unrecognized type '{port['type']}'"
+
+    def test_all_cp2k_input_types_recognized(self):
+        for port_name, port in CP2K_PORTS['inputs'].items():
+            assert port['type'] in PORT_TYPES, \
+                f"CP2K input '{port_name}' has unrecognized type '{port['type']}'"
+
+    def test_cp2k_has_six_outputs(self):
+        assert len(CP2K_PORTS['outputs']) == 6
+
+    def test_cp2k_outputs_include_structure(self):
+        assert 'structure' in CP2K_PORTS['outputs']
+
+    def test_cp2k_outputs_include_trajectory(self):
+        assert 'trajectory' in CP2K_PORTS['outputs']
+
+    def test_cp2k_structure_is_conditional(self):
+        assert 'conditional' in CP2K_PORTS['outputs']['structure']
+
+    def test_cp2k_trajectory_is_conditional(self):
+        assert 'conditional' in CP2K_PORTS['outputs']['trajectory']
+
+    def test_cp2k_structure_conditional_uses_config_path(self):
+        cond = CP2K_PORTS['outputs']['structure']['conditional']
+        assert 'config_path' in cond
+        assert cond['config_path'] == ['parameters', 'GLOBAL', 'RUN_TYPE']
+
+    def test_cp2k_structure_conditional_uses_in_operator(self):
+        cond = CP2K_PORTS['outputs']['structure']['conditional']
+        assert cond['operator'] == 'in'
+        assert 'GEO_OPT' in cond['value']
+        assert 'CELL_OPT' in cond['value']
+        assert 'MD' in cond['value']
+
+    def test_cp2k_trajectory_conditional_uses_eq_operator(self):
+        cond = CP2K_PORTS['outputs']['trajectory']['conditional']
+        assert cond['operator'] == '=='
+        assert cond['value'] == 'MD'
+
+    def test_cp2k_has_auto_structure_source(self):
+        assert CP2K_PORTS['inputs']['structure']['source'] == 'auto'
+
+    def test_cp2k_has_restart_input(self):
+        assert 'restart_folder' in CP2K_PORTS['inputs']
+        assert CP2K_PORTS['inputs']['restart_folder']['source'] == 'restart'
+
+    def test_cp2k_restart_is_optional(self):
+        assert CP2K_PORTS['inputs']['restart_folder']['required'] is False
+
+
+# ---------------------------------------------------------------------------
+# TestConditionalEvaluationCp2k
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestConditionalEvaluationCp2k:
+    """Test config_path conditional evaluation for CP2K."""
+
+    def test_cp2k_geo_opt_structure_true(self):
+        cond = {'config_path': ['parameters', 'GLOBAL', 'RUN_TYPE'],
+                'operator': 'in', 'value': ['GEO_OPT', 'CELL_OPT', 'MD']}
+        stage = {'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}}}
+        assert _evaluate_conditional(cond, stage) is True
+
+    def test_cp2k_cell_opt_structure_true(self):
+        cond = {'config_path': ['parameters', 'GLOBAL', 'RUN_TYPE'],
+                'operator': 'in', 'value': ['GEO_OPT', 'CELL_OPT', 'MD']}
+        stage = {'parameters': {'GLOBAL': {'RUN_TYPE': 'CELL_OPT'}}}
+        assert _evaluate_conditional(cond, stage) is True
+
+    def test_cp2k_md_structure_true(self):
+        cond = {'config_path': ['parameters', 'GLOBAL', 'RUN_TYPE'],
+                'operator': 'in', 'value': ['GEO_OPT', 'CELL_OPT', 'MD']}
+        stage = {'parameters': {'GLOBAL': {'RUN_TYPE': 'MD'}}}
+        assert _evaluate_conditional(cond, stage) is True
+
+    def test_cp2k_energy_structure_false(self):
+        cond = {'config_path': ['parameters', 'GLOBAL', 'RUN_TYPE'],
+                'operator': 'in', 'value': ['GEO_OPT', 'CELL_OPT', 'MD']}
+        stage = {'parameters': {'GLOBAL': {'RUN_TYPE': 'ENERGY'}}}
+        assert _evaluate_conditional(cond, stage) is False
+
+    def test_cp2k_md_trajectory_true(self):
+        cond = {'config_path': ['parameters', 'GLOBAL', 'RUN_TYPE'],
+                'operator': '==', 'value': 'MD'}
+        stage = {'parameters': {'GLOBAL': {'RUN_TYPE': 'MD'}}}
+        assert _evaluate_conditional(cond, stage) is True
+
+    def test_cp2k_geo_opt_trajectory_false(self):
+        cond = {'config_path': ['parameters', 'GLOBAL', 'RUN_TYPE'],
+                'operator': '==', 'value': 'MD'}
+        stage = {'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}}}
+        assert _evaluate_conditional(cond, stage) is False
+
+
+# ---------------------------------------------------------------------------
+# TestValidateConnectionsCp2k
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestValidateConnectionsCp2k:
+    """CP2K-specific connection validation tests."""
+
+    def test_single_cp2k_stage_passes(self, cp2k_geo_opt_stage):
+        warnings = validate_connections([cp2k_geo_opt_stage])
+        assert warnings == []
+
+    def test_two_cp2k_stages_chain_passes(self, cp2k_geo_opt_stage, cp2k_energy_stage):
+        energy = {**cp2k_energy_stage, 'name': 'scf', 'structure_from': 'geo_opt'}
+        warnings = validate_connections([cp2k_geo_opt_stage, energy])
+        assert warnings == []
+
+    def test_cp2k_chain_with_restart_passes(self, cp2k_geo_opt_stage):
+        energy = {
+            'name': 'energy', 'type': 'cp2k',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'ENERGY'}},
+            'restart': 'geo_opt',
+        }
+        validate_connections([cp2k_geo_opt_stage, energy])
+
+    def test_cp2k_restart_from_nonexistent_rejected(self, cp2k_geo_opt_stage):
+        energy = {
+            'name': 'energy', 'type': 'cp2k',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'ENERGY'}},
+            'restart': 'nope',
+        }
+        with pytest.raises(ValueError, match="unknown stage"):
+            validate_connections([cp2k_geo_opt_stage, energy])
+
+    def test_cp2k_energy_then_cp2k_geo_opt_warns(self, cp2k_energy_stage):
+        """CP2K ENERGY has conditional structure output → auto(previous) should warn."""
+        geo_opt = {
+            'name': 'geo_opt', 'type': 'cp2k',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'GEO_OPT'}},
+            'restart': None,
+        }
+        warnings = validate_connections([cp2k_energy_stage, geo_opt])
+        assert len(warnings) == 1
+        assert 'ENERGY' in warnings[0] or 'structure' in warnings[0]
+
+    def test_cp2k_geo_opt_then_cp2k_energy_no_warning(self, cp2k_geo_opt_stage):
+        """CP2K GEO_OPT → CP2K ENERGY auto(previous) should not warn (GEO_OPT has structure)."""
+        energy = {
+            'name': 'energy', 'type': 'cp2k',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'ENERGY'}},
+            'restart': None,
+        }
+        warnings = validate_connections([cp2k_geo_opt_stage, energy])
+        assert len(warnings) == 0
+
+    def test_cp2k_cell_opt_then_energy_no_warning(self):
+        """CP2K CELL_OPT → CP2K ENERGY auto(previous) should not warn."""
+        cell_opt = {
+            'name': 'cell_opt', 'type': 'cp2k',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'CELL_OPT'}},
+            'restart': None,
+        }
+        energy = {
+            'name': 'energy', 'type': 'cp2k',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'ENERGY'}},
+            'restart': None,
+        }
+        warnings = validate_connections([cell_opt, energy])
+        assert len(warnings) == 0
+
+    def test_cp2k_md_then_energy_no_warning(self, cp2k_md_stage):
+        """CP2K MD → CP2K ENERGY auto(previous) should not warn."""
+        energy = {
+            'name': 'energy', 'type': 'cp2k',
+            'parameters': {'GLOBAL': {'RUN_TYPE': 'ENERGY'}},
+            'restart': None,
+        }
+        warnings = validate_connections([cp2k_md_stage, energy])
+        assert len(warnings) == 0
+
+    def test_mixed_vasp_cp2k_pipeline(self, relax_stage, cp2k_energy_stage):
+        """VASP relax → CP2K ENERGY with explicit structure_from."""
+        cp2k = {**cp2k_energy_stage, 'structure_from': 'relax'}
+        validate_connections([relax_stage, cp2k])
+
+    def test_mixed_cp2k_vasp_pipeline(self, cp2k_geo_opt_stage):
+        """CP2K GEO_OPT → VASP SCF with explicit structure_from."""
+        vasp_scf = {
+            'name': 'scf', 'type': 'vasp',
+            'incar': {'nsw': 0, 'encut': 520},
+            'restart': None, 'structure_from': 'geo_opt',
+        }
+        validate_connections([cp2k_geo_opt_stage, vasp_scf])
+

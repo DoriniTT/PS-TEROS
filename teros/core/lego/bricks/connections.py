@@ -301,6 +301,146 @@ CONVERGENCE_PORTS = {
     },
 }
 
+AIMD_PORTS = {
+    'inputs': {
+        'structure': {
+            'type': 'structure',
+            'required': True,
+            'source': 'auto',
+            'description': 'Atomic structure (or supercell)',
+        },
+        'restart_folder': {
+            'type': 'remote_folder',
+            'required': False,
+            'source': 'restart',
+            'description': 'Remote folder for WAVECAR restart from previous AIMD stage',
+        },
+    },
+    'outputs': {
+        'structure': {
+            'type': 'structure',
+            'description': 'Final MD structure',
+        },
+        'energy': {
+            'type': 'energy',
+            'description': 'Final total energy (eV)',
+        },
+        'misc': {
+            'type': 'misc',
+            'description': 'Parsed VASP results dict',
+        },
+        'remote_folder': {
+            'type': 'remote_folder',
+            'description': 'Remote calculation directory',
+        },
+        'retrieved': {
+            'type': 'retrieved',
+            'description': 'Retrieved files from cluster',
+        },
+        'trajectory': {
+            'type': 'trajectory',
+            'description': 'MD trajectory (positions, cells, energies per step)',
+        },
+    },
+}
+
+QE_PORTS = {
+    'inputs': {
+        'structure': {
+            'type': 'structure',
+            'required': True,
+            'source': 'auto',
+            'description': 'Atomic structure for QE pw.x calculation',
+        },
+        'restart_folder': {
+            'type': 'remote_folder',
+            'required': False,
+            'source': 'restart',
+            'description': 'Remote folder for parent_folder restart',
+        },
+    },
+    'outputs': {
+        'structure': {
+            'type': 'structure',
+            'conditional': {
+                'config_path': ['parameters', 'CONTROL', 'calculation'],
+                'operator': 'in',
+                'value': ['relax', 'vc-relax'],
+            },
+            'description': 'Relaxed structure (only if calculation is relax or vc-relax)',
+        },
+        'energy': {
+            'type': 'energy',
+            'description': 'Total energy (eV)',
+        },
+        'output_parameters': {
+            'type': 'misc',
+            'description': 'Parsed QE output dict',
+        },
+        'remote_folder': {
+            'type': 'remote_folder',
+            'description': 'Remote calc directory',
+        },
+        'retrieved': {
+            'type': 'retrieved',
+            'description': 'Retrieved files',
+        },
+    },
+}
+
+CP2K_PORTS = {
+    'inputs': {
+        'structure': {
+            'type': 'structure',
+            'required': True,
+            'source': 'auto',
+            'description': 'Atomic structure for CP2K calculation',
+        },
+        'restart_folder': {
+            'type': 'remote_folder',
+            'required': False,
+            'source': 'restart',
+            'description': 'Remote folder for parent_calc_folder restart',
+        },
+    },
+    'outputs': {
+        'structure': {
+            'type': 'structure',
+            'conditional': {
+                'config_path': ['parameters', 'GLOBAL', 'RUN_TYPE'],
+                'operator': 'in',
+                'value': ['GEO_OPT', 'CELL_OPT', 'MD'],
+            },
+            'description': 'Relaxed/final structure (only if RUN_TYPE produces new structure)',
+        },
+        'energy': {
+            'type': 'energy',
+            'description': 'Total energy (eV, converted from Hartree)',
+        },
+        'output_parameters': {
+            'type': 'misc',
+            'description': 'Parsed CP2K output dict',
+        },
+        'remote_folder': {
+            'type': 'remote_folder',
+            'description': 'Remote calculation directory',
+        },
+        'retrieved': {
+            'type': 'retrieved',
+            'description': 'Retrieved files from cluster',
+        },
+        'trajectory': {
+            'type': 'trajectory',
+            'conditional': {
+                'config_path': ['parameters', 'GLOBAL', 'RUN_TYPE'],
+                'operator': '==',
+                'value': 'MD',
+            },
+            'description': 'Trajectory data (MD runs only)',
+        },
+    },
+}
+
 THICKNESS_PORTS = {
     'inputs': {
         'structure': {
@@ -336,6 +476,9 @@ ALL_PORTS = {
     'hubbard_analysis': HUBBARD_ANALYSIS_PORTS,
     'convergence': CONVERGENCE_PORTS,
     'thickness': THICKNESS_PORTS,
+    'aimd': AIMD_PORTS,
+    'qe': QE_PORTS,
+    'cp2k': CP2K_PORTS,
 }
 
 
@@ -403,11 +546,13 @@ def _evaluate_conditional(conditional, stage_config: dict) -> bool:
     """Evaluate a conditional dict against a stage's config.
 
     Conditionals determine whether an output is meaningful. For example,
-    VASP's structure output is only meaningful when nsw > 0.
+    VASP's structure output is only meaningful when nsw > 0, and QE's
+    structure output is only meaningful for relax/vc-relax calculations.
 
     Args:
         conditional: None (always True), or dict with
-            'incar_key', 'operator', 'value'.
+            'operator', 'value', and either 'incar_key' (for VASP) or
+            'config_path' (for nested dict lookups like QE).
         stage_config: The raw stage configuration dict.
 
     Returns:
@@ -424,11 +569,40 @@ def _evaluate_conditional(conditional, stage_config: dict) -> bool:
             f"Conditional must be a dict, not a string: '{conditional}'. "
             f"Use {{'incar_key': 'nsw', 'operator': '>', 'value': 0}} instead."
         )
-    incar = stage_config.get('incar', {})
-    key = conditional['incar_key']
+
     op = conditional['operator']
     threshold = conditional['value']
-    actual = incar.get(key, 0)  # VASP defaults most keys to 0
+
+    # Resolve actual value from either incar_key (VASP) or config_path (QE, nested)
+    if 'incar_key' in conditional:
+        # VASP-style: read from stage['incar'][key]
+        incar = stage_config.get('incar', {})
+        key = conditional['incar_key']
+        actual = incar.get(key, 0)  # VASP defaults most keys to 0
+    elif 'config_path' in conditional:
+        # Nested lookup: config_path = ['parameters', 'CONTROL', 'calculation']
+        # traverses stage['parameters']['CONTROL']['calculation']
+        config_path = conditional['config_path']
+        if not isinstance(config_path, list):
+            raise ValueError(f"config_path must be a list, got {type(config_path)}")
+
+        actual = stage_config
+        for key in config_path:
+            if isinstance(actual, dict):
+                actual = actual.get(key)
+                if actual is None:
+                    break
+            else:
+                actual = None
+                break
+
+        # If path not resolved, default to None (won't match numeric comparisons)
+        if actual is None:
+            actual = 0  # Default for numeric comparisons
+    else:
+        raise ValueError("Conditional must have either 'incar_key' or 'config_path'")
+
+    # Apply operator
     if op == '>':
         return actual > threshold
     elif op == '>=':
@@ -441,8 +615,35 @@ def _evaluate_conditional(conditional, stage_config: dict) -> bool:
         return actual < threshold
     elif op == '<=':
         return actual <= threshold
+    elif op == 'in':
+        # Check if actual_value is in the expected list
+        if not isinstance(threshold, (list, tuple)):
+            raise ValueError(f"'in' operator requires value to be a list, "
+                             f"got {type(threshold)}")
+        return actual in threshold
     else:
         raise ValueError(f"Unknown operator '{op}' in conditional")
+
+
+def _get_nested_value(config: dict, path: list):
+    """Traverse a nested dict using a path list.
+
+    Args:
+        config: The configuration dict to traverse.
+        path: List of keys, e.g., ['parameters', 'CONTROL', 'calculation']
+
+    Returns:
+        The value at the path, or None if any key is missing.
+    """
+    value = config
+    for key in path:
+        if isinstance(value, dict):
+            value = value.get(key)
+            if value is None:
+                return None
+        else:
+            return None
+    return value
 
 
 def validate_connections(stages: list) -> list:
@@ -535,13 +736,25 @@ def validate_connections(stages: list) -> list:
                             if not _evaluate_conditional(
                                 cond, stage_configs[prev_name]
                             ):
-                                warn_list.append(
-                                    f"Warning: Stage '{prev_name}' has "
-                                    f"{cond['incar_key']}="
-                                    f"{stage_configs[prev_name].get('incar', {}).get(cond['incar_key'], 0)} "
-                                    f"(static calculation). Its 'structure' "
-                                    f"output may not be meaningful."
-                                )
+                                # Build warning message based on conditional type
+                                if 'incar_key' in cond:
+                                    cond_key = cond['incar_key']
+                                    cond_val = stage_configs[prev_name].get('incar', {}).get(cond_key, 0)
+                                    warn_list.append(
+                                        f"Warning: Stage '{prev_name}' has "
+                                        f"{cond_key}={cond_val} "
+                                        f"(static calculation). Its 'structure' "
+                                        f"output may not be meaningful."
+                                    )
+                                elif 'config_path' in cond:
+                                    path = cond['config_path']
+                                    cond_val = _get_nested_value(stage_configs[prev_name], path)
+                                    warn_list.append(
+                                        f"Warning: Stage '{prev_name}' has "
+                                        f"{'.'.join(path)}={cond_val} "
+                                        f"(static calculation). Its 'structure' "
+                                        f"output may not be meaningful."
+                                    )
                 else:
                     # structure_from is an explicit stage name
                     if structure_from not in available_outputs:
@@ -577,13 +790,25 @@ def validate_connections(stages: list) -> list:
                         if not _evaluate_conditional(
                             cond, stage_configs[structure_from]
                         ):
-                            warn_list.append(
-                                f"Warning: Stage '{structure_from}' has "
-                                f"{cond['incar_key']}="
-                                f"{stage_configs[structure_from].get('incar', {}).get(cond['incar_key'], 0)} "
-                                f"(static calculation). Its 'structure' "
-                                f"output may not be meaningful."
-                            )
+                            # Build warning message based on conditional type
+                            if 'incar_key' in cond:
+                                cond_key = cond['incar_key']
+                                cond_val = stage_configs[structure_from].get('incar', {}).get(cond_key, 0)
+                                warn_list.append(
+                                    f"Warning: Stage '{structure_from}' has "
+                                    f"{cond_key}={cond_val} "
+                                    f"(static calculation). Its 'structure' "
+                                    f"output may not be meaningful."
+                                )
+                            elif 'config_path' in cond:
+                                path = cond['config_path']
+                                cond_val = _get_nested_value(stage_configs[structure_from], path)
+                                warn_list.append(
+                                    f"Warning: Stage '{structure_from}' has "
+                                    f"{'.'.join(path)}={cond_val} "
+                                    f"(static calculation). Its 'structure' "
+                                    f"output may not be meaningful."
+                                )
                 continue  # auto handling done
 
             # ── Handle explicit source fields ──
@@ -688,14 +913,27 @@ def validate_connections(stages: list) -> list:
                         if not input_port.get(
                             'handles_conditional', False
                         ):
-                            warn_list.append(
-                                f"Warning: Stage '{ref_stage_name}' has "
-                                f"{cond['incar_key']}="
-                                f"{stage_configs[ref_stage_name].get('incar', {}).get(cond['incar_key'], 0)} "
-                                f"(static calculation). Its "
-                                f"'{matched_port}' output may not be "
-                                f"meaningful."
-                            )
+                            # Build warning message based on conditional type
+                            if 'incar_key' in cond:
+                                cond_key = cond['incar_key']
+                                cond_val = stage_configs[ref_stage_name].get('incar', {}).get(cond_key, 0)
+                                warn_list.append(
+                                    f"Warning: Stage '{ref_stage_name}' has "
+                                    f"{cond_key}={cond_val} "
+                                    f"(static calculation). Its "
+                                    f"'{matched_port}' output may not be "
+                                    f"meaningful."
+                                )
+                            elif 'config_path' in cond:
+                                path = cond['config_path']
+                                cond_val = _get_nested_value(stage_configs[ref_stage_name], path)
+                                warn_list.append(
+                                    f"Warning: Stage '{ref_stage_name}' has "
+                                    f"{'.'.join(path)}={cond_val} "
+                                    f"(static calculation). Its "
+                                    f"'{matched_port}' output may not be "
+                                    f"meaningful."
+                                )
 
         # ── Register this stage's outputs ──
         stage_outputs = {}

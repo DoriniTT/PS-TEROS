@@ -39,13 +39,14 @@ def validate_stage(stage: dict, stage_names: set) -> None:
                 f"later stage (must be defined before this stage)"
             )
 
-    # Validate structure_from for VASP stages
-    structure_from = stage.get('structure_from', 'previous')
-    if structure_from not in ('previous', 'input') and structure_from not in stage_names:
-        raise ValueError(
-            f"Stage '{name}' structure_from='{structure_from}' must be 'previous', "
-            f"'input', or a previous stage name"
-        )
+    # Validate structure_from for VASP stages (skip if explicit structure provided)
+    if 'structure' not in stage:
+        structure_from = stage.get('structure_from', 'previous')
+        if structure_from not in ('previous', 'input') and structure_from not in stage_names:
+            raise ValueError(
+                f"Stage '{name}' structure_from='{structure_from}' must be 'previous', "
+                f"'input', or a previous stage name"
+            )
 
     # Validate supercell spec
     if 'supercell' in stage:
@@ -110,19 +111,22 @@ def create_stage_tasks(wg, stage, stage_name, context):
     VaspTask = task(VaspWorkChain)
 
     # Determine structure source
-    structure_from = stage.get('structure_from', 'previous')
-    if i == 0:
+    if 'structure' in stage:
+        # Explicit structure provided in stage config
+        explicit = stage['structure']
+        stage_structure = orm.load_node(explicit) if isinstance(explicit, int) else explicit
+    elif i == 0:
         # First stage always uses input structure
         stage_structure = input_structure
-    elif structure_from == 'input':
+    elif stage.get('structure_from', 'previous') == 'input':
         stage_structure = input_structure
-    elif structure_from == 'previous':
+    elif stage.get('structure_from', 'previous') == 'previous':
         # Use output structure from previous stage
         prev_name = stage_names[i - 1]
         prev_stage_type = stage_types[prev_name]
         if prev_stage_type in ('dos', 'batch', 'bader'):
             stage_structure = stage_tasks[prev_name]['structure']
-        elif prev_stage_type == 'vasp':
+        elif prev_stage_type in ('vasp', 'aimd'):
             stage_structure = stage_tasks[prev_name]['vasp'].outputs.structure
         else:
             raise ValueError(
@@ -134,6 +138,7 @@ def create_stage_tasks(wg, stage, stage_name, context):
     else:
         # Use output structure from specific stage
         from . import resolve_structure_from
+        structure_from = stage.get('structure_from', 'previous')
         stage_structure = resolve_structure_from(structure_from, context)
 
     # Handle supercell transformation
@@ -225,6 +230,14 @@ def create_stage_tasks(wg, stage, stage_name, context):
     # Add dynamics from calcfunction if computed at runtime
     if dynamics_task is not None:
         vasp_task_kwargs['dynamics'] = dynamics_task.outputs.result
+
+    # Explicit dynamics override (for frequency calculations etc.)
+    if 'dynamics' in stage and dynamics_task is None and 'dynamics' not in vasp_task_kwargs:
+        dyn = stage['dynamics']
+        if isinstance(dyn, orm.Dict):
+            vasp_task_kwargs['dynamics'] = dyn
+        else:
+            vasp_task_kwargs['dynamics'] = orm.Dict(dict=dyn)
 
     vasp_task = wg.add_task(VaspTask, **vasp_task_kwargs)
 
