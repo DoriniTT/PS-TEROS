@@ -897,6 +897,146 @@ options = {
 
 Use production-quality parameters (proper ENCUT, converged k-points, appropriate supercell) and verify results match expectations.
 
+### Iterative Testing Methodology (CRITICAL)
+
+When implementing new features or fixing bugs, **ALWAYS** follow this iterative, test-driven approach to ensure code correctness before integration. This process significantly reduces debugging time and prevents introducing broken code into the main codebase.
+
+#### Philosophy
+
+**Test each component in isolation BEFORE integrating into main code.** Create standalone test scripts that verify EXACTLY the functionality you're implementing. Only after confirming the isolated component works should you integrate it into the full workflow.
+
+#### Step-by-Step Process
+
+1. **Create a Minimal Test Script** (`examples/<module>/test_<feature>.py`)
+   - Use the simplest possible structure (primitive cell, few atoms)
+   - Use minimal resources (`num_mpiprocs_per_machine=1` for localwork)
+   - Use light computational parameters (low ENCUT, coarse k-points, few MD steps)
+   - **Focus on ONE specific feature** (e.g., velocity extraction, POSCAR writing)
+   - Include verification code that checks the specific output you care about
+
+   ```python
+   # Example: Test velocity extraction from CONTCAR
+   from aiida import orm, load_profile
+   load_profile()
+   
+   # Use existing completed calculation
+   calc = orm.load_node(39501)
+   retrieved = calc.outputs.retrieved
+   
+   with retrieved.base.repository.open('CONTCAR', 'r') as f:
+       contcar = f.read()
+   
+   # Test parsing logic
+   lines = contcar.strip().split('\n')
+   print(f"CONTCAR has {len(lines)} lines")
+   
+   # CRITICAL: Verify the EXACT output you expect
+   velocity_start = ...  # Your parsing logic
+   velocities = []
+   for i in range(n_atoms):
+       # ...parsing...
+       velocities.append(vel)
+   
+   print(f"✓ Extracted {len(velocities)} velocities")
+   assert len(velocities) == expected_count, "Velocity count mismatch!"
+   ```
+
+2. **Run the Test Script and Debug**
+   - Submit the test workflow: `python examples/<module>/test_<feature>.py`
+   - Monitor: `verdi process show <PK>`
+   - **Examine outputs at EVERY stage:**
+     ```bash
+     verdi calcjob outputcat <CALC_PK> OUTCAR | grep "temperature"
+     verdi calcjob outputcat <CALC_PK> CONTCAR | tail -30
+     ```
+   - **Use Python snippets to inspect AiiDA nodes:**
+     ```python
+     calc = orm.load_node(39501)
+     retrieved = calc.outputs.retrieved
+     files = retrieved.base.repository.list_object_names()
+     print(f"Retrieved files: {files}")
+     
+     with retrieved.base.repository.open('CONTCAR', 'r') as f:
+         content = f.read()
+         print(content)  # See EXACTLY what VASP wrote
+     ```
+
+3. **Fix Issues One at a Time**
+   - **DO NOT** fix multiple issues simultaneously
+   - After each fix:
+     ```bash
+     verdi daemon restart  # CRITICAL!
+     python examples/<module>/test_<feature>.py  # Re-run test
+     ```
+   - Document what you changed and why
+   - Verify the fix worked before moving to the next issue
+
+4. **Iterate Until Perfect**
+   - Keep testing until **100% of the test cases pass**
+   - Check edge cases (empty files, zero velocities, missing keys)
+   - Verify physical reasonableness (velocities in reasonable range, energies converged)
+
+5. **Only Then Integrate**
+   - After the isolated test works perfectly, integrate into main code
+   - Run the full workflow with the integrated changes
+   - Verify nothing broke in the integration
+
+#### Example: AIMD Velocity Injection (Feb 2026)
+
+This is a perfect example of iterative testing that saved significant debugging time:
+
+**Problem:** AIMD workflows launched but POSCAR lacked velocity blocks from CONTCAR, preventing seamless MD continuation.
+
+**Approach:**
+1. **Isolated testing:** Used completed AIMD calculation (PK 39267) to test velocity extraction
+2. **Discovered issues incrementally:**
+   - Issue 1: VASP not writing velocities → Added `LVEL=True` to INCAR
+   - Issue 2: Blank line in CONTCAR skipped → Fixed parser to skip blanks
+   - Issue 3: Reading from wrong folder → Changed `remote_folder` to `retrieved`
+   - Issue 4: `StringIO` vs `BytesIO` → Used `BytesIO(content.encode('utf-8'))`
+3. **Verified each fix:** Submitted test workflow after each change, confirmed fix worked
+4. **Final verification:** Complete 2-stage AIMD workflow (equilibration → production) with velocity injection working perfectly
+
+**Key insight:** Testing on completed calculations (using PKs) allowed rapid iteration without waiting for new VASP runs. We could test parsing logic, file I/O, and data flow independently before running expensive calculations.
+
+**Files changed:**
+- [`teros/core/lego/bricks/aimd.py`](teros/core/lego/bricks/aimd.py): Velocity extraction logic, `LVEL=True`
+- [`teros/core/lego/calcs/aimd_vasp.py`](teros/core/lego/calcs/aimd_vasp.py): POSCAR file writing
+
+**Test script:** [`examples/lego/aimd/test_lvel_fix.py`](examples/lego/aimd/test_lvel_fix.py)
+
+**Success criteria verified:**
+```
+✓ Velocities extracted: has_velocities=True, count=6
+✓ POSCAR created: 21 lines with velocity block
+✓ Production WorkChain: exit=0 (success)
+✓ Velocities evolved during MD (confirming injection worked)
+```
+
+#### Common Testing Patterns
+
+| Pattern | When to Use | Example |
+|---------|-------------|---------|
+| **Test on existing PK** | File parsing, data extraction | Load PK, test parsing logic without VASP run |
+| **Minimal workflow** | Integration testing | 2-atom structure, 1 processor, 10 MD steps |
+| **Staged monitoring** | Multi-step workflows | Print status after each stage, verify intermediate outputs |
+| **Verbose logging** | Debugging decision points | Add `print()` statements to stderr showing injection decisions |
+| **Comparison testing** | Validate numerical outputs | Compare extracted velocities with known values from CONTCAR |
+
+#### Anti-Patterns to Avoid
+
+❌ **Don't** submit to production cluster without local testing  
+❌ **Don't** fix multiple issues in one commit without testing each  
+❌ **Don't** assume code works because it "should" — always verify  
+❌ **Don't** skip intermediate verification steps  
+❌ **Don't** test on complex structures when simple ones suffice
+
+✅ **Do** test incrementally with simple cases  
+✅ **Do** verify outputs at every stage  
+✅ **Do** use existing PKs for rapid iteration  
+✅ **Do** document what you're testing and why  
+✅ **Do** restart daemon after EVERY code change
+
 #### Common Issues During Development
 
 | Issue | Cause | Solution |
@@ -908,6 +1048,7 @@ Use production-quality parameters (proper ENCUT, converged k-points, appropriate
 | Outputs not in `verdi process show` | Used `wg.add_output()` | Use `wg.outputs.name = socket` instead |
 | Results extraction fails on stored node | Accessing `.tasks` on AiiDA node | Traverse `CALL_CALC` links instead |
 | V=0 baseline shift | Different INCAR settings at V=0 | Ensure consistent settings across all calculations |
+| AIMD velocities not transferring | VASP writes zeros without explicit flag | Add `'lvel': True` to INCAR. Read CONTCAR from `retrieved` folder. Skip blank lines when parsing. Use `BytesIO` for file writing |
 
 ## Code Style
 
