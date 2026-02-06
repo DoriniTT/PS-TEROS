@@ -187,6 +187,7 @@ teros/core/
         ├── dos.py             # DOS brick (BandsWorkChain wrapper)
         ├── batch.py           # Batch brick (parallel VASP with varying params)
         ├── bader.py           # Bader brick (charge analysis)
+        ├── cohp.py            # COHP brick (bonding analysis via LOBSTER)
         ├── convergence.py     # Convergence brick (ENCUT/k-points testing)
         ├── thickness.py       # Thickness brick (slab thickness convergence)
         ├── hubbard_response.py # Hubbard U response calculations (NSCF + SCF)
@@ -242,6 +243,7 @@ print_stage_results()    # Format results for display
 | `dos` | `bricks/dos.py` | Density of states via BandsWorkChain |
 | `batch` | `bricks/batch.py` | Parallel VASP runs with varying parameters |
 | `bader` | `bricks/bader.py` | Bader charge analysis |
+| `cohp` | `bricks/cohp.py` | COHP bonding analysis via LOBSTER |
 | `convergence` | `bricks/convergence.py` | ENCUT and k-points convergence testing |
 | `thickness` | `bricks/thickness.py` | Slab thickness convergence testing |
 | `hubbard_response` | `bricks/hubbard_response.py` | Hubbard U response calculations (NSCF + SCF per potential) |
@@ -265,12 +267,13 @@ from teros.core.lego.bricks.connections import (
 )
 ```
 
-**Port types:** `structure`, `energy`, `misc`, `remote_folder`, `retrieved`, `dos_data`, `projectors`, `bader_charges`, `trajectory`, `convergence`, `file`, `hubbard_responses`, `hubbard_occupation`, `hubbard_result`, `neb_images`
+**Port types:** `structure`, `energy`, `misc`, `remote_folder`, `retrieved`, `dos_data`, `projectors`, `bader_charges`, `cohp_data`, `trajectory`, `convergence`, `file`, `hubbard_responses`, `hubbard_occupation`, `hubbard_result`, `neb_images`
 
 **Source resolution modes:**
 - `'auto'` -- VASP structure: first stage uses initial, then `'previous'`/`'input'`/explicit stage name
 - `'structure_from'` -- reads `stage['structure_from']` (DOS, batch, convergence, hubbard)
 - `'charge_from'` -- reads `stage['charge_from']` (bader)
+- `'cohp_from'` -- reads `stage['cohp_from']` (cohp)
 - `'restart'` -- reads `stage['restart']` (VASP restart folder)
 - `'ground_state_from'` -- reads `stage['ground_state_from']` (hubbard_response)
 - `'response_from'` -- reads `stage['response_from']` (hubbard_analysis)
