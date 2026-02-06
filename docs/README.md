@@ -40,6 +40,7 @@ To build the documentation locally:
 - `source/history.rst`: Release history and changelog
 
 ### Module documentation (docs/)
+- `TESTING_GUIDE.md`: Comprehensive guide to tier1/tier2/tier3 testing framework
 - `aimd_standalone_module.md`: AIMD standalone module with override system
 - `cleavage_energy.md`: Cleavage energy calculations
 - `surface_hydroxylation.md`: Surface hydroxylation and vacancy generation

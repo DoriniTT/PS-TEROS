@@ -9,10 +9,76 @@ from aiida.common.links import LinkType
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
 
-from teros.core.utils import get_vasp_parser_settings
-
 from .connections import AIMD_PORTS as PORTS  # noqa: F401
 from ..tasks import extract_energy
+
+
+def _looks_fractional_trajectory_positions(positions, cells, tol: float = 0.25) -> bool:
+    """Heuristic: detect fractional trajectory coordinates (0..1 scale)."""
+    import numpy as np
+
+    if positions is None or cells is None:
+        return False
+
+    if getattr(positions, 'size', 0) == 0:
+        return False
+
+    # Typical fractional coordinates stay close to [0, 1], allowing slight drift.
+    min_pos = float(np.min(positions))
+    max_pos = float(np.max(positions))
+    if min_pos < -tol or max_pos > 1.0 + tol:
+        return False
+
+    # Require a physically sized cell to avoid false positives.
+    cell_lengths = np.linalg.norm(cells, axis=2)
+    return float(np.max(cell_lengths)) > 2.0
+
+
+def _fractional_to_cartesian_positions(positions, cells):
+    """Convert fractional positions to Cartesian using per-frame cells."""
+    import numpy as np
+
+    return np.einsum('sni,sij->snj', positions, cells, optimize=True)
+
+
+@task.calcfunction
+def ensure_cartesian_trajectory(
+    trajectory: orm.TrajectoryData,
+) -> orm.TrajectoryData:
+    """Ensure trajectory positions are Cartesian.
+
+    aiida-vasp trajectories may provide fractional coordinates. AiiDA's
+    TrajectoryData assumes Cartesian positions, so convert when detected.
+    """
+    import numpy as np
+
+    positions = np.asarray(trajectory.get_positions(), dtype=float)
+    cells = trajectory.get_cells()
+    stepids = trajectory.get_stepids()
+    times = trajectory.get_times()
+    velocities = trajectory.get_velocities()
+    symbols = list(trajectory.base.attributes.get('symbols', []))
+
+    if _looks_fractional_trajectory_positions(positions, cells):
+        positions = _fractional_to_cartesian_positions(positions, cells)
+
+    result = orm.TrajectoryData()
+    result.set_trajectory(
+        symbols=symbols,
+        positions=positions,
+        stepids=stepids,
+        cells=cells,
+        times=times,
+        velocities=velocities,
+    )
+
+    core_arrays = {'positions', 'cells', 'steps', 'times', 'velocities'}
+    for array_name in trajectory.get_arraynames():
+        if array_name in core_arrays:
+            continue
+        result.set_array(array_name, trajectory.get_array(array_name))
+
+    return result
 
 
 @task.calcfunction
@@ -154,6 +220,29 @@ def _parse_species_counts(lines):
         return []
 
 
+def _build_aimd_parser_settings(existing: dict | None = None) -> dict:
+    """Build parser settings for AIMD stages.
+
+    Uses modern aiida-vasp keys (`include_node`) while keeping legacy
+    `add_*` flags for backward compatibility.
+    """
+    parser_settings = dict(existing or {})
+
+    include_node = list(parser_settings.get('include_node', []))
+    for node_name in ('trajectory', 'structure', 'kpoints'):
+        if node_name not in include_node:
+            include_node.append(node_name)
+    parser_settings['include_node'] = include_node
+
+    # Keep legacy flags for compatibility with older parser configurations.
+    parser_settings['add_energy'] = True
+    parser_settings['add_trajectory'] = True
+    parser_settings['add_structure'] = True
+    parser_settings['add_kpoints'] = True
+
+    return parser_settings
+
+
 def validate_stage(stage: dict, stage_names: set) -> None:
     """Validate an AIMD stage configuration.
 
@@ -267,12 +356,14 @@ def create_stage_tasks(wg, stage, stage_name, context):
             stage_structure = stage_tasks[prev_name]['structure']
         elif prev_stage_type in ('vasp', 'aimd'):
             stage_structure = stage_tasks[prev_name]['vasp'].outputs.structure
+        elif prev_stage_type == 'neb':
+            stage_structure = stage_tasks[prev_name]['neb'].outputs.structure
         else:
             raise ValueError(
                 f"Stage '{stage['name']}' uses structure_from='previous' "
                 f"but previous stage '{prev_name}' is a '{prev_stage_type}' "
                 f"stage that doesn't produce a structure. Use an explicit "
-                f"'structure_from' pointing to a VASP or AIMD stage."
+                f"'structure_from' pointing to a VASP, AIMD, or NEB stage."
             )
     else:
         from . import resolve_structure_from
@@ -364,21 +455,11 @@ def create_stage_tasks(wg, stage, stage_name, context):
         kpoints_mesh=stage_kpoints_mesh,
     )
 
-    # Add parser settings with trajectory enabled for AIMD
-    parser_settings = get_vasp_parser_settings(
-        add_energy=True,
-        add_trajectory=True,
-        add_structure=True,
-        add_kpoints=True,
-    )
-
-    # Merge with existing settings from _prepare_builder_inputs
-    if 'settings' in builder_inputs:
-        existing = builder_inputs['settings'].get_dict()
-        existing.update(parser_settings)
-        builder_inputs['settings'] = orm.Dict(dict=existing)
-    else:
-        builder_inputs['settings'] = orm.Dict(dict=parser_settings)
+    # Ensure parser settings request trajectory output for AIMD.
+    settings_dict = builder_inputs['settings'].get_dict() if 'settings' in builder_inputs else {}
+    existing_parser = settings_dict.get('parser_settings', {})
+    settings_dict['parser_settings'] = _build_aimd_parser_settings(existing_parser)
+    builder_inputs['settings'] = orm.Dict(dict=settings_dict)
 
     # Create POSCAR with velocities task if needed
     poscar_file_task = None
@@ -459,10 +540,18 @@ def create_stage_tasks(wg, stage, stage_name, context):
         structure=vasp_task.outputs.structure,
     )
 
+    # Normalize trajectory coordinates for reliable downstream visualization/processing.
+    trajectory_task = wg.add_task(
+        ensure_cartesian_trajectory,
+        name=f'trajectory_{stage_name}',
+        trajectory=vasp_task.outputs.trajectory,
+    )
+
     return {
         'vasp': vasp_task,
         'energy': energy_task,
         'velocities': velocity_task,
+        'trajectory': trajectory_task,
         'supercell': supercell_task,
         'poscar_file': poscar_file_task,
         'input_structure': stage_structure,
@@ -482,6 +571,7 @@ def expose_stage_outputs(wg, stage_name, stage_tasks_result, namespace_map=None)
     energy_task = stage_tasks_result['energy']
 
     velocity_task = stage_tasks_result['velocities']
+    trajectory_task = stage_tasks_result['trajectory']
 
     if namespace_map is not None:
         ns = namespace_map['main']
@@ -490,7 +580,7 @@ def expose_stage_outputs(wg, stage_name, stage_tasks_result, namespace_map=None)
         setattr(wg.outputs, f'{ns}.vasp.misc', vasp_task.outputs.misc)
         setattr(wg.outputs, f'{ns}.vasp.remote', vasp_task.outputs.remote_folder)
         setattr(wg.outputs, f'{ns}.vasp.retrieved', vasp_task.outputs.retrieved)
-        setattr(wg.outputs, f'{ns}.vasp.trajectory', vasp_task.outputs.trajectory)
+        setattr(wg.outputs, f'{ns}.vasp.trajectory', trajectory_task.outputs.result)
         setattr(wg.outputs, f'{ns}.vasp.velocities', velocity_task.outputs.result)
     else:
         setattr(wg.outputs, f'{stage_name}_energy', energy_task.outputs.result)
@@ -498,7 +588,7 @@ def expose_stage_outputs(wg, stage_name, stage_tasks_result, namespace_map=None)
         setattr(wg.outputs, f'{stage_name}_misc', vasp_task.outputs.misc)
         setattr(wg.outputs, f'{stage_name}_remote', vasp_task.outputs.remote_folder)
         setattr(wg.outputs, f'{stage_name}_retrieved', vasp_task.outputs.retrieved)
-        setattr(wg.outputs, f'{stage_name}_trajectory', vasp_task.outputs.trajectory)
+        setattr(wg.outputs, f'{stage_name}_trajectory', trajectory_task.outputs.result)
         setattr(wg.outputs, f'{stage_name}_velocities', velocity_task.outputs.result)
 
 

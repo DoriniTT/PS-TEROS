@@ -3,7 +3,7 @@
 This module provides a simple API for exploratory computational work:
 - Submit a calculation, check results, decide next step, optionally restart
 - No presets - always specify parameters manually for maximum flexibility
-- Specific file retrieval - get exactly the files you need
+- Specific file retrieval - standard VASP files are always retrieved, add extras as needed
 - Non-blocking default - submit and return immediately
 
 Stage types are implemented as "bricks" (see bricks/ subdirectory):
@@ -17,6 +17,9 @@ Stage types are implemented as "bricks" (see bricks/ subdirectory):
 - hubbard_analysis: Linear regression and summary for Hubbard U
 - aimd: Ab initio molecular dynamics (IBRION=0)
 - qe: Quantum ESPRESSO calculations (PwBaseWorkChain)
+- cp2k: CP2K calculations
+- generate_neb_images: Generate intermediate NEB images from VASP endpoints
+- neb: NEB calculations via aiida-vasp ``vasp.neb``
 
 Example usage:
 
@@ -31,7 +34,7 @@ Example usage:
     ...     potential_family='PBE',
     ...     potential_mapping={'Sn': 'Sn_d', 'O': 'O'},
     ...     options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},
-    ...     retrieve=['CONTCAR', 'CHGCAR'],
+    ...     retrieve=['CHGCAR'],
     ...     name='sno2_relax',
     ... )
     >>>

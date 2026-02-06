@@ -37,7 +37,7 @@ def validate_stage(stage: dict, stage_names: set) -> None:
         )
 
     structure_from = stage['structure_from']
-    if structure_from not in stage_names:
+    if structure_from != 'input' and structure_from not in stage_names:
         raise ValueError(
             f"Stage '{name}' structure_from='{structure_from}' must reference "
             f"a previous stage name"
@@ -68,7 +68,10 @@ def create_stage_tasks(wg, stage, stage_name, context):
 
     # Resolve structure from referenced stage
     structure_from = stage['structure_from']
-    input_structure = resolve_structure_from(structure_from, context)
+    if structure_from == 'input':
+        input_structure = context['input_structure']
+    else:
+        input_structure = resolve_structure_from(structure_from, context)
 
     VaspWorkChain = WorkflowFactory('vasp.v2.vasp')
     VaspTask = task(VaspWorkChain)

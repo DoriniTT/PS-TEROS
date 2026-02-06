@@ -1,10 +1,96 @@
 """Calcfunction tasks for the lego module."""
 
 import re
-import typing as t
 
 from aiida import orm
-from aiida_workgraph import task, dynamic
+from aiida_workgraph import task
+
+
+@task.calcfunction
+def generate_neb_intermediate_image(
+    initial_structure: orm.StructureData,
+    final_structure: orm.StructureData,
+    n_images: orm.Int,
+    image_index: orm.Int,
+    method: orm.Str,
+    mic: orm.Bool,
+) -> orm.StructureData:
+    """Generate one NEB intermediate image using MIC displacement + interpolation.
+
+    The endpoint displacement is first built using minimum-image displacements to
+    avoid long jumps across periodic boundaries. Intermediate images are then
+    obtained using ASE's NEB interpolation (IDPP or linear).
+    """
+    import numpy as np
+    from ase.mep import NEB
+
+    total_images = int(n_images.value)
+    idx = int(image_index.value)
+    interp_method = method.value.strip().lower()
+    use_mic = bool(mic.value)
+
+    if total_images < 1:
+        raise ValueError("n_images must be >= 1")
+    if idx < 1 or idx > total_images:
+        raise ValueError(
+            f"image_index must be in [1, {total_images}], got {idx}"
+        )
+    if interp_method not in {'idpp', 'linear'}:
+        raise ValueError("method must be 'idpp' or 'linear'")
+
+    ainit = initial_structure.get_ase()
+    afinal_ref = final_structure.get_ase()
+
+    if len(ainit) != len(afinal_ref):
+        raise ValueError(
+            f"Initial/final atom counts differ: {len(ainit)} != {len(afinal_ref)}"
+        )
+
+    # Build endpoint with MIC-aware per-atom displacements.
+    displacements = []
+    combined = ainit.copy()
+    combined.extend(afinal_ref)
+    for atom_idx in range(len(ainit)):
+        vec = combined.get_distance(
+            atom_idx, atom_idx + len(ainit), vector=True, mic=True
+        )
+        displacements.append(vec.tolist())
+
+    displacements = np.asarray(displacements, dtype=float)
+    ainit.wrap(eps=1e-1)
+    afinal = ainit.copy()
+    afinal.positions += displacements
+
+    images = [ainit.copy() for _ in range(total_images + 1)] + [afinal.copy()]
+    neb = NEB(images)
+    if interp_method == 'idpp':
+        neb.interpolate('idpp', mic=use_mic)
+    else:
+        neb.interpolate(mic=use_mic)
+
+    return orm.StructureData(ase=neb.images[idx])
+
+
+@task.calcfunction
+def build_neb_images_manifest(**images: orm.StructureData) -> orm.Dict:
+    """Create a deterministic manifest for generated NEB image outputs."""
+
+    def _image_order(label: str) -> int:
+        if '_' not in label:
+            return 0
+        try:
+            return int(label.rsplit('_', 1)[-1])
+        except (TypeError, ValueError):
+            return 0
+
+    labels = sorted(images.keys(), key=_image_order)
+    return orm.Dict(
+        dict={
+            'labels': labels,
+            'n_images': len(labels),
+            'source': 'generate_neb_images',
+        }
+    )
 
 
 @task.calcfunction
@@ -306,7 +392,7 @@ def compute_cp2k_dynamics(
 
 @task.calcfunction
 def concatenate_trajectories(
-    trajectories: t.Annotated[dict, dynamic(orm.TrajectoryData)],
+    **trajectories: orm.TrajectoryData,
 ) -> orm.TrajectoryData:
     """
     Concatenate multiple AIMD trajectory files from sequential stages.
@@ -316,65 +402,111 @@ def concatenate_trajectories(
     on sorted stage namespace keys.
 
     Args:
-        trajectories: Dict of {stage_namespace: TrajectoryData}.
-                     Keys should be sortable (e.g., 's01_...', 's02_...').
+        trajectories: Dynamic kwargs of {stage_namespace: TrajectoryData}.
+            Keys should be sortable (e.g., 's01_...', 's02_...').
 
     Returns:
         TrajectoryData with all frames from all stages concatenated.
-
-    Note:
-        Arrays are concatenated along axis=0 (frame dimension).
-        Symbols array is taken from the first trajectory (assumes same atoms).
     """
     import numpy as np
 
-    all_positions = []
-    all_cells = []
-    all_energies = []
-    all_forces = []
-    symbols = None
-
-    # Process in sorted order for correct frame sequence
+    ordered = []
     for stage_key in sorted(trajectories.keys()):
-        traj = trajectories[stage_key]
+        trajectory = trajectories[stage_key]
+        if isinstance(trajectory, orm.TrajectoryData):
+            ordered.append(trajectory)
 
+    # Return a valid zero-frame trajectory when nothing is available.
+    if not ordered:
+        empty = orm.TrajectoryData()
+        empty.set_trajectory(
+            symbols=[],
+            positions=np.zeros((0, 0, 3), dtype=float),
+            stepids=np.array([], dtype=int),
+            cells=np.zeros((0, 3, 3), dtype=float),
+        )
+        return empty
+
+    first = ordered[0]
+    symbols = first.base.attributes.get('symbols')
+    if symbols is None:
         try:
-            all_positions.append(traj.get_array('positions'))
-        except KeyError:
-            pass
+            symbols = first.get_array('symbols').tolist()
+        except (KeyError, AttributeError):
+            symbols = []
 
-        try:
-            all_cells.append(traj.get_array('cells'))
-        except KeyError:
-            pass
+    positions_parts = []
+    cells_parts = []
+    step_parts = []
+    times_parts = []
+    velocities_parts = []
 
-        try:
-            all_energies.append(traj.get_array('energies'))
-        except KeyError:
-            pass
+    have_cells = True
+    have_times = True
+    have_velocities = True
 
-        try:
-            all_forces.append(traj.get_array('forces'))
-        except KeyError:
-            pass
+    next_step = 0
+    core_arrays = {'positions', 'cells', 'steps', 'times', 'velocities'}
+    common_extra_arrays = None
 
-        if symbols is None:
+    for traj in ordered:
+        positions = np.asarray(traj.get_positions())
+        positions_parts.append(positions)
+
+        steps = np.asarray(traj.get_stepids(), dtype=int)
+        if steps.size > 0:
+            steps = steps - steps[0] + next_step
+            next_step = int(steps[-1]) + 1
+        step_parts.append(steps)
+
+        if have_cells:
             try:
-                symbols = traj.get_array('symbols')
-            except KeyError:
-                pass
+                cells = traj.get_cells()
+                if cells is None:
+                    raise KeyError('cells not available')
+                cells_parts.append(np.asarray(cells))
+            except (KeyError, AttributeError):
+                have_cells = False
+                cells_parts = []
+
+        if have_times:
+            try:
+                times = traj.get_times()
+                if times is None:
+                    raise KeyError('times not available')
+                times_parts.append(np.asarray(times, dtype=float))
+            except (KeyError, AttributeError):
+                have_times = False
+                times_parts = []
+
+        if have_velocities:
+            try:
+                velocities = traj.get_velocities()
+                if velocities is None:
+                    raise KeyError('velocities not available')
+                velocities_parts.append(np.asarray(velocities, dtype=float))
+            except (KeyError, AttributeError):
+                have_velocities = False
+                velocities_parts = []
+
+        names = set(traj.get_arraynames()) - core_arrays
+        common_extra_arrays = names if common_extra_arrays is None else (common_extra_arrays & names)
 
     result = orm.TrajectoryData()
+    result.set_trajectory(
+        symbols=symbols,
+        positions=np.concatenate(positions_parts, axis=0),
+        stepids=np.concatenate(step_parts, axis=0),
+        cells=(np.concatenate(cells_parts, axis=0) if have_cells and cells_parts else None),
+        times=(np.concatenate(times_parts, axis=0) if have_times and times_parts else None),
+        velocities=(np.concatenate(velocities_parts, axis=0) if have_velocities and velocities_parts else None),
+    )
 
-    if all_positions:
-        result.set_array('positions', np.concatenate(all_positions, axis=0))
-    if all_cells:
-        result.set_array('cells', np.concatenate(all_cells, axis=0))
-    if all_energies:
-        result.set_array('energies', np.concatenate(all_energies, axis=0))
-    if all_forces:
-        result.set_array('forces', np.concatenate(all_forces, axis=0))
-    if symbols is not None:
-        result.set_array('symbols', symbols)
+    for name in sorted(common_extra_arrays or set()):
+        try:
+            arrays = [traj.get_array(name) for traj in ordered]
+            result.set_array(name, np.concatenate(arrays, axis=0))
+        except (KeyError, ValueError, AttributeError):
+            continue
 
     return result

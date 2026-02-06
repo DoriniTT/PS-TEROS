@@ -31,3 +31,16 @@ class TestMaxConcurrentJobsParameter:
         sig = inspect.signature(quick_vasp_sequential)
         param = sig.parameters['max_concurrent_jobs']
         assert param.annotation is int
+
+
+@pytest.mark.tier1
+class TestIndexedOutputNaming:
+    """Tests indexed output naming helpers used by lego sequential workflows."""
+
+    def test_build_indexed_output_name(self):
+        from teros.core.lego.workgraph import _build_indexed_output_name
+        assert _build_indexed_output_name(3, 'md_production_0') == 's03_md_production_0'
+
+    def test_build_combined_trajectory_output_name(self):
+        from teros.core.lego.workgraph import _build_combined_trajectory_output_name
+        assert _build_combined_trajectory_output_name(6) == 's07_combined_trajectory'

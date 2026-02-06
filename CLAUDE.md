@@ -193,7 +193,9 @@ teros/core/
         ├── hubbard_analysis.py # Hubbard U regression and summary
         ├── aimd.py            # Ab initio molecular dynamics
         ├── qe.py              # Quantum ESPRESSO (PwBaseWorkChain)
-        └── cp2k.py            # CP2K (Cp2kBaseWorkChain)
+        ├── cp2k.py            # CP2K (Cp2kBaseWorkChain)
+        ├── generate_neb_images.py # NEB image interpolation/generation
+        └── neb.py             # NEB workflow wrapper (vasp.neb)
 ```
 
 **Submodule pattern:**
@@ -247,6 +249,8 @@ print_stage_results()    # Format results for display
 | `aimd` | `bricks/aimd.py` | Ab initio molecular dynamics (IBRION=0) |
 | `qe` | `bricks/qe.py` | Quantum ESPRESSO pw.x calculations (SCF, relax, vc-relax) |
 | `cp2k` | `bricks/cp2k.py` | CP2K calculations (ENERGY, GEO_OPT, CELL_OPT, MD) |
+| `generate_neb_images` | `bricks/generate_neb_images.py` | Generate intermediate NEB images from relaxed VASP endpoints |
+| `neb` | `bricks/neb.py` | Run `vasp.neb` with images from generator stage or local folder |
 
 ### Port System (`connections.py`)
 
@@ -261,7 +265,7 @@ from teros.core.lego.bricks.connections import (
 )
 ```
 
-**Port types:** `structure`, `energy`, `misc`, `remote_folder`, `retrieved`, `dos_data`, `projectors`, `bader_charges`, `trajectory`, `convergence`, `file`, `hubbard_responses`, `hubbard_occupation`, `hubbard_result`
+**Port types:** `structure`, `energy`, `misc`, `remote_folder`, `retrieved`, `dos_data`, `projectors`, `bader_charges`, `trajectory`, `convergence`, `file`, `hubbard_responses`, `hubbard_occupation`, `hubbard_result`, `neb_images`
 
 **Source resolution modes:**
 - `'auto'` -- VASP structure: first stage uses initial, then `'previous'`/`'input'`/explicit stage name
@@ -428,6 +432,17 @@ s04_fukui_minus_calcs_2x2
 | `vasp` | `s{N}_{name}.vasp.{energy,structure,misc,remote,retrieved}` |
 | `dos` | `s{N}_{name}.scf.{misc,remote,retrieved}` + `s{N}_{name}.dos.{misc,remote,retrieved}` |
 | `batch` | `s{N}_{name}.batch.{calc_label}.{energy,misc,remote,retrieved}` |
+
+### AIMD Brick Status (2026-02-06)
+
+The AIMD VASP brick is working great now for multi-stage MD workflows.
+
+- Trajectory positions are normalized to Cartesian coordinates before exposure/concatenation.
+- Combined trajectory output uses indexed naming: `s{N+1:02d}_combined_trajectory`
+  (example: after 6 AIMD stages, output is `s07_combined_trajectory`).
+- Velocity continuation across AIMD restart stages is supported via POSCAR velocity injection.
+- Viewer helper script available at `~/.local/bin/trajview`:
+  `trajview <TrajectoryData_PK>` opens the trajectory in ASE view.
 
 ### Hubbard U Stage Configuration
 

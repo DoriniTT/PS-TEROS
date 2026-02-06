@@ -8,6 +8,17 @@ validate_connections() function checks all inter-stage connections
 before submission.
 """
 
+from ..retrieve_defaults import build_vasp_retrieve
+
+
+_VASP_RETRIEVE_STAGE_TYPES = {
+    'vasp',
+    'batch',
+    'aimd',
+    'neb',
+    'dos',
+}
+
 # ---------------------------------------------------------------------------
 # Recognized port types — every port's 'type' field must be in this set.
 # ---------------------------------------------------------------------------
@@ -27,6 +38,7 @@ PORT_TYPES = {
     'hubbard_responses',
     'hubbard_occupation',
     'hubbard_result',
+    'neb_images',
 }
 
 
@@ -466,6 +478,94 @@ THICKNESS_PORTS = {
     },
 }
 
+GENERATE_NEB_IMAGES_PORTS = {
+    'inputs': {
+        'initial_structure': {
+            'type': 'structure',
+            'required': True,
+            'source': 'initial_from',
+            'compatible_bricks': ['vasp'],
+            'description': 'Initial relaxed structure from a VASP stage',
+        },
+        'final_structure': {
+            'type': 'structure',
+            'required': True,
+            'source': 'final_from',
+            'compatible_bricks': ['vasp'],
+            'description': 'Final relaxed structure from a VASP stage',
+        },
+    },
+    'outputs': {
+        'images': {
+            'type': 'neb_images',
+            'description': 'Generated intermediate NEB image structures',
+        },
+    },
+}
+
+NEB_PORTS = {
+    'inputs': {
+        'initial_structure': {
+            'type': 'structure',
+            'required': True,
+            'source': 'initial_from',
+            'compatible_bricks': ['vasp'],
+            'description': 'Initial endpoint structure from a VASP stage',
+        },
+        'final_structure': {
+            'type': 'structure',
+            'required': True,
+            'source': 'final_from',
+            'compatible_bricks': ['vasp'],
+            'description': 'Final endpoint structure from a VASP stage',
+        },
+        'images': {
+            'type': 'neb_images',
+            'required': False,
+            'source': 'images_from',
+            'compatible_bricks': ['generate_neb_images'],
+            'description': 'Intermediate images from generate_neb_images stage',
+        },
+        'restart_folder': {
+            'type': 'remote_folder',
+            'required': False,
+            'source': 'restart',
+            'compatible_bricks': ['neb'],
+            'description': 'Remote folder from previous NEB stage for restart',
+        },
+    },
+    'outputs': {
+        'structure': {
+            'type': 'structure',
+            'description': 'NEB images structure output',
+        },
+        'misc': {
+            'type': 'misc',
+            'description': 'Parsed NEB results dict',
+        },
+        'remote_folder': {
+            'type': 'remote_folder',
+            'description': 'Remote NEB calculation directory',
+        },
+        'retrieved': {
+            'type': 'retrieved',
+            'description': 'Retrieved files from NEB calculation',
+        },
+        'trajectory': {
+            'type': 'trajectory',
+            'description': 'NEB trajectory data (if parser produced it)',
+        },
+        'dos': {
+            'type': 'dos_data',
+            'description': 'DOS ArrayData output (optional)',
+        },
+        'projectors': {
+            'type': 'projectors',
+            'description': 'Projected DOS data (optional)',
+        },
+    },
+}
+
 # Registry mapping brick type name -> PORTS dict
 ALL_PORTS = {
     'vasp': VASP_PORTS,
@@ -479,6 +579,8 @@ ALL_PORTS = {
     'aimd': AIMD_PORTS,
     'qe': QE_PORTS,
     'cp2k': CP2K_PORTS,
+    'generate_neb_images': GENERATE_NEB_IMAGES_PORTS,
+    'neb': NEB_PORTS,
 }
 
 
@@ -672,6 +774,16 @@ def validate_connections(stages: list) -> list:
         name = stage['name']
         brick_type = stage.get('type', 'vasp')
         ports = _get_ports(brick_type)
+
+        # Brick-specific schema constraints not expressible with PORTS alone.
+        if brick_type == 'neb':
+            has_images_from = stage.get('images_from') is not None
+            has_images_dir = stage.get('images_dir') is not None
+            if has_images_from == has_images_dir:
+                raise ValueError(
+                    f"Stage '{name}': NEB stages require exactly one of "
+                    f"'images_from' or 'images_dir'"
+                )
 
         stage_configs[name] = stage
         stage_types[name] = brick_type
@@ -872,6 +984,8 @@ def validate_connections(stages: list) -> list:
                 ref_config = stage_configs[ref_stage_name]
                 ref_incar = ref_config.get('incar', {})
                 ref_retrieve = ref_config.get('retrieve', [])
+                if stage_types.get(ref_stage_name) in _VASP_RETRIEVE_STAGE_TYPES:
+                    ref_retrieve = build_vasp_retrieve(ref_retrieve)
 
                 missing_incar = {}
                 for key, required_val in prereqs.get('incar', {}).items():

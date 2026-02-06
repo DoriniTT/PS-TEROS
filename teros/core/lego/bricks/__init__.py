@@ -12,7 +12,21 @@ Port declarations and validation logic live in connections.py (pure Python,
 no AiiDA dependency) so they can be imported in tier1 tests.
 """
 
-from . import vasp, dos, batch, bader, convergence, thickness, hubbard_response, hubbard_analysis, aimd, qe, cp2k
+from . import (
+    vasp,
+    dos,
+    batch,
+    bader,
+    convergence,
+    thickness,
+    hubbard_response,
+    hubbard_analysis,
+    aimd,
+    qe,
+    cp2k,
+    generate_neb_images,
+    neb,
+)
 from .connections import (  # noqa: F401
     PORT_TYPES,
     ALL_PORTS,
@@ -35,6 +49,8 @@ BRICK_REGISTRY = {
     'aimd': aimd,
     'qe': qe,
     'cp2k': cp2k,
+    'generate_neb_images': generate_neb_images,
+    'neb': neb,
 }
 
 VALID_BRICK_TYPES = tuple(BRICK_REGISTRY.keys())
@@ -65,7 +81,7 @@ def get_brick_module(brick_type: str):
 def resolve_structure_from(structure_from: str, context: dict):
     """Resolve a structure socket from a previous stage.
 
-    Only VASP, AIMD, QE, and CP2K stages produce a meaningful structure output.
+    Only VASP, AIMD, QE, CP2K, and NEB stages produce a meaningful structure output.
     Referencing a non-VASP/AIMD/QE/CP2K stage (dos, batch, bader, convergence,
     thickness, hubbard_response, hubbard_analysis) raises an error
     because those bricks don't produce structures.
@@ -90,12 +106,14 @@ def resolve_structure_from(structure_from: str, context: dict):
         return stage_tasks[structure_from]['qe'].outputs.output_structure
     elif ref_stage_type == 'cp2k':
         return stage_tasks[structure_from]['cp2k'].outputs.output_structure
+    elif ref_stage_type == 'neb':
+        return stage_tasks[structure_from]['neb'].outputs.structure
     else:
-        # Non-VASP/AIMD/QE/CP2K bricks don't produce structures
+        # Non-structure-producing bricks
         raise ValueError(
             f"structure_from='{structure_from}' references a '{ref_stage_type}' "
             f"stage, which doesn't produce a structure output. "
-            f"Point to a VASP, AIMD, QE, or CP2K stage instead."
+            f"Point to a VASP, AIMD, QE, CP2K, or NEB stage instead."
         )
 
 

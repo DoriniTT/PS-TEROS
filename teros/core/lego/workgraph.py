@@ -14,6 +14,7 @@ from aiida_workgraph import WorkGraph, task
 
 from .tasks import extract_energy, compute_dynamics
 from .utils import prepare_restart_settings, get_status
+from .retrieve_defaults import build_vasp_retrieve
 from ..utils import deep_merge_dicts
 
 
@@ -48,7 +49,7 @@ def quick_vasp(
         potential_family: POTCAR family (default: 'PBE')
         potential_mapping: Element to POTCAR mapping (e.g., {'Sn': 'Sn_d', 'O': 'O'})
         options: Scheduler options dict with 'resources' key
-        retrieve: List of files to retrieve (e.g., ['CONTCAR', 'CHGCAR'])
+        retrieve: Additional files to retrieve (merged with defaults)
         restart_from: PK of previous calculation to restart from
         copy_wavecar: Copy WAVECAR from restart_from (sets ISTART=1)
         copy_chgcar: Copy CHGCAR from restart_from (sets ICHARG=1)
@@ -201,7 +202,7 @@ def quick_vasp_batch(
         potential_family: POTCAR family (default: 'PBE')
         potential_mapping: Element to POTCAR mapping
         options: Scheduler options dict
-        retrieve: List of files to retrieve
+        retrieve: Additional files to retrieve (merged with defaults)
         incar_overrides: Per-structure INCAR overrides
                         (e.g., {'delta_0.05': {'NELECT': 191.95}})
         max_concurrent_jobs: Maximum parallel VASP jobs (default: unlimited)
@@ -381,7 +382,7 @@ def _prepare_builder_inputs(
         potential_family: POTCAR family
         potential_mapping: Element to POTCAR mapping
         options: Scheduler options
-        retrieve: Additional files to retrieve
+        retrieve: Additional files to retrieve (merged with defaults)
         restart_folder: RemoteData for restart
         clean_workdir: Whether to clean work directory
         kpoints_mesh: Explicit k-points mesh [nx, ny, nz] (overrides kpoints_spacing)
@@ -421,8 +422,9 @@ def _prepare_builder_inputs(
     # Settings (for file retrieval)
     # Note: aiida-vasp expects UPPERCASE keys for settings
     settings = {}
-    if retrieve:
-        settings['ADDITIONAL_RETRIEVE_LIST'] = retrieve
+    retrieve_list = build_vasp_retrieve(retrieve)
+    if retrieve_list:
+        settings['ADDITIONAL_RETRIEVE_LIST'] = retrieve_list
     if settings:
         prepared['settings'] = orm.Dict(dict=settings)
 
@@ -521,6 +523,16 @@ def _validate_stages(stages: t.List[dict]) -> None:
         _warnings.warn(w, stacklevel=3)
 
 
+def _build_indexed_output_name(index: int, name: str) -> str:
+    """Build a stable indexed output name (e.g. ``s01_relax``)."""
+    return f's{index:02d}_{name}'
+
+
+def _build_combined_trajectory_output_name(stage_count: int) -> str:
+    """Build indexed output name for the final combined trajectory."""
+    return _build_indexed_output_name(stage_count + 1, 'combined_trajectory')
+
+
 def quick_vasp_sequential(
     structure: t.Union[orm.StructureData, int] = None,
     stages: t.List[dict] = None,
@@ -565,7 +577,8 @@ def quick_vasp_sequential(
             - __stage_names__: List of stage names in order
             - __stage_types__: Dict mapping stage names to types
               ('vasp', 'dos', 'batch', 'bader', 'convergence', 'thickness',
-               'hubbard_response', or 'hubbard_analysis')
+               'hubbard_response', 'hubbard_analysis', 'aimd', 'qe', 'cp2k',
+               'generate_neb_images', or 'neb')
             - __stage_namespaces__: Dict mapping stage names to namespace_map dicts
             - <stage_name>: WorkGraph PK (for each stage)
 
@@ -578,7 +591,7 @@ def quick_vasp_sequential(
         - supercell: [nx, ny, nz] to create supercell
         - kpoints_spacing: Override k-points spacing for this stage
         - kpoints: Explicit k-points mesh [nx, ny, nz] (overrides kpoints_spacing)
-        - retrieve: ADDITIONAL_RETRIEVE_LIST for this stage (e.g., ['CONTCAR', 'WAVECAR'])
+        - retrieve: Additional files to retrieve for this stage (merged with defaults)
         - fix_type: Where to fix atoms ('bottom', 'center', 'top', or None)
         - fix_thickness: Thickness in Angstroms for fixing region (required if fix_type set)
         - fix_elements: Optional list of element symbols to restrict fixing to
@@ -591,7 +604,7 @@ def quick_vasp_sequential(
         - dos_incar (required): INCAR for DOS step (ismear defaults to -5, lorbit to 11)
         - kpoints_spacing: K-points for SCF (default: base value)
         - dos_kpoints_spacing: K-points for DOS (default: kpoints_spacing * 0.8)
-        - retrieve: Files to retrieve from DOS step (default: ['DOSCAR'])
+        - retrieve: Files to retrieve from DOS step (default: ['DOSCAR'], merged with defaults)
 
     Stage Configuration (Batch stages, type='batch'):
         Runs multiple parallel VASP calculations on the same structure with
@@ -606,10 +619,10 @@ def quick_vasp_sequential(
             - incar: INCAR keys to override/add on top of base_incar
             - kpoints: Explicit k-points mesh [nx, ny, nz]
             - kpoints_spacing: K-points spacing
-            - retrieve: Files to retrieve
+            - retrieve: Files to retrieve (merged with defaults)
         - kpoints_spacing: Default k-points spacing for all calculations
         - kpoints: Default explicit k-points mesh for all calculations
-        - retrieve: Default files to retrieve for all calculations
+        - retrieve: Default files to retrieve for all calculations (merged with defaults)
 
         Output naming: Each calculation produces outputs named
             {stage_name}_{calc_label}_energy
@@ -619,6 +632,36 @@ def quick_vasp_sequential(
 
         Note: Batch stages do NOT modify the structure. All calculations
         run the same geometry with different electronic parameters.
+
+    Stage Configuration (Generate NEB Images, type='generate_neb_images'):
+        - name (required): Unique stage identifier
+        - type: 'generate_neb_images'
+        - initial_from (required): Previous VASP stage name for initial endpoint
+        - final_from (required): Previous VASP stage name for final endpoint
+        - n_images (required): Number of intermediate images (>= 1)
+        - method: Interpolation method ('idpp' default, or 'linear')
+        - mic: Minimum-image-convention interpolation flag (default: True)
+
+    Stage Configuration (NEB, type='neb'):
+        - name (required): Unique stage identifier
+        - type: 'neb'
+        - initial_from (required): Previous VASP stage name for initial endpoint
+        - final_from (required): Previous VASP stage name for final endpoint
+        - incar (required): INCAR parameters (images count is auto-synchronized)
+          (LCLIMB/lclimb is supported and injected via scheduler prepend_text)
+        - images_from: Previous generate_neb_images stage name
+        - images_dir: Local path with NEB images (.vasp files or 00/01... folders)
+        - restart: Previous NEB stage name for restart_folder chaining (optional)
+        - kpoints_spacing: Override stage k-point spacing (optional)
+        - kpoints: Explicit k-point mesh [nx, ny, nz] (optional)
+        - retrieve: Additional files to retrieve (merged with defaults)
+
+        Exactly one of images_from or images_dir must be provided.
+
+    Explicit CI-NEB pattern:
+        Define two sequential NEB stages:
+        1) regular NEB stage (`restart`: None, `lclimb`: False in INCAR)
+        2) CI-NEB stage (`restart`: <stage1>, `lclimb`: True in INCAR)
 
     Example:
         >>> stages = [
@@ -733,7 +776,7 @@ def quick_vasp_sequential(
 
         # Build namespace_map with index prefix for ordered display
         # Use 's' prefix (stage) since Python identifiers can't start with digits
-        indexed_name = f's{i + 1:02d}_{stage_name}'
+        indexed_name = _build_indexed_output_name(i + 1, stage_name)
         namespace_map = {'main': indexed_name}
         if stage_type == 'dos':
             namespace_map['scf'] = indexed_name
@@ -753,9 +796,13 @@ def quick_vasp_sequential(
         for stage_name in stage_names:
             if stage_types[stage_name] == 'aimd':
                 ns = stage_namespaces[stage_name]['main']
-                # Get trajectory socket directly from the VASP task
-                vasp_task = stage_tasks[stage_name]['vasp']
-                traj_inputs[ns] = vasp_task.outputs.trajectory
+                # Prefer normalized trajectory socket when provided by AIMD brick.
+                trajectory_task = stage_tasks[stage_name].get('trajectory')
+                if trajectory_task is not None:
+                    traj_inputs[ns] = trajectory_task.outputs.result
+                else:
+                    vasp_task = stage_tasks[stage_name]['vasp']
+                    traj_inputs[ns] = vasp_task.outputs.trajectory
 
         # Only add concatenate task if we have AIMD stages
         if traj_inputs:
@@ -764,7 +811,8 @@ def quick_vasp_sequential(
                 name='concatenate_trajectories',
                 trajectories=traj_inputs,
             )
-            wg.outputs.combined_trajectory = concat_task.outputs.result
+            combined_name = _build_combined_trajectory_output_name(len(stage_names))
+            setattr(wg.outputs, combined_name, concat_task.outputs.result)
 
     # Submit
     wg.submit()
@@ -886,7 +934,7 @@ def quick_dos_batch(
         potential_family: POTCAR family (default: 'PBE')
         potential_mapping: Element to POTCAR mapping
         options: Scheduler options dict
-        retrieve: List of files to retrieve (e.g., ['DOSCAR'])
+        retrieve: Additional files to retrieve (merged with defaults)
         scf_incar_overrides: Per-structure SCF INCAR overrides
                             (e.g., {'vacancy': {'ismear': 0, 'sigma': 0.02}})
         dos_incar_overrides: Per-structure DOS INCAR overrides
@@ -1037,13 +1085,14 @@ def quick_dos_batch(
 
         # Prepare DOS builder inputs
         # Note: We prepare the base inputs here, then add restart in add_task
+        dos_retrieve = retrieve if retrieve is not None else ['DOSCAR']
         dos_builder_inputs = _prepare_builder_inputs(
             incar=dos_incar_final,
             kpoints_spacing=dos_kpoints_spacing,
             potential_family=potential_family,
             potential_mapping=potential_mapping or {},
             options=options,
-            retrieve=retrieve,
+            retrieve=dos_retrieve,
             restart_folder=None,  # Will be passed directly below
             clean_workdir=clean_workdir,
         )
@@ -1128,7 +1177,7 @@ def quick_dos(
         potential_family: POTCAR family (default: 'PBE')
         potential_mapping: Element to POTCAR mapping (e.g., {'Sn': 'Sn_d', 'O': 'O'})
         options: Scheduler options dict with 'resources' key
-        retrieve: List of additional files to retrieve (e.g., ['DOSCAR'])
+        retrieve: Additional files to retrieve (merged with defaults)
         name: Calculation label for identification
         wait: If True, block until calculation finishes (default: False)
         poll_interval: Seconds between status checks when wait=True
@@ -1230,7 +1279,9 @@ def quick_dos(
         'potential_family': potential_family,
         'potential_mapping': potential_mapping or {},
         'clean_workdir': False,  # Keep for DOS restart
-        'settings': {},  # Must be dict, not None
+        'settings': {
+            'ADDITIONAL_RETRIEVE_LIST': build_vasp_retrieve(None),
+        },
     }
 
     # SCF k-points: explicit mesh or spacing
@@ -1242,9 +1293,15 @@ def quick_dos(
         scf_overrides['kpoints_spacing'] = float(kpoints_spacing)
 
     # DOS overrides
+    dos_retrieve = retrieve if retrieve is not None else ['DOSCAR']
     dos_overrides = {
         'parameters': {'incar': dos_incar_final},
-        'settings': {},  # Must be dict, not None
+        'settings': {
+            'ADDITIONAL_RETRIEVE_LIST': build_vasp_retrieve(dos_retrieve),
+            'parser_settings': {
+                'include_node': ['dos'],
+            },
+        },
     }
 
     # DOS k-points: explicit mesh or spacing
@@ -1261,13 +1318,6 @@ def quick_dos(
 
     # Add settings for file retrieval
     # Note: aiida-vasp expects UPPERCASE keys for settings
-    if retrieve:
-        overrides['dos']['settings'] = {
-            'ADDITIONAL_RETRIEVE_LIST': retrieve,
-            'parser_settings': {
-                'include_node': ['dos'],
-            },
-        }
 
     # Clean workdir option
     if clean_workdir:

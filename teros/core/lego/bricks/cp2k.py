@@ -130,6 +130,8 @@ def create_stage_tasks(wg, stage: dict, stage_name: str, context: dict) -> dict:
             prev_stage_type = stage_types.get(prev_name, 'vasp')
             if prev_stage_type in ('vasp', 'aimd'):
                 stage_structure = stage_tasks[prev_name]['vasp'].outputs.structure
+            elif prev_stage_type == 'neb':
+                stage_structure = stage_tasks[prev_name]['neb'].outputs.structure
             elif prev_stage_type == 'qe':
                 stage_structure = stage_tasks[prev_name]['qe'].outputs.output_structure
             elif prev_stage_type == 'cp2k':
@@ -139,7 +141,7 @@ def create_stage_tasks(wg, stage: dict, stage_name: str, context: dict) -> dict:
                     f"Stage '{stage['name']}' uses structure_from='previous' (auto) "
                     f"but previous stage '{prev_name}' is a '{prev_stage_type}' "
                     f"stage that doesn't produce a structure. Use an explicit "
-                    f"'structure_from' pointing to a VASP, AIMD, QE, or CP2K stage."
+                    f"'structure_from' pointing to a VASP, AIMD, NEB, QE, or CP2K stage."
                 )
     elif stage.get('structure_from') == 'input':
         stage_structure = input_structure
