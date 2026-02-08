@@ -128,12 +128,14 @@ def create_stage_tasks(wg, stage, stage_name, context):
             stage_structure = stage_tasks[prev_name]['structure']
         elif prev_stage_type in ('vasp', 'aimd'):
             stage_structure = stage_tasks[prev_name]['vasp'].outputs.structure
+        elif prev_stage_type == 'neb':
+            stage_structure = stage_tasks[prev_name]['neb'].outputs.structure
         else:
             raise ValueError(
                 f"Stage '{stage['name']}' uses structure_from='previous' "
                 f"but previous stage '{prev_name}' is a '{prev_stage_type}' "
                 f"stage that doesn't produce a structure. Use an explicit "
-                f"'structure_from' pointing to a VASP stage."
+                f"'structure_from' pointing to a VASP, AIMD, or NEB stage."
             )
     else:
         # Use output structure from specific stage

@@ -35,6 +35,8 @@ HUBBARD_ANALYSIS_PORTS = _connections.HUBBARD_ANALYSIS_PORTS
 AIMD_PORTS = _connections.AIMD_PORTS
 QE_PORTS = _connections.QE_PORTS
 CP2K_PORTS = _connections.CP2K_PORTS
+GENERATE_NEB_IMAGES_PORTS = _connections.GENERATE_NEB_IMAGES_PORTS
+NEB_PORTS = _connections.NEB_PORTS
 validate_connections = _connections.validate_connections
 _validate_port_types = _connections._validate_port_types
 _evaluate_conditional = _connections._evaluate_conditional
@@ -163,6 +165,56 @@ def hubbard_analysis_stage():
     }
 
 
+@pytest.fixture
+def relax_initial_stage():
+    """Initial endpoint VASP relaxation stage."""
+    return {
+        'name': 'relax_initial',
+        'type': 'vasp',
+        'incar': {'encut': 520, 'nsw': 100, 'ibrion': 2, 'isif': 2},
+        'restart': None,
+    }
+
+
+@pytest.fixture
+def relax_final_stage():
+    """Final endpoint VASP relaxation stage."""
+    return {
+        'name': 'relax_final',
+        'type': 'vasp',
+        'incar': {'encut': 520, 'nsw': 100, 'ibrion': 2, 'isif': 2},
+        'restart': None,
+    }
+
+
+@pytest.fixture
+def generate_neb_images_stage():
+    """generate_neb_images stage with VASP endpoint refs."""
+    return {
+        'name': 'make_images',
+        'type': 'generate_neb_images',
+        'initial_from': 'relax_initial',
+        'final_from': 'relax_final',
+        'n_images': 5,
+        'method': 'idpp',
+        'mic': True,
+    }
+
+
+@pytest.fixture
+def neb_stage():
+    """NEB stage using generated images."""
+    return {
+        'name': 'neb_stage_1',
+        'type': 'neb',
+        'initial_from': 'relax_initial',
+        'final_from': 'relax_final',
+        'images_from': 'make_images',
+        'incar': {'encut': 520, 'ediff': 1e-6, 'ibrion': 3, 'nsw': 150},
+        'restart': None,
+    }
+
+
 # ---------------------------------------------------------------------------
 # TestPortTypeRegistry
 # ---------------------------------------------------------------------------
@@ -200,6 +252,19 @@ class TestPortTypeRegistry:
         for port_name, port in HUBBARD_ANALYSIS_PORTS['outputs'].items():
             assert port['type'] in PORT_TYPES, \
                 f"Hubbard analysis output '{port_name}' has unrecognized type '{port['type']}'"
+
+    def test_neb_images_port_type_registered(self):
+        assert 'neb_images' in PORT_TYPES
+
+    def test_all_generate_neb_images_output_types_recognized(self):
+        for port_name, port in GENERATE_NEB_IMAGES_PORTS['outputs'].items():
+            assert port['type'] in PORT_TYPES, \
+                f"generate_neb_images output '{port_name}' has unrecognized type '{port['type']}'"
+
+    def test_all_neb_output_types_recognized(self):
+        for port_name, port in NEB_PORTS['outputs'].items():
+            assert port['type'] in PORT_TYPES, \
+                f"neb output '{port_name}' has unrecognized type '{port['type']}'"
 
     def test_typo_in_port_type_caught(self):
         """A misspelled type should be caught by _validate_port_types."""
@@ -335,6 +400,29 @@ class TestPortDeclarations:
         inputs = HUBBARD_ANALYSIS_PORTS['inputs']
         assert 'ground_state_occupation' in inputs
         assert inputs['ground_state_occupation']['required'] is True
+
+    def test_generate_neb_images_has_single_output(self):
+        assert len(GENERATE_NEB_IMAGES_PORTS['outputs']) == 1
+        assert 'images' in GENERATE_NEB_IMAGES_PORTS['outputs']
+        assert GENERATE_NEB_IMAGES_PORTS['outputs']['images']['type'] == 'neb_images'
+
+    def test_generate_neb_images_has_two_endpoint_inputs(self):
+        inputs = GENERATE_NEB_IMAGES_PORTS['inputs']
+        assert set(inputs.keys()) == {'initial_structure', 'final_structure'}
+        assert inputs['initial_structure']['source'] == 'initial_from'
+        assert inputs['final_structure']['source'] == 'final_from'
+
+    def test_neb_has_endpoint_and_restart_inputs(self):
+        inputs = NEB_PORTS['inputs']
+        for key in ('initial_structure', 'final_structure', 'images', 'restart_folder'):
+            assert key in inputs
+        assert inputs['images']['source'] == 'images_from'
+        assert inputs['restart_folder']['source'] == 'restart'
+
+    def test_neb_core_outputs_declared(self):
+        outputs = NEB_PORTS['outputs']
+        for key in ('structure', 'misc', 'remote_folder', 'retrieved'):
+            assert key in outputs
 
 
 # ---------------------------------------------------------------------------
@@ -904,6 +992,133 @@ class TestValidateConnectionsHubbard:
             validate_connections([relax_stage, ground_state_stage,
                                   hubbard_response_stage,
                                   hubbard_analysis_stage, analysis2])
+
+
+# ---------------------------------------------------------------------------
+# TestValidateConnectionsNeb
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestValidateConnectionsNeb:
+    """NEB and generate_neb_images connection validation tests."""
+
+    def test_vasp_to_neb_pipeline_passes(
+        self,
+        relax_initial_stage,
+        relax_final_stage,
+        generate_neb_images_stage,
+        neb_stage,
+    ):
+        stages = [
+            relax_initial_stage,
+            relax_final_stage,
+            generate_neb_images_stage,
+            neb_stage,
+        ]
+        warnings = validate_connections(stages)
+        assert isinstance(warnings, list)
+
+    def test_generate_neb_images_wrong_endpoint_brick_rejected(
+        self,
+        relax_final_stage,
+        aimd_stage,
+        generate_neb_images_stage,
+    ):
+        bad_gen = {
+            **generate_neb_images_stage,
+            'initial_from': 'equilibration',
+        }
+        with pytest.raises(ValueError, match="compatible with bricks.*vasp"):
+            validate_connections([aimd_stage, relax_final_stage, bad_gen])
+
+    def test_neb_missing_image_source_rejected(
+        self,
+        relax_initial_stage,
+        relax_final_stage,
+    ):
+        neb_missing = {
+            'name': 'neb_stage_1',
+            'type': 'neb',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'incar': {'encut': 520, 'ibrion': 3, 'nsw': 100},
+        }
+        with pytest.raises(ValueError, match="exactly one of 'images_from' or 'images_dir'"):
+            validate_connections([relax_initial_stage, relax_final_stage, neb_missing])
+
+    def test_neb_both_image_sources_rejected(
+        self,
+        relax_initial_stage,
+        relax_final_stage,
+        generate_neb_images_stage,
+        neb_stage,
+    ):
+        bad_neb = {
+            **neb_stage,
+            'images_dir': './neb_images',
+        }
+        with pytest.raises(ValueError, match="exactly one of 'images_from' or 'images_dir'"):
+            validate_connections([
+                relax_initial_stage,
+                relax_final_stage,
+                generate_neb_images_stage,
+                bad_neb,
+            ])
+
+    def test_neb_forward_reference_rejected(
+        self,
+        relax_initial_stage,
+        relax_final_stage,
+        generate_neb_images_stage,
+        neb_stage,
+    ):
+        forward_neb = {
+            **neb_stage,
+            'images_from': 'images_late',
+        }
+        images_late = {
+            **generate_neb_images_stage,
+            'name': 'images_late',
+        }
+        with pytest.raises(ValueError, match="unknown stage"):
+            validate_connections([
+                relax_initial_stage,
+                relax_final_stage,
+                forward_neb,
+                images_late,
+            ])
+
+    def test_neb_restart_from_non_neb_stage_rejected(
+        self,
+        relax_initial_stage,
+        relax_final_stage,
+        generate_neb_images_stage,
+        neb_stage,
+    ):
+        bad_neb = {
+            **neb_stage,
+            'restart': 'relax_final',
+        }
+        with pytest.raises(ValueError, match="compatible with bricks.*neb"):
+            validate_connections([
+                relax_initial_stage,
+                relax_final_stage,
+                generate_neb_images_stage,
+                bad_neb,
+            ])
+
+    def test_neb_images_from_wrong_stage_type_rejected(
+        self,
+        relax_initial_stage,
+        relax_final_stage,
+        neb_stage,
+    ):
+        bad_neb = {
+            **neb_stage,
+            'images_from': 'relax_final',
+        }
+        with pytest.raises(ValueError, match="needs type 'neb_images'"):
+            validate_connections([relax_initial_stage, relax_final_stage, bad_neb])
 
 
 # ---------------------------------------------------------------------------
@@ -1692,4 +1907,3 @@ class TestValidateConnectionsCp2k:
             'restart': None, 'structure_from': 'geo_opt',
         }
         validate_connections([cp2k_geo_opt_stage, vasp_scf])
-

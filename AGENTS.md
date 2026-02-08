@@ -10,14 +10,21 @@ source ~/envs/aiida/bin/activate
 verdi profile set-default presto
 verdi daemon restart  # CRITICAL: after any code changes
 
-# Testing
+# Testing (three tiers)
+pytest tests/ -m tier1 -v                     # Tier1: Pure Python tests (fast, no AiiDA)
+pytest tests/ -m tier2 -v                     # Tier2: AiiDA integration (no VASP, ~5-10 min)
+pytest tests/ -m tier3 -v                     # Tier3: Real VASP results (requires pre-computed PKs)
 pytest tests/ -v                              # Run all tests
-pytest tests/test_imports.py -v               # Run specific test file
-pytest tests/ -m tier1 -v                     # Fast unit tests (no AiiDA needed)
-pytest tests/ -m "not slow" -v                # Exclude slow tests
+pytest tests/test_lego_*_integration.py -m tier2 -v  # Tier2 for lego module
+
+# Tier3 reference generation (lego module)
+python tests/generate_lego_references.py --code VASP-6.5.1@localwork  # Generate references
+python tests/generate_lego_references.py --status                     # Check status
+python tests/generate_lego_references.py --wait                       # Wait for completion
 
 # Linting (matches CI)
 flake8 teros/ --max-line-length=120 --ignore=E501,W503,E402,F401
+flake8 tests/ --max-line-length=120 --ignore=E501,W503,E402,F401
 
 # Workflow monitoring
 verdi process show <PK>                       # Show workflow status
@@ -190,7 +197,12 @@ teros/core/
         ├── convergence.py     # Convergence brick (ENCUT/k-points testing)
         ├── thickness.py       # Thickness brick (slab thickness convergence)
         ├── hubbard_response.py # Hubbard U response calculations (NSCF + SCF)
-        └── hubbard_analysis.py # Hubbard U regression and summary
+        ├── hubbard_analysis.py # Hubbard U regression and summary
+        ├── aimd.py            # Ab initio molecular dynamics
+        ├── qe.py              # Quantum ESPRESSO (PwBaseWorkChain)
+        ├── cp2k.py            # CP2K (Cp2kBaseWorkChain)
+        ├── generate_neb_images.py # NEB image interpolation/generation
+        └── neb.py             # NEB workflow wrapper (vasp.neb)
 ```
 
 **Submodule pattern:**
@@ -241,6 +253,11 @@ print_stage_results()    # Format results for display
 | `thickness` | `bricks/thickness.py` | Slab thickness convergence testing |
 | `hubbard_response` | `bricks/hubbard_response.py` | Hubbard U response calculations (NSCF + SCF per potential) |
 | `hubbard_analysis` | `bricks/hubbard_analysis.py` | Hubbard U linear regression and summary |
+| `aimd` | `bricks/aimd.py` | Ab initio molecular dynamics (IBRION=0) |
+| `qe` | `bricks/qe.py` | Quantum ESPRESSO pw.x calculations (SCF, relax, vc-relax) |
+| `cp2k` | `bricks/cp2k.py` | CP2K calculations (ENERGY, GEO_OPT, CELL_OPT, MD) |
+| `generate_neb_images` | `bricks/generate_neb_images.py` | Generate intermediate NEB images from relaxed VASP endpoints |
+| `neb` | `bricks/neb.py` | Run `vasp.neb` with images from generator stage or local folder |
 
 ### Port System (`connections.py`)
 
@@ -255,7 +272,7 @@ from teros.core.lego.bricks.connections import (
 )
 ```
 
-**Port types:** `structure`, `energy`, `misc`, `remote_folder`, `retrieved`, `dos_data`, `projectors`, `bader_charges`, `trajectory`, `convergence`, `file`, `hubbard_responses`, `hubbard_occupation`, `hubbard_result`
+**Port types:** `structure`, `energy`, `misc`, `remote_folder`, `retrieved`, `dos_data`, `projectors`, `bader_charges`, `trajectory`, `convergence`, `file`, `hubbard_responses`, `hubbard_occupation`, `hubbard_result`, `neb_images`
 
 **Source resolution modes:**
 - `'auto'` -- VASP structure: first stage uses initial, then `'previous'`/`'input'`/explicit stage name
@@ -285,6 +302,9 @@ from teros.core.lego.bricks.connections import (
 | `quick_dos(...)` | Single DOS calculation (SCF + DOS) |
 | `quick_dos_batch(...)` | Multiple parallel DOS calcs |
 | `quick_hubbard_u(...)` | Hubbard U calculation (ground state + response + analysis) |
+| `quick_aimd(...)` | AIMD simulation (molecular dynamics) |
+| `quick_qe(...)` | Single QE pw.x calculation |
+| `quick_qe_sequential(...)` | Multi-stage QE pipeline with restart chaining |
 | `get_results(pk)` | Extract results from single calc |
 | `get_sequential_results(result)` | Extract all stage results |
 | `get_stage_results(result, name)` | Extract one stage's results |
@@ -295,7 +315,7 @@ from teros.core.lego.bricks.connections import (
 Convenience functions for common workflows:
 
 ```python
-from teros.core.lego import quick_vasp, quick_dos, quick_hubbard_u, quick_vasp_sequential
+from teros.core.lego import quick_vasp, quick_dos, quick_hubbard_u, quick_qe, quick_vasp_sequential
 
 # Single VASP calculation
 wg = quick_vasp(structure, code_label, incar={...})
@@ -312,6 +332,47 @@ wg = quick_hubbard_u(
     potential_values=[-0.2, -0.1, 0.1, 0.2],  # Default
     ldaul=2,  # 2=d-electrons, 3=f-electrons
 )
+
+# Single QE calculation
+pk = quick_qe(
+    structure=structure,
+    code_label='pw@localhost',
+    parameters={'CONTROL': {'calculation': 'scf'}, 'SYSTEM': {'ecutwfc': 50}},
+    pseudo_family='SSSP/1.3/PBE/efficiency',
+    kpoints_spacing=0.15,
+    options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 4}},
+)
+
+```
+
+### Thickness Brick
+
+The `thickness` brick wraps the slab thickness convergence workflow from
+`teros.core.convergence`. It generates slabs at multiple thicknesses,
+relaxes them, computes surface energies, and checks convergence.
+
+**Two input modes:**
+
+1. **From a previous VASP stage** (recommended): provide both
+   `structure_from` and `energy_from` pointing at a bulk relaxation stage.
+2. **Standalone:** omit both `structure_from` and `energy_from`, and provide
+   `bulk_incar` to run a bulk relaxation inside the thickness stage.
+
+**Required fields:**
+- `miller_indices`: list of 3 integers (e.g., `[1, 1, 0]`)
+- `layer_counts`: list of at least 2 positive integers (e.g., `[3, 5, 7]`)
+
+**Common optional fields:**
+- `convergence_threshold` (J/m^2, default `0.01`)
+- `slab_incar`, `slab_kpoints_spacing`
+- `min_vacuum_thickness` (default `15.0`)
+- `lll_reduce`, `center_slab`, `primitive`, `termination_index`
+- `bulk_incar`, `bulk_kpoints_spacing` (standalone only)
+
+**Outputs:**
+- `convergence_results` (Dict) with per-thickness energies and a summary.
+
+**Example:** see `examples/lego/thickness/run_thickness_sno2.py`.
 ```
 
 ### Sequential Workflows
@@ -410,6 +471,17 @@ s04_fukui_minus_calcs_2x2
 | `dos` | `s{N}_{name}.scf.{misc,remote,retrieved}` + `s{N}_{name}.dos.{misc,remote,retrieved}` |
 | `batch` | `s{N}_{name}.batch.{calc_label}.{energy,misc,remote,retrieved}` |
 
+### AIMD Brick Status (2026-02-06)
+
+The AIMD VASP brick is working great now for multi-stage MD workflows.
+
+- Trajectory positions are normalized to Cartesian coordinates before exposure/concatenation.
+- Combined trajectory output uses indexed naming: `s{N+1:02d}_combined_trajectory`
+  (example: after 6 AIMD stages, output is `s07_combined_trajectory`).
+- Velocity continuation across AIMD restart stages is supported via POSCAR velocity injection.
+- Viewer helper script available at `~/.local/bin/trajview`:
+  `trajview <TrajectoryData_PK>` opens the trajectory in ASE view.
+
 ### Hubbard U Stage Configuration
 
 The Hubbard U workflow uses two brick types that wrap `teros.core.u_calculation`:
@@ -475,7 +547,217 @@ energy = misc_dict['total_energies']['energy_extrapolated']  # Recommended
 
 ## Testing
 
-### Testing Environment by Location
+The PS-TEROS testing framework uses a **three-tier strategy** optimized for development efficiency and validation:
+
+### Tier1 - Pure Python Unit Tests (Fast, No AiiDA)
+
+**Purpose:** Validate pure Python logic, parsing, validation, and utility functions without needing AiiDA or VASP.
+
+**Characteristics:**
+- No AiiDA profile required
+- Run in seconds
+- No external dependencies
+- Test file parsing, data structures, algorithms, business logic
+- Examples: port type definitions, connection validation, parameter merging
+
+**Run all tier1 tests:**
+```bash
+pytest tests/ -m tier1 -v
+```
+
+**Run tier1 for a specific module (e.g., lego):**
+```bash
+pytest tests/test_lego_connections.py tests/test_lego_bricks.py -m tier1 -v
+```
+
+**Files with tier1 tests:**
+- `tests/test_lego_connections.py` — port type registry, PORTS declarations, connection validation
+- `tests/test_lego_bricks.py` — validate_stage() for all brick types, parser utilities
+- `tests/test_lego_concurrent_and_outputs.py` — output naming helpers
+- `tests/test_pure_functions.py` — miscellaneous pure Python logic
+
+### Tier2 - AiiDA Integration Tests (Real Nodes, No VASP)
+
+**Purpose:** Validate AiiDA WorkGraph construction, calcfunction behavior, and result extraction against mock data without running VASP calculations.
+
+**Characteristics:**
+- Requires AiiDA profile (but no VASP code)
+- Runs in 5-10 minutes
+- Creates real AiiDA nodes (Dict, StructureData, Float, etc.)
+- Runs calcfunctions via WorkGraph.run() with synthetic inputs
+- Validates WorkGraph task creation and output wiring
+- Tests result extraction logic on real nodes
+- Example: test `extract_energy()` calcfunction with mock `misc` Dict
+
+**Run all tier2 tests:**
+```bash
+pytest tests/ -m tier2 -v
+```
+
+**Run tier2 for lego module:**
+```bash
+pytest tests/test_lego_*_integration.py -m tier2 -v
+```
+
+**Key tier2 test classes:**
+- `TestVaspExtractEnergy` — mock VASP outputs, test energy extraction
+- `TestVaspComputeDynamics` — selective dynamics bitmasks
+- `TestDosValidation` — DOS brick parameter validation
+- `TestBatchValidation` — batch stage configuration checks
+- `TestAimdFractionalDetection` — trajectory coordinate conversion
+- `TestAimdEnsureCartesianTrajectory` — WorkGraph calcfunction tests
+- `TestSequentialValidation` — multi-stage pipeline validation
+
+### Tier3 - End-to-End Tests (Pre-Computed VASP Results)
+
+**Purpose:** Validate result extraction and post-processing against real VASP calculations without re-running them.
+
+**Characteristics:**
+- Requires AiiDA profile with pre-computed VASP results
+- Runs in seconds (loads existing PKs)
+- Tests result extraction: `get_results()`, `get_dos_results()`, `get_sequential_results()`, `get_stage_results()`
+- Validates output schemas (energy, structure, files, trajectory, etc.)
+- Checks result consistency (e.g., relax energy vs SCF energy agreement)
+- Skips gracefully if reference PKs not available
+- **Status (2026-02-06):** 30 tier3 tests passing, 6 reference calculations generated (vasp: 2, dos: 1, batch: 1, aimd: 1, sequential: 1)
+
+#### Tier3 Test Structure
+
+Reference calculations are stored as PKs in `tests/fixtures/lego_reference_pks.json`:
+
+```json
+{
+    "vasp": {
+        "relax_si": {"pk": 43119, "code_label": "VASP-6.5.1@localwork"},
+        "scf_sno2": {"pk": 43125, "code_label": "VASP-6.5.1@localwork"}
+    },
+    "dos": {
+        "dos_sno2": {"pk": 43196, ...}
+    },
+    "batch": {
+        "batch_si_encut": {"pk": 43351, ..., "stage_names": ["encut_scan"], ...}
+    },
+    "aimd": {
+        "aimd_si": {"pk": 43408, ..., "stage_names": ["md_short_md_0"], ...}
+    },
+    "sequential": {
+        "relax_then_scf_si": {"pk": 43444, ..., "stage_names": ["relax", "scf"], ...}
+    }
+}
+```
+
+**Current Coverage (2026-02-06):**
+- ✅ **vasp**: 8 tier3 tests passing
+- ✅ **dos**: 5 tier3 tests passing
+- ✅ **batch**: 5 tier3 tests passing
+- ✅ **aimd**: 5 tier3 tests passing
+- ✅ **sequential**: 7 tier3 tests passing
+- ❌ **bader**: No tier2/tier3 tests yet
+- ❌ **convergence**: No tier2/tier3 tests yet
+- ❌ **thickness**: No tier2/tier3 tests yet
+- ❌ **hubbard_response**: No tier2/tier3 tests yet
+- ❌ **hubbard_analysis**: No tier2/tier3 tests yet
+- ❌ **qe**: No tier2/tier3 tests yet
+- ❌ **cp2k**: No tier2/tier3 tests yet
+- ❌ **generate_neb_images**: No tier2/tier3 tests yet
+- ❌ **neb**: No tier2/tier3 tests yet
+
+#### Generating Tier3 References
+
+Use the reference generator script to submit lightweight VASP calculations:
+
+```bash
+# Generate all references on localwork
+python tests/generate_lego_references.py --code VASP-6.5.1@localwork
+
+# Generate only VASP brick references
+python tests/generate_lego_references.py --code VASP-6.5.1@localwork --brick vasp
+
+# Check status of submitted calculations
+python tests/generate_lego_references.py --status
+
+# Wait for all calculations to finish, then save PKs
+python tests/generate_lego_references.py --wait
+```
+
+**Generator Details:**
+- Submits to `tests/generate_lego_references.py` — CLI script in repo root (not temp)
+- Uses lightweight parameters: ENCUT=200-300, kpoints_spacing=0.06, NSW=5-20
+- Saves stage metadata (stage_names, stage_types, stage_namespaces) for sequential/batch/AIMD
+- Each brick creates scenario-specific calculations:
+  - **VASP**: Si relaxation (ISIF=3) + SnO2 SCF (NSW=0)
+  - **DOS**: SnO2 SCF+DOS
+  - **Batch**: Si with 3 ENCUT values (200, 250, 300)
+  - **AIMD**: Si 5-step MD at 300K
+  - **Sequential**: Si relax → SCF pipeline
+
+#### Running Tier3 Tests
+
+```bash
+# Run all tier3 tests (skip if PKs missing)
+pytest tests/ -m tier3 -v
+
+# Run tier3 for lego module
+pytest tests/test_lego_*_integration.py -m tier3 -v
+
+# Run tier3 VASP tests
+pytest tests/test_lego_vasp_integration.py::TestVaspRelaxResultExtraction -v
+```
+
+#### Tier3 Test Classes
+
+| File | Class | Tests |
+|------|-------|-------|
+| `test_lego_vasp_integration.py` | `TestVaspRelaxResultExtraction` | energy, structure, misc, files |
+| | `TestVaspScfResultExtraction` | energy, no structure, misc |
+| `test_lego_dos_integration.py` | `TestDosResultExtraction` | energy, scf_misc, dos_misc, files, schema |
+| `test_lego_batch_integration.py` | `TestBatchResultExtraction` | schema, 3 calcs, energies differ by ENCUT |
+| `test_lego_aimd_integration.py` | `TestAimdResultExtraction` | schema, energy, trajectory dims, positions are Cartesian |
+| `test_lego_sequential_integration.py` | `TestSequentialResultExtraction` | all stages, energy+structure in relax, no structure in SCF, energy consistency |
+
+### Test Markers
+
+All tests use pytest markers for filtering:
+
+```python
+@pytest.mark.tier1              # Pure Python tests
+@pytest.mark.tier2              # AiiDA integration (no VASP)
+@pytest.mark.tier3              # End-to-end with VASP results
+@pytest.mark.requires_aiida     # Skip if AiiDA not configured
+@pytest.mark.slow               # Long-running tests
+@pytest.mark.localwork          # Tests using VASP-6.5.1@localwork
+@pytest.mark.obelix             # Tests using VASP-6.5.1-idefix-4@obelix
+```
+
+### Testing Best Practices
+
+#### 1. Development Workflow
+
+```bash
+# Phase 1: Validate logic with tier1
+pytest tests/test_lego_connections.py -m tier1 -v
+
+# Phase 2: Test AiiDA integration with tier2
+pytest tests/test_lego_vasp_integration.py -m tier2 -v
+
+# Phase 3: Validate against real results with tier3 (once references exist)
+pytest tests/test_lego_vasp_integration.py -m tier3 -v
+```
+
+#### 2. CI/CD Running
+
+The CI pipeline runs:
+```bash
+# Tier1 only (fast, always runs)
+pytest tests/ -m tier1 -v
+
+# Tier2 only (integration, with mock AiiDA)
+pytest tests/ -m tier2 -v
+
+# Tier3 skipped in CI (requires pre-computed PKs in artifact storage)
+```
+
+#### 3. Testing Environment by Location
 
 **IMPORTANT:** Choose the testing environment based on the current working directory:
 
@@ -484,7 +766,39 @@ energy = misc_dict['total_energies']['energy_extrapolated']  # Recommended
 | `/home/thiagotd` (home computer) | Jump directly to production on obelix | `VASP-6.5.1-idefix-4@obelix` |
 | `/home/trevizam` (work computer) | 1. Test locally first, then production | `vasp-6.5.1-std@localhost` → `VASP-6.5.1-idefix-4@obelix` |
 
-**Obelix cluster configuration:**
+#### 4. Code Changes → Testing Sequence
+
+When modifying code:
+
+1. **After each code change**, restart AiiDA daemon:
+   ```bash
+   verdi daemon restart
+   ```
+
+2. **Run affected tier1 tests** (seconds):
+   ```bash
+   pytest tests/test_lego_connections.py -m tier1 -v
+   ```
+
+3. **Run affected tier2 tests** (minutes):
+   ```bash
+   pytest tests/test_lego_vasp_integration.py -m tier2 -v
+   ```
+
+4. **Run tier3 if changing result extraction** (once references exist):
+   ```bash
+   pytest tests/test_lego_vasp_integration.py::TestVaspRelaxResultExtraction -m tier3 -v
+   ```
+
+### Test Cluster (localwork)
+
+```python
+code_label = 'VASP-6.5.1@localwork'
+max_concurrent_jobs = 1  # CRITICAL: localwork runs ONE job at a time
+```
+
+### Obelix Cluster Configuration
+
 ```python
 code_label = 'VASP-6.5.1-idefix-4@obelix'
 options = {
@@ -498,23 +812,6 @@ options = {
 #PBS -N MyJobName''',
 }
 potential_family = 'PBE'
-```
-
-### Test Markers
-
-```python
-@pytest.mark.tier1        # Fast unit tests (no AiiDA)
-@pytest.mark.tier2        # Integration tests (AiiDA mock)
-@pytest.mark.tier3        # End-to-end (real calculations)
-@pytest.mark.slow         # Long-running tests
-@pytest.mark.requires_aiida
-```
-
-### Test Cluster (localwork)
-
-```python
-code_label = 'VASP-6.5.1@localwork'
-max_concurrent_jobs = 1  # CRITICAL: localwork runs ONE job at a time
 ```
 
 ### Validation Checklist

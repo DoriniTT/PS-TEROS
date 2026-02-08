@@ -6,11 +6,14 @@ Lightweight, incremental VASP calculation module for exploratory work.
 
 - **Incremental**: Run one calculation at a time, inspect, decide what's next
 - **Minimal provenance**: Track via PKs manually, no complex dependency graphs
-- **Specific file retrieval**: Get exactly the files you need (CHGCAR, DOSCAR, etc.)
+- **Specific file retrieval**: Standard VASP files are always retrieved; add extras as needed
 - **Non-blocking default**: Submit and return immediately
 - **No presets**: Always specify INCAR manually for maximum flexibility
 
 ## Quick Start
+
+Standard VASP files always retrieved:
+`INCAR`, `KPOINTS`, `POTCAR`, `POSCAR`, `CONTCAR`, `OUTCAR`, `vasprun.xml`, `OSZICAR`.
 
 ```python
 from teros.core.lego import quick_vasp, get_results, get_status
@@ -24,7 +27,7 @@ pk = quick_vasp(
     potential_family='PBE',
     potential_mapping={'Sn': 'Sn_d', 'O': 'O'},
     options={'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},
-    retrieve=['CONTCAR', 'CHGCAR'],
+    retrieve=['CHGCAR'],  # Extras (standard VASP files are always retrieved)
     name='sno2_relax',
 )
 
@@ -53,7 +56,7 @@ pk = quick_vasp(
     potential_family='PBE',        # POTCAR family
     potential_mapping={'Sn': 'Sn_d'},
     options={'resources': {...}},   # Scheduler options (required)
-    retrieve=['CONTCAR', 'CHGCAR'], # Files to retrieve
+    retrieve=['CHGCAR'],            # Extra files to retrieve (merged with defaults)
     restart_from=None,              # PK to restart from
     copy_wavecar=True,              # Copy WAVECAR on restart
     copy_chgcar=False,              # Copy CHGCAR on restart
@@ -75,7 +78,7 @@ pks = quick_vasp_batch(
         'defect': {'NELECT': 191.95},
     },
     max_concurrent_jobs=4,         # Limit parallel jobs
-    retrieve=['CHGCAR'],
+    retrieve=['CHGCAR'],  # Extra files to retrieve (merged with defaults)
     name='batch_calc',
 )
 ```
@@ -96,7 +99,7 @@ pk = quick_dos(
     potential_family='PBE',
     potential_mapping={'Sn': 'Sn_d', 'O': 'O'},
     options={'resources': {...}},
-    retrieve=['DOSCAR'],           # Files to retrieve
+    retrieve=['DOSCAR'],           # Extra files to retrieve (merged with defaults)
     name='sno2_dos',
 )
 ```
@@ -306,6 +309,51 @@ for key, r in results.items():
     print(f"{key}: E = {r['energy']:.4f} eV")
 ```
 
+## Sequential NEB Stages
+
+`quick_vasp_sequential` now supports two NEB-focused stage types:
+
+- `generate_neb_images`: generate intermediate images from two relaxed VASP endpoints
+- `neb`: run `vasp.neb` using either generated images (`images_from`) or folder images (`images_dir`)
+
+Minimal pattern:
+
+```python
+from teros.core.lego import quick_vasp_sequential
+
+stages = [
+    {'name': 'relax_initial', 'type': 'vasp', 'structure': initial, 'incar': relax_incar, 'restart': None},
+    {'name': 'relax_final', 'type': 'vasp', 'structure': final, 'incar': relax_incar, 'restart': None},
+    {
+        'name': 'make_images',
+        'type': 'generate_neb_images',
+        'initial_from': 'relax_initial',
+        'final_from': 'relax_final',
+        'n_images': 5,
+    },
+    {
+        'name': 'neb_stage_1',
+        'type': 'neb',
+        'initial_from': 'relax_initial',
+        'final_from': 'relax_final',
+        'images_from': 'make_images',  # xor images_dir
+        'incar': {'ibrion': 3, 'nsw': 120, 'iopt': 3, 'spring': -5},
+        'restart': None,
+    },
+    {
+        'name': 'neb_stage_2_ci',
+        'type': 'neb',
+        'initial_from': 'relax_initial',
+        'final_from': 'relax_final',
+        'images_from': 'make_images',
+        'incar': {'ibrion': 3, 'nsw': 120, 'iopt': 3, 'spring': -5, 'lclimb': True},
+        'restart': 'neb_stage_1',
+    },
+]
+
+result = quick_vasp_sequential(structure=initial, stages=stages, ...)
+```
+
 ## Module Structure
 
 ```
@@ -317,10 +365,20 @@ teros/core/lego/
 ├── results.py       # Result extraction (thin dispatcher)
 ├── bricks/          # Stage type modules
 │   ├── __init__.py  # Brick registry + shared helpers
+│   ├── connections.py # PORTS/connection validation (pure Python)
 │   ├── vasp.py      # VASP brick
 │   ├── dos.py       # DOS brick
 │   ├── batch.py     # Batch brick
-│   └── bader.py     # Bader brick
+│   ├── bader.py     # Bader brick
+│   ├── convergence.py # Convergence brick
+│   ├── thickness.py # Thickness brick
+│   ├── hubbard_response.py # Hubbard response brick
+│   ├── hubbard_analysis.py # Hubbard analysis brick
+│   ├── aimd.py      # AIMD brick
+│   ├── qe.py        # QE brick
+│   ├── cp2k.py      # CP2K brick
+│   ├── generate_neb_images.py # NEB image generator brick
+│   └── neb.py       # vasp.neb brick
 └── README.md        # This file
 ```
 

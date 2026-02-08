@@ -1,7 +1,7 @@
 """
 Slab thickness convergence test: SnO2 (110) surface.
 
-Two-stage pipeline:
+Two-stage pipeline on obelix cluster:
   1. Bulk relaxation (VASP)
   2. Thickness convergence (generates slabs at multiple thicknesses,
      relaxes them, computes surface energies, checks convergence)
@@ -24,15 +24,19 @@ load_profile()
 # ============================================================================
 
 STRUCTURE_FILE = Path(__file__).parent.parent / 'convergence' / 'sno2.vasp'
-CODE_LABEL = 'VASP-6.5.1@localwork'
+CODE_LABEL = 'VASP-6.5.1-idefix-4@obelix'
 POTENTIAL_FAMILY = 'PBE'
 POTENTIAL_MAPPING = {'Sn': 'Sn_d', 'O': 'O'}
 
 OPTIONS = {
     'resources': {
         'num_machines': 1,
-        'num_mpiprocs_per_machine': 8,
+        'num_mpiprocs_per_machine': 4,
     },
+    'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
+#PBS -l nodes=1:ppn=88:skylake
+#PBS -j oe
+#PBS -N thickness_sno2''',
 }
 
 # ============================================================================
@@ -111,7 +115,7 @@ if __name__ == '__main__':
         potential_family=POTENTIAL_FAMILY,
         potential_mapping=POTENTIAL_MAPPING,
         options=OPTIONS,
-        max_concurrent_jobs=1,  # CRITICAL: localwork runs ONE job at a time
+        max_concurrent_jobs=4,  # obelix can handle multiple concurrent jobs
         name='sno2_thickness_convergence',
     )
 

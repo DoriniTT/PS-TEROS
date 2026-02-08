@@ -44,6 +44,32 @@ def valid_bader_stage():
 
 
 @pytest.fixture
+def valid_generate_neb_images_stage():
+    return {
+        'name': 'make_images',
+        'type': 'generate_neb_images',
+        'initial_from': 'relax_initial',
+        'final_from': 'relax_final',
+        'n_images': 5,
+        'method': 'idpp',
+        'mic': True,
+    }
+
+
+@pytest.fixture
+def valid_neb_stage():
+    return {
+        'name': 'neb_stage1',
+        'type': 'neb',
+        'initial_from': 'relax_initial',
+        'final_from': 'relax_final',
+        'images_from': 'make_images',
+        'incar': {'encut': 520, 'ediff': 1e-6, 'ibrion': 3},
+        'restart': None,
+    }
+
+
+@pytest.fixture
 def valid_hubbard_response_stage():
     return {
         'name': 'response', 'type': 'hubbard_response',
@@ -88,11 +114,15 @@ class TestBrickRegistry:
 
     def test_valid_brick_types_tuple(self):
         from teros.core.lego.bricks import VALID_BRICK_TYPES
-        assert VALID_BRICK_TYPES == ('vasp', 'dos', 'batch', 'bader', 'convergence', 'thickness', 'hubbard_response', 'hubbard_analysis', 'aimd', 'qe', 'cp2k')
+        assert VALID_BRICK_TYPES == (
+            'vasp', 'dos', 'batch', 'bader', 'convergence', 'thickness',
+            'hubbard_response', 'hubbard_analysis', 'aimd', 'qe', 'cp2k',
+            'generate_neb_images', 'neb',
+        )
 
-    def test_registry_has_eleven_entries(self):
+    def test_registry_has_thirteen_entries(self):
         from teros.core.lego.bricks import BRICK_REGISTRY
-        assert len(BRICK_REGISTRY) == 11
+        assert len(BRICK_REGISTRY) == 13
 
     def test_get_brick_module_valid_types(self):
         from teros.core.lego.bricks import get_brick_module, VALID_BRICK_TYPES
@@ -393,6 +423,359 @@ class TestBaderValidateStage:
     def test_charge_from_valid_passes(self):
         stage = {'name': 'bader', 'charge_from': 'relax'}
         self._validate(stage, stage_names={'relax'})
+
+
+# ---------------------------------------------------------------------------
+# TestGenerateNebImagesValidateStage
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestGenerateNebImagesValidateStage:
+    """Tests for teros.core.lego.bricks.generate_neb_images.validate_stage()."""
+
+    def _validate(self, stage, stage_names=None):
+        from teros.core.lego.bricks.generate_neb_images import validate_stage
+        if stage_names is None:
+            stage_names = set()
+        validate_stage(stage, stage_names)
+
+    def test_valid_passes(self, valid_generate_neb_images_stage):
+        self._validate(
+            valid_generate_neb_images_stage,
+            stage_names={'relax_initial', 'relax_final'},
+        )
+
+    def test_missing_initial_from_raises(self):
+        stage = {
+            'name': 'make_images',
+            'type': 'generate_neb_images',
+            'final_from': 'relax_final',
+            'n_images': 5,
+        }
+        with pytest.raises(ValueError, match="initial_from"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_missing_final_from_raises(self):
+        stage = {
+            'name': 'make_images',
+            'type': 'generate_neb_images',
+            'initial_from': 'relax_initial',
+            'n_images': 5,
+        }
+        with pytest.raises(ValueError, match="final_from"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_missing_n_images_raises(self):
+        stage = {
+            'name': 'make_images',
+            'type': 'generate_neb_images',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+        }
+        with pytest.raises(ValueError, match="n_images"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_initial_from_unknown_raises(self):
+        stage = {
+            'name': 'make_images',
+            'type': 'generate_neb_images',
+            'initial_from': 'unknown',
+            'final_from': 'relax_final',
+            'n_images': 5,
+        }
+        with pytest.raises(ValueError, match="previous stage"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_final_from_unknown_raises(self):
+        stage = {
+            'name': 'make_images',
+            'type': 'generate_neb_images',
+            'initial_from': 'relax_initial',
+            'final_from': 'unknown',
+            'n_images': 5,
+        }
+        with pytest.raises(ValueError, match="previous stage"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_n_images_zero_raises(self):
+        stage = {
+            'name': 'make_images',
+            'type': 'generate_neb_images',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'n_images': 0,
+        }
+        with pytest.raises(ValueError, match="positive integer"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_n_images_non_int_raises(self):
+        stage = {
+            'name': 'make_images',
+            'type': 'generate_neb_images',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'n_images': 2.5,
+        }
+        with pytest.raises(ValueError, match="positive integer"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_method_invalid_raises(self):
+        stage = {
+            'name': 'make_images',
+            'type': 'generate_neb_images',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'n_images': 5,
+            'method': 'cubic',
+        }
+        with pytest.raises(ValueError, match="method"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_mic_non_bool_raises(self):
+        stage = {
+            'name': 'make_images',
+            'type': 'generate_neb_images',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'n_images': 5,
+            'mic': 1,
+        }
+        with pytest.raises(ValueError, match="mic"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+
+# ---------------------------------------------------------------------------
+# TestNebValidateStage
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestNebValidateStage:
+    """Tests for teros.core.lego.bricks.neb.validate_stage()."""
+
+    def _validate(self, stage, stage_names=None):
+        from teros.core.lego.bricks.neb import validate_stage
+        if stage_names is None:
+            stage_names = set()
+        validate_stage(stage, stage_names)
+
+    def test_valid_with_images_from_passes(self, valid_neb_stage):
+        self._validate(
+            valid_neb_stage,
+            stage_names={'relax_initial', 'relax_final', 'make_images'},
+        )
+
+    def test_valid_with_images_dir_passes(self):
+        stage = {
+            'name': 'neb_stage1',
+            'type': 'neb',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'images_dir': './neb_images',
+            'incar': {'encut': 520, 'ediff': 1e-6, 'ibrion': 3},
+            'restart': None,
+        }
+        self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_missing_initial_from_raises(self):
+        stage = {
+            'name': 'neb_stage1',
+            'type': 'neb',
+            'final_from': 'relax_final',
+            'images_from': 'make_images',
+            'incar': {'encut': 520},
+        }
+        with pytest.raises(ValueError, match="initial_from"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final', 'make_images'})
+
+    def test_missing_final_from_raises(self):
+        stage = {
+            'name': 'neb_stage1',
+            'type': 'neb',
+            'initial_from': 'relax_initial',
+            'images_from': 'make_images',
+            'incar': {'encut': 520},
+        }
+        with pytest.raises(ValueError, match="final_from"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final', 'make_images'})
+
+    def test_missing_incar_raises(self):
+        stage = {
+            'name': 'neb_stage1',
+            'type': 'neb',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'images_from': 'make_images',
+        }
+        with pytest.raises(ValueError, match="incar"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final', 'make_images'})
+
+    def test_incar_not_dict_raises(self):
+        stage = {
+            'name': 'neb_stage1',
+            'type': 'neb',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'images_from': 'make_images',
+            'incar': 'encut=520',
+        }
+        with pytest.raises(ValueError, match="incar"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final', 'make_images'})
+
+    def test_missing_both_image_sources_raises(self):
+        stage = {
+            'name': 'neb_stage1',
+            'type': 'neb',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'incar': {'encut': 520},
+        }
+        with pytest.raises(ValueError, match="exactly one"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_both_image_sources_raises(self):
+        stage = {
+            'name': 'neb_stage1',
+            'type': 'neb',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'images_from': 'make_images',
+            'images_dir': './neb_images',
+            'incar': {'encut': 520},
+        }
+        with pytest.raises(ValueError, match="exactly one"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final', 'make_images'})
+
+    def test_images_from_unknown_raises(self):
+        stage = {
+            'name': 'neb_stage1',
+            'type': 'neb',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'images_from': 'unknown',
+            'incar': {'encut': 520},
+        }
+        with pytest.raises(ValueError, match="previous stage"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_images_dir_empty_raises(self):
+        stage = {
+            'name': 'neb_stage1',
+            'type': 'neb',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'images_dir': '',
+            'incar': {'encut': 520},
+        }
+        with pytest.raises(ValueError, match="images_dir"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final'})
+
+    def test_restart_unknown_raises(self):
+        stage = {
+            'name': 'neb_stage2',
+            'type': 'neb',
+            'initial_from': 'relax_initial',
+            'final_from': 'relax_final',
+            'images_from': 'make_images',
+            'incar': {'encut': 520},
+            'restart': 'unknown',
+        }
+        with pytest.raises(ValueError, match="previous stage"):
+            self._validate(stage, stage_names={'relax_initial', 'relax_final', 'make_images'})
+
+
+# ---------------------------------------------------------------------------
+# TestNebLclimbHandling
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestNebLclimbHandling:
+    """Tests for NEB LCLIMB compatibility helpers."""
+
+    def test_extract_lclimb_from_incar_removes_key_and_returns_bool(self):
+        from teros.core.lego.bricks.neb import _extract_lclimb_from_incar
+
+        clean_incar, lclimb = _extract_lclimb_from_incar(
+            {'encut': 520, 'ibrion': 3, 'lclimb': True}
+        )
+
+        assert lclimb is True
+        assert 'lclimb' not in clean_incar
+        assert clean_incar['encut'] == 520
+
+    def test_extract_lclimb_from_incar_accepts_string_bool(self):
+        from teros.core.lego.bricks.neb import _extract_lclimb_from_incar
+
+        clean_incar, lclimb = _extract_lclimb_from_incar(
+            {'encut': 520, 'LCLIMB': '.TRUE.'}
+        )
+
+        assert lclimb is True
+        assert 'LCLIMB' not in clean_incar
+
+    def test_extract_lclimb_from_incar_invalid_value_raises(self):
+        from teros.core.lego.bricks.neb import _extract_lclimb_from_incar
+
+        with pytest.raises(ValueError, match="LCLIMB"):
+            _extract_lclimb_from_incar({'encut': 520, 'lclimb': [1]})
+
+    def test_inject_lclimb_prepend_text_appends_command(self):
+        from teros.core.lego.bricks.neb import _inject_lclimb_prepend_text
+
+        options = {'resources': {'num_machines': 1}, 'prepend_text': 'module load vasp'}
+        updated = _inject_lclimb_prepend_text(options, True)
+
+        assert 'prepend_text' in updated
+        assert 'module load vasp' in updated['prepend_text']
+        assert 'echo LCLIMB=.TRUE. >> INCAR' in updated['prepend_text']
+
+    def test_inject_lclimb_prepend_text_none_keeps_options(self):
+        from teros.core.lego.bricks.neb import _inject_lclimb_prepend_text
+
+        options = {'resources': {'num_machines': 1}}
+        updated = _inject_lclimb_prepend_text(options, None)
+
+        assert updated == options
+
+    def test_build_neb_parser_settings_includes_required_outputs(self):
+        from teros.core.lego.bricks.neb import _build_neb_parser_settings
+
+        settings = _build_neb_parser_settings()
+        parser = settings['parser_settings']
+
+        assert parser['add_energy'] is True
+        assert parser['add_trajectory'] is True
+        assert parser['add_structure'] is True
+        assert parser['add_kpoints'] is True
+        assert 'trajectory' in parser['include_node']
+        assert 'structure' in parser['include_node']
+        assert 'kpoints' in parser['include_node']
+
+    def test_build_neb_parser_settings_preserves_existing_entries(self):
+        from teros.core.lego.bricks.neb import _build_neb_parser_settings
+
+        settings = _build_neb_parser_settings(
+            {'parser_settings': {'check_errors': False, 'include_node': ['dos']}}
+        )
+        parser = settings['parser_settings']
+
+        assert parser['check_errors'] is False
+        assert 'dos' in parser['include_node']
+
+    def test_build_kpoints_from_spacing_returns_kpointsdata(self):
+        from aiida import orm
+        from teros.core.lego.bricks.neb import build_kpoints_from_spacing
+
+        structure = orm.StructureData(
+            cell=[[3.0, 0.0, 0.0], [0.0, 3.0, 0.0], [0.0, 0.0, 3.0]]
+        )
+        structure.append_atom(position=(0.0, 0.0, 0.0), symbols='Sn')
+        structure.append_atom(position=(1.5, 1.5, 1.5), symbols='O')
+        result = build_kpoints_from_spacing._callable(structure, orm.Float(0.04))
+
+        assert isinstance(result, orm.KpointsData)
+        mesh, _ = result.get_kpoints_mesh()
+        assert len(mesh) == 3
+        assert all(isinstance(v, int) and v > 0 for v in mesh)
 
 
 # ---------------------------------------------------------------------------
@@ -884,8 +1267,35 @@ class TestAimdValidateStage:
 
 
 # ---------------------------------------------------------------------------
+# TestAimdParserSettings
+# ---------------------------------------------------------------------------
+
+@pytest.mark.tier1
+class TestAimdParserSettings:
+    """Tests for AIMD parser settings helper."""
+
+    def test_include_node_contains_trajectory_structure_kpoints(self):
+        from teros.core.lego.bricks.aimd import _build_aimd_parser_settings
+
+        settings = _build_aimd_parser_settings()
+        include_node = settings.get('include_node', [])
+
+        assert 'trajectory' in include_node
+        assert 'structure' in include_node
+        assert 'kpoints' in include_node
+
+    def test_preserves_existing_parser_entries(self):
+        from teros.core.lego.bricks.aimd import _build_aimd_parser_settings
+
+        settings = _build_aimd_parser_settings({'check_errors': False, 'include_node': ['dos']})
+
+        assert settings['check_errors'] is False
+        assert 'dos' in settings['include_node']
+
+# ---------------------------------------------------------------------------
 # TestQeValidateStage
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def valid_qe_stage():
@@ -1203,4 +1613,3 @@ class TestCp2kValidateStage:
         valid_cp2k_stage['supercell'] = [2.0, 2, 1]
         with pytest.raises(ValueError, match="positive integers"):
             self._validate(valid_cp2k_stage)
-

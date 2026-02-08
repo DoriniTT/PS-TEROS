@@ -8,6 +8,7 @@ from aiida.common.links import LinkType
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task
 from .connections import DOS_PORTS as PORTS  # noqa: F401
+from ..retrieve_defaults import build_vasp_retrieve
 
 
 def validate_stage(stage: dict, stage_names: set) -> None:
@@ -91,15 +92,9 @@ def create_stage_tasks(wg, stage, stage_name, context):
         'ibrion': -1,
     })
 
-    # Files to retrieve from DOS calc
-    dos_retrieve = stage.get('retrieve', ['DOSCAR'])
-
-    # DOS settings for file retrieval
-    dos_settings = {}
-    if dos_retrieve:
-        dos_settings = {
-            'ADDITIONAL_RETRIEVE_LIST': dos_retrieve,
-        }
+    # Files to retrieve from SCF and DOS calculations
+    scf_retrieve = build_vasp_retrieve(None)
+    dos_retrieve = build_vasp_retrieve(stage.get('retrieve', ['DOSCAR']))
 
     # Prepare SCF input dict
     scf_input = {
@@ -108,7 +103,7 @@ def create_stage_tasks(wg, stage, stage_name, context):
         'potential_family': potential_family,
         'potential_mapping': orm.Dict(potential_mapping),
         'options': orm.Dict(options),
-        'settings': orm.Dict({}),
+        'settings': orm.Dict({'ADDITIONAL_RETRIEVE_LIST': scf_retrieve}),
         'clean_workdir': False,
     }
 
@@ -127,7 +122,7 @@ def create_stage_tasks(wg, stage, stage_name, context):
         'potential_family': potential_family,
         'potential_mapping': orm.Dict(potential_mapping),
         'options': orm.Dict(options),
-        'settings': orm.Dict(dos_settings),
+        'settings': orm.Dict({'ADDITIONAL_RETRIEVE_LIST': dos_retrieve}),
     }
 
     # DOS k-points
