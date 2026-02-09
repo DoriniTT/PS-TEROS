@@ -39,6 +39,7 @@ PORT_TYPES = {
     'hubbard_occupation',
     'hubbard_result',
     'neb_images',
+    'cohp_data',
 }
 
 
@@ -207,6 +208,54 @@ BADER_PORTS = {
         'avf': {
             'type': 'file',
             'description': 'AVF.dat (SinglefileData)',
+        },
+    },
+}
+
+COHP_PORTS = {
+    'inputs': {
+        'remote_folder': {
+            'type': 'remote_folder',
+            'required': True,
+            'source': 'cohp_from',
+            'compatible_bricks': ['vasp'],
+            'prerequisites': {
+                'incar': {'isym': -1, 'lwave': True},
+                'retrieve': ['WAVECAR', 'CONTCAR', 'POTCAR', 'INCAR', 'DOSCAR'],
+            },
+            'description': 'Remote folder with VASP outputs for LOBSTER',
+        },
+        'retrieved': {
+            'type': 'retrieved',
+            'required': True,
+            'source': 'cohp_from',
+            'compatible_bricks': ['vasp'],
+            'description': 'Retrieved VASP files for LOBSTER input',
+        },
+        'structure': {
+            'type': 'structure',
+            'required': True,
+            'source': 'cohp_from',
+            'compatible_bricks': ['vasp'],
+            'description': 'Structure for COHP analysis',
+        },
+    },
+    'outputs': {
+        'cohp_data': {
+            'type': 'cohp_data',
+            'description': 'Parsed COHP analysis results (Dict)',
+        },
+        'icohp': {
+            'type': 'file',
+            'description': 'ICOHPLIST.lobster (SinglefileData)',
+        },
+        'cohpcar': {
+            'type': 'file',
+            'description': 'COHPCAR.lobster (SinglefileData)',
+        },
+        'doscar': {
+            'type': 'file',
+            'description': 'DOSCAR.lobster (SinglefileData)',
         },
     },
 }
@@ -572,6 +621,7 @@ ALL_PORTS = {
     'dos': DOS_PORTS,
     'batch': BATCH_PORTS,
     'bader': BADER_PORTS,
+    'cohp': COHP_PORTS,
     'hubbard_response': HUBBARD_RESPONSE_PORTS,
     'hubbard_analysis': HUBBARD_ANALYSIS_PORTS,
     'convergence': CONVERGENCE_PORTS,
