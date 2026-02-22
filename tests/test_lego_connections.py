@@ -30,6 +30,7 @@ VASP_PORTS = _connections.VASP_PORTS
 DOS_PORTS = _connections.DOS_PORTS
 BATCH_PORTS = _connections.BATCH_PORTS
 BADER_PORTS = _connections.BADER_PORTS
+COHP_PORTS = _connections.COHP_PORTS
 HUBBARD_RESPONSE_PORTS = _connections.HUBBARD_RESPONSE_PORTS
 HUBBARD_ANALYSIS_PORTS = _connections.HUBBARD_ANALYSIS_PORTS
 AIMD_PORTS = _connections.AIMD_PORTS
@@ -119,6 +120,35 @@ def bader_stage():
         'name': 'bader',
         'type': 'bader',
         'charge_from': 'scf',
+    }
+
+
+@pytest.fixture
+def scf_stage_cohp():
+    """VASP SCF stage with COHP prerequisites (isym=-1, lwave=True)."""
+    return {
+        'name': 'scf',
+        'type': 'vasp',
+        'incar': {
+            'encut': 520, 'nsw': 0, 'ibrion': -1,
+            'isym': -1, 'lwave': True,
+        },
+        'restart': None,
+        'retrieve': ['WAVECAR', 'CONTCAR', 'POTCAR', 'INCAR', 'DOSCAR'],
+    }
+
+
+@pytest.fixture
+def cohp_stage():
+    """Valid cohp stage pointing at scf."""
+    return {
+        'name': 'cohp',
+        'type': 'cohp',
+        'cohp_from': 'scf',
+        'cohp_start_energy': -15.0,
+        'cohp_end_energy': 10.0,
+        'basis_set': 'pbeVaspFit2015',
+        'bond_cutoff': 3.0,
     }
 
 
@@ -337,6 +367,28 @@ class TestPortDeclarations:
             assert 'compatible_bricks' in port, \
                 f"Bader input '{input_name}' missing compatible_bricks"
 
+    def test_cohp_has_four_outputs(self):
+        assert len(COHP_PORTS['outputs']) == 4
+        for key in ('cohp_data', 'icohp', 'cohpcar', 'doscar'):
+            assert key in COHP_PORTS['outputs']
+
+    def test_cohp_all_inputs_have_compatible_bricks(self):
+        for input_name, port in COHP_PORTS['inputs'].items():
+            assert 'compatible_bricks' in port, \
+                f"COHP input '{input_name}' missing compatible_bricks"
+            assert port['compatible_bricks'] == ['vasp'], \
+                f"COHP input '{input_name}' should only accept VASP stages"
+
+    def test_cohp_has_prerequisites(self):
+        assert 'prerequisites' in COHP_PORTS['inputs']['remote_folder']
+        prereq = COHP_PORTS['inputs']['remote_folder']['prerequisites']
+        assert 'incar' in prereq
+        assert prereq['incar']['isym'] == -1
+        assert prereq['incar']['lwave'] is True
+
+    def test_cohp_has_no_structure_output(self):
+        assert 'structure' not in COHP_PORTS['outputs']
+
     def test_hubbard_response_has_no_structure_output(self):
         assert 'structure' not in HUBBARD_RESPONSE_PORTS['outputs']
 
@@ -496,6 +548,33 @@ class TestValidateConnectionsBasic:
         stages = [relax_stage, scf_stage, dos_stage, batch_stage, bader_stage]
         warnings = validate_connections(stages)
         assert isinstance(warnings, list)
+
+    def test_vasp_then_cohp_passes(self, scf_stage_cohp, cohp_stage):
+        warnings = validate_connections([scf_stage_cohp, cohp_stage])
+        assert isinstance(warnings, list)
+
+    def test_cohp_from_missing_stage_fails(self, cohp_stage):
+        # COHP without a preceding SCF stage
+        with pytest.raises(ValueError, match="not found in previous stages"):
+            validate_connections([cohp_stage])
+
+    def test_cohp_missing_prerequisites_warns(self):
+        # SCF without ISYM=-1, LWAVE=True
+        scf_bad = {
+            'name': 'scf',
+            'type': 'vasp',
+            'incar': {'encut': 520, 'nsw': 0},
+            'retrieve': ['WAVECAR'],
+        }
+        cohp = {
+            'name': 'cohp',
+            'type': 'cohp',
+            'cohp_from': 'scf',
+        }
+        warnings = validate_connections([scf_bad, cohp])
+        # Should produce warnings about missing INCAR prerequisites
+        assert len(warnings) > 0
+        assert any('isym' in w.lower() or 'lwave' in w.lower() for w in warnings)
 
     def test_hubbard_pipeline_passes(self, relax_stage, ground_state_stage,
                                      hubbard_response_stage,
