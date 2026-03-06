@@ -2,6 +2,9 @@
 
 This file provides guidance to any coding agent when working with code in this repository.
 
+`/home/trevizam/git/PS-TEROS/CLAUDE.md` is a thin mirror of this file. Keep `AGENTS.md` as the
+canonical repo instruction source.
+
 ## Quick Reference
 
 ```bash
