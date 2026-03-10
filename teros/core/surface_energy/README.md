@@ -385,6 +385,11 @@ The `wulff_shape` Dict contains:
         "(-1, -1, -1)": 0.79,
         ...
     },
+    "wulff_geometry": {
+        "vertices": [[...], ...],
+        "faces": [[0, 1, 2], ...],
+        "bounding_radius": 1.1
+    },
     "n_calculated_orientations": 3,
     "n_expanded_orientations": 26,
     "total_surface_area": 14.2,
@@ -403,6 +408,7 @@ The `wulff_shape` Dict contains:
 | `facet_fractions` | All facets and their area fractions |
 | `miller_energy_dict` | Original calculated energies |
 | `expanded_miller_energy_dict` | After symmetry expansion |
+| `wulff_geometry` | Serializable polyhedron data (vertices, faces, bounding radius) |
 
 ### Using Wulff Shape Results
 

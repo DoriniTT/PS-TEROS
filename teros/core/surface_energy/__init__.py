@@ -36,6 +36,7 @@ from .wulff import (
     visualize_wulff_shape,
     get_wulff_shape_summary,
 )
+from .wulff_geometry import extract_wulff_geometry
 
 from .stoichiometric_finder import (
     # Data classes
@@ -66,6 +67,7 @@ __all__ = [
     'expand_surface_energies_with_symmetry',
     'visualize_wulff_shape',
     'get_wulff_shape_summary',
+    'extract_wulff_geometry',
     # Stoichiometric+Symmetric Surface Finder (EXPERIMENTAL)
     'SlabSearchResult',
     'MillerFeasibilityReport',
