@@ -28,6 +28,11 @@ Output:
 import sys
 from pathlib import Path
 
+from teros.core.fukui.fukui_grid_runtime import (
+    get_fukui_grid_search_paths,
+    resolve_fukui_grid_import_root,
+)
+
 
 def main():
     """Run FukuiGrid Perturbative_point with command-line arguments."""
@@ -66,14 +71,16 @@ def main():
         print(f"Error: File not found: {fukui_locpot_file}", file=sys.stderr)
         sys.exit(1)
 
-    # Add FukuiGrid to Python path
-    # Path: scripts/ -> fukui/ -> core/ -> teros/ -> external/FukuiGrid/
-    script_dir = Path(__file__).parent
-    fukui_grid_path = script_dir.parent.parent.parent / 'external' / 'FukuiGrid'
-
-    if not fukui_grid_path.exists():
-        print(f"Error: FukuiGrid not found at {fukui_grid_path}", file=sys.stderr)
-        print("Please clone FukuiGrid to teros/external/FukuiGrid", file=sys.stderr)
+    fukui_grid_path = resolve_fukui_grid_import_root()
+    if fukui_grid_path is None:
+        print("Error: Could not locate FukuiGrid.", file=sys.stderr)
+        print("Searched locations:", file=sys.stderr)
+        for candidate in get_fukui_grid_search_paths():
+            print(f"  - {candidate}", file=sys.stderr)
+        print(
+            "Set FUKUI_GRID_PATH to the directory or file location if needed.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     sys.path.insert(0, str(fukui_grid_path))

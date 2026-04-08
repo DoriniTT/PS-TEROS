@@ -17,13 +17,11 @@ Output:
 import sys
 import os
 import numpy as np
-from pathlib import Path
 
-# Compute FukuiGrid path relative to this script's location
-# Script is at: teros/core/fukui/scripts/fukui_interpolation_wrapper.py
-# FukuiGrid is at: teros/external/FukuiGrid/
-_SCRIPT_DIR = Path(__file__).resolve().parent
-FUKUI_GRID_PATH = str(_SCRIPT_DIR.parent.parent.parent / 'external' / 'FukuiGrid')
+from teros.core.fukui.fukui_grid_runtime import (
+    get_fukui_grid_search_paths,
+    resolve_fukui_grid_import_root,
+)
 
 
 def main():
@@ -81,13 +79,22 @@ def main():
     print(f"  Sorted files (by delta_n descending): {sorted_files}")
     print(f"  Sorted delta_n for FukuiGrid: {sorted_dn.tolist()}")
 
-    # Import FukuiGrid from absolute path
-    sys.path.insert(0, FUKUI_GRID_PATH)
+    fukui_grid_path = resolve_fukui_grid_import_root()
+    if fukui_grid_path is None:
+        print("ERROR: Could not locate FukuiGrid.")
+        print("  Searched locations:")
+        for candidate in get_fukui_grid_search_paths():
+            print(f"    - {candidate}")
+        print("  You can also set FUKUI_GRID_PATH to the directory or file location.")
+        sys.exit(1)
+
+    # Import FukuiGrid from resolved path
+    sys.path.insert(0, str(fukui_grid_path))
     try:
         from FukuiGrid import Fukui_interpolation
     except ImportError as e:
         print(f"ERROR: Could not import FukuiGrid: {e}")
-        print(f"  Expected location: {FUKUI_GRID_PATH}")
+        print(f"  Import root used: {fukui_grid_path}")
         sys.exit(1)
 
     # Run interpolation (files are in current working directory)

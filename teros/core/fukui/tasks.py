@@ -11,12 +11,14 @@ from pathlib import Path
 from aiida import orm
 from aiida_workgraph import task
 
+from .fukui_grid_runtime import DEFAULT_FUKUI_GRID_DIR, resolve_fukui_grid_import_root
+
 # Paths for aiida-shell integration (relative to this module)
 _MODULE_DIR = Path(__file__).parent
 WRAPPER_SCRIPT = str(_MODULE_DIR / 'scripts' / 'fukui_interpolation_wrapper.py')
 ELECTRODES_WRAPPER_SCRIPT = str(_MODULE_DIR / 'scripts' / 'fukui_electrodes_wrapper.py')
 PERTURBATIVE_WRAPPER_SCRIPT = str(_MODULE_DIR / 'scripts' / 'perturbative_expansion_wrapper.py')
-FUKUI_GRID_PATH = str(_MODULE_DIR.parent.parent / 'external' / 'FukuiGrid')
+FUKUI_GRID_PATH = str(resolve_fukui_grid_import_root() or DEFAULT_FUKUI_GRID_DIR)
 
 
 @task.calcfunction
