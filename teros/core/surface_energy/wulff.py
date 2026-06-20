@@ -23,6 +23,7 @@ import numpy as np
 
 from aiida import orm
 from aiida_workgraph import task
+from .wulff_geometry import extract_wulff_geometry
 
 
 def get_symmetrically_equivalent_miller_indices(
@@ -209,6 +210,7 @@ def build_wulff_shape(
         - wulff_shape_valid: Whether Wulff shape was successfully constructed
         - only_stoichiometric: Whether stoichiometric filter was applied
         - n_filtered_out: Number of terminations filtered out (if filter applied)
+        - wulff_geometry: Serializable polyhedron (vertices, faces, normals, bounding radius)
 
     Example:
         For FCC Au with (111), (110), (001):
@@ -312,6 +314,8 @@ def build_wulff_shape(
                 dominant_facet = miller_str
 
         # Build result dictionary
+        geometry = extract_wulff_geometry(wulff)
+
         result = {
             'wulff_shape_valid': True,
             'miller_energy_dict': original_miller_energy,
@@ -328,6 +332,7 @@ def build_wulff_shape(
             'dominant_facet_fraction': max_fraction if dominant_facet else 0.0,
             'only_stoichiometric': filter_stoichiometric,
             'n_filtered_out': n_filtered_out,
+            'wulff_geometry': geometry,
         }
 
         return orm.Dict(dict=result)
