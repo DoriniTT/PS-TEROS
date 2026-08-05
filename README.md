@@ -45,23 +45,15 @@ calculation. The library does not start an external controller; submission,
 monitoring, retries, provenance, and archival remain the responsibility of the
 user or operator in the selected AiiDA environment.
 
-## SnO2(110) reference campaign
+## Guided SnO2(110) example
 
-The included structure generator produces symmetric rutile SnO2(110) starting
-models for the O, SnO, and Sn2O terminations.  For nine triple layers their
-formulas are Sn18O36, Sn18O34, and Sn18O32, respectively.  The analysis uses
-the explicit oxygen chemical-potential convention
+The documentation includes a beginner-friendly walkthrough of the rutile
+SnO2(110) surface example. It explains what a surface termination and a
+symmetric slab are, then develops the thermodynamic calculation with rendered
+equations rather than placing it in this overview.
 
-`mu_O = E(O2)/2 + Delta mu_O`.
-
-For slabs in bulk SnO2 equilibrium,
-
-`gamma = [E_slab - N_Sn E_bulk - (N_O - 2 N_Sn) mu_O] / (2 A)`.
-
-The corresponding pure analysis helper is
-`psteros.surface_energy_oxide_equilibrium`; it returns both eV/A2 and J/m2.
-Record the exact convergence, structure, hardware, and result evidence for any
-published value in the provenance records of the project that produced it.
+Read the [SnO2(110) surface-thermodynamics walkthrough](docs/source/examples.rst)
+when you are ready for the worked example.
 
 ## Installation and verification
 
