@@ -1,11 +1,12 @@
-=====================
-psteros documentation
-=====================
+======================
+PS-TEROS documentation
+======================
 
-psteros helps you organize surface thermodynamics calculations with AiiDA. It
-keeps the starting structures, calculation inputs, and execution choices
-visible as you build a graph. It does not replace the scientific checks needed
-to choose a model or interpret a result.
+PS-TEROS helps you organize surface thermodynamics calculations with AiiDA. The
+Python package is imported as ``psteros``. It keeps the starting structures,
+calculation inputs, and execution choices visible as you build a graph. It does
+not replace the scientific checks needed to choose a model or interpret a
+result.
 
 The pages below follow the questions readers usually ask first: how to install
 the library, how to build a safe first graph, how the pieces fit together, and

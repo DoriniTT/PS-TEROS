@@ -1,18 +1,18 @@
 .. _tutorial:
 
-==========================
-Your first psteros graph
-==========================
+=========================
+Your first PS-TEROS graph
+=========================
 
 Here you will build one Quantum ESPRESSO graph from a bulk SnO2 structure. The
-graph stays unsubmitted, so you can inspect the public API without starting a
-calculation.
+graph stays unsubmitted, so you can inspect how the pieces fit together without
+starting a calculation.
 
 By the end, you will know how to:
 
 * describe the calculation inputs with ``QeCalculationConfig``;
-* make the computer, queue, and resource choices explicit with
-  ``ExecutionPolicy``; and
+* identify the registered code that selects the AiiDA computer;
+* make the queue and resource choices explicit with ``ExecutionPolicy``; and
 * build an unsubmitted graph from a labelled structure.
 
 Before you start
@@ -71,13 +71,29 @@ example concrete; converge them for the material and property you study.
        recipe,
    )
 
+   print(graph.name)
+   print(graph.max_number_jobs)
+
+You should see:
+
+.. code-block:: text
+
+   sno2_bulk_relax
+   1
+
+The first line confirms the graph name from the recipe. The second is the
+number of calculations the graph may run at once.
+
 What the code did
 -----------------
 
-``QeCalculationConfig`` describes the electronic-structure calculation.
-``ExecutionPolicy`` records where and how AiiDA should run it. The current
-public builder keeps one active calculation in a graph, so
-``max_concurrent_jobs`` must be ``1``. ``build_surface_workgraph`` then connects
+``QeCalculationConfig`` describes the electronic-structure calculation and
+identifies the registered code; that code selects the actual AiiDA computer.
+``ExecutionPolicy`` supplies the queue, resource, wall-time, and MPI metadata.
+Its ``computer`` field is descriptive in the current API, so keep it consistent
+with the computer in ``code_label``. The builder does not cross-check them.
+``build_surface_workgraph`` currently keeps one active calculation in a graph,
+so ``max_concurrent_jobs`` must be ``1``. The builder then connects
 the labelled structure and the recipe into an AiiDA WorkGraph.
 
 The call above leaves ``submit`` at its default value, ``False``. It builds a
@@ -93,6 +109,6 @@ family, numerical settings, queue, and resource request are appropriate for
 your project.
 
 The :doc:`QE guide <qe-first-workflow>` shows how to connect a geometry
-relaxation to a final static calculation. Read :doc:`how a psteros calculation
+relaxation to a final static calculation. Read :doc:`how a PS-TEROS calculation
 fits together <concepts>` for the roles of the structures, recipe, graph, and
 analysis helpers.

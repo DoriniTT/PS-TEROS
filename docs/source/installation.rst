@@ -28,10 +28,7 @@ Install psteros and its declared dependencies:
 
 .. code-block:: console
 
-   $ python -m pip install -e '.[dev]'
-
-The ``-e`` flag installs the checkout in editable mode. Changes you make in the
-working tree are then visible to Python without reinstalling the package.
+   $ python -m pip install .
 
 Verify the installation
 -----------------------
@@ -42,13 +39,6 @@ Check that Python can import the package and report its version:
 
    $ python -c "import psteros; print(psteros.__version__)"
    1.0.0
-
-If you are working from the source checkout, run the public API test as a
-second check:
-
-.. code-block:: console
-
-   $ python -m pytest -q tests/unit/test_public_api.py
 
 Prepare AiiDA before using a calculation graph
 -----------------------------------------------
@@ -74,12 +64,12 @@ copy a label, queue, or resource request from another project as a default.
 Optional VASP support
 ---------------------
 
-Quantum ESPRESSO is the primary public path. If you are continuing an existing
-VASP study, install its optional adapter in the same environment:
+The main supported workflow uses Quantum ESPRESSO. If you are continuing an
+existing VASP study, install its optional adapter in the same environment:
 
 .. code-block:: console
 
-   $ python -m pip install -e '.[vasp]'
+   $ python -m pip install '.[vasp]'
 
 What next?
 ----------

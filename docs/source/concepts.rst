@@ -1,8 +1,8 @@
 .. _concepts:
 
-============================================================
-How a psteros calculation fits together
-============================================================
+========================================
+How a PS-TEROS calculation fits together
+========================================
 
 A surface-energy result is more than a number returned by an
 electronic-structure code. It depends on the structure that was modelled, the
@@ -26,10 +26,12 @@ Four pieces, one calculation story
    run?”
 
 **Execution policy**
-   An ``ExecutionPolicy`` carries the AiiDA computer, scheduler queue,
-   resources, wall-time, and MPI choice. It answers, “Where and with what
-   allocation will this calculation run?” Those values belong to your own AiiDA
-   environment and should be supplied explicitly in public examples.
+   An ``ExecutionPolicy`` carries scheduler queue, resource, wall-time, and MPI
+   choices. The registered code in the calculation recipe selects the actual
+   AiiDA computer. The policy's ``computer`` field is descriptive in the current
+   API and should match that code, but the builder does not cross-check them.
+   These values belong to your own AiiDA environment and should be supplied
+   explicitly in public examples.
 
 **WorkGraph**
    A WorkGraph connects structures and recipes into an ordered set of AiiDA
@@ -66,7 +68,7 @@ input calculations are scientifically compatible. Its job is to make the
 thermodynamic expression explicit and return the resulting surface energy in
 both eV/Å² and J/m².
 
-The :doc:`SnO2(110) worked example <examples>` explains this sequence with a
+The :doc:`SnO2 surface-energy model <examples>` explains this sequence with a
 symmetric slab, defines the terms used in the equation, and shows what to
 record before interpreting a result. If you already know the concepts and want
 to prepare a two-stage calculation, continue to the :doc:`QE guide

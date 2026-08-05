@@ -1,6 +1,6 @@
-==============
-Worked example
-==============
+===========================================
+Understanding the SnO2 surface-energy model
+===========================================
 
 Suppose you want to compare three SnO2(110) surfaces that expose different
 numbers of oxygen atoms. Before comparing their energies, you need to know what

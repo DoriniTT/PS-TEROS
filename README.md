@@ -17,8 +17,8 @@ Those choices belong to the project that uses it.
 - **Understand the pieces of a calculation:** [core concepts](docs/source/concepts.rst)
 - **Prepare a relaxation followed by a static QE calculation:**
   [QE guide](docs/source/qe-first-workflow.rst)
-- **Follow a surface thermodynamics case step by step:**
-  [SnO2(110) worked example](docs/source/examples.rst)
+- **Understand the SnO2 surface-energy model:**
+  [model explanation](docs/source/examples.rst)
 - **Look up public names and inputs:** [reference](docs/source/api.rst)
 
 ## A safe first interaction
@@ -40,7 +40,7 @@ print(identity.termination)  # o
 print(slab.composition.reduced_formula)  # SnO2
 ```
 
-A starting structure is not yet a converged result. The worked example explains
+A starting structure is not yet a converged result. The SnO2 model page explains
 what a slab and a termination are, which calculations provide the needed
 energies, and which assumptions must be checked before interpreting a surface
 energy.
@@ -51,8 +51,8 @@ energy.
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e '.[dev]'
-python -m pytest -q tests/unit/test_public_api.py
+python -m pip install .
+python -c "import psteros; print(psteros.__version__)"
 ```
 
 Before building a calculation graph, configure an AiiDA profile, a
@@ -60,11 +60,5 @@ Before building a calculation graph, configure an AiiDA profile, a
 environment. The [installation guide](docs/source/installation.rst) explains
 what each of those pieces contributes and points to AiiDA's setup guides.
 
-For an established VASP project, install the optional adapter with:
-
-```bash
-python -m pip install -e '.[vasp]'
-```
-
-Quantum ESPRESSO is the primary public path; the VASP adapter remains available
-for existing studies.
+The main supported workflow uses Quantum ESPRESSO. The installation guide also
+describes the optional VASP adapter for existing studies.

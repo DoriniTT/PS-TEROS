@@ -28,8 +28,11 @@ the numerical settings for your material before submitting a calculation.
 Choose one execution policy
 ---------------------------
 
-Both stages must use the same execution policy. It records the computer,
-queue, resource request, wall-time, and MPI choice alongside the graph.
+Both stages must use the same execution policy. The builder turns its queue,
+resource, wall-time, and MPI choices into AiiDA task metadata. The registered
+code in each recipe selects the actual AiiDA computer. ``ExecutionPolicy`` also
+has a descriptive ``computer`` field; keep it consistent with ``code_label``
+because the builder does not cross-check them.
 
 .. code-block:: python
 
@@ -47,8 +50,8 @@ queue, resource request, wall-time, and MPI choice alongside the graph.
        max_concurrent_jobs=1,
    )
 
-The current public builder permits one active calculation in a graph, so
-``max_concurrent_jobs`` must remain ``1``. That is a psteros graph constraint,
+``build_qe_relax_static_workgraph`` currently permits one active calculation in
+a graph, so ``max_concurrent_jobs`` must remain ``1``. That limit belongs to
 not a recommendation about how many jobs your cluster can run.
 
 .. warning::
@@ -138,5 +141,5 @@ Check the items that the library cannot choose for you:
 * the queue, resources, wall-time, and MPI settings accepted by your AiiDA
   computer and scheduler.
 
-The :doc:`worked SnO2(110) example <examples>` explains how compatible bulk,
+The :doc:`SnO2 surface-energy model <examples>` explains how compatible bulk,
 slab, and oxygen-reference energies are combined after the calculations finish.
