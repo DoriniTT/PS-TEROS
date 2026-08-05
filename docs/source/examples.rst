@@ -1,37 +1,57 @@
-========
-Examples
-========
+==============
+Worked example
+==============
 
-The walkthrough below explains one PS-TEROS model in enough detail to make its
-assumptions visible. It is an instructional starting point, not a convergence
-protocol or a set of transferable parameters for every material.
+Suppose you want to compare three SnO2(110) surfaces that expose different
+numbers of oxygen atoms. Before comparing their energies, you need to know what
+each structure represents and how the difference in composition enters the
+thermodynamics. This walkthrough follows that small model from its starting
+structures to the surface-energy expression.
 
-Rutile SnO2(110) surface-thermodynamics walkthrough
-----------------------------------------------------
+Rutile SnO2(110) keeps the example compact enough to inspect; its settings are
+not a recipe for every oxide.
 
-This example studies one exposed face of rutile tin dioxide, written
-``SnO2(110)``. The ``(110)`` is a Miller index: it identifies the orientation
-of the crystal face being modelled.
+You will learn what a slab and a surface termination are, why this example uses
+a symmetric cell, and which calculated energies the analysis helper needs. The
+page does not submit calculations or establish converged parameters for a new
+material.
 
-What the terms mean
-^^^^^^^^^^^^^^^^^^^
+.. important::
 
-A surface calculation starts with a finite piece of a bulk crystal, called a
-**slab**, separated from its periodic images by vacuum. The atoms exposed at
-the outside of that slab define a **surface termination**. Cutting the same
-bulk crystal at the same orientation can expose different atoms, so different
-terminations can have different energies and stability ranges.
+   Treat the structures and numerical values below as an illustrative model.
+   Relax the structures and converge the slab thickness, vacuum, k-point
+   sampling, and basis or cutoff settings for the material and property you
+   study.
 
-PS-TEROS provides three labelled starting models for this particular example:
-``o``, ``sno``, and ``sn2o``. The ``o`` model is stoichiometric. The ``sno``
-and ``sn2o`` models are obtained by removing one or two equivalent pairs of
-oxygen atoms from the two outer faces. Removing matching atoms from both sides
-keeps the slab **symmetric**: its top and bottom surfaces represent the same
-termination. This matters below because the surface-energy expression then
-accounts for two equivalent surfaces.
+The physical question
+---------------------
 
-Build the starting structures
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+A crystal has a repeating bulk structure. To study one of its exposed faces, we
+make a finite piece of that crystal and add empty space around it. The finite
+piece is called a **slab**; the empty region prevents periodic copies of the
+slab from interacting too strongly.
+
+The atoms that appear on the outside of a slab define its **surface
+termination**. Cutting the same crystal plane in different places can leave
+different atoms exposed, so the resulting terminations can have different
+energies.
+
+For this example, ``(110)`` is the Miller index that identifies the crystal
+orientation. psteros labels three starting models ``o``, ``sno``, and ``sn2o``:
+
+* ``o`` is the stoichiometric starting surface;
+* ``sno`` removes one equivalent pair of oxygen atoms from the outer faces; and
+* ``sn2o`` removes two equivalent pairs.
+
+Removing matching atoms from the top and bottom faces keeps the slab
+**symmetric**. Both exposed faces then represent the same termination, which is
+why the surface-energy expression below divides by two surface areas.
+
+Build the three starting structures
+-----------------------------------
+
+The following code creates the three in-memory structures. It does not use an
+AiiDA profile or submit work.
 
 .. code-block:: python
 
@@ -46,29 +66,32 @@ Build the starting structures
        for label in ("o", "sno", "sn2o")
    }
 
-For this ``1x1`` starting-cell configuration, the formulas are ``Sn18O36``,
+For this ``1x1`` starting-cell model, the formulas are ``Sn18O36``,
 ``Sn18O34``, and ``Sn18O32``. Nine triple layers and 20 Å of vacuum reproduce
-this illustrative model; they are not convergence recommendations. Relax the
-structures and test slab thickness, vacuum, k-point sampling, and basis or
-cutoff settings for the material and property you are studying.
+this example only. A real study should report the checks used to choose its
+own thickness and vacuum.
 
-From calculated energies to surface energy
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Choose compatible energy references
+-----------------------------------
 
-For an oxide slab in equilibrium with bulk SnO2, the analysis uses an oxygen
-chemical potential defined by
+To compare slabs with different numbers of oxygen atoms, the analysis needs a
+way to account for oxygen exchanged with a reservoir. In this model, the oxygen
+chemical potential is written as
 
 .. math::
 
    \mu_{\mathrm{O}} = \frac{E(\mathrm{O}_2)}{2} + \Delta\mu_{\mathrm{O}}.
 
-Here :math:`E(\mathrm{O}_2)` is the energy of the chosen oxygen reference
-calculation and :math:`\Delta\mu_{\mathrm{O}}` is an offset used to explore
-oxygen-poor and oxygen-rich conditions. Keep that reference compatible with
-the bulk and slab calculations: do not combine energies from unrelated
-methods, pseudopotential families, or numerical settings.
+Here :math:`E(\mathrm{O}_2)` is the energy of the oxygen reference calculation.
+The offset :math:`\Delta\mu_{\mathrm{O}}` lets you explore oxygen-poor and
+oxygen-rich conditions. Calculate the bulk, oxygen, and slab energies with a
+compatible electronic-structure method; combining unrelated functionals,
+pseudopotential families, or numerical settings makes the comparison unclear.
 
-For a symmetric slab, PS-TEROS evaluates
+Calculate the surface energy
+----------------------------
+
+For a symmetric SnO2 slab in equilibrium with bulk SnO2, psteros evaluates
 
 .. math::
 
@@ -79,24 +102,26 @@ For a symmetric slab, PS-TEROS evaluates
        - \left(N_{\mathrm{O}} - 2N_{\mathrm{Sn}}\right)\mu_{\mathrm{O}}
    }{2A}.
 
-The terms have the following roles:
+The expression answers, “How much energy is associated with one exposed
+surface?” Its terms are:
 
-* :math:`\gamma` is the surface energy.
-* :math:`E_{\mathrm{slab}}` is the calculated energy of the slab.
-* :math:`E_{\mathrm{bulk}}` is the energy per SnO2 formula unit in the bulk
-  reference calculation.
-* :math:`N_{\mathrm{Sn}}` and :math:`N_{\mathrm{O}}` are the numbers of tin
-  and oxygen atoms in the slab. The term
-  :math:`N_{\mathrm{O}} - 2N_{\mathrm{Sn}}` measures oxygen excess or deficit
-  relative to bulk SnO2 stoichiometry.
-* :math:`A` is the area of one exposed face. The denominator is :math:`2A`
-  because a symmetric slab has two equivalent surfaces.
+* :math:`\gamma`, the surface energy;
+* :math:`E_{\mathrm{slab}}`, the calculated energy of the slab;
+* :math:`E_{\mathrm{bulk}}`, the energy per SnO2 formula unit in the bulk
+  reference calculation;
+* :math:`N_{\mathrm{Sn}}` and :math:`N_{\mathrm{O}}`, the numbers of tin and
+  oxygen atoms in the slab;
+* :math:`N_{\mathrm{O}} - 2N_{\mathrm{Sn}}`, the oxygen excess or deficit
+  relative to bulk SnO2; and
+* :math:`A`, the area of one exposed face. The denominator is :math:`2A`
+  because the slab has two equivalent surfaces.
 
-Analyze a calculated slab
-^^^^^^^^^^^^^^^^^^^^^^^^^
+Use the analysis helper
+-----------------------
 
-After obtaining compatible bulk, oxygen-reference, and slab energies, pass
-those values to the pure-Python helper:
+After you have the compatible energies and the slab area, pass them to the
+pure-Python helper. This calculation is local: it does not run Quantum
+ESPRESSO or submit an AiiDA process.
 
 .. code-block:: python
 
@@ -114,21 +139,27 @@ those values to the pure-Python helper:
    print(point.gamma_ev_per_angstrom2)
    print(point.gamma_j_per_m2)
 
-The helper returns the surface energy in both eV/Å² and J/m². The variable
-names in the example stand for results that you calculated and validated for
-your own project; they are not supplied reference energies.
+``point`` provides the surface energy in eV/Å² and J/m². The variables in this
+snippet stand for values calculated and checked by your project; they are not
+reference energies supplied by psteros.
 
-Before interpreting a result
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Before you draw a conclusion
+----------------------------
 
-For a defensible study, record and validate at least the following:
+Record the structure, calculation, and analysis choices that make a result
+reproducible:
 
-* the slab orientation, termination, thickness, vacuum, and relaxed geometry;
-* the bulk and oxygen-reference calculations used in the expression;
-* convergence evidence for the chosen numerical settings; and
-* the code, pseudopotentials, scheduler configuration, and provenance records
-  for the calculations that produced the energies.
+* slab orientation, termination, thickness, vacuum, and relaxed geometry;
+* bulk and oxygen-reference calculations used in the expression;
+* convergence evidence for numerical settings; and
+* the code, pseudopotentials, scheduler configuration, and AiiDA provenance
+  records that produced the energies.
 
-This walkthrough explains the SnO2(110) model and its thermodynamic convention.
-It does not establish which termination, numerical settings, or computational
-resources are appropriate for a different material or research question.
+This is a model of clean, symmetric SnO2(110) terminations. It does not decide
+which termination is stable for another material, nor does it include every
+possible temperature, pressure, adsorbate, vibrational, or reconstruction
+effect.
+
+For the workflow that creates a relaxation followed by a static calculation,
+see the :doc:`QE guide <qe-first-workflow>`. For the role of each object in the
+larger calculation story, return to :doc:`the concepts page <concepts>`.

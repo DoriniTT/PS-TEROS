@@ -1,87 +1,70 @@
-# psteros
+# PS-TEROS
 
-`psteros` is a reproducible AiiDA workflow library for ab-initio surface
-thermodynamics.  Quantum ESPRESSO, through `aiida-quantumespresso`, is the
-primary backend.  VASP remains available as a secondary, tested backend for
-existing studies.
+PS-TEROS is a Python library for organizing surface thermodynamics calculations
+with AiiDA. It helps you turn starting structures, a calculation recipe, and
+an execution policy into an inspectable calculation graph. When the graph runs,
+AiiDA records the inputs, outputs, and calculation steps that produced the
+result.
 
-The public API is deliberately small. Use the code and pseudopotential-family
-identifiers registered in your own AiiDA profile, and set an execution policy
-that matches your scheduler and resource allocation:
+The library provides building blocks; it does not choose a material model,
+convergence settings, compute resource, or scientific conclusion for you.
+Those choices belong to the project that uses it.
+
+## Start here
+
+- **Install the library:** [installation guide](docs/source/installation.rst)
+- **Build one graph without submitting work:** [first tutorial](docs/source/tutorial.rst)
+- **Understand the pieces of a calculation:** [core concepts](docs/source/concepts.rst)
+- **Prepare a relaxation followed by a static QE calculation:**
+  [QE guide](docs/source/qe-first-workflow.rst)
+- **Follow a surface thermodynamics case step by step:**
+  [SnO2(110) worked example](docs/source/examples.rst)
+- **Look up public names and inputs:** [reference](docs/source/api.rst)
+
+## A safe first interaction
+
+The structure helpers can be used before you connect to a scheduler or submit a
+calculation. This example creates an in-memory starting model for one rutile
+SnO2(110) surface; it does not use an AiiDA profile or external compute time.
 
 ```python
 import psteros
 
-recipe = psteros.SurfaceWorkflowConfig(
-    backend="qe",
-    calculation=psteros.QeCalculationConfig(
-        code_label="your-qe-code@your-computer",
-        pseudo_family="your-pseudo-family",
-        parameters={
-            "CONTROL": {"calculation": "relax"},
-            "SYSTEM": {"ecutwfc": 80.0, "ecutrho": 640.0},
-            "ELECTRONS": {"conv_thr": 1.0e-8},
-        },
-    ),
-    execution=psteros.ExecutionPolicy(
-        computer="your-computer",
-        queue="your-scheduler-queue",
-        resources={
-            "num_machines": 1,  # adjust for your scheduler and calculation
-            "num_mpiprocs_per_machine": 1,
-        },
-        max_wallclock_seconds=86_400,  # adjust for your scheduler policy
-        with_mpi=True,  # adjust for your executable and scheduler
-        max_concurrent_jobs=1,  # public graph-local bound
-    ),
+slab, identity = psteros.sno2_110_slab(
+    termination="o",
+    triple_layers=9,
+    vacuum_angstrom=20.0,
 )
-bulk = psteros.rutile_sno2_bulk()
-graph = psteros.build_surface_workgraph({"bulk_sno2": bulk}, recipe)
+
+print(identity.termination)  # o
+print(slab.composition.reduced_formula)  # SnO2
 ```
 
-`ExecutionPolicy` records the graph-local execution bound and the scheduler
-settings for your environment. The public builder limits a graph to one active
-calculation. The library does not start an external controller; submission,
-monitoring, retries, provenance, and archival remain the responsibility of the
-user or operator in the selected AiiDA environment.
+A starting structure is not yet a converged result. The worked example explains
+what a slab and a termination are, which calculations provide the needed
+energies, and which assumptions must be checked before interpreting a surface
+energy.
 
-## Guided SnO2(110) example
-
-The documentation includes a beginner-friendly walkthrough of the rutile
-SnO2(110) surface example. It explains what a surface termination and a
-symmetric slab are, then develops the thermodynamic calculation with rendered
-equations rather than placing it in this overview.
-
-Read the [SnO2(110) surface-thermodynamics walkthrough](docs/source/examples.rst)
-when you are ready for the worked example.
-
-## Installation and verification
+## Installation from a source checkout
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate
-python -m pip install -U pip
-python -m pip install -c constraints/aiida-qe-2026-08.txt \
-  aiida-core aiida-workgraph aiida-quantumespresso aiida-pseudo pytest
-python -m pip install --no-deps -e .
-pytest -q tests/unit/test_public_api.py
-pytest -q
+python -m pip install --upgrade pip
+python -m pip install -e '.[dev]'
+python -m pytest -q tests/unit/test_public_api.py
 ```
 
-For real QE calculations, register an AiiDA `pw.x` code and a pseudopotential
-family in the active profile. Choose the executable, pseudopotential family,
-and scientific parameters for your own project, then record those choices in
-its AiiDA provenance.
+Before building a calculation graph, configure an AiiDA profile, a
+`quantumespresso.pw` code, and an `aiida-pseudo` family for your own computing
+environment. The [installation guide](docs/source/installation.rst) explains
+what each of those pieces contributes and points to AiiDA's setup guides.
 
-The constraint file is intentional: psteros uses the WorkGraph task-socket
-API and therefore verifies a compatible AiiDA/WorkGraph stack rather than
-silently replacing packages in an existing scientific profile.
+For an established VASP project, install the optional adapter with:
 
-For an established VASP project, install the separately optional adapter with
-`python -m pip install -e '.[vasp]'`; it is retained as the secondary backend.
+```bash
+python -m pip install -e '.[vasp]'
+```
 
-## Compatibility
-
-The broad pre-1.0 VASP builder is intentionally not imported at package level.
-It remains available only as `psteros.compat.build_core_workgraph` while an
-established VASP project migrates.  New work should use the typed public API.
+Quantum ESPRESSO is the primary public path; the VASP adapter remains available
+for existing studies.
