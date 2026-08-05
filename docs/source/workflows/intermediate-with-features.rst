@@ -80,8 +80,8 @@ Add one import to your beginner script:
 
 .. code-block:: python
 
-    from teros.core.workgraph import build_core_workgraph
-    from teros.core.builders import get_electronic_properties_defaults  # NEW
+    from psteros.core.workgraph import build_core_workgraph
+    from psteros.core.builders import get_electronic_properties_defaults  # NEW
 
 2. Configure Electronic Properties
 -----------------------------------
@@ -518,8 +518,8 @@ Complete Example Script
 
     import os
     from aiida import load_profile
-    from teros.core.workgraph import build_core_workgraph
-    from teros.core.builders import get_electronic_properties_defaults  # NEW
+    from psteros.core.workgraph import build_core_workgraph
+    from psteros.core.builders import get_electronic_properties_defaults  # NEW
 
     def main():
         load_profile(profile='your_profile_name')

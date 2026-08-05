@@ -53,7 +53,7 @@ parallel:
       Analyze the TERNARY oxide surface thermodynamics implementation in PS-TEROS.
 
       Key files to examine:
-      - /home/trevizam/git/PS-TEROS/teros/core/thermodynamics.py
+      - /home/trevizam/git/PS-TEROS/psteros/core/thermodynamics.py
 
       Focus on:
       1. The formula for surface Gibbs free energy gamma(Delta_mu_O, Delta_mu_M)
@@ -71,7 +71,7 @@ parallel:
       Analyze the BINARY oxide surface thermodynamics implementation in PS-TEROS.
 
       Key files to examine:
-      - /home/trevizam/git/PS-TEROS/teros/core/thermodynamics.py
+      - /home/trevizam/git/PS-TEROS/psteros/core/thermodynamics.py
 
       Focus on:
       1. The formula for surface Gibbs free energy gamma(Delta_mu_O) for binary oxides

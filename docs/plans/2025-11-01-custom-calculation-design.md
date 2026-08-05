@@ -19,7 +19,7 @@ This module runs arbitrary VASP calculations through PS-TEROS WorkGraphs. Users 
 ## Module Structure
 
 ```
-teros/core/custom_calculation/
+psteros/core/custom_calculation/
 ├── __init__.py          # Exports: build_custom_calculation_workgraph, get_custom_results
 ├── workgraph.py         # Main builder function and result extraction
 └── tasks.py             # Helper tasks: extract_energy, extract_structure
@@ -46,7 +46,7 @@ build_custom_calculation_workgraph(
 ### Single Structure Example
 
 ```python
-from teros.core.custom_calculation import build_custom_calculation_workgraph
+from psteros.core.custom_calculation import build_custom_calculation_workgraph
 
 # Define all builder inputs
 builder_inputs = {
@@ -162,7 +162,7 @@ misc_list = [m.get_dict() for m in wg.outputs.misc]
 ### Helper Function
 
 ```python
-from teros.core.custom_calculation import get_custom_results
+from psteros.core.custom_calculation import get_custom_results
 
 results = get_custom_results(wg)
 # Returns:
@@ -262,7 +262,7 @@ Test scripts follow `examples/hydroxylation_with_bulk_reference/` pattern.
 ### Follows Existing Patterns
 
 1. **Module structure**: Same as `surface_hydroxylation` (separate folder with `__init__.py`, `workgraph.py`, `tasks.py`)
-2. **Import style**: `from teros.core.custom_calculation import build_custom_calculation_workgraph`
+2. **Import style**: `from psteros.core.custom_calculation import build_custom_calculation_workgraph`
 3. **Builder parameters**: Match existing VASP patterns in `workgraph.py` and `hydroxylation`
 4. **Testing location**: `examples/custom_calculation/` with complete test cases
 5. **Code loading**: User specifies code label in run script
@@ -280,7 +280,7 @@ This module:
 Implementation requires these files:
 
 ```
-teros/core/custom_calculation/
+psteros/core/custom_calculation/
 ├── __init__.py
 ├── workgraph.py
 └── tasks.py

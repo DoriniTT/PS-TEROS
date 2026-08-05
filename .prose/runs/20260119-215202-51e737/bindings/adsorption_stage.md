@@ -3,7 +3,7 @@
 ## Status: COMPLETED
 
 ## File Created
-- `/home/thiagotd/git/PS-TEROS/teros/core/stages/adsorption_stage.py`
+- `/home/thiagotd/git/PS-TEROS/psteros/core/stages/adsorption_stage.py`
 
 ## Functions Implemented
 

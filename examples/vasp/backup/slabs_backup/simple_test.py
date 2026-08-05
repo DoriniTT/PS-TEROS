@@ -37,7 +37,7 @@ def simple_test():
 
     # Test imports
     print("\n3. Testing imports...")
-    from teros.core.workgraph import (
+    from psteros.core.workgraph import (
         build_core_workgraph,
         build_core_workgraph_with_map,
     )

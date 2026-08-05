@@ -13,7 +13,7 @@ let binary_impl = session: code_analyst
 ## Analysis of Binary Oxide Surface Thermodynamics Implementation
 
 ### File Location
-`/home/trevizam/git/PS-TEROS/teros/core/thermodynamics.py`
+`/home/trevizam/git/PS-TEROS/psteros/core/thermodynamics.py`
 
 ### Function: `calculate_surface_energy_binary`
 Lines 348-524

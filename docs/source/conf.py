@@ -10,10 +10,10 @@ sys.path.insert(0, os.path.abspath('../..'))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'PS-TEROS'
+project = 'psteros'
 copyright = '2025, Thiago T. Dorini'
 author = 'Thiago T. Dorini'
-release = '0.1.0'
+release = '1.0.0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -29,13 +29,25 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-exclude_patterns = []
+# The v1.0 documentation is intentionally the QE-first public surface.  The
+# pre-migration builder manuals remain in the source tree as historical
+# material, but are not built or published as current psteros documentation.
+exclude_patterns = [
+    'api/**',
+    'how-to/**',
+    'workflows/**',
+    'authors.rst',
+    'changelog.rst',
+    'contributing.rst',
+    'history.rst',
+    'install/**',
+    'theory.rst',
+]
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
 
 # -- Extension configuration -------------------------------------------------
 
@@ -60,7 +72,7 @@ napoleon_attr_annotations = True
 
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
-    'aiida': ('https://aiida-core.readthedocs.io/en/latest/', None),
+    'aiida': ('https://aiida.readthedocs.io/projects/aiida-core/en/latest/', None),
     'pymatgen': ('https://pymatgen.org/', None),
 }
 
@@ -72,6 +84,6 @@ todo_include_todos = True
 # -- RST substitutions -------------------------------------------------------
 # Define common substitutions for use across documentation
 
-rst_prolog = """
+rst_prolog = r"""
 .. |E_relax| replace:: E\ :sub:`relax`
 """

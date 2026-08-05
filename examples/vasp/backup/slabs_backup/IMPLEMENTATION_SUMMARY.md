@@ -10,7 +10,7 @@ This document summarizes the implementation of the user-provided slabs feature i
 
 ## What Was Changed
 
-### Core Module: `teros/core/workgraph.py`
+### Core Module: `psteros/core/workgraph.py`
 
 #### 1. Function: `core_workgraph()`
 - **Added parameters**:
@@ -37,7 +37,7 @@ This document summarizes the implementation of the user-provided slabs feature i
 - **Updated call**: Passes `input_slabs` to `build_core_workgraph()`
 - **Made optional**: Generation parameters when `input_slabs` provided
 
-#### 4. Module: `teros/core/slabs.py`
+#### 4. Module: `psteros/core/slabs.py`
 - **Added function**: `wrap_input_slabs()` (marked as `@task.graph`)
 - **Purpose**: Provides namespace wrapper for user slabs (not currently used)
 - **Note**: Final implementation doesn't use this due to provenance cycle issues
@@ -71,7 +71,7 @@ else:
 
 # In build_core_workgraph() around line 450-480
 if use_input_slabs and relax_slabs:
-    from teros.core.slabs import relax_slabs_scatter
+    from psteros.core.slabs import relax_slabs_scatter
     from aiida.orm import load_code
     
     code = load_code(code_label)
@@ -110,16 +110,16 @@ This avoids serialization issues while maintaining the scatter-gather pattern.
 
 ### Syntax Validation
 ```bash
-✓ Python syntax check passed for teros/core/workgraph.py
+✓ Python syntax check passed for psteros/core/workgraph.py
 ✓ Python syntax check passed for examples/slabs/slabs_input_relax.py
 ✓ Python syntax check passed for examples/slabs/compare_modes.py
 ```
 
 ### Import Tests
 ```bash
-✓ Import successful: teros.core.workgraph.core_workgraph
-✓ Import successful: teros.core.workgraph.build_core_workgraph
-✓ Import successful: teros.core.workgraph.build_core_workgraph_with_map
+✓ Import successful: psteros.core.workgraph.core_workgraph
+✓ Import successful: psteros.core.workgraph.build_core_workgraph
+✓ Import successful: psteros.core.workgraph.build_core_workgraph_with_map
 ```
 
 ### Parameter Validation
@@ -293,7 +293,7 @@ Possible future additions:
 ## Files Affected
 
 ### Modified (2 files)
-1. `teros/core/workgraph.py` - Core implementation
+1. `psteros/core/workgraph.py` - Core implementation
 2. `CHANGE.md` - Changelog
 
 ### Created (7 files)

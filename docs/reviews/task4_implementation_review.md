@@ -44,7 +44,7 @@ All 4 required test functions implemented exactly as specified:
 
 ### Implementation Analysis
 
-**File:** `/home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py` (Lines 62-92)
+**File:** `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py` (Lines 62-92)
 
 #### Strengths
 
@@ -183,19 +183,19 @@ def _get_builder_for_structure_stage(...):
 ### All Tests Passing
 
 ```
-teros/core/aimd/test_utils.py::test_validate_stage_sequence_valid PASSED       [  7%]
-teros/core/aimd/test_utils.py::test_validate_stage_sequence_missing_temperature PASSED [ 15%]
-teros/core/aimd/test_utils.py::test_validate_stage_sequence_missing_steps PASSED [ 23%]
-teros/core/aimd/test_utils.py::test_validate_stage_sequence_empty PASSED       [ 30%]
-teros/core/aimd/test_utils.py::test_validate_supercell_spec_valid PASSED       [ 38%]
-teros/core/aimd/test_utils.py::test_validate_supercell_spec_not_list PASSED    [ 46%]
-teros/core/aimd/test_utils.py::test_validate_supercell_spec_wrong_length PASSED [ 53%]
-teros/core/aimd/test_utils.py::test_validate_supercell_spec_non_integer PASSED [ 61%]
-teros/core/aimd/test_utils.py::test_validate_supercell_spec_non_positive PASSED [ 69%]
-teros/core/aimd/test_utils.py::test_merge_builder_inputs_simple PASSED         [ 76%]
-teros/core/aimd/test_utils.py::test_merge_builder_inputs_nested PASSED         [ 84%]
-teros/core/aimd/test_utils.py::test_merge_builder_inputs_add_new_keys PASSED   [ 92%]
-teros/core/aimd/test_utils.py::test_merge_builder_inputs_replace_dict_with_value PASSED [100%]
+psteros/core/aimd/test_utils.py::test_validate_stage_sequence_valid PASSED       [  7%]
+psteros/core/aimd/test_utils.py::test_validate_stage_sequence_missing_temperature PASSED [ 15%]
+psteros/core/aimd/test_utils.py::test_validate_stage_sequence_missing_steps PASSED [ 23%]
+psteros/core/aimd/test_utils.py::test_validate_stage_sequence_empty PASSED       [ 30%]
+psteros/core/aimd/test_utils.py::test_validate_supercell_spec_valid PASSED       [ 38%]
+psteros/core/aimd/test_utils.py::test_validate_supercell_spec_not_list PASSED    [ 46%]
+psteros/core/aimd/test_utils.py::test_validate_supercell_spec_wrong_length PASSED [ 53%]
+psteros/core/aimd/test_utils.py::test_validate_supercell_spec_non_integer PASSED [ 61%]
+psteros/core/aimd/test_utils.py::test_validate_supercell_spec_non_positive PASSED [ 69%]
+psteros/core/aimd/test_utils.py::test_merge_builder_inputs_simple PASSED         [ 76%]
+psteros/core/aimd/test_utils.py::test_merge_builder_inputs_nested PASSED         [ 84%]
+psteros/core/aimd/test_utils.py::test_merge_builder_inputs_add_new_keys PASSED   [ 92%]
+psteros/core/aimd/test_utils.py::test_merge_builder_inputs_replace_dict_with_value PASSED [100%]
 
 ============================== 13 passed in 1.96s ==============================
 ```
@@ -297,8 +297,8 @@ feat(aimd): add builder inputs deep merge
 ### Commit Content
 
 ```
- teros/core/aimd/test_utils.py | 56 ++++++++++++++++++++++++++++++++++++
- teros/core/aimd/utils.py      | 34 ++++++++++++++++++++++
+ psteros/core/aimd/test_utils.py | 56 ++++++++++++++++++++++++++++++++++++
+ psteros/core/aimd/utils.py      | 34 ++++++++++++++++++++++
  2 files changed, 89 insertions(+), 1 deletion(-)
 ```
 

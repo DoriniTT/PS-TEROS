@@ -11,8 +11,8 @@ What this calculates:
 - AIMD simulation on all slabs
 """
 
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_aimd_defaults
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders import get_aimd_defaults
 from aiida.engine import submit
 
 # ============================================================================

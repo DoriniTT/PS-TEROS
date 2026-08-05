@@ -89,10 +89,10 @@ Tasks in workflow:
 **Result**: ✅ **PASSED**
 
 ```bash
-$ python -c "from teros.modules import get_slabs; print('✓ Import successful')"
+$ python -c "from psteros.modules import get_slabs; print('✓ Import successful')"
 ✓ Import successful
 
-$ python -c "from teros.workgraph import build_formation_workgraph; print('✓ Import successful')"
+$ python -c "from psteros.workgraph import build_formation_workgraph; print('✓ Import successful')"
 ✓ Import successful
 ```
 
@@ -115,7 +115,7 @@ The `@task` decorator automatically unwraps AiiDA data nodes:
 - Input: `orm.StructureData` → Function receives: `ase.Atoms`
 
 ### Solution
-Updated `get_slabs` function in `/home/thiagotd/git/PS-TEROS/teros/modules/slabs.py`:
+Updated `get_slabs` function in `/home/thiagotd/git/PS-TEROS/psteros/modules/slabs.py`:
 
 ```python
 # Before (incorrect)
@@ -141,15 +141,15 @@ def get_slabs(
 ## Files Created/Modified
 
 ### Created
-1. `/home/thiagotd/git/PS-TEROS/teros/modules/slabs.py` - Slab generation module
-2. `/home/thiagotd/git/PS-TEROS/teros/examples/slabs/slabs.py` - Main example script
-3. `/home/thiagotd/git/PS-TEROS/teros/examples/slabs/README.md` - Documentation
-4. `/home/thiagotd/git/PS-TEROS/teros/examples/slabs/test_slabs.py` - Direct test
-5. `/home/thiagotd/git/PS-TEROS/teros/examples/slabs/test_workflow.py` - Workflow test
+1. `/home/thiagotd/git/PS-TEROS/psteros/modules/slabs.py` - Slab generation module
+2. `/home/thiagotd/git/PS-TEROS/psteros/examples/slabs/slabs.py` - Main example script
+3. `/home/thiagotd/git/PS-TEROS/psteros/examples/slabs/README.md` - Documentation
+4. `/home/thiagotd/git/PS-TEROS/psteros/examples/slabs/test_slabs.py` - Direct test
+5. `/home/thiagotd/git/PS-TEROS/psteros/examples/slabs/test_workflow.py` - Workflow test
 
 ### Modified
-1. `/home/thiagotd/git/PS-TEROS/teros/workgraph.py` - Added slab generation to workflow
-2. `/home/thiagotd/git/PS-TEROS/teros/modules/__init__.py` - Export get_slabs
+1. `/home/thiagotd/git/PS-TEROS/psteros/workgraph.py` - Added slab generation to workflow
+2. `/home/thiagotd/git/PS-TEROS/psteros/modules/__init__.py` - Export get_slabs
 
 ---
 
@@ -167,7 +167,7 @@ The slab generation feature is now:
 To run the actual workflow:
 
 ```bash
-cd /home/thiagotd/git/PS-TEROS/teros/examples/slabs
+cd /home/thiagotd/git/PS-TEROS/psteros/examples/slabs
 source ~/envs/aiida/bin/activate
 python slabs.py
 ```

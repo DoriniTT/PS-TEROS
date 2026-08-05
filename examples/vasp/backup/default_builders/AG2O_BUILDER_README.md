@@ -25,7 +25,7 @@ The `default_ag2o_builders` module provides pre-configured parameters for **bina
 ## Module Location
 
 ```
-teros/core/builders/default_ag2o_builders.py
+psteros/core/builders/default_ag2o_builders.py
 ```
 
 ## Parameters Included
@@ -71,8 +71,8 @@ Total: **37 parameters** (6 more than Ag3PO4 due to additional slab generation o
 
 ```python
 from aiida import load_profile
-from teros.core.builders.default_ag2o_builders import get_ag2o_defaults
-from teros.core.workgraph import build_core_workgraph_with_map
+from psteros.core.builders.default_ag2o_builders import get_ag2o_defaults
+from psteros.core.workgraph import build_core_workgraph_with_map
 
 # Load AiiDA
 load_profile(profile='psteros')
@@ -180,8 +180,8 @@ This is different from ternary oxides which give **γ(Δμ_P, Δμ_O)**.
 """Generate and relax (100) surface of Ag2O (binary oxide)."""
 
 from aiida import load_profile
-from teros.core.builders.default_ag2o_builders import get_ag2o_defaults
-from teros.core.workgraph import build_core_workgraph_with_map
+from psteros.core.builders.default_ag2o_builders import get_ag2o_defaults
+from psteros.core.workgraph import build_core_workgraph_with_map
 
 # Load AiiDA
 load_profile(profile='psteros')
@@ -289,7 +289,7 @@ cd /home/thiagotd/git/worktree/PS-TEROS/default-builders
 source ~/envs/psteros/bin/activate
 
 python -c "
-from teros.core.builders.default_ag2o_builders import get_ag2o_defaults
+from psteros.core.builders.default_ag2o_builders import get_ag2o_defaults
 d = get_ag2o_defaults(structures_dir='/tmp', code_label='test', potential_family='PBE')
 print(f'Parameters: {len(d)}')
 print(f'Miller index: {d[\"miller_indices\"]}')
@@ -301,7 +301,7 @@ print(f'Binary oxide: Ready!')
 
 ## Summary
 
-✅ **Module**: `teros.core.builders.default_ag2o_builders`
+✅ **Module**: `psteros.core.builders.default_ag2o_builders`
 ✅ **Parameters**: 37 (complete set for binary oxides)
 ✅ **System Type**: Binary oxide (Ag + O only)
 ✅ **Nonmetal**: Dummy reference (uses Ag parameters)
@@ -312,6 +312,6 @@ print(f'Binary oxide: Ready!')
 ---
 
 **Created**: 2025-01-09
-**Module**: `teros.core.builders.default_ag2o_builders`
+**Module**: `psteros.core.builders.default_ag2o_builders`
 **System**: Binary Oxide (Ag₂O)
 **Status**: ✅ Ready for use

@@ -131,7 +131,7 @@ class TestWorkGraphConstruction:
     def test_build_bulk_only_workgraph(self, structures_dir, mock_code_label,
                                        vasp_parameters, scheduler_options):
         """Test building a bulk_only workgraph."""
-        from teros.core.workgraph import build_core_workgraph
+        from psteros.core.workgraph import build_core_workgraph
 
         wg = build_core_workgraph(
             workflow_preset='bulk_only',
@@ -157,7 +157,7 @@ class TestWorkGraphConstruction:
     def test_build_formation_enthalpy_workgraph(self, structures_dir, mock_code_label,
                                                  vasp_parameters, scheduler_options):
         """Test building a formation_enthalpy_only workgraph."""
-        from teros.core.workgraph import build_core_workgraph
+        from psteros.core.workgraph import build_core_workgraph
 
         wg = build_core_workgraph(
             workflow_preset='formation_enthalpy_only',
@@ -191,7 +191,7 @@ class TestWorkGraphConstruction:
     def test_build_surface_thermodynamics_workgraph(self, structures_dir, mock_code_label,
                                                      vasp_parameters, scheduler_options):
         """Test building a surface_thermodynamics workgraph."""
-        from teros.core.workgraph import build_core_workgraph
+        from psteros.core.workgraph import build_core_workgraph
 
         slab_params = vasp_parameters.copy()
         slab_params['ISIF'] = 2  # Fix cell for slabs
@@ -234,7 +234,7 @@ class TestWorkGraphPresetValidation:
 
     def test_invalid_preset_raises_error(self):
         """Test that invalid preset raises ValueError."""
-        from teros.core.workgraph import build_core_workgraph
+        from psteros.core.workgraph import build_core_workgraph
 
         with pytest.raises(ValueError, match="Unknown workflow preset"):
             build_core_workgraph(
@@ -245,7 +245,7 @@ class TestWorkGraphPresetValidation:
 
     def test_missing_required_params_raises_error(self, tmp_path):
         """Test that missing required parameters raise error."""
-        from teros.core.workgraph import build_core_workgraph
+        from psteros.core.workgraph import build_core_workgraph
         from ase import Atoms
         from ase.io import write
 
@@ -306,7 +306,7 @@ class TestTaskGraphFunctions:
 
     def test_scf_slabs_scatter_structure(self):
         """Test that scf_slabs_scatter has correct output structure."""
-        from teros.core.slabs import scf_slabs_scatter
+        from psteros.core.slabs import scf_slabs_scatter
 
         # Check function exists and has expected attributes
         assert callable(scf_slabs_scatter)
@@ -316,18 +316,18 @@ class TestTaskGraphFunctions:
 
     def test_relax_slabs_scatter_structure(self):
         """Test that relax_slabs_scatter has correct output structure."""
-        from teros.core.slabs import relax_slabs_scatter
+        from psteros.core.slabs import relax_slabs_scatter
 
         assert callable(relax_slabs_scatter)
 
     def test_compute_surface_energies_scatter_structure(self):
         """Test that compute_surface_energies_scatter has correct output structure."""
-        from teros.core.thermodynamics import compute_surface_energies_scatter
+        from psteros.core.thermodynamics import compute_surface_energies_scatter
 
         assert callable(compute_surface_energies_scatter)
 
     def test_compute_adsorption_energies_scatter_structure(self):
         """Test that compute_adsorption_energies_scatter has correct output structure."""
-        from teros.core.adsorption_energy import compute_adsorption_energies_scatter
+        from psteros.core.adsorption_energy import compute_adsorption_energies_scatter
 
         assert callable(compute_adsorption_energies_scatter)

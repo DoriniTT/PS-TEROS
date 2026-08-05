@@ -11,7 +11,7 @@ Successfully implemented **parallel slab relaxation** in PS-TEROS following the 
 ### Core Implementation
 
 #### 1. `relax_all_slabs` Task Graph
-**File**: `/home/thiagotd/git/PS-TEROS/teros/workgraph.py`
+**File**: `/home/thiagotd/git/PS-TEROS/psteros/workgraph.py`
 
 A `@task.graph` function that:
 - ✅ Takes dynamic slabs dict from `get_slabs`
@@ -165,10 +165,10 @@ Tasks in workflow:
 ### ✅ Test 2: Module Imports
 
 ```bash
-$ python -c "from teros.workgraph import relax_all_slabs; print('✓')"
+$ python -c "from psteros.workgraph import relax_all_slabs; print('✓')"
 ✓
 
-$ python -c "from teros.workgraph import build_formation_workgraph; print('✓')"
+$ python -c "from psteros.workgraph import build_formation_workgraph; print('✓')"
 ✓
 ```
 
@@ -187,7 +187,7 @@ Daemon is running with PID 1294374
 ### Example 1: Generate Slabs Only (No Relaxation)
 
 ```python
-from teros.workgraph import build_formation_workgraph
+from psteros.workgraph import build_formation_workgraph
 
 wg = build_formation_workgraph(
     structures_dir='/path/to/structures',
@@ -256,7 +256,7 @@ for term_id, slab in relaxed.items():
 ### Step 1: Run Workflow with Slab Relaxation
 
 ```bash
-cd /home/thiagotd/git/PS-TEROS/teros/examples/slabs
+cd /home/thiagotd/git/PS-TEROS/psteros/examples/slabs
 source ~/envs/aiida/bin/activate
 python slabs_relax.py
 ```
@@ -366,7 +366,7 @@ slab_parameters = {
 
 ### Code Reference
 
-- **Main workflow**: `teros/workgraph.py` lines 60-126 (`relax_all_slabs`)
+- **Main workflow**: `psteros/workgraph.py` lines 60-126 (`relax_all_slabs`)
 - **Example**: `examples/slabs/slabs_relax.py`
 - **Tests**: `examples/slabs/test_slab_relax.py`
 
@@ -426,7 +426,7 @@ After relaxing slabs, you can:
 ## 🚀 Run It Now!
 
 ```bash
-cd /home/thiagotd/git/PS-TEROS/teros/examples/slabs
+cd /home/thiagotd/git/PS-TEROS/psteros/examples/slabs
 source ~/envs/aiida/bin/activate
 python slabs_relax.py
 ```

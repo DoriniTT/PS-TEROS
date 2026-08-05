@@ -59,7 +59,7 @@ except ImportError:
 # ==============================================================================
 
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 
 def main():

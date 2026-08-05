@@ -119,14 +119,14 @@ Check with O:   7 / 1 = 7 formula units ✓
 ## Code Changes Summary
 
 ### Files Created
-1. `teros/core/cleavage.py` (221 lines)
+1. `psteros/core/cleavage.py` (221 lines)
 2. `docs/cleavage_energy.md`
 3. `CLEAVAGE_IMPLEMENTATION.md`
 4. `QUICK_START_CLEAVAGE.md`
 
 ### Files Modified
-1. `teros/core/workgraph.py` - Added cleavage integration
-2. `teros/core/__init__.py` - Added exports
+1. `psteros/core/workgraph.py` - Added cleavage integration
+2. `psteros/core/__init__.py` - Added exports
 3. `examples/cleavage/slabs_relax_ag2o_cleavage.py` - Enabled feature
 
 ## Conclusion

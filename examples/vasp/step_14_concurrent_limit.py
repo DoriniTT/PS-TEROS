@@ -55,7 +55,7 @@ MAX_CONCURRENT_JOBS = 4
 # ==============================================================================
 
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 
 def main():

@@ -9,7 +9,7 @@ What this calculates:
 - Bulk structure relaxation only
 """
 
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 from aiida.engine import submit
 
 # ============================================================================

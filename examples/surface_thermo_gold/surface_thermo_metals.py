@@ -23,7 +23,7 @@ Usage:
 import sys
 import os
 from aiida import load_profile
-from teros.core.surface_energy import build_metal_surface_energy_workgraph
+from psteros.core.surface_energy import build_metal_surface_energy_workgraph
 
 
 def main():
@@ -161,7 +161,7 @@ def main():
     print(f"  - Shape factor expected: ~1.02 (near spherical)")
     print(f"\nTo visualize the Wulff shape after completion:")
     print(f"  from aiida import orm")
-    print(f"  from teros.core.surface_energy import visualize_wulff_shape, get_wulff_shape_summary")
+    print(f"  from psteros.core.surface_energy import visualize_wulff_shape, get_wulff_shape_summary")
     print(f"  wg = orm.load_node({wg.pk})")
     print(f"  print(get_wulff_shape_summary(wg.outputs.wulff_shape))")
     print(f"  visualize_wulff_shape(wg.outputs.bulk_structure, wg.outputs.surface_energies)")

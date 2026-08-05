@@ -6,7 +6,7 @@ Successfully extracted the input validation logic (lines 1133-1168 of `build_cor
 
 ## Files Created
 
-### `/home/thiagotd/git/PS-TEROS/teros/core/stages/input_validation.py`
+### `/home/thiagotd/git/PS-TEROS/psteros/core/stages/input_validation.py`
 
 New module implementing Stage 2 of the workflow construction pipeline.
 
@@ -24,7 +24,7 @@ New module implementing Stage 2 of the workflow construction pipeline.
 
 ## Files Modified
 
-### `/home/thiagotd/git/PS-TEROS/teros/core/stages/__init__.py`
+### `/home/thiagotd/git/PS-TEROS/psteros/core/stages/__init__.py`
 
 - Replaced placeholder functions with imports from `input_validation.py`
 - Updated `__all__` to export `validate_workflow_inputs` (renamed from `validate_required_inputs` for clarity)
@@ -72,7 +72,7 @@ The extracted code preserves the exact original logic:
 ## Usage Example
 
 ```python
-from teros.core.stages import validate_workflow_inputs, StageContext
+from psteros.core.stages import validate_workflow_inputs, StageContext
 
 # After Stage 1 (preset resolution)
 needs_bulk = validate_workflow_inputs(
@@ -116,7 +116,7 @@ needs_bulk = (
 Can now be replaced with:
 
 ```python
-from teros.core.stages import validate_workflow_inputs
+from psteros.core.stages import validate_workflow_inputs
 
 # Stage 2: Validate inputs
 needs_bulk = validate_workflow_inputs(
@@ -137,7 +137,7 @@ The module can be unit tested in isolation:
 
 ```python
 import pytest
-from teros.core.stages.input_validation import validate_workflow_inputs
+from psteros.core.stages.input_validation import validate_workflow_inputs
 
 def test_validate_bulk_needed_thermodynamics():
     """Bulk is needed when compute_thermodynamics is True."""

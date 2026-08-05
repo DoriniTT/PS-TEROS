@@ -15,7 +15,7 @@
 ## Task 1: Update aimd_single_stage_scatter Signature
 
 **Files:**
-- Modify: `teros/core/aimd_functions.py:122-135`
+- Modify: `psteros/core/aimd_functions.py:122-135`
 
 **Step 1: Update function signature**
 
@@ -80,7 +80,7 @@ Update the docstring (lines ~136-161) to document new parameters:
 **Step 3: Commit signature change**
 
 ```bash
-git add teros/core/aimd_functions.py
+git add psteros/core/aimd_functions.py
 git commit -m "refactor(aimd): update aimd_single_stage_scatter signature for overrides
 
 - Rename aimd_parameters -> base_aimd_parameters
@@ -93,7 +93,7 @@ git commit -m "refactor(aimd): update aimd_single_stage_scatter signature for ov
 ## Task 2: Implement Override Merging Logic
 
 **Files:**
-- Modify: `teros/core/aimd_functions.py:178-181`
+- Modify: `psteros/core/aimd_functions.py:178-181`
 
 **Step 1: Add merge logic in scatter loop**
 
@@ -122,7 +122,7 @@ Replace the old line:
 **Step 2: Commit merge logic**
 
 ```bash
-git add teros/core/aimd_functions.py
+git add psteros/core/aimd_functions.py
 git commit -m "feat(aimd): implement per-structure INCAR override merging
 
 Merge logic:
@@ -136,7 +136,7 @@ Merge logic:
 ## Task 3: Update Main Workflow Caller
 
 **Files:**
-- Modify: `teros/core/workgraph.py:1660`
+- Modify: `psteros/core/workgraph.py:1660`
 
 **Step 1: Find and update parameter name**
 
@@ -145,7 +145,7 @@ Find the import and call to `aimd_single_stage_scatter` (around line 1660):
 ```python
         # Import appropriate scatter function based on calculator
         if calculator == 'vasp':
-            from teros.core.aimd_functions import aimd_single_stage_scatter
+            from psteros.core.aimd_functions import aimd_single_stage_scatter
             aimd_scatter_func = aimd_single_stage_scatter
 ```
 
@@ -163,7 +163,7 @@ Find where it's called (search for `aimd_scatter_func(` or check AIMD integratio
 **Step 2: Commit main workflow update**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "fix(workgraph): update aimd_single_stage_scatter call for new signature
 
 - Rename aimd_parameters -> base_aimd_parameters
@@ -175,7 +175,7 @@ git commit -m "fix(workgraph): update aimd_single_stage_scatter call for new sig
 ## Task 4: Implement Override Extraction in Standalone Module
 
 **Files:**
-- Modify: `teros/core/aimd/workgraph.py:175-230`
+- Modify: `psteros/core/aimd/workgraph.py:175-230`
 
 **Step 1: Replace stage loop with override extraction**
 
@@ -248,7 +248,7 @@ Find the stage loop in `build_aimd_workgraph` (starts around line 175). Replace 
 **Step 2: Commit override extraction**
 
 ```bash
-git add teros/core/aimd/workgraph.py
+git add psteros/core/aimd/workgraph.py
 git commit -m "feat(aimd): implement override extraction and priority system
 
 Priority order: matrix > stage > structure > base
@@ -262,7 +262,7 @@ passes merged dict per structure to scatter function."
 ## Task 5: Update Docstring for Override Parameters
 
 **Files:**
-- Modify: `teros/core/aimd/workgraph.py:67-105`
+- Modify: `psteros/core/aimd/workgraph.py:67-105`
 
 **Step 1: Update parameter descriptions**
 
@@ -337,7 +337,7 @@ Find and remove the old "CURRENT LIMITATIONS" section from the docstring (if it 
 **Step 3: Commit docstring update**
 
 ```bash
-git add teros/core/aimd/workgraph.py
+git add psteros/core/aimd/workgraph.py
 git commit -m "docs(aimd): update docstring with functional override system
 
 - Remove 'NOT IMPLEMENTED' warnings
@@ -351,7 +351,7 @@ git commit -m "docs(aimd): update docstring with functional override system
 ## Task 6: Write Override Tests
 
 **Files:**
-- Create: `teros/core/aimd/test_overrides.py`
+- Create: `psteros/core/aimd/test_overrides.py`
 
 **Step 1: Write test for structure overrides**
 
@@ -361,7 +361,7 @@ Create new test file:
 """Tests for AIMD override system."""
 from aiida import orm, load_profile
 from ase.build import bulk
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 
 # Load AiiDA profile for tests
 load_profile('presto')
@@ -513,7 +513,7 @@ def test_override_priority():
 **Step 2: Run tests**
 
 ```bash
-pytest teros/core/aimd/test_overrides.py -v
+pytest psteros/core/aimd/test_overrides.py -v
 ```
 
 Expected: All 4 tests PASS
@@ -521,7 +521,7 @@ Expected: All 4 tests PASS
 **Step 3: Commit tests**
 
 ```bash
-git add teros/core/aimd/test_overrides.py
+git add psteros/core/aimd/test_overrides.py
 git commit -m "test(aimd): add override system tests
 
 Tests:
@@ -536,12 +536,12 @@ Tests:
 ## Task 7: Verify Existing Tests Still Pass
 
 **Files:**
-- Test: `teros/core/aimd/test_*.py`
+- Test: `psteros/core/aimd/test_*.py`
 
 **Step 1: Run all AIMD module tests**
 
 ```bash
-pytest teros/core/aimd/test_*.py -v
+pytest psteros/core/aimd/test_*.py -v
 ```
 
 Expected: All tests PASS (15 existing + 4 new = 19 total)
@@ -559,7 +559,7 @@ Fix any failures before proceeding.
 ## Task 8: Update README Documentation
 
 **Files:**
-- Modify: `teros/core/aimd/README.md:176-186`
+- Modify: `psteros/core/aimd/README.md:176-186`
 
 **Step 1: Update "Current Limitations" section**
 
@@ -639,7 +639,7 @@ wg = build_aimd_workgraph(
 **Step 2: Commit README update**
 
 ```bash
-git add teros/core/aimd/README.md
+git add psteros/core/aimd/README.md
 git commit -m "docs(aimd): document functional override system in README
 
 - Replace limitation section with override documentation
@@ -680,7 +680,7 @@ Usage:
 import sys
 import os
 from aiida import load_profile, orm
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 from ase.io import read
 
 
@@ -891,8 +891,8 @@ Example demonstrates:
 **Step 1: Clear Python cache and restart daemon**
 
 ```bash
-find teros/core -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
-find teros/core -name "*.pyc" -delete 2>/dev/null
+find psteros/core -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
+find psteros/core -name "*.pyc" -delete 2>/dev/null
 verdi daemon restart
 ```
 
@@ -939,12 +939,12 @@ Expected for ag2 stage 0: `ENCUT = 500`, `PREC = Normal`, `ALGO = Normal`
 
 **Files:**
 - Verify: All changes committed
-- Update: `teros/core/aimd/README.md` if needed
+- Update: `psteros/core/aimd/README.md` if needed
 
 **Step 1: Run all tests one final time**
 
 ```bash
-pytest teros/core/aimd/test_*.py -v
+pytest psteros/core/aimd/test_*.py -v
 ```
 
 Expected: All 19 tests PASS
@@ -967,7 +967,7 @@ Expected: See all 11 commits from this implementation
 
 **Step 4: Update main README if needed**
 
-Check if `teros/core/aimd/README.md` needs any final clarifications based on testing experience.
+Check if `psteros/core/aimd/README.md` needs any final clarifications based on testing experience.
 
 ---
 
@@ -985,7 +985,7 @@ Check if `teros/core/aimd/README.md` needs any final clarifications based on tes
 
 ### Issue: Tests fail with import error
 
-**Solution:** Check `teros/core/aimd/__init__.py` exports the function correctly
+**Solution:** Check `psteros/core/aimd/__init__.py` exports the function correctly
 
 ### Issue: WorkGraph fails immediately
 

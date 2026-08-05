@@ -6,7 +6,7 @@
 
 ## Problem Statement
 
-The standalone AIMD module (`teros/core/aimd/`) accepts override parameters but cannot apply them. All structures in all stages use identical INCAR parameters from `builder_inputs`.
+The standalone AIMD module (`psteros/core/aimd/`) accepts override parameters but cannot apply them. All structures in all stages use identical INCAR parameters from `builder_inputs`.
 
 **Root cause:** `aimd_single_stage_scatter()` accepts a single `aimd_parameters` dict and applies it uniformly to all structures in the scatter loop.
 
@@ -28,7 +28,7 @@ Structures missing from override dict fall back to base parameters.
 
 ### 1. Function Signature Change
 
-**File:** `teros/core/aimd_functions.py`
+**File:** `psteros/core/aimd_functions.py`
 
 ```python
 @task.graph
@@ -93,7 +93,7 @@ for slab_label, slab_structure in slabs.items():
 
 ### 3. Standalone Module Integration
 
-**File:** `teros/core/aimd/workgraph.py`
+**File:** `psteros/core/aimd/workgraph.py`
 
 Extract INCAR parameters from the three override levels:
 
@@ -154,7 +154,7 @@ for stage_idx, stage_config in enumerate(aimd_stages):
 
 ### 4. Documentation Updates
 
-**File:** `teros/core/aimd/workgraph.py` docstring
+**File:** `psteros/core/aimd/workgraph.py` docstring
 
 Remove "NOT IMPLEMENTED" warnings. Update parameter descriptions:
 
@@ -174,7 +174,7 @@ Override priority: matrix_overrides > stage_overrides > structure_overrides > bu
 """
 ```
 
-**File:** `teros/core/aimd/README.md`
+**File:** `psteros/core/aimd/README.md`
 
 Update "Current Limitations" section:
 
@@ -196,7 +196,7 @@ support **INCAR parameter customization only**.
 
 ### New tests
 
-**File:** `teros/core/aimd/test_workgraph.py` (new)
+**File:** `psteros/core/aimd/test_workgraph.py` (new)
 
 ```python
 def test_structure_overrides():
@@ -231,7 +231,7 @@ No changes needed. Unit tests for `validate_*` and `merge_*` functions remain va
 
 ### Files requiring updates
 
-1. **`teros/core/workgraph.py`** - Main workflow
+1. **`psteros/core/workgraph.py`** - Main workflow
    - Line ~1660: Rename `aimd_parameters=` to `base_aimd_parameters=`
    - Add `structure_aimd_overrides=None`
 
@@ -239,7 +239,7 @@ No changes needed. Unit tests for `validate_*` and `merge_*` functions remain va
    - Uses main workflow, breaks indirectly
    - Fix by updating workgraph.py
 
-3. **`teros/core/aimd/workgraph.py`**
+3. **`psteros/core/aimd/workgraph.py`**
    - Implement override extraction logic
    - Update parameter passing to scatter function
 
@@ -276,8 +276,8 @@ Implementation succeeds when:
 ## Implementation Steps
 
 1. Update `aimd_single_stage_scatter()` signature and logic
-2. Update `teros/core/workgraph.py` caller
-3. Implement override extraction in `teros/core/aimd/workgraph.py`
+2. Update `psteros/core/workgraph.py` caller
+3. Implement override extraction in `psteros/core/aimd/workgraph.py`
 4. Write new tests
 5. Update documentation
 6. Verify with running workflow

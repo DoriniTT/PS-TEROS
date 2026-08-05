@@ -7,7 +7,7 @@ using Si diamond structure with minimal computational settings.
 """
 
 from aiida import orm, load_profile
-from teros.core.convergence import (
+from psteros.core.convergence import (
     build_thickness_convergence_workgraph,
     get_thickness_convergence_results,
 )

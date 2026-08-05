@@ -4,7 +4,7 @@ Test script to verify the slab relaxation workflow can be built without submitti
 """
 
 from aiida import load_profile
-from teros.workgraph import build_core_workgraph
+from psteros.workgraph import build_core_workgraph
 
 def test_slab_relax_workflow():
     """Test that the slab relaxation workflow can be built successfully."""
@@ -14,7 +14,7 @@ def test_slab_relax_workflow():
     load_profile()
 
     # Define minimal parameters for testing
-    structures_dir = '/home/thiagotd/git/PS-TEROS/teros/structures'
+    structures_dir = '/home/thiagotd/git/PS-TEROS/psteros/structures'
 
     bulk_parameters = {'ENCUT': 520, 'IBRION': 2, 'ISIF': 3, 'NSW': 1}
     bulk_options = {'resources': {'num_machines': 1, 'num_cores_per_machine': 40}, 'queue_name': 'par40'}

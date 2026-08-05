@@ -11,7 +11,7 @@ This document summarizes the updates made to the PS-TEROS workflow preset system
 
 ## Changes Made
 
-### 1. Updated Workflow Presets (`teros/core/workflow_presets.py`)
+### 1. Updated Workflow Presets (`psteros/core/workflow_presets.py`)
 
 #### Modified Presets:
 
@@ -165,7 +165,7 @@ All presets have been validated:
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-reorganize
 source ~/envs/psteros/bin/activate
-python -c "from teros.core.workflow_presets import list_workflow_presets; list_workflow_presets()"
+python -c "from psteros.core.workflow_presets import list_workflow_presets; list_workflow_presets()"
 ```
 
 Verified preset flags:
@@ -185,7 +185,7 @@ Verified preset flags:
 ## Files Modified
 
 ### Core Code:
-- `teros/core/workflow_presets.py` - Updated preset definitions
+- `psteros/core/workflow_presets.py` - Updated preset definitions
 
 ### New Examples:
 - `examples/step_by_step/step_08_electronic_structure_slabs.py`

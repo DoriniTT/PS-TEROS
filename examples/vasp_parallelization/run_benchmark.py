@@ -17,7 +17,7 @@ Usage:
        verdi process report <PK>
 
     4. After completion, view results:
-       python -c "from teros.core.vasp_parallelization import print_benchmark_summary; print_benchmark_summary(<PK>)"
+       python -c "from psteros.core.vasp_parallelization import print_benchmark_summary; print_benchmark_summary(<PK>)"
 
 Notes:
     - Adjust code_label, potential_family, and options for your cluster
@@ -28,7 +28,7 @@ Notes:
 from aiida import orm
 from pymatgen.core import Structure, Lattice
 
-from teros.core.vasp_parallelization import (
+from psteros.core.vasp_parallelization import (
     build_parallelization_benchmark_workgraph,
     generate_benchmark_combinations,
     print_benchmark_summary,
@@ -159,11 +159,11 @@ def main():
 
     print(f"\n2. After completion, view results:")
     print(
-        f'   python -c "from teros.core.vasp_parallelization import print_benchmark_summary; print_benchmark_summary({wg.pk})"'
+        f'   python -c "from psteros.core.vasp_parallelization import print_benchmark_summary; print_benchmark_summary({wg.pk})"'
     )
 
     print(f"\n3. Or in Python:")
-    print(f"   from teros.core.vasp_parallelization import get_benchmark_results")
+    print(f"   from psteros.core.vasp_parallelization import get_benchmark_results")
     print(f"   results = get_benchmark_results({wg.pk})")
     print(f"   print(results['recommended'])")
 

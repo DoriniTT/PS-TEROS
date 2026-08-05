@@ -25,7 +25,7 @@ The implementation specifications in the binding files are well-designed and com
 
 **Status:** ❌ NOT IMPLEMENTED
 
-**Issue:** The file `/home/thiagotd/git/PS-TEROS/teros/core/convergence/visualization.py` ends at line 694 and contains NONE of the new thickness convergence functions.
+**Issue:** The file `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/visualization.py` ends at line 694 and contains NONE of the new thickness convergence functions.
 
 **Expected:** Four new functions should have been added after line 437:
 - `_get_thickness_structure_info()` (helper function)
@@ -56,7 +56,7 @@ The implementation specifications in the binding files are well-designed and com
 
 **Status:** ❌ NOT IMPLEMENTED
 
-**Issue:** The file `/home/thiagotd/git/PS-TEROS/teros/core/convergence/__init__.py` does NOT contain the three new visualization function exports:
+**Issue:** The file `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/__init__.py` does NOT contain the three new visualization function exports:
 - `print_thickness_convergence_summary`
 - `plot_thickness_convergence`
 - `export_thickness_convergence_data`
@@ -115,7 +115,7 @@ Replace the entire __init__.py content with the version from exports_impl.md lin
 
 2. **Proper import paths:**
    ```python
-   from teros.core.convergence import (
+   from psteros.core.convergence import (
        build_thickness_convergence_workgraph,
        get_thickness_convergence_results,
    )
@@ -150,7 +150,7 @@ Replace the entire __init__.py content with the version from exports_impl.md lin
 #### Minor Issues ⚠️
 
 1. **Import dependency issue:**
-   - The script imports functions that are NOT YET exported from `teros.core.convergence.__init__.py`
+   - The script imports functions that are NOT YET exported from `psteros.core.convergence.__init__.py`
    - This will cause `ImportError` until the exports are fixed
    - The functions exist in `workgraph.py` but are not exposed via `__init__.py`
 
@@ -172,7 +172,7 @@ verdi daemon restart  # CRITICAL after code changes
 
 ### 2. Check imports
 ```bash
-python -c "from teros.core.convergence import (
+python -c "from psteros.core.convergence import (
     print_thickness_convergence_summary,
     plot_thickness_convergence,
     export_thickness_convergence_data
@@ -181,14 +181,14 @@ python -c "from teros.core.convergence import (
 
 ### 3. Linting
 ```bash
-flake8 teros/core/convergence/visualization.py --max-line-length=120 --ignore=E501,W503,E402,F401
-flake8 teros/core/convergence/__init__.py --max-line-length=120 --ignore=E501,W503,E402,F401
+flake8 psteros/core/convergence/visualization.py --max-line-length=120 --ignore=E501,W503,E402,F401
+flake8 psteros/core/convergence/__init__.py --max-line-length=120 --ignore=E501,W503,E402,F401
 ```
 
 ### 4. Test with completed WorkGraph (if available)
 ```bash
 python -c "
-from teros.core.convergence import print_thickness_convergence_summary
+from psteros.core.convergence import print_thickness_convergence_summary
 print_thickness_convergence_summary(<PK>)
 "
 ```
@@ -204,7 +204,7 @@ python run_thickness_convergence.py --help  # Should show usage
 ## Corrections Needed
 
 ### Priority 1: Apply visualization.py changes
-**File:** `/home/thiagotd/git/PS-TEROS/teros/core/convergence/visualization.py`
+**File:** `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/visualization.py`
 
 **Action:** Insert the complete code block from `visualization_impl.md` (lines 18-342) after line 694 (end of file, after `export_convergence_data()` function).
 
@@ -214,7 +214,7 @@ python run_thickness_convergence.py --help  # Should show usage
 - Approximately 342 lines of new code
 
 ### Priority 2: Update __init__.py exports
-**File:** `/home/thiagotd/git/PS-TEROS/teros/core/convergence/__init__.py`
+**File:** `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/__init__.py`
 
 **Action:** Replace entire file content with the version from `exports_impl.md` lines 16-107.
 
@@ -255,7 +255,7 @@ cd /home/thiagotd/git/PS-TEROS/examples/convergence/thickness_convergence
 python -c "from ase.build import bulk; from ase.io import write; write('Au.cif', bulk('Au', 'fcc', a=4.08))"
 
 # Test import (should not raise ImportError)
-python -c "from teros.core.convergence import build_thickness_convergence_workgraph, get_thickness_convergence_results"
+python -c "from psteros.core.convergence import build_thickness_convergence_workgraph, get_thickness_convergence_results"
 
 # Optionally submit workflow
 python run_thickness_convergence.py

@@ -26,17 +26,17 @@ The feature allows users to calculate DOS and band structures for **selected sla
 
 ### 2. Files Modified
 
-#### `teros/core/builders/electronic_properties_builder.py` (+142 lines)
+#### `psteros/core/builders/electronic_properties_builder.py` (+142 lines)
 - Added `get_slab_electronic_properties_defaults()` function
 - Material-agnostic builder with denser k-point sampling for 2D systems
 - Returns complete parameter dictionary for vasp.v2.bands workchain
 
-#### `teros/core/slabs.py` (+153 lines)
+#### `psteros/core/slabs.py` (+153 lines)
 - Added `calculate_electronic_properties_slabs_scatter()` task graph
 - Scatter-gather function for parallel slab electronic properties
 - Returns 4 dynamic namespaces: bands, dos, primitive_structures, seekpath_parameters
 
-#### `teros/core/workgraph.py` (+87 lines)
+#### `psteros/core/workgraph.py` (+87 lines)
 - Added 4 new outputs to `@task.graph` decorator
 - Added 5 new parameters to `build_core_workgraph()` function
 - Integrated conditional task creation in `build_core_workgraph()`
@@ -59,8 +59,8 @@ The feature allows users to calculate DOS and band structures for **selected sla
 ### Basic Usage
 
 ```python
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_slab_electronic_properties_defaults
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders import get_slab_electronic_properties_defaults
 
 # Get defaults for slab electronic properties
 slab_ep_defaults = get_slab_electronic_properties_defaults(
@@ -249,9 +249,9 @@ Potential improvements identified in the implementation:
 ### Syntax Verification ✅
 All files compile successfully:
 ```bash
-python -m py_compile teros/core/builders/electronic_properties_builder.py
-python -m py_compile teros/core/slabs.py
-python -m py_compile teros/core/workgraph.py
+python -m py_compile psteros/core/builders/electronic_properties_builder.py
+python -m py_compile psteros/core/slabs.py
+python -m py_compile psteros/core/workgraph.py
 python -m py_compile examples/complete/complete_ag2o_example.py
 ```
 

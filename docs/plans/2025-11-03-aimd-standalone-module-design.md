@@ -2,7 +2,7 @@
 
 **Date:** 2025-11-03
 **Status:** Design Complete
-**Location:** `teros/core/aimd/`
+**Location:** `psteros/core/aimd/`
 
 ## Purpose
 
@@ -21,7 +21,7 @@ Create a standalone AIMD module that gives users complete control over multi-sta
 ## Module Structure
 
 ```
-teros/core/aimd/
+psteros/core/aimd/
 ├── __init__.py           # Exports main functions
 ├── workgraph.py          # Main entry: build_aimd_workgraph()
 ├── tasks.py              # WorkGraph tasks for supercell and AIMD orchestration
@@ -35,9 +35,9 @@ teros/core/aimd/
 
 The module imports and orchestrates existing AIMD functions:
 
-- `prepare_aimd_parameters()` from `teros.core.aimd` - inject temperature/steps into INCAR
-- `aimd_single_stage_scatter()` from `teros.core.aimd` - parallel AIMD on multiple structures
-- `extract_total_energy()` from `teros.core.slabs` - extract energies from outputs
+- `prepare_aimd_parameters()` from `psteros.core.aimd` - inject temperature/steps into INCAR
+- `aimd_single_stage_scatter()` from `psteros.core.aimd` - parallel AIMD on multiple structures
+- `extract_total_energy()` from `psteros.core.slabs` - extract energies from outputs
 
 ### WorkGraph Flow
 
@@ -424,7 +424,7 @@ Both use the same underlying `aimd_single_stage_scatter()` function.
 
 ## Documentation
 
-Create `teros/core/aimd/README.md` explaining:
+Create `psteros/core/aimd/README.md` explaining:
 - Module purpose and design
 - API reference with examples
 - Relationship to `workgraph.py` AIMD integration

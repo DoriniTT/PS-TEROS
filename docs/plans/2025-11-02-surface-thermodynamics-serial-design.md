@@ -52,10 +52,10 @@ All VASP nodes exist at the same graph level. The WorkGraph engine applies `max_
 
 ### Module Structure
 
-Create the new module in `teros/experimental/surface_thermo_preset_serial/`:
+Create the new module in `psteros/experimental/surface_thermo_preset_serial/`:
 
 ```
-teros/experimental/surface_thermo_preset_serial/
+psteros/experimental/surface_thermo_preset_serial/
 ├── __init__.py                      # Export surface_thermodynamics_serial_workgraph
 ├── workgraph.py                     # Main @task.graph entry point
 ├── slab_operations.py               # Node builders for slab calculations
@@ -128,9 +128,9 @@ def surface_thermodynamics_serial_workgraph(...):
 
 The serial implementation will reuse existing code:
 
-- **Calcfunctions**: Reuse all calcfunctions from `teros.core.thermodynamics` (`calculate_surface_energy_ternary`, `calculate_surface_energy_binary`, etc.)
+- **Calcfunctions**: Reuse all calcfunctions from `psteros.core.thermodynamics` (`calculate_surface_energy_ternary`, `calculate_surface_energy_binary`, etc.)
 - **VASP setup**: Reuse parameter preparation logic from current implementation
-- **Slab generation**: Reuse `generate_slab_structures` from `teros.core.slabs`
+- **Slab generation**: Reuse `generate_slab_structures` from `psteros.core.slabs`
 
 Only the graph construction pattern changes. The underlying calculations remain identical.
 
@@ -179,7 +179,7 @@ Test the serial preset with `max_concurrent_jobs=2`:
 ## Implementation Notes
 
 - Keep the current `surface_thermodynamics` preset unchanged
-- Place serial variant in `teros/experimental/` for testing
+- Place serial variant in `psteros/experimental/` for testing
 - If successful, consider migrating other presets to flat structure
 - Document differences between nested and flat approaches
 

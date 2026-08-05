@@ -64,7 +64,7 @@ def print_thickness_convergence_summary(workgraph: Union[int, str, WorkGraph]) -
         workgraph: WorkGraph PK (int), PK as string, or WorkGraph object
 
     Example:
-        >>> from teros.core.convergence import print_thickness_convergence_summary
+        >>> from psteros.core.convergence import print_thickness_convergence_summary
         >>> print_thickness_convergence_summary(12345)  # Using PK
         >>> print_thickness_convergence_summary(wg)      # Using WorkGraph object
     """
@@ -156,7 +156,7 @@ def plot_thickness_convergence(
         matplotlib.figure.Figure: The figure object for further customization
 
     Example:
-        >>> from teros.core.convergence import plot_thickness_convergence
+        >>> from psteros.core.convergence import plot_thickness_convergence
         >>> fig = plot_thickness_convergence(12345)
         >>> fig = plot_thickness_convergence(wg, save_path='thickness_conv.png')
     """
@@ -258,7 +258,7 @@ def export_thickness_convergence_data(
         dict: Mapping of file types to file paths created
 
     Example:
-        >>> from teros.core.convergence import export_thickness_convergence_data
+        >>> from psteros.core.convergence import export_thickness_convergence_data
         >>> files = export_thickness_convergence_data(12345, '/path/to/output')
         >>> print(files)
         {'csv': '/path/to/output/thickness_conv.csv', 'summary_json': '...'}
@@ -371,14 +371,14 @@ After adding this code:
 verdi daemon restart
 
 # 2. Check imports
-python -c "from teros.core.convergence import print_thickness_convergence_summary, plot_thickness_convergence, export_thickness_convergence_data"
+python -c "from psteros.core.convergence import print_thickness_convergence_summary, plot_thickness_convergence, export_thickness_convergence_data"
 
 # 3. Linting
-flake8 teros/core/convergence/visualization.py --max-line-length=120 --ignore=E501,W503,E402,F401
+flake8 psteros/core/convergence/visualization.py --max-line-length=120 --ignore=E501,W503,E402,F401
 
 # 4. Test with a completed WorkGraph
 python -c "
-from teros.core.convergence import print_thickness_convergence_summary
+from psteros.core.convergence import print_thickness_convergence_summary
 print_thickness_convergence_summary(<PK>)
 "
 ```

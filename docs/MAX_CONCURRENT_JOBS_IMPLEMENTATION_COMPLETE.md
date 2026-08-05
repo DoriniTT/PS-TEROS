@@ -21,16 +21,16 @@ Successfully implemented and documented the `max_concurrent_jobs` parameter that
 
 #### Core Functionality (5 files)
 
-1. **teros/core/slabs.py**
+1. **psteros/core/slabs.py**
    - ✅ `scf_slabs_scatter` (lines 359-434)
    - ✅ `relax_slabs_scatter` (lines 437-510)
    - ✅ `scf_relax_and_calculate_relaxation_energy` (lines 238-365)
    - ✅ `calculate_electronic_properties_slabs_scatter` (lines 584-656)
 
-2. **teros/core/adsorption_energy.py**
+2. **psteros/core/adsorption_energy.py**
    - ✅ `compute_adsorption_energies_scatter` (lines 551-815)
 
-3. **teros/core/workgraph.py**
+3. **psteros/core/workgraph.py**
    - ✅ Added `max_concurrent_jobs` parameter to `core_workgraph`
    - ✅ Added `max_concurrent_jobs` parameter to `build_core_workgraph`
    - ✅ Propagated parameter to all @task.graph function calls (8 locations)
@@ -176,7 +176,7 @@ With `max_concurrent_jobs=2` and 3 slab structures:
 ### Basic Usage
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     workflow_preset='surface_thermodynamics',
@@ -252,7 +252,7 @@ All 14 example scripts in `examples/vasp/` now include `max_concurrent_jobs` par
 
 ## Investigation Files
 
-**Location**: `/home/thiagotd/git/PS-TEROS/teros/experimental/max_jobs_investigation/`
+**Location**: `/home/thiagotd/git/PS-TEROS/psteros/experimental/max_jobs_investigation/`
 
 Contains detailed investigation process, test functions, and implementation notes:
 
@@ -300,7 +300,7 @@ If you were using the experimental serial preset as a workaround:
 
 **Before (v2.0.0 - workaround)**:
 ```python
-from teros.experimental.surface_thermo_preset_serial import (
+from psteros.experimental.surface_thermo_preset_serial import (
     surface_thermodynamics_serial_workgraph
 )
 
@@ -313,7 +313,7 @@ wg.max_number_jobs = 2
 
 **After (v2.1.0 - native support)**:
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     workflow_preset='surface_thermodynamics',

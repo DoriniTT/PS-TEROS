@@ -27,7 +27,7 @@ This document provides complete, runnable examples for each workflow preset.
 All examples use this common setup:
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 from aiida.engine import submit
 
 # Common parameters
@@ -375,7 +375,7 @@ Example: Electronic structure calculation
 DOS and band structure for bulk Ag3PO4
 """
 
-from teros.core.builders import get_electronic_properties_defaults
+from psteros.core.builders import get_electronic_properties_defaults
 
 # Get default electronic properties parameters
 elec_defaults = get_electronic_properties_defaults()
@@ -422,7 +422,7 @@ Example: Electronic structure for Ag3PO4 (100) slabs
 DOS and band structure for surface terminations
 """
 
-from teros.core.builders import get_slab_electronic_properties_defaults
+from psteros.core.builders import get_slab_electronic_properties_defaults
 
 # Get default slab electronic properties parameters (denser k-points for 2D)
 slab_elec_defaults = get_slab_electronic_properties_defaults()
@@ -478,7 +478,7 @@ Example: Complete electronic structure analysis
 DOS and bands for both bulk and slabs
 """
 
-from teros.core.builders import (
+from psteros.core.builders import (
     get_electronic_properties_defaults,
     get_slab_electronic_properties_defaults
 )
@@ -542,7 +542,7 @@ Example: AIMD simulation on Ag3PO4 (100) surface
 Multi-stage temperature equilibration and production
 """
 
-from teros.core.builders import get_aimd_defaults
+from psteros.core.builders import get_aimd_defaults
 
 # AIMD sequence: equilibration → production
 aimd_sequence = [
@@ -603,7 +603,7 @@ Example: Comprehensive analysis
 Everything: thermodynamics + electronic properties + AIMD
 """
 
-from teros.core.builders import (
+from psteros.core.builders import (
     get_electronic_properties_defaults,
     get_aimd_defaults,
     get_slab_electronic_properties_defaults

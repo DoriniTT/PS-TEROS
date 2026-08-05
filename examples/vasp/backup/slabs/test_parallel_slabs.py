@@ -8,7 +8,7 @@ from pathlib import Path
 from aiida import load_profile, orm
 from ase.io import read
 
-from teros.workgraph_parallel_slabs import build_parallel_slab_workgraph
+from psteros.workgraph_parallel_slabs import build_parallel_slab_workgraph
 
 
 def load_bulk_structure(structure_path: Path) -> orm.StructureData:
@@ -21,7 +21,7 @@ def main() -> None:
     """Configure parameters and launch the parallel slab relaxation workflow."""
     load_profile()
 
-    structures_dir = Path("/home/thiagotd/git/PS-TEROS/teros/structures")
+    structures_dir = Path("/home/thiagotd/git/PS-TEROS/psteros/structures")
     bulk_path = structures_dir / "ag3po4.cif"
 
     if not bulk_path.exists():

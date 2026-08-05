@@ -24,7 +24,7 @@ The PS-TEROS codebase demonstrates generally solid performance design with effec
 
 ### 1. **Excessive Deep Copying in Workflow Construction** (HIGH IMPACT)
 
-**Location:** `teros/core/utils.py:98-137`, used extensively in `slabs.py`, `adsorption_energy.py`
+**Location:** `psteros/core/utils.py:98-137`, used extensively in `slabs.py`, `adsorption_energy.py`
 
 **Issue:**
 ```python
@@ -119,7 +119,7 @@ def calculate_surface_energy_ternary(...):
 
 ### 3. **Inefficient Grid Computation in Surface Thermodynamics** (HIGH IMPACT)
 
-**Location:** `teros/core/thermodynamics.py:183-202, 251-258`
+**Location:** `psteros/core/thermodynamics.py:183-202, 251-258`
 
 **Issue:**
 Nested loop generates full 2D grids for every slab independently:
@@ -208,7 +208,7 @@ oxygen_count = element_counts['O']
 
 ### 5. **Large Nested Dictionary Structures**
 
-**Location:** `teros/core/workgraph.py` (2000+ lines), complex nested builders
+**Location:** `psteros/core/workgraph.py` (2000+ lines), complex nested builders
 
 **Observation:**
 The `builder_inputs` pattern creates deeply nested dictionaries:

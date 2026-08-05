@@ -5,7 +5,7 @@ Replaced inline slab electronic properties code in `build_core_workgraph()` with
 
 ## Changes Made
 
-### File: `teros/core/workgraph.py`
+### File: `psteros/core/workgraph.py`
 
 **Lines replaced:** 1564-1612 (original line numbers, now at ~1736-1766)
 
@@ -66,7 +66,7 @@ if (
 
 ## Import Required (deferred)
 ```python
-from teros.core.stages.electronic_properties import add_slab_electronic_properties_stage
+from psteros.core.stages.electronic_properties import add_slab_electronic_properties_stage
 ```
 
 Note: Import will be added in a later consolidation step.

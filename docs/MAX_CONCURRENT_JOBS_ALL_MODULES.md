@@ -22,7 +22,7 @@ Extended `max_concurrent_jobs` support to **all remaining PS-TEROS modules** bey
 
 ### 1. AIMD Module (VASP) ✅
 
-**File**: `teros/core/aimd.py`
+**File**: `psteros/core/aimd.py`
 
 **Function Modified**: `aimd_single_stage_scatter()`
 
@@ -31,7 +31,7 @@ Extended `max_concurrent_jobs` support to **all remaining PS-TEROS modules** bey
 - Added `get_current_graph()` implementation (lines 162-168)
 - Updated docstring to document the parameter (line 154)
 
-**Propagation**: Updated `teros/core/workgraph.py` line 1688 to pass `max_concurrent_jobs` to VASP AIMD stage inputs:
+**Propagation**: Updated `psteros/core/workgraph.py` line 1688 to pass `max_concurrent_jobs` to VASP AIMD stage inputs:
 ```python
 'max_number_jobs': orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
 ```
@@ -40,7 +40,7 @@ Extended `max_concurrent_jobs` support to **all remaining PS-TEROS modules** bey
 
 ### 2. AIMD Module (CP2K) ✅
 
-**File**: `teros/core/aimd_cp2k.py`
+**File**: `psteros/core/aimd_cp2k.py`
 
 **Function Modified**: `aimd_single_stage_scatter_cp2k()`
 
@@ -49,7 +49,7 @@ Extended `max_concurrent_jobs` support to **all remaining PS-TEROS modules** bey
 - Added `get_current_graph()` implementation (lines 79-83)
 - Updated docstring to document the parameter (line 65)
 
-**Propagation**: Updated `teros/core/workgraph.py` line 1702 to pass `max_concurrent_jobs` to CP2K AIMD stage inputs:
+**Propagation**: Updated `psteros/core/workgraph.py` line 1702 to pass `max_concurrent_jobs` to CP2K AIMD stage inputs:
 ```python
 'max_number_jobs': orm.Int(max_concurrent_jobs) if max_concurrent_jobs is not None else None,
 ```
@@ -58,7 +58,7 @@ Extended `max_concurrent_jobs` support to **all remaining PS-TEROS modules** bey
 
 ### 3. Surface Hydroxylation Module ✅
 
-**File**: `teros/core/surface_hydroxylation/relaxations.py`
+**File**: `psteros/core/surface_hydroxylation/relaxations.py`
 
 **Function Modified**: `relax_slabs_with_semaphore()`
 
@@ -75,7 +75,7 @@ Extended `max_concurrent_jobs` support to **all remaining PS-TEROS modules** bey
 
 ### 4. Custom Calculations Module ✅
 
-**File**: `teros/core/custom_calculation/workgraph.py`
+**File**: `psteros/core/custom_calculation/workgraph.py`
 
 **Function Modified**: `build_custom_calculation_workgraph()`
 
@@ -138,21 +138,21 @@ def build_workgraph(..., max_concurrent_jobs=None):
 
 ### Core Modules (4 files)
 
-1. **teros/core/aimd.py**
+1. **psteros/core/aimd.py**
    - ✅ `aimd_single_stage_scatter()` - Lines 134, 162-168, 154
 
-2. **teros/core/aimd_cp2k.py**
+2. **psteros/core/aimd_cp2k.py**
    - ✅ `aimd_single_stage_scatter_cp2k()` - Lines 35, 79-83, 65
 
-3. **teros/core/surface_hydroxylation/relaxations.py**
+3. **psteros/core/surface_hydroxylation/relaxations.py**
    - ✅ `relax_slabs_with_semaphore()` - Lines 89, 154-158, 133-136
 
-4. **teros/core/custom_calculation/workgraph.py**
+4. **psteros/core/custom_calculation/workgraph.py**
    - ✅ `build_custom_calculation_workgraph()` - Lines 15, 48-50, 32-33
 
 ### Main Workgraph (1 file)
 
-5. **teros/core/workgraph.py**
+5. **psteros/core/workgraph.py**
    - ✅ VASP AIMD stage inputs - Line 1688
    - ✅ CP2K AIMD stage inputs - Line 1702
 
@@ -172,7 +172,7 @@ def build_workgraph(..., max_concurrent_jobs=None):
 ### AIMD Workflows
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 # AIMD with concurrency control
 wg = build_core_workgraph(
@@ -190,7 +190,7 @@ wg = build_core_workgraph(
 ### Custom Calculations
 
 ```python
-from teros.core.custom_calculation.workgraph import build_custom_calculation_workgraph
+from psteros.core.custom_calculation.workgraph import build_custom_calculation_workgraph
 
 # Custom calculations with concurrency control
 structures = [structure1, structure2, structure3]
@@ -207,7 +207,7 @@ wg = build_custom_calculation_workgraph(
 ### Hydroxylation Workflows
 
 ```python
-from teros.core.surface_hydroxylation.workgraph import build_surface_hydroxylation_workgraph
+from psteros.core.surface_hydroxylation.workgraph import build_surface_hydroxylation_workgraph
 
 # Hydroxylation with both batch and concurrency control
 wg = build_surface_hydroxylation_workgraph(

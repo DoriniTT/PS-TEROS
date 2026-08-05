@@ -23,13 +23,13 @@ Requirements:
     - AiiDA profile configured
     - VASP code registered
     - POTCAR files available
-    - FukuiGrid cloned to teros/external/FukuiGrid/
+    - FukuiGrid cloned to psteros/external/FukuiGrid/
 """
 
 import sys
 from pathlib import Path
 from aiida import orm, load_profile
-from teros.core.fukui import (
+from psteros.core.fukui import (
     build_fukui_workgraph,
     get_fukui_results,
     print_fukui_summary,
@@ -207,7 +207,7 @@ Monitor progress:
     verdi process report {wg.pk}
 
 After completion, extract results:
-    >>> from teros.core.fukui import get_fukui_results, print_fukui_summary
+    >>> from psteros.core.fukui import get_fukui_results, print_fukui_summary
     >>> results = get_fukui_results({wg.pk})
     >>> print_fukui_summary({wg.pk})
 

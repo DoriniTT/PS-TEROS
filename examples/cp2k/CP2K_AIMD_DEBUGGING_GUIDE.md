@@ -40,7 +40,7 @@ aimd_task = Cp2kTask(
 )
 ```
 
-**Broken code (teros/core/aimd_cp2k.py lines 118-122):**
+**Broken code (psteros/core/aimd_cp2k.py lines 118-122):**
 ```python
 aimd_task = Cp2kTask(
     cp2k=cp2k_inputs,
@@ -222,7 +222,7 @@ tail -100 ~/.aiida/daemon/log/daemon-40000.log | grep -A 20 "DEBUG:"
 
 ### Check for Unwrapped Integers in CP2K Parameters
 
-Look at `teros/core/builders/aimd_builder_cp2k.py`:
+Look at `psteros/core/builders/aimd_builder_cp2k.py`:
 
 ```python
 def get_aimd_defaults_cp2k(...):
@@ -273,7 +273,7 @@ The problem is the metadata/options nesting. The parameter is annotated as `meta
 
 ## Quick Fix to Test
 
-Edit `teros/core/aimd_cp2k.py` line 97-99:
+Edit `psteros/core/aimd_cp2k.py` line 97-99:
 
 ```python
 # OLD (BROKEN):

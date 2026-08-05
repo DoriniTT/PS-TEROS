@@ -12,7 +12,7 @@ output summary = session "Verify decorator standardization"
 
 ## Verification Results
 
-### 1. teros/core/aimd/tasks.py
+### 1. psteros/core/aimd/tasks.py
 
 | Check | Status |
 |-------|--------|
@@ -26,7 +26,7 @@ output summary = session "Verify decorator standardization"
 - Function renamed from `create_supercell_calcfunc` to `create_supercell`
 
 
-### 2. teros/core/surface_hydroxylation/surface_energy.py
+### 2. psteros/core/surface_hydroxylation/surface_energy.py
 
 | Check | Status |
 |-------|--------|

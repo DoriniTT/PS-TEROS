@@ -7,7 +7,7 @@ optimal ENCUT and k-points spacing for a given structure.
 """
 
 from aiida import orm, load_profile
-from teros.core.convergence import build_convergence_workgraph, get_convergence_results
+from psteros.core.convergence import build_convergence_workgraph, get_convergence_results
 
 
 def submit_convergence_test():

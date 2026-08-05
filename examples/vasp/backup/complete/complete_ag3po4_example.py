@@ -37,11 +37,11 @@ import sys
 import os
 from aiida import load_profile, orm
 from ase.io import read
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 <<<<<<< HEAD
-from teros.core.builders import get_electronic_properties_defaults
+from psteros.core.builders import get_electronic_properties_defaults
 =======
-from teros.core.builders import (
+from psteros.core.builders import (
     get_electronic_properties_defaults,
     get_slab_electronic_properties_defaults,
 )

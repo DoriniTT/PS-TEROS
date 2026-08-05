@@ -124,7 +124,7 @@ surface_thermodynamics
 ### New Files
 
 ```
-teros/core/
+psteros/core/
 ├── workflow_presets.py              # NEW: Preset definitions and logic
 └── __init__.py                      # MODIFIED: Export preset functions
 
@@ -143,7 +143,7 @@ examples/
 ### Modified Files
 
 ```
-teros/core/
+psteros/core/
 └── workgraph.py                     # MODIFIED: Add preset support to build_core_workgraph()
 ```
 
@@ -153,7 +153,7 @@ teros/core/
 
 ### Step 1: Create `workflow_presets.py`
 
-**File:** `teros/core/workflow_presets.py`
+**File:** `psteros/core/workflow_presets.py`
 
 **Contents:**
 1. Define all 9 workflow presets
@@ -166,7 +166,7 @@ teros/core/
 
 ### Step 2: Modify `build_core_workgraph()`
 
-**File:** `teros/core/workgraph.py`
+**File:** `psteros/core/workgraph.py`
 
 **Changes:**
 1. Add `workflow_preset` parameter (default: `"surface_thermodynamics"`)
@@ -180,7 +180,7 @@ teros/core/
 
 ### Step 3: Update `__init__.py`
 
-**File:** `teros/core/__init__.py`
+**File:** `psteros/core/__init__.py`
 
 **Changes:**
 1. Export `list_workflow_presets`
@@ -250,7 +250,7 @@ This module provides pre-configured workflow presets for common PS-TEROS
 use cases, automatic dependency resolution, and parameter validation.
 
 Usage:
-    from teros.core.workflow_presets import list_workflow_presets, get_preset_config
+    from psteros.core.workflow_presets import list_workflow_presets, get_preset_config
 
     # List available presets
     list_workflow_presets()
@@ -1013,7 +1013,7 @@ def build_core_workgraph(
         ...     ...
         ... )
     """
-    from teros.core.workflow_presets import (
+    from psteros.core.workflow_presets import (
         resolve_preset,
         validate_preset_inputs,
         check_old_api_usage,
@@ -1093,7 +1093,7 @@ def build_core_workgraph(
 
 ### Modifications to `__init__.py`
 
-**File:** `teros/core/__init__.py`
+**File:** `psteros/core/__init__.py`
 
 ```python
 """
@@ -1144,7 +1144,7 @@ from .aimd import (
     aimd_single_stage_scatter,
 )
 
-# Define what gets imported with "from teros.core import *"
+# Define what gets imported with "from psteros.core import *"
 __all__ = [
     # Main builders
     'build_core_workgraph',
@@ -1191,7 +1191,7 @@ Test each preset individually:
 ```python
 def test_preset_resolution():
     """Test that presets resolve to correct flags"""
-    from teros.core.workflow_presets import resolve_preset
+    from psteros.core.workflow_presets import resolve_preset
 
     # Test surface_thermodynamics preset
     flags = resolve_preset('surface_thermodynamics', {})
@@ -1207,7 +1207,7 @@ def test_preset_resolution():
 
 def test_validation():
     """Test parameter validation"""
-    from teros.core.workflow_presets import validate_preset_inputs
+    from psteros.core.workflow_presets import validate_preset_inputs
 
     # Should pass
     validate_preset_inputs(
@@ -1235,7 +1235,7 @@ Test each preset with actual workflow building:
 ```python
 def test_surface_thermodynamics_preset():
     """Test surface_thermodynamics preset builds correctly"""
-    from teros.core import build_core_workgraph
+    from psteros.core import build_core_workgraph
 
     wg = build_core_workgraph(
         workflow_preset='surface_thermodynamics',
@@ -1255,7 +1255,7 @@ def test_surface_thermodynamics_preset():
 
 def test_bulk_only_preset():
     """Test bulk_only preset builds minimal workflow"""
-    from teros.core import build_core_workgraph
+    from psteros.core import build_core_workgraph
 
     wg = build_core_workgraph(
         workflow_preset='bulk_only',
@@ -1277,7 +1277,7 @@ Run complete workflows with actual VASP calculations (if possible on test system
 ```python
 def test_e2e_surface_thermodynamics():
     """End-to-end test of surface_thermodynamics workflow"""
-    from teros.core import build_core_workgraph
+    from psteros.core import build_core_workgraph
     from aiida import load_profile
 
     load_profile()
@@ -1304,7 +1304,7 @@ Ensure old API still works (with deprecation warnings):
 ```python
 def test_backward_compatibility():
     """Test that old API still works"""
-    from teros.core import build_core_workgraph
+    from psteros.core import build_core_workgraph
     import warnings
 
     # Old API should work but show deprecation warning
@@ -1461,7 +1461,7 @@ To add a new workflow preset:
 
 ```python
 def test_my_new_preset():
-    from teros.core import build_core_workgraph
+    from psteros.core import build_core_workgraph
 
     wg = build_core_workgraph(
         workflow_preset='my_new_preset',
@@ -1495,8 +1495,8 @@ surface energies as a function of chemical potential.
 
 from pathlib import Path
 from aiida import load_profile
-from teros.core import build_core_workgraph
-from teros.core.builders import get_ag3po4_defaults
+from psteros.core import build_core_workgraph
+from psteros.core.builders import get_ag3po4_defaults
 
 # Load AiiDA profile
 load_profile()
@@ -1597,8 +1597,8 @@ on pre-generated slab structures.
 from pathlib import Path
 from aiida import load_profile
 from aiida.orm import load_node
-from teros.core import build_core_workgraph
-from teros.core.builders import get_ag3po4_defaults, get_aimd_defaults
+from psteros.core import build_core_workgraph
+from psteros.core.builders import get_ag3po4_defaults, get_aimd_defaults
 
 # Load AiiDA profile
 load_profile()
@@ -1689,8 +1689,8 @@ for a specific use case.
 
 from pathlib import Path
 from aiida import load_profile
-from teros.core import build_core_workgraph
-from teros.core.builders import (
+from psteros.core import build_core_workgraph
+from psteros.core.builders import (
     get_ag3po4_defaults,
     get_electronic_properties_defaults,
     get_aimd_defaults,
@@ -1850,7 +1850,7 @@ print(f"   WorkGraph PK: {wg.pk}")
    - Answer questions → generate preset configuration
 
    ```python
-   from teros.core import interactive_preset_builder
+   from psteros.core import interactive_preset_builder
 
    preset = interactive_preset_builder()
    # Q: What do you want to calculate? [thermodynamics/electronic/aimd]
@@ -1866,7 +1866,7 @@ print(f"   WorkGraph PK: {wg.pk}")
    - Visual comparison of different presets
 
    ```python
-   from teros.core import visualize_preset
+   from psteros.core import visualize_preset
 
    visualize_preset('surface_thermodynamics')
    # Creates graphviz diagram showing task flow
@@ -1907,7 +1907,7 @@ print(f"   WorkGraph PK: {wg.pk}")
 ### Files to Create
 
 ```
-teros/core/
+psteros/core/
 ├── workflow_presets.py                    (~800 lines)
 
 docs/
@@ -1924,7 +1924,7 @@ examples/workflow_presets/
 ### Files to Modify
 
 ```
-teros/core/
+psteros/core/
 ├── workgraph.py                           (~50 lines added)
 └── __init__.py                            (~20 lines added)
 ```
@@ -1961,15 +1961,15 @@ teros/core/
 
 ```python
 # List all presets
-from teros.core import list_workflow_presets
+from psteros.core import list_workflow_presets
 list_workflow_presets()
 
 # Get preset details
-from teros.core import get_preset_config
+from psteros.core import get_preset_config
 config = get_preset_config('surface_thermodynamics')
 
 # Build with preset
-from teros.core import build_core_workgraph
+from psteros.core import build_core_workgraph
 wg = build_core_workgraph(
     workflow_preset='surface_thermodynamics',
     ...

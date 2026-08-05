@@ -13,15 +13,15 @@
 ## Task 1: Create adsorbate separation calcfunction with connectivity analysis
 
 **Files:**
-- Create: `teros/core/adsorption_energy.py`
-- Create test: `teros/core/test_adsorption_energy.py`
+- Create: `psteros/core/adsorption_energy.py`
+- Create test: `psteros/core/test_adsorption_energy.py`
 
 **Step 1: Write the failing test**
 
 Create the test file:
 
 ```python
-# teros/core/test_adsorption_energy.py
+# psteros/core/test_adsorption_energy.py
 import pytest
 import numpy as np
 from aiida import orm
@@ -172,7 +172,7 @@ def test_separate_adsorbate_no_match():
 Run:
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-adsorption-energy
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py -v
 ```
 
 Expected: FAIL with "ModuleNotFoundError: No module named 'adsorption_energy'"
@@ -182,7 +182,7 @@ Expected: FAIL with "ModuleNotFoundError: No module named 'adsorption_energy'"
 Create the implementation file:
 
 ```python
-# teros/core/adsorption_energy.py
+# psteros/core/adsorption_energy.py
 """
 Adsorption Energy Calculations Module
 
@@ -360,12 +360,12 @@ def separate_adsorbate_structure(
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_separate_adsorbate_returns_three_structures -v
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_separate_adsorbate_correct_atom_counts -v
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_separate_adsorbate_correct_species -v
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_separate_adsorbate_same_cell -v
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_separate_adsorbate_invalid_formula -v
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_separate_adsorbate_no_match -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_separate_adsorbate_returns_three_structures -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_separate_adsorbate_correct_atom_counts -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_separate_adsorbate_correct_species -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_separate_adsorbate_same_cell -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_separate_adsorbate_invalid_formula -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_separate_adsorbate_no_match -v
 ```
 
 Expected: All 6 tests PASS
@@ -373,7 +373,7 @@ Expected: All 6 tests PASS
 **Step 5: Commit**
 
 ```bash
-git add teros/core/adsorption_energy.py teros/core/test_adsorption_energy.py
+git add psteros/core/adsorption_energy.py psteros/core/test_adsorption_energy.py
 git commit -m "feat: add adsorbate separation with connectivity analysis"
 ```
 
@@ -382,15 +382,15 @@ git commit -m "feat: add adsorbate separation with connectivity analysis"
 ## Task 2: Create adsorption energy calculation calcfunction
 
 **Files:**
-- Modify: `teros/core/adsorption_energy.py`
-- Modify: `teros/core/test_adsorption_energy.py`
+- Modify: `psteros/core/adsorption_energy.py`
+- Modify: `psteros/core/test_adsorption_energy.py`
 
 **Step 1: Write the failing test**
 
 Add to test file:
 
 ```python
-# Add to teros/core/test_adsorption_energy.py
+# Add to psteros/core/test_adsorption_energy.py
 
 from adsorption_energy import calculate_adsorption_energy
 
@@ -450,7 +450,7 @@ def test_calculate_adsorption_energy_returns_float():
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_calculate_adsorption_energy_correct_formula -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_calculate_adsorption_energy_correct_formula -v
 ```
 
 Expected: FAIL with "ImportError: cannot import name 'calculate_adsorption_energy'"
@@ -460,7 +460,7 @@ Expected: FAIL with "ImportError: cannot import name 'calculate_adsorption_energ
 Add to implementation file:
 
 ```python
-# Add to teros/core/adsorption_energy.py
+# Add to psteros/core/adsorption_energy.py
 
 
 @task.calcfunction
@@ -494,9 +494,9 @@ def calculate_adsorption_energy(
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_calculate_adsorption_energy_correct_formula -v
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_calculate_adsorption_energy_positive -v
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_calculate_adsorption_energy_returns_float -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_calculate_adsorption_energy_correct_formula -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_calculate_adsorption_energy_positive -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_calculate_adsorption_energy_returns_float -v
 ```
 
 Expected: All 3 tests PASS
@@ -504,7 +504,7 @@ Expected: All 3 tests PASS
 **Step 5: Commit**
 
 ```bash
-git add teros/core/adsorption_energy.py teros/core/test_adsorption_energy.py
+git add psteros/core/adsorption_energy.py psteros/core/test_adsorption_energy.py
 git commit -m "feat: add adsorption energy calculation function"
 ```
 
@@ -513,14 +513,14 @@ git commit -m "feat: add adsorption energy calculation function"
 ## Task 3: Create scatter-gather workflow for parallel processing
 
 **Files:**
-- Modify: `teros/core/adsorption_energy.py`
+- Modify: `psteros/core/adsorption_energy.py`
 
 **Step 1: Write the failing test**
 
 Add to test file:
 
 ```python
-# Add to teros/core/test_adsorption_energy.py
+# Add to psteros/core/test_adsorption_energy.py
 
 from adsorption_energy import compute_adsorption_energies_scatter
 
@@ -549,7 +549,7 @@ def test_compute_adsorption_energies_scatter_signature():
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_compute_adsorption_energies_scatter_signature -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_compute_adsorption_energies_scatter_signature -v
 ```
 
 Expected: FAIL with "ImportError: cannot import name 'compute_adsorption_energies_scatter'"
@@ -559,7 +559,7 @@ Expected: FAIL with "ImportError: cannot import name 'compute_adsorption_energie
 Add to implementation file:
 
 ```python
-# Add to teros/core/adsorption_energy.py
+# Add to psteros/core/adsorption_energy.py
 
 # Import at top of file
 from .slabs import extract_total_energy
@@ -701,7 +701,7 @@ def compute_adsorption_energies_scatter(
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py::test_compute_adsorption_energies_scatter_signature -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py::test_compute_adsorption_energies_scatter_signature -v
 ```
 
 Expected: PASS
@@ -709,7 +709,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add teros/core/adsorption_energy.py teros/core/test_adsorption_energy.py
+git add psteros/core/adsorption_energy.py psteros/core/test_adsorption_energy.py
 git commit -m "feat: add scatter-gather workflow for parallel adsorption energy calculations"
 ```
 
@@ -718,14 +718,14 @@ git commit -m "feat: add scatter-gather workflow for parallel adsorption energy 
 ## Task 4: Update core module exports
 
 **Files:**
-- Modify: `teros/core/__init__.py`
+- Modify: `psteros/core/__init__.py`
 
 **Step 1: Add exports to __init__.py**
 
 Add the new functions to the exports:
 
 ```python
-# Modify teros/core/__init__.py
+# Modify psteros/core/__init__.py
 
 # Add to imports section:
 from .adsorption_energy import (
@@ -763,7 +763,7 @@ __all__ = [
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -c "from teros.core import separate_adsorbate_structure, calculate_adsorption_energy, compute_adsorption_energies_scatter; print('Imports successful')"
+source ~/envs/aiida/bin/activate && python -c "from psteros.core import separate_adsorbate_structure, calculate_adsorption_energy, compute_adsorption_energies_scatter; print('Imports successful')"
 ```
 
 Expected: "Imports successful"
@@ -771,7 +771,7 @@ Expected: "Imports successful"
 **Step 3: Commit**
 
 ```bash
-git add teros/core/__init__.py
+git add psteros/core/__init__.py
 git commit -m "feat: export adsorption energy functions from core module"
 ```
 
@@ -811,7 +811,7 @@ from aiida import orm, load_profile
 from aiida_workgraph import WorkGraph
 
 # Import PSTEROS core functions
-from teros.core import (
+from psteros.core import (
     get_structure_from_file,
     compute_adsorption_energies_scatter,
 )
@@ -1029,7 +1029,7 @@ git commit -m "docs: add example workflow for OH/Ag(111) adsorption energy"
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -m pytest teros/core/test_adsorption_energy.py -v
+source ~/envs/aiida/bin/activate && python -m pytest psteros/core/test_adsorption_energy.py -v
 ```
 
 Expected: All tests PASS
@@ -1056,7 +1056,7 @@ Expected: Daemon restarts successfully
 Run:
 ```bash
 source ~/envs/aiida/bin/activate && python -c "
-from teros.core import (
+from psteros.core import (
     separate_adsorbate_structure,
     calculate_adsorption_energy,
     compute_adsorption_energies_scatter
@@ -1105,7 +1105,7 @@ Separates substrate+adsorbate into three components using connectivity analysis.
 
 **Example:**
 ```python
-from teros.core import separate_adsorbate_structure
+from psteros.core import separate_adsorbate_structure
 from aiida import orm
 
 result = separate_adsorbate_structure(
@@ -1133,7 +1133,7 @@ Calculates adsorption energy from component energies.
 
 **Example:**
 ```python
-from teros.core import calculate_adsorption_energy
+from psteros.core import calculate_adsorption_energy
 from aiida import orm
 
 E_ads = calculate_adsorption_energy(
@@ -1169,7 +1169,7 @@ Dictionary with:
 
 **Example:**
 ```python
-from teros.core import compute_adsorption_energies_scatter
+from psteros.core import compute_adsorption_energies_scatter
 
 results = compute_adsorption_energies_scatter(
     structures={'site1': structure1, 'site2': structure2},
@@ -1234,7 +1234,7 @@ The module can use structures generated by experimental tools:
 
 ```python
 # Use experimental surface builder to create substrate+adsorbate
-from teros.experimental.adsorption_energy.lamno3.surface_builder import add_ooh_to_surface
+from psteros.experimental.adsorption_energy.lamno3.surface_builder import add_ooh_to_surface
 
 # Generate structure with OOH
 complete_structure = add_ooh_to_surface(substrate_cif)
@@ -1250,8 +1250,8 @@ results = compute_adsorption_energies_scatter(
 ## See Also
 
 - Example: `examples/adsorption_energy/test_oh_ag111/`
-- Related modules: `teros.core.thermodynamics`, `teros.core.cleavage`
-- Experimental tools: `teros.experimental.adsorption_energy/`
+- Related modules: `psteros.core.thermodynamics`, `psteros.core.cleavage`
+- Experimental tools: `psteros.experimental.adsorption_energy/`
 ```
 
 **Step 2: Commit documentation**
@@ -1279,12 +1279,12 @@ After completing all tasks:
 
 1. **Unit tests pass:**
    ```bash
-   pytest teros/core/test_adsorption_energy.py -v
+   pytest psteros/core/test_adsorption_energy.py -v
    ```
 
 2. **Imports work:**
    ```bash
-   python -c "from teros.core import separate_adsorbate_structure, calculate_adsorption_energy, compute_adsorption_energies_scatter"
+   python -c "from psteros.core import separate_adsorbate_structure, calculate_adsorption_energy, compute_adsorption_energies_scatter"
    ```
 
 3. **Daemon runs without errors:**

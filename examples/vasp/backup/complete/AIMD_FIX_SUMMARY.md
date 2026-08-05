@@ -79,7 +79,7 @@ if should_add_aimd:
 
 ## How to Use AIMD
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     # ... other parameters ...
@@ -104,8 +104,8 @@ final_energies = wg.tasks['aimd_stage_01_300K'].outputs.energies
 ```
 
 ## Files Modified
-1. `teros/core/workgraph.py` - Removed AIMD loop from core_workgraph, added manual wiring
-2. `teros/core/aimd.py` - Fixed type annotation for restart_folders parameter
+1. `psteros/core/workgraph.py` - Removed AIMD loop from core_workgraph, added manual wiring
+2. `psteros/core/aimd.py` - Fixed type annotation for restart_folders parameter
 
 ## Pattern for Future Sequential Tasks
 When adding sequential tasks that chain outputs to inputs:

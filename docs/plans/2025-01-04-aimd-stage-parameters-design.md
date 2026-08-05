@@ -84,7 +84,7 @@ Missing optional parameters come from `builder_inputs['parameters']['incar']` or
 
 ### 1. Function Signature Changes
 
-**File**: `teros/core/aimd_functions.py`
+**File**: `psteros/core/aimd_functions.py`
 
 **Current**:
 ```python
@@ -184,7 +184,7 @@ for slab_label, slab_structure in slabs.items():
 
 ### 4. Scatter Function Signature Change
 
-**File**: `teros/core/aimd_functions.py`
+**File**: `psteros/core/aimd_functions.py`
 
 **Current**:
 ```python
@@ -211,7 +211,7 @@ def aimd_single_stage_scatter(
 
 ### 5. Standalone Module Changes
 
-**File**: `teros/core/aimd/workgraph.py`
+**File**: `psteros/core/aimd/workgraph.py`
 
 **Current stage loop**:
 ```python
@@ -262,12 +262,12 @@ All existing code using `temperature` and `steps` will break with a clear error 
    - Any user scripts using standalone AIMD module
 
 2. **Unit tests**:
-   - `teros/core/aimd/test_overrides.py`
-   - `teros/core/aimd/test_tasks.py`
+   - `psteros/core/aimd/test_overrides.py`
+   - `psteros/core/aimd/test_tasks.py`
    - Add new tests for AIMD parameter validation
 
 3. **Documentation**:
-   - `teros/core/aimd/README.md`
+   - `psteros/core/aimd/README.md`
    - `docs/aimd_standalone_module.md`
    - Add migration note
 
@@ -333,7 +333,7 @@ ValueError: Stage 1: aimd_stages must contain 'TEBEG' and 'NSW'. Got: ['TEBEG']
 
 ### Unit Tests
 
-**New tests in `teros/core/aimd/test_aimd_parameters.py`**:
+**New tests in `psteros/core/aimd/test_aimd_parameters.py`**:
 
 1. `test_prepare_aimd_parameters_required_only()`
    - Verify TEBEG and NSW are correctly set
@@ -380,7 +380,7 @@ Verify INCAR values:
 
 ### 1. Module README
 
-**File**: `teros/core/aimd/README.md`
+**File**: `psteros/core/aimd/README.md`
 
 Update all examples to use new format. Add section:
 

@@ -13,7 +13,7 @@ let stages_init = session: implementer
 
 ## Summary
 
-Created the `teros/core/stages/__init__.py` module with the following components:
+Created the `psteros/core/stages/__init__.py` module with the following components:
 
 ### StageContext Dataclass
 
@@ -92,14 +92,14 @@ Comprehensive docstrings explain:
 
 The module was tested and imports correctly:
 ```python
-from teros.core.stages import StageContext
+from psteros.core.stages import StageContext
 ctx = StageContext(code_label='test')
 print(ctx.get_effective_code_label('bulk'))  # 'test'
 ```
 
 ### Files Created
 
-- `/home/thiagotd/git/PS-TEROS/teros/core/stages/__init__.py` (560 lines)
+- `/home/thiagotd/git/PS-TEROS/psteros/core/stages/__init__.py` (560 lines)
 
 ### Next Steps
 

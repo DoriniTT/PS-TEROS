@@ -56,8 +56,8 @@ Easiest way - use the builder with sensible defaults:
 
 .. code-block:: python
 
-   from teros.core.workgraph import build_core_workgraph
-   from teros.core.builders import get_electronic_properties_defaults
+   from psteros.core.workgraph import build_core_workgraph
+   from psteros.core.builders import get_electronic_properties_defaults
 
    # Get default electronic properties configuration
    ep_defaults = get_electronic_properties_defaults(
@@ -145,7 +145,7 @@ Configure electronic properties for specific slabs:
 
 .. code-block:: python
 
-   from teros.core.builders import get_slab_electronic_properties_defaults
+   from psteros.core.builders import get_slab_electronic_properties_defaults
 
    # Get slab-specific defaults
    slab_ep_defaults = get_slab_electronic_properties_defaults(

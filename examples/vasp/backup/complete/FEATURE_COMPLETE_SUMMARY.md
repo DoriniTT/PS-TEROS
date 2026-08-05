@@ -17,7 +17,7 @@ This feature adds the capability to compute Density of States (DOS) and band str
 ## Implementation Components
 
 ### 1. Core WorkGraph Integration
-**File:** `teros/core/workgraph.py`
+**File:** `psteros/core/workgraph.py`
 
 **Changes:**
 - Added `bulk_bands`, `bulk_dos`, `bulk_electronic_properties_misc` to output declarations
@@ -33,7 +33,7 @@ This feature adds the capability to compute Density of States (DOS) and band str
 - Parallel execution with other workflow components
 
 ### 2. Electronic Properties Builder
-**File:** `teros/core/builders/electronic_properties_builder.py`
+**File:** `psteros/core/builders/electronic_properties_builder.py`
 
 **Function:** `get_electronic_properties_defaults()`
 
@@ -320,9 +320,9 @@ WorkGraph: PS-TEROS Complete
 
 ### Core Code
 ```
-teros/core/workgraph.py                          [Modified]
-teros/core/builders/electronic_properties_builder.py  [Created]
-teros/core/builders/__init__.py                  [Modified - export added]
+psteros/core/workgraph.py                          [Modified]
+psteros/core/builders/electronic_properties_builder.py  [Created]
+psteros/core/builders/__init__.py                  [Modified - export added]
 ```
 
 ### Examples

@@ -12,7 +12,7 @@ class TestWorkflowPresetsModule:
 
     def test_presets_module_imports(self):
         """Test that workflow_presets module imports successfully."""
-        from teros.core.workflow_presets import (
+        from psteros.core.workflow_presets import (
             WORKFLOW_PRESETS,
             DEFAULT_PRESET,
             list_workflow_presets,
@@ -28,21 +28,21 @@ class TestWorkflowPresetsModule:
 
     def test_default_preset_exists(self):
         """Test that default preset is defined and valid."""
-        from teros.core.workflow_presets import WORKFLOW_PRESETS, DEFAULT_PRESET
+        from psteros.core.workflow_presets import WORKFLOW_PRESETS, DEFAULT_PRESET
 
         assert DEFAULT_PRESET in WORKFLOW_PRESETS
         assert DEFAULT_PRESET == 'surface_thermodynamics'
 
     def test_all_expected_presets_exist(self, workflow_presets_list):
         """Test that all expected presets are defined."""
-        from teros.core.workflow_presets import WORKFLOW_PRESETS
+        from psteros.core.workflow_presets import WORKFLOW_PRESETS
 
         for preset_name in workflow_presets_list:
             assert preset_name in WORKFLOW_PRESETS, f"Missing preset: {preset_name}"
 
     def test_preset_structure(self):
         """Test that each preset has required keys."""
-        from teros.core.workflow_presets import WORKFLOW_PRESETS
+        from psteros.core.workflow_presets import WORKFLOW_PRESETS
 
         required_keys = ['name', 'description', 'flags', 'requires', 'dependencies', 'use_cases']
         flag_keys = [
@@ -72,7 +72,7 @@ class TestWorkflowPresetsModule:
 
     def test_preset_flags_are_booleans(self):
         """Test that all flags are boolean values."""
-        from teros.core.workflow_presets import WORKFLOW_PRESETS
+        from psteros.core.workflow_presets import WORKFLOW_PRESETS
 
         for preset_name, preset_config in WORKFLOW_PRESETS.items():
             for flag_name, flag_value in preset_config['flags'].items():
@@ -85,7 +85,7 @@ class TestResolvePreset:
 
     def test_resolve_default_preset(self):
         """Test resolving with no arguments uses default."""
-        from teros.core.workflow_presets import resolve_preset, DEFAULT_PRESET
+        from psteros.core.workflow_presets import resolve_preset, DEFAULT_PRESET
 
         preset_name, flags = resolve_preset()
 
@@ -94,7 +94,7 @@ class TestResolvePreset:
 
     def test_resolve_specific_preset(self):
         """Test resolving a specific preset."""
-        from teros.core.workflow_presets import resolve_preset
+        from psteros.core.workflow_presets import resolve_preset
 
         preset_name, flags = resolve_preset('bulk_only')
 
@@ -104,7 +104,7 @@ class TestResolvePreset:
 
     def test_resolve_with_override(self):
         """Test that explicit flags override preset defaults."""
-        from teros.core.workflow_presets import resolve_preset
+        from psteros.core.workflow_presets import resolve_preset
 
         # surface_thermodynamics has compute_cleavage=False by default
         preset_name, flags = resolve_preset(
@@ -117,14 +117,14 @@ class TestResolvePreset:
 
     def test_resolve_invalid_preset_raises(self):
         """Test that invalid preset name raises ValueError."""
-        from teros.core.workflow_presets import resolve_preset
+        from psteros.core.workflow_presets import resolve_preset
 
         with pytest.raises(ValueError, match="Unknown workflow preset"):
             resolve_preset('nonexistent_preset')
 
     def test_resolve_none_overrides_ignored(self):
         """Test that None values don't override preset defaults."""
-        from teros.core.workflow_presets import resolve_preset, WORKFLOW_PRESETS
+        from psteros.core.workflow_presets import resolve_preset, WORKFLOW_PRESETS
 
         preset_name, flags = resolve_preset(
             'surface_thermodynamics',
@@ -143,7 +143,7 @@ class TestGetPresetConfig:
 
     def test_get_valid_preset(self):
         """Test getting a valid preset config."""
-        from teros.core.workflow_presets import get_preset_config
+        from psteros.core.workflow_presets import get_preset_config
 
         config = get_preset_config('bulk_only')
 
@@ -153,14 +153,14 @@ class TestGetPresetConfig:
 
     def test_get_invalid_preset_raises(self):
         """Test that invalid preset raises ValueError."""
-        from teros.core.workflow_presets import get_preset_config
+        from psteros.core.workflow_presets import get_preset_config
 
         with pytest.raises(ValueError, match="Unknown workflow preset"):
             get_preset_config('nonexistent_preset')
 
     def test_config_is_copy(self):
         """Test that returned config is a copy, not original."""
-        from teros.core.workflow_presets import get_preset_config, WORKFLOW_PRESETS
+        from psteros.core.workflow_presets import get_preset_config, WORKFLOW_PRESETS
 
         config = get_preset_config('bulk_only')
         config['name'] = 'modified'
@@ -174,7 +174,7 @@ class TestValidatePresetInputs:
 
     def test_valid_inputs(self):
         """Test validation with all required inputs provided."""
-        from teros.core.workflow_presets import validate_preset_inputs
+        from psteros.core.workflow_presets import validate_preset_inputs
 
         errors = validate_preset_inputs(
             'surface_thermodynamics',
@@ -186,7 +186,7 @@ class TestValidatePresetInputs:
 
     def test_missing_required_input(self):
         """Test validation with missing required input."""
-        from teros.core.workflow_presets import validate_preset_inputs
+        from psteros.core.workflow_presets import validate_preset_inputs
 
         errors = validate_preset_inputs(
             'surface_thermodynamics',
@@ -199,7 +199,7 @@ class TestValidatePresetInputs:
 
     def test_bulk_only_no_requirements(self):
         """Test that bulk_only has no required parameters."""
-        from teros.core.workflow_presets import validate_preset_inputs
+        from psteros.core.workflow_presets import validate_preset_inputs
 
         errors = validate_preset_inputs('bulk_only')
 
@@ -211,7 +211,7 @@ class TestValidateFlagDependencies:
 
     def test_thermodynamics_without_references(self):
         """Test warning when thermodynamics enabled without references."""
-        from teros.core.workflow_presets import validate_flag_dependencies
+        from psteros.core.workflow_presets import validate_flag_dependencies
 
         flags = {'compute_thermodynamics': True}
         messages = validate_flag_dependencies(flags, metal_name=None, oxygen_name=None)
@@ -221,7 +221,7 @@ class TestValidateFlagDependencies:
 
     def test_cleavage_without_relax(self):
         """Test warning when cleavage enabled without slab relaxation."""
-        from teros.core.workflow_presets import validate_flag_dependencies
+        from psteros.core.workflow_presets import validate_flag_dependencies
 
         flags = {'compute_cleavage': True, 'relax_slabs': False}
         messages = validate_flag_dependencies(flags)
@@ -231,7 +231,7 @@ class TestValidateFlagDependencies:
 
     def test_relaxation_energy_without_relax(self):
         """Test warning when relaxation energy enabled without slab relaxation."""
-        from teros.core.workflow_presets import validate_flag_dependencies
+        from psteros.core.workflow_presets import validate_flag_dependencies
 
         flags = {'compute_relaxation_energy': True, 'relax_slabs': False}
         messages = validate_flag_dependencies(flags)
@@ -241,7 +241,7 @@ class TestValidateFlagDependencies:
 
     def test_valid_configuration(self):
         """Test that valid configuration produces no warnings."""
-        from teros.core.workflow_presets import validate_flag_dependencies
+        from psteros.core.workflow_presets import validate_flag_dependencies
 
         flags = {
             'relax_slabs': True,
@@ -270,7 +270,7 @@ class TestGetPresetSummary:
 
     def test_summary_contains_name(self):
         """Test that summary contains preset name."""
-        from teros.core.workflow_presets import get_preset_summary
+        from psteros.core.workflow_presets import get_preset_summary
 
         summary = get_preset_summary('bulk_only')
 
@@ -278,7 +278,7 @@ class TestGetPresetSummary:
 
     def test_summary_contains_flags(self):
         """Test that summary contains flag information."""
-        from teros.core.workflow_presets import get_preset_summary
+        from psteros.core.workflow_presets import get_preset_summary
 
         summary = get_preset_summary('surface_thermodynamics')
 
@@ -287,7 +287,7 @@ class TestGetPresetSummary:
 
     def test_invalid_preset_returns_error_message(self):
         """Test that invalid preset returns error message."""
-        from teros.core.workflow_presets import get_preset_summary
+        from psteros.core.workflow_presets import get_preset_summary
 
         summary = get_preset_summary('nonexistent')
 

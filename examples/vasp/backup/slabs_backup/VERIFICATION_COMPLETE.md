@@ -102,13 +102,13 @@ The workflow will proceed through these phases:
 ## New Features Verified
 
 ### ✅ SCF Calculation Task
-- Function: `scf_slabs_scatter()` in `teros/core/slabs.py`
+- Function: `scf_slabs_scatter()` in `psteros/core/slabs.py`
 - **Verified**: Task appears in workgraph structure
 - **Verified**: Correct inputs (slabs, code, parameters)
 - **Verified**: NSW=0 and IBRION=-1 set automatically
 
 ### ✅ Relaxation Energy Calculation Task
-- Function: `calculate_relaxation_energies_scatter()` in `teros/core/slabs.py`
+- Function: `calculate_relaxation_energies_scatter()` in `psteros/core/slabs.py`
 - **Verified**: Task appears in workgraph structure
 - **Verified**: Correct inputs (unrelaxed_energies, relaxed_energies)
 
@@ -167,8 +167,8 @@ if node.is_finished_ok:
 ## Files Created/Modified
 
 ### Modified (2):
-- `teros/core/slabs.py` - Added 3 new functions
-- `teros/core/workgraph.py` - Integrated new functions
+- `psteros/core/slabs.py` - Added 3 new functions
+- `psteros/core/workgraph.py` - Integrated new functions
 
 ### Created (7):
 - `docs/RELAXATION_ENERGY.md` - User documentation

@@ -1,6 +1,6 @@
 # Default Builders Examples
 
-This directory contains examples demonstrating the use of the `teros.default_builders` module.
+This directory contains examples demonstrating the use of the `psteros.default_builders` module.
 
 ## Files
 
@@ -54,8 +54,8 @@ python examples/default_builders/slabs_input_relax_ag3po4_simplified.py
 Copy the simplified example and modify:
 
 ```python
-from teros.default_builders import get_ag3po4_defaults
-from teros.core.workgraph import build_core_workgraph_with_map
+from psteros.default_builders import get_ag3po4_defaults
+from psteros.core.workgraph import build_core_workgraph_with_map
 
 # Get defaults
 defaults = get_ag3po4_defaults(

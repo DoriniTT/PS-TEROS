@@ -40,7 +40,7 @@ When `relax_slabs=True` is enabled in the workflow, the following steps are exec
 ### Key Functions
 
 #### `scf_slabs_scatter`
-Located in `teros/core/slabs.py`
+Located in `psteros/core/slabs.py`
 
 Performs SCF calculations on unrelaxed slab structures in parallel using the scatter-gather pattern.
 
@@ -58,7 +58,7 @@ Performs SCF calculations on unrelaxed slab structures in parallel using the sca
 - `remote_folders`: Dictionary of RemoteData nodes
 
 #### `calculate_relaxation_energies_scatter`
-Located in `teros/core/slabs.py`
+Located in `psteros/core/slabs.py`
 
 Calculates relaxation energies for all slab terminations using the scatter-gather pattern.
 
@@ -74,7 +74,7 @@ Calculates relaxation energies for all slab terminations using the scatter-gathe
 The relaxation energy calculation is automatically integrated into the `core_workgraph` when `relax_slabs=True`:
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     structures_dir="/path/to/structures",
@@ -136,7 +136,7 @@ All outputs use dynamic namespaces, so each slab termination (e.g., `term_0`, `t
 
 ```python
 from aiida import load_profile, orm
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 from aiida_workgraph import submit
 
 load_profile()

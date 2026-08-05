@@ -6,7 +6,7 @@ The code has been successfully updated to compute surface energy with respect to
 
 ### What Was Modified
 
-1. **`teros/core/thermodynamics.py`**
+1. **`psteros/core/thermodynamics.py`**
    - Enhanced `calculate_surface_energy_ternary()` function
    - Now returns both A-based and B-based formulations
    - Maintains backward compatibility
@@ -178,7 +178,7 @@ To verify the code is working without rerunning the full workflow:
 
 ```bash
 # Quick syntax check
-python -m py_compile teros/core/thermodynamics.py
+python -m py_compile psteros/core/thermodynamics.py
 
 # Check daemon status
 verdi daemon status
@@ -187,7 +187,7 @@ verdi daemon status
 python -c "
 import aiida
 aiida.load_profile('psteros')
-from teros.core.thermodynamics import calculate_surface_energy_ternary
+from psteros.core.thermodynamics import calculate_surface_energy_ternary
 print('✓ Function loaded successfully')
 print(f'✓ Function has {len(calculate_surface_energy_ternary._callable.__code__.co_names)} operations')
 "

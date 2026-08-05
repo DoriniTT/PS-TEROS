@@ -11,7 +11,7 @@ The initial implementation wasn't working because:
 ## Solution
 
 **Combined Function Approach**: Created a single `@task.graph` function that does all three steps:
-- `scf_relax_and_calculate_relaxation_energy()` in `teros/core/slabs.py`
+- `scf_relax_and_calculate_relaxation_energy()` in `psteros/core/slabs.py`
 
 This function performs:
 1. SCF calculation on unrelaxed slabs (NSW=0, IBRION=-1)
@@ -38,7 +38,7 @@ The new combined task was successfully created and is running!
 
 ## What Changed
 
-### New Function in `teros/core/slabs.py`
+### New Function in `psteros/core/slabs.py`
 
 ```python
 @task.graph
@@ -59,7 +59,7 @@ def scf_relax_and_calculate_relaxation_energy(
     #   3. Calculate: E_relax = E_relaxed - E_unrelaxed
 ```
 
-### Updated `teros/core/workgraph.py`
+### Updated `psteros/core/workgraph.py`
 
 ```python
 if relax_slabs and slab_namespace is not None:
@@ -120,8 +120,8 @@ node.outputs.slab_remote              # RemoteData from relaxation
 
 ## Files Modified
 
-- `teros/core/slabs.py` - Added combined function
-- `teros/core/workgraph.py` - Updated to use combined function
+- `psteros/core/slabs.py` - Added combined function
+- `psteros/core/workgraph.py` - Updated to use combined function
 - `examples/slabs/ag2o_100_relaxation_energy.py` - Added PYTHONPATH fix
 
 ## Known Limitations

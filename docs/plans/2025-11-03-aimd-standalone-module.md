@@ -4,7 +4,7 @@
 
 **Goal:** Create a standalone AIMD module that accepts structures directly, runs sequential molecular dynamics stages with full parameter control, and supports optional supercell transformations.
 
-**Architecture:** Mirror the hydroxylation module structure (`teros/core/aimd/`) with workgraph.py for orchestration, tasks.py for WorkGraph tasks, utils.py for helpers. Reuse existing `aimd_single_stage_scatter()` from `teros.core.aimd` and orchestrate multi-stage workflows with parameter override system (global → structure → stage → matrix).
+**Architecture:** Mirror the hydroxylation module structure (`psteros/core/aimd/`) with workgraph.py for orchestration, tasks.py for WorkGraph tasks, utils.py for helpers. Reuse existing `aimd_single_stage_scatter()` from `psteros.core.aimd` and orchestrate multi-stage workflows with parameter override system (global → structure → stage → matrix).
 
 **Tech Stack:** AiiDA-WorkGraph, pymatgen (supercell), Python 3.9+
 
@@ -13,21 +13,21 @@
 ## Task 1: Create Module Structure
 
 **Files:**
-- Create: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/__init__.py`
-- Create: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/workgraph.py`
-- Create: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/tasks.py`
-- Create: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py`
-- Create: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/README.md`
+- Create: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/__init__.py`
+- Create: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/workgraph.py`
+- Create: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/tasks.py`
+- Create: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py`
+- Create: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/README.md`
 
 **Step 1: Create aimd directory**
 
 ```bash
-mkdir -p /home/thiagotd/git/PS-TEROS/teros/core/aimd
+mkdir -p /home/thiagotd/git/PS-TEROS/psteros/core/aimd
 ```
 
 **Step 2: Create __init__.py with exports**
 
-File: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/__init__.py`
+File: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/__init__.py`
 
 ```python
 """AIMD standalone module for PS-TEROS."""
@@ -44,14 +44,14 @@ __all__ = [
 **Step 3: Create empty module files**
 
 ```bash
-touch /home/thiagotd/git/PS-TEROS/teros/core/aimd/workgraph.py
-touch /home/thiagotd/git/PS-TEROS/teros/core/aimd/tasks.py
-touch /home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py
+touch /home/thiagotd/git/PS-TEROS/psteros/core/aimd/workgraph.py
+touch /home/thiagotd/git/PS-TEROS/psteros/core/aimd/tasks.py
+touch /home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py
 ```
 
 **Step 4: Create README.md**
 
-File: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/README.md`
+File: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/README.md`
 
 ```markdown
 # AIMD Standalone Module
@@ -70,7 +70,7 @@ Run multi-stage AIMD calculations on pre-existing structures with full parameter
 
 ```python
 from aiida import orm, load_profile
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 
 load_profile('presto')
 
@@ -100,7 +100,7 @@ See `examples/vasp/step_XX_aimd_standalone.py` for complete examples.
 **Step 5: Commit**
 
 ```bash
-git add teros/core/aimd/
+git add psteros/core/aimd/
 git commit -m "feat(aimd): create standalone module structure"
 ```
 
@@ -109,16 +109,16 @@ git commit -m "feat(aimd): create standalone module structure"
 ## Task 2: Implement Validation Functions
 
 **Files:**
-- Modify: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py`
 
 **Step 1: Write test for stage validation**
 
-Create test file: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/test_utils.py`
+Create test file: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/test_utils.py`
 
 ```python
 """Tests for AIMD utils."""
 import pytest
-from teros.core.aimd.utils import validate_stage_sequence
+from psteros.core.aimd.utils import validate_stage_sequence
 
 
 def test_validate_stage_sequence_valid():
@@ -155,14 +155,14 @@ def test_validate_stage_sequence_empty():
 ```bash
 cd /home/thiagotd/git/PS-TEROS
 source ~/envs/aiida/bin/activate
-python -m pytest teros/core/aimd/test_utils.py::test_validate_stage_sequence_valid -v
+python -m pytest psteros/core/aimd/test_utils.py::test_validate_stage_sequence_valid -v
 ```
 
 Expected: FAIL with "cannot import name 'validate_stage_sequence'"
 
 **Step 3: Implement validate_stage_sequence**
 
-File: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py`
+File: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py`
 
 ```python
 """Utility functions for AIMD module."""
@@ -197,7 +197,7 @@ def validate_stage_sequence(stages: list[dict]) -> None:
 **Step 4: Run tests to verify they pass**
 
 ```bash
-python -m pytest teros/core/aimd/test_utils.py -v
+python -m pytest psteros/core/aimd/test_utils.py -v
 ```
 
 Expected: All tests PASS
@@ -205,7 +205,7 @@ Expected: All tests PASS
 **Step 5: Commit**
 
 ```bash
-git add teros/core/aimd/utils.py teros/core/aimd/test_utils.py
+git add psteros/core/aimd/utils.py psteros/core/aimd/test_utils.py
 git commit -m "feat(aimd): add stage sequence validation"
 ```
 
@@ -214,15 +214,15 @@ git commit -m "feat(aimd): add stage sequence validation"
 ## Task 3: Implement Supercell Validation
 
 **Files:**
-- Modify: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py`
-- Modify: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/test_utils.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/test_utils.py`
 
 **Step 1: Write test for supercell validation**
 
-Add to `/home/thiagotd/git/PS-TEROS/teros/core/aimd/test_utils.py`:
+Add to `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/test_utils.py`:
 
 ```python
-from teros.core.aimd.utils import validate_supercell_spec
+from psteros.core.aimd.utils import validate_supercell_spec
 
 
 def test_validate_supercell_spec_valid():
@@ -257,14 +257,14 @@ def test_validate_supercell_spec_non_positive():
 **Step 2: Run test to verify it fails**
 
 ```bash
-python -m pytest teros/core/aimd/test_utils.py::test_validate_supercell_spec_valid -v
+python -m pytest psteros/core/aimd/test_utils.py::test_validate_supercell_spec_valid -v
 ```
 
 Expected: FAIL with "cannot import name 'validate_supercell_spec'"
 
 **Step 3: Implement validate_supercell_spec**
 
-Add to `/home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py`:
+Add to `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py`:
 
 ```python
 def validate_supercell_spec(spec: list[int]) -> None:
@@ -301,7 +301,7 @@ def validate_supercell_spec(spec: list[int]) -> None:
 **Step 4: Run tests to verify they pass**
 
 ```bash
-python -m pytest teros/core/aimd/test_utils.py -v
+python -m pytest psteros/core/aimd/test_utils.py -v
 ```
 
 Expected: All tests PASS
@@ -309,7 +309,7 @@ Expected: All tests PASS
 **Step 5: Commit**
 
 ```bash
-git add teros/core/aimd/utils.py teros/core/aimd/test_utils.py
+git add psteros/core/aimd/utils.py psteros/core/aimd/test_utils.py
 git commit -m "feat(aimd): add supercell spec validation"
 ```
 
@@ -318,15 +318,15 @@ git commit -m "feat(aimd): add supercell spec validation"
 ## Task 4: Implement Builder Merging
 
 **Files:**
-- Modify: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py`
-- Modify: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/test_utils.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/test_utils.py`
 
 **Step 1: Write test for merge_builder_inputs**
 
-Add to `/home/thiagotd/git/PS-TEROS/teros/core/aimd/test_utils.py`:
+Add to `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/test_utils.py`:
 
 ```python
-from teros.core.aimd.utils import merge_builder_inputs
+from psteros.core.aimd.utils import merge_builder_inputs
 
 
 def test_merge_builder_inputs_simple():
@@ -386,14 +386,14 @@ def test_merge_builder_inputs_replace_dict_with_value():
 **Step 2: Run test to verify it fails**
 
 ```bash
-python -m pytest teros/core/aimd/test_utils.py::test_merge_builder_inputs_simple -v
+python -m pytest psteros/core/aimd/test_utils.py::test_merge_builder_inputs_simple -v
 ```
 
 Expected: FAIL with "cannot import name 'merge_builder_inputs'"
 
 **Step 3: Implement merge_builder_inputs**
 
-Add to `/home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py`:
+Add to `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py`:
 
 ```python
 from copy import deepcopy
@@ -435,7 +435,7 @@ def merge_builder_inputs(base: dict, override: dict) -> dict:
 **Step 4: Run tests to verify they pass**
 
 ```bash
-python -m pytest teros/core/aimd/test_utils.py -v
+python -m pytest psteros/core/aimd/test_utils.py -v
 ```
 
 Expected: All tests PASS
@@ -443,7 +443,7 @@ Expected: All tests PASS
 **Step 5: Commit**
 
 ```bash
-git add teros/core/aimd/utils.py teros/core/aimd/test_utils.py
+git add psteros/core/aimd/utils.py psteros/core/aimd/test_utils.py
 git commit -m "feat(aimd): add builder inputs deep merge"
 ```
 
@@ -452,17 +452,17 @@ git commit -m "feat(aimd): add builder inputs deep merge"
 ## Task 5: Implement Supercell Creation Task
 
 **Files:**
-- Modify: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/tasks.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/tasks.py`
 
 **Step 1: Write test for create_supercell**
 
-Create test file: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/test_tasks.py`
+Create test file: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/test_tasks.py`
 
 ```python
 """Tests for AIMD tasks."""
 from aiida import orm
 from ase.build import bulk
-from teros.core.aimd.tasks import create_supercell
+from psteros.core.aimd.tasks import create_supercell
 
 
 def test_create_supercell_basic():
@@ -499,14 +499,14 @@ def test_create_supercell_3x3x2():
 **Step 2: Run test to verify it fails**
 
 ```bash
-python -m pytest teros/core/aimd/test_tasks.py::test_create_supercell_basic -v
+python -m pytest psteros/core/aimd/test_tasks.py::test_create_supercell_basic -v
 ```
 
 Expected: FAIL with "cannot import name 'create_supercell'"
 
 **Step 3: Implement create_supercell**
 
-File: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/tasks.py`
+File: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/tasks.py`
 
 ```python
 """WorkGraph tasks for AIMD module."""
@@ -546,7 +546,7 @@ def create_supercell(
 **Step 4: Run tests to verify they pass**
 
 ```bash
-python -m pytest teros/core/aimd/test_tasks.py -v
+python -m pytest psteros/core/aimd/test_tasks.py -v
 ```
 
 Expected: All tests PASS
@@ -554,7 +554,7 @@ Expected: All tests PASS
 **Step 5: Commit**
 
 ```bash
-git add teros/core/aimd/tasks.py teros/core/aimd/test_tasks.py
+git add psteros/core/aimd/tasks.py psteros/core/aimd/test_tasks.py
 git commit -m "feat(aimd): add supercell creation task"
 ```
 
@@ -563,11 +563,11 @@ git commit -m "feat(aimd): add supercell creation task"
 ## Task 6: Implement Result Organization Helper
 
 **Files:**
-- Modify: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py`
 
 **Step 1: Write organize_aimd_results signature**
 
-Add to `/home/thiagotd/git/PS-TEROS/teros/core/aimd/utils.py`:
+Add to `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/utils.py`:
 
 ```python
 def organize_aimd_results(node: orm.WorkGraphNode) -> dict:
@@ -610,7 +610,7 @@ def organize_aimd_results(node: orm.WorkGraphNode) -> dict:
 **Step 2: Commit**
 
 ```bash
-git add teros/core/aimd/utils.py
+git add psteros/core/aimd/utils.py
 git commit -m "feat(aimd): add organize_aimd_results signature"
 ```
 
@@ -619,11 +619,11 @@ git commit -m "feat(aimd): add organize_aimd_results signature"
 ## Task 7: Implement Main Workgraph Builder (Part 1 - Structure Preparation)
 
 **Files:**
-- Modify: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/workgraph.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/workgraph.py`
 
 **Step 1: Write function signature and docstring**
 
-File: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/workgraph.py`
+File: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/workgraph.py`
 
 ```python
 """Main workgraph builder for AIMD module."""
@@ -749,7 +749,7 @@ def build_aimd_workgraph(
 **Step 2: Commit**
 
 ```bash
-git add teros/core/aimd/workgraph.py
+git add psteros/core/aimd/workgraph.py
 git commit -m "feat(aimd): add workgraph builder structure preparation"
 ```
 
@@ -758,11 +758,11 @@ git commit -m "feat(aimd): add workgraph builder structure preparation"
 ## Task 8: Implement Main Workgraph Builder (Part 2 - Stage Loop)
 
 **Files:**
-- Modify: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/workgraph.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/workgraph.py`
 
 **Step 1: Add helper function for override merging**
 
-Add to `/home/thiagotd/git/PS-TEROS/teros/core/aimd/workgraph.py` (before `build_aimd_workgraph`):
+Add to `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/workgraph.py` (before `build_aimd_workgraph`):
 
 ```python
 def _get_builder_for_structure_stage(
@@ -813,7 +813,7 @@ Replace the `# TODO: Stage loop implementation in next task` comment in `build_a
 
 ```python
     # 2. Run sequential AIMD stages
-    from teros.core.aimd import aimd_single_stage_scatter
+    from psteros.core.aimd import aimd_single_stage_scatter
 
     stage_results = {}
     current_structures = prepared_structures
@@ -879,7 +879,7 @@ Replace the `# TODO: Stage loop implementation in next task` comment in `build_a
 **Step 3: Commit**
 
 ```bash
-git add teros/core/aimd/workgraph.py
+git add psteros/core/aimd/workgraph.py
 git commit -m "feat(aimd): implement AIMD stage loop with restart chaining"
 ```
 
@@ -917,7 +917,7 @@ Usage:
 import sys
 from aiida import orm, load_profile
 from ase.build import bulk
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 
 
 def main():
@@ -1179,11 +1179,11 @@ Replace `<PK>` with actual PK.
 ## Task 11: Create Module Documentation
 
 **Files:**
-- Modify: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/README.md`
+- Modify: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/README.md`
 
 **Step 1: Update README with complete documentation**
 
-File: `/home/thiagotd/git/PS-TEROS/teros/core/aimd/README.md`
+File: `/home/thiagotd/git/PS-TEROS/psteros/core/aimd/README.md`
 
 ```markdown
 # AIMD Standalone Module
@@ -1202,7 +1202,7 @@ Run multi-stage Ab Initio Molecular Dynamics calculations on pre-existing struct
 
 ```python
 from aiida import orm, load_profile
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 
 load_profile('presto')
 
@@ -1268,7 +1268,7 @@ Main function to build AIMD workflow.
 Organize completed workflow results into user-friendly format.
 
 ```python
-from teros.core.aimd import organize_aimd_results
+from psteros.core.aimd import organize_aimd_results
 
 node = orm.load_node(pk)
 results = organize_aimd_results(node)
@@ -1415,7 +1415,7 @@ Run tests:
 ```bash
 cd /home/thiagotd/git/PS-TEROS
 source ~/envs/aiida/bin/activate
-python -m pytest teros/core/aimd/ -v
+python -m pytest psteros/core/aimd/ -v
 ```
 
 ## Design Document
@@ -1426,7 +1426,7 @@ See `docs/plans/2025-11-03-aimd-standalone-module-design.md` for complete design
 **Step 2: Commit**
 
 ```bash
-git add teros/core/aimd/README.md
+git add psteros/core/aimd/README.md
 git commit -m "docs(aimd): complete module documentation"
 ```
 
@@ -1439,7 +1439,7 @@ git commit -m "docs(aimd): complete module documentation"
 ```bash
 cd /home/thiagotd/git/PS-TEROS
 source ~/envs/aiida/bin/activate
-python -m pytest teros/core/aimd/ -v
+python -m pytest psteros/core/aimd/ -v
 ```
 
 Expected: All tests PASS
@@ -1454,7 +1454,7 @@ find /home/thiagotd/git/PS-TEROS -name "*.pyc" -delete
 **Step 3: Check imports work**
 
 ```bash
-python -c "from teros.core.aimd import build_aimd_workgraph, organize_aimd_results; print('✓ Imports OK')"
+python -c "from psteros.core.aimd import build_aimd_workgraph, organize_aimd_results; print('✓ Imports OK')"
 ```
 
 Expected: "✓ Imports OK"
@@ -1489,7 +1489,7 @@ Expected: Push successful
 
 Verify all components complete:
 
-- [ ] Module structure created (`teros/core/aimd/`)
+- [ ] Module structure created (`psteros/core/aimd/`)
 - [ ] Validation functions implemented and tested
 - [ ] Supercell creation task implemented
 - [ ] Builder merging logic implemented

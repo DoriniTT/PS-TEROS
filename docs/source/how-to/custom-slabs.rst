@@ -153,7 +153,7 @@ Generate with PS-TEROS, modify, then reuse:
 
 .. code-block:: python
 
-   from teros.core.slabs import generate_slabs_scatter
+   from psteros.core.slabs import generate_slabs_scatter
    from aiida import orm
 
    # Load bulk structure
@@ -195,7 +195,7 @@ Most straightforward - point to directory with POSCAR files:
 
 .. code-block:: python
 
-   from teros.core.workgraph import build_core_workgraph
+   from psteros.core.workgraph import build_core_workgraph
 
    # Load bulk structure (still needed for reference calculations)
    structures_dir = '/path/to/structures'
@@ -282,7 +282,7 @@ Combine auto-generated slabs with custom ones:
 
 .. code-block:: python
 
-   from teros.core.slabs import generate_slabs_scatter
+   from psteros.core.slabs import generate_slabs_scatter
    from aiida import orm
 
    # Auto-generate some surfaces

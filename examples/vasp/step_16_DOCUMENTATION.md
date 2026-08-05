@@ -1,7 +1,7 @@
 # Serial Surface Thermodynamics Preset (EXPERIMENTAL)
 
 **Status:** Experimental - In Active Development
-**Location:** `teros.experimental.surface_thermo_preset_serial`
+**Location:** `psteros.experimental.surface_thermo_preset_serial`
 **Example:** `examples/vasp/step_16_surface_thermodynamics_serial.py`
 
 ## Overview
@@ -52,7 +52,7 @@ The preset implements five phases:
 ## Usage
 
 ```python
-from teros.experimental.surface_thermo_preset_serial import (
+from psteros.experimental.surface_thermo_preset_serial import (
     surface_thermodynamics_serial_workgraph
 )
 
@@ -200,7 +200,7 @@ Expected timeline:
 ### Module Structure
 
 ```
-teros/experimental/surface_thermo_preset_serial/
+psteros/experimental/surface_thermo_preset_serial/
 ├── __init__.py              # Exports main workgraph function
 ├── workgraph.py             # Main workgraph logic
 ├── utils.py                 # Parameter preparation helpers
@@ -240,7 +240,7 @@ This is experimental code. Report issues or suggest improvements:
 
 ## References
 
-- Standard preset: `teros.core.workgraph.build_core_workgraph()`
-- Core thermodynamics: `teros.core.thermodynamics`
-- Core formation enthalpy: `teros.core.hf`
+- Standard preset: `psteros.core.workgraph.build_core_workgraph()`
+- Core thermodynamics: `psteros.core.thermodynamics`
+- Core formation enthalpy: `psteros.core.hf`
 - Example: `examples/vasp/step_16_surface_thermodynamics_serial.py`

@@ -115,7 +115,7 @@ Code Implementation
 .. code-block:: python
 
     from aiida import load_profile, orm
-    from teros.core.aimd import aimd_single_stage_scatter
+    from psteros.core.aimd import aimd_single_stage_scatter
 
     load_profile(profile='your_profile_name')
 
@@ -345,8 +345,8 @@ CP2K AIMD Workflow
 
 .. code-block:: python
 
-    from teros.core.workgraph import build_core_workgraph
-    from teros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
+    from psteros.core.workgraph import build_core_workgraph
+    from psteros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
 
     # Get default CP2K AIMD parameters
     aimd_params = get_aimd_defaults_cp2k(
@@ -929,7 +929,7 @@ Complete Example Script
     """
 
     from aiida import load_profile, orm
-    from teros.core.aimd import aimd_single_stage_scatter
+    from psteros.core.aimd import aimd_single_stage_scatter
 
     load_profile(profile='your_profile')
 

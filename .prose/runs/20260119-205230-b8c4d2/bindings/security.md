@@ -54,7 +54,7 @@ No high-risk vulnerabilities were found.
 
 ### 1. Subprocess Execution Without Input Sanitization
 
-**Location:** `teros/core/fukui/tasks.py`
+**Location:** `psteros/core/fukui/tasks.py`
 
 **Lines:** 444-481, 476-481, 699-710, 830-842
 
@@ -114,10 +114,10 @@ delta_n_list = validate_delta_n_list(delta_n_values.get_list())
 ### 2. Path Traversal in File Loading
 
 **Location:** Multiple files
-- `teros/core/workgraph.py:45`
-- `teros/core/surface_energy/workgraph.py:50`
-- `teros/core/convergence/workgraph.py:350`
-- `teros/core/surface_hydroxylation/tasks.py:137`
+- `psteros/core/workgraph.py:45`
+- `psteros/core/surface_energy/workgraph.py:50`
+- `psteros/core/convergence/workgraph.py:350`
+- `psteros/core/surface_hydroxylation/tasks.py:137`
 
 **Description:**
 The `load_structure_from_file()` function and similar file reading operations accept filepath strings without validating against path traversal attacks (e.g., `../../etc/passwd`).
@@ -185,7 +185,7 @@ def load_structure_from_file(filepath: str, allowed_dirs: list = None) -> orm.St
 
 ### 3. Temporary File Cleanup Not Guaranteed
 
-**Location:** `teros/core/fukui/tasks.py`
+**Location:** `psteros/core/fukui/tasks.py`
 
 **Lines:** 286-308, 458-503, 673-732, 816-860
 
@@ -273,7 +273,7 @@ def get_validated_api_key(env_var: str = 'MP_API_KEY', min_length: int = 16) -> 
 
 ### 5. Module Patching System
 
-**Location:** `teros/core/vasp_parallelization/patches/`
+**Location:** `psteros/core/vasp_parallelization/patches/`
 
 **Description:**
 The module includes scripts to patch installed packages (`aiida-vasp`, `aiida-workgraph`) by directly modifying files in site-packages. While this is done for legitimate bug fixes, it represents a security concern:
@@ -317,7 +317,7 @@ def verify_file_hash(filepath: Path, expected_hash: str) -> bool:
 **Description:**
 Functions that parse OUTCAR, CHGCAR, and other VASP output files do not impose size limits. Very large files could cause memory exhaustion.
 
-**Example:** `teros/core/fukui/tasks.py:100-104`
+**Example:** `psteros/core/fukui/tasks.py:100-104`
 ```python
 chgcar_content = retrieved.get_object_content('CHGCAR')
 # No size check before writing

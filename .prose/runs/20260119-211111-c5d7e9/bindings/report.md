@@ -55,7 +55,7 @@ PS-TEROS demonstrates excellent design and implementation quality for a scientif
 | Extensibility | A | Standardized module template supports easy additions |
 
 **Highlights:**
-- **Hierarchical Core Structure:** 10+ submodules organized logically under `teros/core/`
+- **Hierarchical Core Structure:** 10+ submodules organized logically under `psteros/core/`
 - **Workflow Preset System:** Self-documenting with `list_workflow_presets()` function
 - **Scalable Parallelization:** Dynamic type annotations enable automatic parallel execution
 
@@ -197,31 +197,31 @@ gamma_grid_2d = phi - gamma_M * delta_mu_M_grid - ...
    - `/home/thiagotd/git/PS-TEROS/tests/test_hf.py`
 
 2. **Define exception hierarchy:**
-   - Create `/home/thiagotd/git/PS-TEROS/teros/core/exceptions.py`
-   - Define: `TerosError`, `ValidationError`, `ConvergenceError`, `StructureError`
+   - Create `/home/thiagotd/git/PS-TEROS/psteros/core/exceptions.py`
+   - Define: `PsterosError`, `ValidationError`, `ConvergenceError`, `StructureError`
 
 3. **Standardize task decorators:**
    - Files to update:
-     - `/home/thiagotd/git/PS-TEROS/teros/core/thermodynamics.py`
-     - `/home/thiagotd/git/PS-TEROS/teros/core/hf.py`
-     - `/home/thiagotd/git/PS-TEROS/teros/core/cleavage.py`
+     - `/home/thiagotd/git/PS-TEROS/psteros/core/thermodynamics.py`
+     - `/home/thiagotd/git/PS-TEROS/psteros/core/hf.py`
+     - `/home/thiagotd/git/PS-TEROS/psteros/core/cleavage.py`
    - Replace `@calcfunction` + `task()` with `@task.calcfunction`
 
 ### Near-Term Actions (Next Month)
 
 4. **Refactor build_core_workgraph():**
-   - Extract stage builders into `/home/thiagotd/git/PS-TEROS/teros/core/stages/`:
+   - Extract stage builders into `/home/thiagotd/git/PS-TEROS/psteros/core/stages/`:
      - `bulk_stage.py`
      - `slab_relaxation_stage.py`
      - `thermodynamics_stage.py`
      - `electronic_structure_stage.py`
 
 5. **Vectorize thermodynamics:**
-   - File: `/home/thiagotd/git/PS-TEROS/teros/core/thermodynamics.py`
+   - File: `/home/thiagotd/git/PS-TEROS/psteros/core/thermodynamics.py`
    - Replace nested loops with NumPy meshgrid operations
 
 6. **Add VASP error handlers:**
-   - File: `/home/thiagotd/git/PS-TEROS/teros/core/error_handlers.py`
+   - File: `/home/thiagotd/git/PS-TEROS/psteros/core/error_handlers.py`
    - Implement retry logic for common VASP failures (convergence, ZBRENT)
 
 ### Documentation Actions

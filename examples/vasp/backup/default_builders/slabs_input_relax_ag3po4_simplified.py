@@ -2,7 +2,7 @@
 """
 Simplified example using default_builders module for Ag3PO4 slab relaxation.
 
-This script demonstrates how to use the teros.default_builders module to
+This script demonstrates how to use the psteros.default_builders module to
 reduce boilerplate code. All default VASP parameters are stored in the module
 and can be easily overridden as needed.
 
@@ -12,8 +12,8 @@ Usage:
 
 from aiida import load_profile, orm
 from ase.io import read
-from teros.core.workgraph import build_core_workgraph_with_map
-from teros.core.builders.default_ag3po4_builders import get_ag3po4_defaults
+from psteros.core.workgraph import build_core_workgraph_with_map
+from psteros.core.builders.default_ag3po4_builders import get_ag3po4_defaults
 
 def main():
     """Main function to run the slab relaxation workflow with input slabs."""

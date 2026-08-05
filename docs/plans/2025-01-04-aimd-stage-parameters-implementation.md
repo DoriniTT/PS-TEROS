@@ -15,7 +15,7 @@
 ## Task 1: Write Failing Test for New prepare_aimd_parameters() Signature
 
 **Files:**
-- Create: `teros/core/test_aimd_functions.py`
+- Create: `psteros/core/test_aimd_functions.py`
 
 **Step 1: Write failing test for required parameters**
 
@@ -24,7 +24,7 @@ Create new test file:
 ```python
 """Tests for AIMD functions."""
 import pytest
-from teros.core.aimd_functions import prepare_aimd_parameters
+from psteros.core.aimd_functions import prepare_aimd_parameters
 
 
 def test_prepare_aimd_parameters_required_only():
@@ -102,7 +102,7 @@ def test_prepare_aimd_parameters_missing_nsw():
 **Step 2: Run test to verify it fails**
 
 ```bash
-pytest teros/core/test_aimd_functions.py -v
+pytest psteros/core/test_aimd_functions.py -v
 ```
 
 Expected output:
@@ -113,7 +113,7 @@ FAILED - TypeError: prepare_aimd_parameters() takes 3 positional arguments but 2
 **Step 3: Commit failing test**
 
 ```bash
-git add teros/core/test_aimd_functions.py
+git add psteros/core/test_aimd_functions.py
 git commit -m "test(aimd): add tests for new prepare_aimd_parameters signature
 
 - Test required parameters (TEBEG, NSW)
@@ -127,7 +127,7 @@ git commit -m "test(aimd): add tests for new prepare_aimd_parameters signature
 ## Task 2: Update prepare_aimd_parameters() Implementation
 
 **Files:**
-- Modify: `teros/core/aimd_functions.py:21-55`
+- Modify: `psteros/core/aimd_functions.py:21-55`
 
 **Step 1: Update function signature and implementation**
 
@@ -182,7 +182,7 @@ def prepare_aimd_parameters(base_aimd_parameters: dict, stage_config: dict) -> d
 **Step 2: Run tests to verify they pass**
 
 ```bash
-pytest teros/core/test_aimd_functions.py -v
+pytest psteros/core/test_aimd_functions.py -v
 ```
 
 Expected output:
@@ -197,7 +197,7 @@ test_prepare_aimd_parameters_missing_nsw PASSED
 **Step 3: Commit implementation**
 
 ```bash
-git add teros/core/aimd_functions.py
+git add psteros/core/aimd_functions.py
 git commit -m "feat(aimd): update prepare_aimd_parameters to use stage_config
 
 - Replace temperature/steps parameters with stage_config dict
@@ -212,7 +212,7 @@ git commit -m "feat(aimd): update prepare_aimd_parameters to use stage_config
 ## Task 3: Update aimd_single_stage_scatter() Signature
 
 **Files:**
-- Modify: `teros/core/aimd_functions.py:122-195`
+- Modify: `psteros/core/aimd_functions.py:122-195`
 
 **Step 1: Update function signature**
 
@@ -295,7 +295,7 @@ Find the scatter loop (line ~185-194) and update:
 **Step 4: Commit signature update**
 
 ```bash
-git add teros/core/aimd_functions.py
+git add psteros/core/aimd_functions.py
 git commit -m "refactor(aimd): update aimd_single_stage_scatter signature
 
 - Replace temperature and steps with stage_config dict
@@ -309,7 +309,7 @@ git commit -m "refactor(aimd): update aimd_single_stage_scatter signature
 ## Task 4: Update build_aimd_workgraph() Stage Loop
 
 **Files:**
-- Modify: `teros/core/aimd/workgraph.py:175-235`
+- Modify: `psteros/core/aimd/workgraph.py:175-235`
 
 **Step 1: Update stage loop**
 
@@ -385,7 +385,7 @@ Find the stage loop in `build_aimd_workgraph()` (line ~175) and replace:
 **Step 2: Commit standalone module update**
 
 ```bash
-git add teros/core/aimd/workgraph.py
+git add psteros/core/aimd/workgraph.py
 git commit -m "feat(aimd): update build_aimd_workgraph to use new stage_config format
 
 - Add validation for required TEBEG and NSW parameters
@@ -398,12 +398,12 @@ git commit -m "feat(aimd): update build_aimd_workgraph to use new stage_config f
 ## Task 5: Update Main Workflow Caller (if applicable)
 
 **Files:**
-- Check: `teros/core/workgraph.py:1742-1759`
+- Check: `psteros/core/workgraph.py:1742-1759`
 
 **Step 1: Search for aimd_single_stage_scatter calls**
 
 ```bash
-grep -n "aimd_single_stage_scatter" teros/core/workgraph.py
+grep -n "aimd_single_stage_scatter" psteros/core/workgraph.py
 ```
 
 **Step 2: If found, update the call**
@@ -415,7 +415,7 @@ Based on current code review, the main workflow uses the AIMD module indirectly,
 **Step 3: Verify no direct calls exist**
 
 ```bash
-grep -r "temperature.*steps" teros/core/workgraph.py | grep -i aimd
+grep -r "temperature.*steps" psteros/core/workgraph.py | grep -i aimd
 ```
 
 Expected: No matches (main workflow doesn't call scatter directly)
@@ -550,7 +550,7 @@ git commit -m "refactor(examples): update step_19 to use new AIMD stage format
 ## Task 8: Update Unit Tests
 
 **Files:**
-- Modify: `teros/core/aimd/test_overrides.py:66-142`
+- Modify: `psteros/core/aimd/test_overrides.py:66-142`
 
 **Step 1: Update all aimd_stages definitions in test file**
 
@@ -576,7 +576,7 @@ aimd_stages=[{'TEBEG': 300, 'NSW': 10}],
 **Step 2: Run override tests**
 
 ```bash
-pytest teros/core/aimd/test_overrides.py -v
+pytest psteros/core/aimd/test_overrides.py -v
 ```
 
 Expected output:
@@ -591,7 +591,7 @@ test_override_priority PASSED
 **Step 3: Commit test updates**
 
 ```bash
-git add teros/core/aimd/test_overrides.py
+git add psteros/core/aimd/test_overrides.py
 git commit -m "test(aimd): update override tests to use new stage format
 
 - Replace temperature/steps with TEBEG/NSW in all tests
@@ -603,7 +603,7 @@ git commit -m "test(aimd): update override tests to use new stage format
 ## Task 9: Add Validation Tests
 
 **Files:**
-- Modify: `teros/core/aimd/test_overrides.py` (add new tests)
+- Modify: `psteros/core/aimd/test_overrides.py` (add new tests)
 
 **Step 1: Add test for missing TEBEG**
 
@@ -616,7 +616,7 @@ def test_build_aimd_workgraph_missing_tebeg():
     load_profile('presto')
 
     from ase.build import bulk
-    from teros.core.aimd import build_aimd_workgraph
+    from psteros.core.aimd import build_aimd_workgraph
 
     atoms = bulk('Al', 'fcc', a=4.0)
     struct = orm.StructureData(ase=atoms)
@@ -648,7 +648,7 @@ def test_build_aimd_workgraph_missing_nsw():
     load_profile('presto')
 
     from ase.build import bulk
-    from teros.core.aimd import build_aimd_workgraph
+    from psteros.core.aimd import build_aimd_workgraph
 
     atoms = bulk('Al', 'fcc', a=4.0)
     struct = orm.StructureData(ase=atoms)
@@ -677,8 +677,8 @@ def test_build_aimd_workgraph_missing_nsw():
 **Step 2: Run validation tests**
 
 ```bash
-pytest teros/core/aimd/test_overrides.py::test_build_aimd_workgraph_missing_tebeg -v
-pytest teros/core/aimd/test_overrides.py::test_build_aimd_workgraph_missing_nsw -v
+pytest psteros/core/aimd/test_overrides.py::test_build_aimd_workgraph_missing_tebeg -v
+pytest psteros/core/aimd/test_overrides.py::test_build_aimd_workgraph_missing_nsw -v
 ```
 
 Expected: Both tests PASS
@@ -686,7 +686,7 @@ Expected: Both tests PASS
 **Step 3: Commit validation tests**
 
 ```bash
-git add teros/core/aimd/test_overrides.py
+git add psteros/core/aimd/test_overrides.py
 git commit -m "test(aimd): add validation tests for stage config
 
 - Test missing TEBEG raises ValueError
@@ -699,30 +699,30 @@ git commit -m "test(aimd): add validation tests for stage config
 ## Task 10: Run All AIMD Tests
 
 **Files:**
-- Test: `teros/core/aimd/test_*.py`
-- Test: `teros/core/test_aimd_functions.py`
+- Test: `psteros/core/aimd/test_*.py`
+- Test: `psteros/core/test_aimd_functions.py`
 
 **Step 1: Run all AIMD module tests**
 
 ```bash
-pytest teros/core/aimd/test_*.py teros/core/test_aimd_functions.py -v
+pytest psteros/core/aimd/test_*.py psteros/core/test_aimd_functions.py -v
 ```
 
 Expected output:
 ```
-teros/core/test_aimd_functions.py::test_prepare_aimd_parameters_required_only PASSED
-teros/core/test_aimd_functions.py::test_prepare_aimd_parameters_with_optional PASSED
-teros/core/test_aimd_functions.py::test_prepare_aimd_parameters_missing_tebeg PASSED
-teros/core/test_aimd_functions.py::test_prepare_aimd_parameters_missing_nsw PASSED
-teros/core/aimd/test_overrides.py::test_structure_overrides PASSED
-teros/core/aimd/test_overrides.py::test_stage_overrides PASSED
-teros/core/aimd/test_overrides.py::test_matrix_overrides PASSED
-teros/core/aimd/test_override_priority PASSED
-teros/core/aimd/test_overrides.py::test_build_aimd_workgraph_missing_tebeg PASSED
-teros/core/aimd/test_overrides.py::test_build_aimd_workgraph_missing_nsw PASSED
-teros/core/aimd/test_tasks.py::test_create_supercell_basic PASSED
-teros/core/aimd/test_tasks.py::test_create_supercell_3x3x2 PASSED
-teros/core/aimd/test_utils.py::test_validate_stage_sequence_valid PASSED
+psteros/core/test_aimd_functions.py::test_prepare_aimd_parameters_required_only PASSED
+psteros/core/test_aimd_functions.py::test_prepare_aimd_parameters_with_optional PASSED
+psteros/core/test_aimd_functions.py::test_prepare_aimd_parameters_missing_tebeg PASSED
+psteros/core/test_aimd_functions.py::test_prepare_aimd_parameters_missing_nsw PASSED
+psteros/core/aimd/test_overrides.py::test_structure_overrides PASSED
+psteros/core/aimd/test_overrides.py::test_stage_overrides PASSED
+psteros/core/aimd/test_overrides.py::test_matrix_overrides PASSED
+psteros/core/aimd/test_override_priority PASSED
+psteros/core/aimd/test_overrides.py::test_build_aimd_workgraph_missing_tebeg PASSED
+psteros/core/aimd/test_overrides.py::test_build_aimd_workgraph_missing_nsw PASSED
+psteros/core/aimd/test_tasks.py::test_create_supercell_basic PASSED
+psteros/core/aimd/test_tasks.py::test_create_supercell_3x3x2 PASSED
+psteros/core/aimd/test_utils.py::test_validate_stage_sequence_valid PASSED
 ...
 ======================== 25 passed in 3.5s ========================
 ```
@@ -738,7 +738,7 @@ Check error messages. Most likely issues:
 ## Task 11: Update Module README
 
 **Files:**
-- Modify: `teros/core/aimd/README.md:55-85`
+- Modify: `psteros/core/aimd/README.md:55-85`
 
 **Step 1: Update Quick Start example**
 
@@ -748,7 +748,7 @@ Find the Quick Start section and update aimd_stages:
 ## Quick Start
 
 ```python
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 
 # Define AIMD stages with VASP-native parameters
 aimd_stages = [
@@ -814,7 +814,7 @@ Search for `temperature` and `steps` in README and replace with `TEBEG` and `NSW
 **Step 4: Commit README update**
 
 ```bash
-git add teros/core/aimd/README.md
+git add psteros/core/aimd/README.md
 git commit -m "docs(aimd): update README for new stage parameter format
 
 - Replace temperature/steps with TEBEG/NSW in examples
@@ -923,8 +923,8 @@ git commit -m "docs(aimd): update standalone module docs for new stage format
 **Step 1: Clear Python cache**
 
 ```bash
-find teros/core -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
-find teros/core -name "*.pyc" -delete 2>/dev/null
+find psteros/core -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null
+find psteros/core -name "*.pyc" -delete 2>/dev/null
 ```
 
 **Step 2: Restart AiiDA daemon**
@@ -986,7 +986,7 @@ NSW = 50
 **Step 1: Run all tests one final time**
 
 ```bash
-pytest teros/core/aimd/test_*.py teros/core/test_aimd_functions.py -v
+pytest psteros/core/aimd/test_*.py psteros/core/test_aimd_functions.py -v
 ```
 
 Expected: All 25+ tests PASS

@@ -1,7 +1,7 @@
 """
 Fixed Atoms Module Tests
 
-Tests for atom fixing utilities in teros.core.fixed_atoms.
+Tests for atom fixing utilities in psteros.core.fixed_atoms.
 Includes tests for position-based fixing (bottom, top, center) and
 parameter modification for both CP2K and VASP calculators.
 """
@@ -100,7 +100,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_type_none_returns_empty_list(self, simple_slab_aiida):
         """Test that fix_type=None returns empty list."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         result = get_fixed_atoms_list(
             simple_slab_aiida,
@@ -112,7 +112,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_zero_thickness_returns_empty_list(self, simple_slab_aiida):
         """Test that zero thickness returns empty list."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         result = get_fixed_atoms_list(
             simple_slab_aiida,
@@ -124,7 +124,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_negative_thickness_returns_empty_list(self, simple_slab_aiida):
         """Test that negative thickness returns empty list."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         result = get_fixed_atoms_list(
             simple_slab_aiida,
@@ -136,7 +136,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_bottom_atoms(self, simple_slab_aiida):
         """Test fixing atoms at the bottom of the slab."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Fix bottom 1.5 Å (should get bottom layer at z=0.0)
         result = get_fixed_atoms_list(
@@ -150,7 +150,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_bottom_multiple_layers(self, simple_slab_aiida):
         """Test fixing multiple layers at bottom."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Fix bottom 4.0 Å (should get bottom two layers)
         result = get_fixed_atoms_list(
@@ -164,7 +164,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_top_atoms(self, simple_slab_aiida):
         """Test fixing atoms at the top of the slab."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Fix top 1.5 Å (should get top layer at z=6.0)
         result = get_fixed_atoms_list(
@@ -178,7 +178,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_top_multiple_layers(self, simple_slab_aiida):
         """Test fixing multiple layers at top."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Fix top 4.0 Å (should get top two layers)
         result = get_fixed_atoms_list(
@@ -192,7 +192,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_center_atoms(self, simple_slab_aiida):
         """Test fixing atoms at the center of the slab."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Slab center is at z=3.0 (middle layer)
         # Fix 2.0 Å around center (1.0 Å above and below)
@@ -207,7 +207,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_center_wide_region(self, simple_slab_aiida):
         """Test fixing wide region around center."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Fix 6.0 Å around center (3.0 Å above and below)
         # Should include all three layers
@@ -222,7 +222,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_bottom_with_element_filter(self, mixed_element_slab_aiida):
         """Test fixing only specific elements at bottom."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Fix bottom 6.0 Å but only Ag atoms
         result = get_fixed_atoms_list(
@@ -237,7 +237,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_top_with_element_filter(self, mixed_element_slab_aiida):
         """Test fixing only specific elements at top."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Fix top 6.0 Å but only O atoms
         result = get_fixed_atoms_list(
@@ -252,7 +252,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_with_nonexistent_element(self, simple_slab_aiida):
         """Test fixing with element that doesn't exist in structure."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         result = get_fixed_atoms_list(
             simple_slab_aiida,
@@ -265,7 +265,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_fix_with_multiple_element_filter(self, mixed_element_slab_aiida):
         """Test fixing with multiple elements in filter."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Fix bottom 6.0 Å with both Ag and O
         result = get_fixed_atoms_list(
@@ -280,7 +280,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_invalid_fix_type_raises_error(self, simple_slab_aiida):
         """Test that invalid fix_type raises ValueError."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         with pytest.raises(ValueError, match="Invalid fix_type"):
             get_fixed_atoms_list(
@@ -291,7 +291,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_returns_sorted_list(self, simple_slab_aiida):
         """Test that returned indices are sorted."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         result = get_fixed_atoms_list(
             simple_slab_aiida,
@@ -304,7 +304,7 @@ class TestGetFixedAtomsListWithAiiDA:
 
     def test_returns_1_based_indices(self, simple_slab_aiida):
         """Test that indices are 1-based (not 0-based)."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         result = get_fixed_atoms_list(
             simple_slab_aiida,
@@ -326,7 +326,7 @@ class TestAddFixedAtomsToCP2KParameters:
 
     def test_empty_list_returns_unchanged_params(self):
         """Test that empty fixed_atoms_list doesn't modify parameters."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
 
         base_params = {'FORCE_EVAL': {'METHOD': 'QS'}}
         result = add_fixed_atoms_to_cp2k_parameters(base_params, [])
@@ -335,7 +335,7 @@ class TestAddFixedAtomsToCP2KParameters:
 
     def test_add_fixed_atoms_to_empty_params(self):
         """Test adding fixed atoms to empty parameters."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
 
         base_params = {}
         fixed_list = [1, 2, 3]
@@ -350,7 +350,7 @@ class TestAddFixedAtomsToCP2KParameters:
 
     def test_add_fixed_atoms_with_existing_motion(self):
         """Test adding fixed atoms to parameters with existing MOTION section."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
 
         base_params = {
             'MOTION': {
@@ -368,7 +368,7 @@ class TestAddFixedAtomsToCP2KParameters:
 
     def test_components_xyz(self):
         """Test fixing all three components (default)."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
 
         base_params = {}
         fixed_list = [1]
@@ -383,7 +383,7 @@ class TestAddFixedAtomsToCP2KParameters:
 
     def test_components_xy(self):
         """Test fixing only in-plane components."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
 
         base_params = {}
         fixed_list = [1]
@@ -398,7 +398,7 @@ class TestAddFixedAtomsToCP2KParameters:
 
     def test_components_z(self):
         """Test fixing only out-of-plane component."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
 
         base_params = {}
         fixed_list = [1]
@@ -413,7 +413,7 @@ class TestAddFixedAtomsToCP2KParameters:
 
     def test_original_params_not_modified(self):
         """Test that original parameters are not modified (deep copy)."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
 
         base_params = {'FORCE_EVAL': {'METHOD': 'QS'}}
         original_copy = deepcopy(base_params)
@@ -429,7 +429,7 @@ class TestAddFixedAtomsToCP2KParameters:
 
     def test_list_formatting(self):
         """Test that atom list is correctly formatted as space-separated string."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
 
         base_params = {}
         fixed_list = [1, 5, 10, 15, 20]
@@ -449,7 +449,7 @@ class TestAddFixedAtomsToVASPParameters:
 
     def test_empty_list_returns_unchanged(self, simple_slab_aiida):
         """Test that empty fixed_atoms_list doesn't modify anything."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
 
         base_params = {'ENCUT': 520, 'ISMEAR': 0}
         params, structure = add_fixed_atoms_to_vasp_parameters(
@@ -464,7 +464,7 @@ class TestAddFixedAtomsToVASPParameters:
 
     def test_preserves_ibrion_if_present(self, simple_slab_aiida):
         """Test that existing IBRION is preserved."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
 
         base_params = {'IBRION': 1, 'ENCUT': 520}
         fixed_list = [1, 2, 3]
@@ -480,7 +480,7 @@ class TestAddFixedAtomsToVASPParameters:
 
     def test_sets_default_ibrion_if_absent(self, simple_slab_aiida):
         """Test that IBRION defaults to 2 if not present."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
 
         base_params = {'ENCUT': 520}
         fixed_list = [1, 2, 3]
@@ -496,7 +496,7 @@ class TestAddFixedAtomsToVASPParameters:
 
     def test_creates_constrained_structure(self, simple_slab_aiida):
         """Test that a new constrained structure is created."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
 
         base_params = {}
         fixed_list = [1, 2, 3]  # Fix bottom layer
@@ -518,7 +518,7 @@ class TestAddFixedAtomsToVASPParameters:
 
     def test_constraint_has_correct_indices(self, simple_slab_aiida):
         """Test that structure is created and has correct number of sites."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
 
         base_params = {}
         fixed_list = [1, 2, 3]  # 1-based indices
@@ -540,7 +540,7 @@ class TestAddFixedAtomsToVASPParameters:
 
     def test_original_params_not_modified(self, simple_slab_aiida):
         """Test that original parameters are not modified (deep copy)."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
 
         base_params = {'ENCUT': 520, 'ISMEAR': 0}
         original_copy = deepcopy(base_params)
@@ -557,7 +557,7 @@ class TestAddFixedAtomsToVASPParameters:
 
     def test_multiple_fixed_atoms(self, simple_slab_aiida):
         """Test fixing multiple non-contiguous atoms."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
 
         base_params = {}
         fixed_list = [1, 3, 5, 7, 9]  # Fix alternating atoms
@@ -577,7 +577,7 @@ class TestAddFixedAtomsToVASPParameters:
 
     def test_fix_all_atoms(self, simple_slab_aiida):
         """Test fixing all atoms in structure."""
-        from teros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
+        from psteros.core.fixed_atoms import add_fixed_atoms_to_vasp_parameters
 
         base_params = {}
         # Fix all 9 atoms
@@ -607,7 +607,7 @@ class TestFixedAtomsIntegration:
 
     def test_bottom_fix_integration_cp2k(self, simple_slab_aiida):
         """Test complete workflow for CP2K: get indices + add to params."""
-        from teros.core.fixed_atoms import (
+        from psteros.core.fixed_atoms import (
             get_fixed_atoms_list,
             add_fixed_atoms_to_cp2k_parameters
         )
@@ -628,7 +628,7 @@ class TestFixedAtomsIntegration:
 
     def test_bottom_fix_integration_vasp(self, simple_slab_aiida):
         """Test complete workflow for VASP: get indices + add to params."""
-        from teros.core.fixed_atoms import (
+        from psteros.core.fixed_atoms import (
             get_fixed_atoms_list,
             add_fixed_atoms_to_vasp_parameters
         )
@@ -657,7 +657,7 @@ class TestFixedAtomsIntegration:
 
     def test_element_filter_integration(self, mixed_element_slab_aiida):
         """Test workflow with element filtering."""
-        from teros.core.fixed_atoms import (
+        from psteros.core.fixed_atoms import (
             get_fixed_atoms_list,
             add_fixed_atoms_to_vasp_parameters
         )
@@ -691,7 +691,7 @@ class TestFixedAtomsIntegration:
 
     def test_no_fixing_workflow(self, simple_slab_aiida):
         """Test workflow when no fixing is needed."""
-        from teros.core.fixed_atoms import (
+        from psteros.core.fixed_atoms import (
             get_fixed_atoms_list,
             add_fixed_atoms_to_cp2k_parameters,
             add_fixed_atoms_to_vasp_parameters
@@ -729,7 +729,7 @@ class TestFixedAtomsEdgeCases:
 
     def test_very_large_thickness(self, simple_slab_aiida):
         """Test with thickness larger than slab height."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Use huge thickness
         result = get_fixed_atoms_list(
@@ -744,7 +744,7 @@ class TestFixedAtomsEdgeCases:
 
     def test_very_small_positive_thickness(self, simple_slab_aiida):
         """Test with very small positive thickness."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Use tiny thickness (only atoms exactly at z_min)
         result = get_fixed_atoms_list(
@@ -758,7 +758,7 @@ class TestFixedAtomsEdgeCases:
 
     def test_thickness_exactly_at_layer_boundary(self, simple_slab_aiida):
         """Test with thickness exactly at layer boundary."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Thickness exactly 3.0 Å (up to but not including middle layer)
         result = get_fixed_atoms_list(
@@ -772,7 +772,7 @@ class TestFixedAtomsEdgeCases:
 
     def test_empty_element_list(self, simple_slab_aiida):
         """Test with empty fix_elements list."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Empty element list should fix nothing
         result = get_fixed_atoms_list(
@@ -786,7 +786,7 @@ class TestFixedAtomsEdgeCases:
 
     def test_fix_type_case_sensitivity(self, simple_slab_aiida):
         """Test that fix_type is case-sensitive."""
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         # Should raise error for incorrect case
         with pytest.raises(ValueError, match="Invalid fix_type"):
@@ -800,7 +800,7 @@ class TestFixedAtomsEdgeCases:
         """Test with structure containing only one atom."""
         from aiida import orm
         from ase import Atoms
-        from teros.core.fixed_atoms import get_fixed_atoms_list
+        from psteros.core.fixed_atoms import get_fixed_atoms_list
 
         atoms = Atoms('H', positions=[[0, 0, 0]], cell=[10, 10, 10], pbc=True)
         structure = orm.StructureData(ase=atoms)

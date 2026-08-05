@@ -64,7 +64,7 @@ for idx, slab_file in enumerate(slab_files):
 ### 3. Call the WorkGraph Builder
 
 ```python
-from teros.core.workgraph import build_core_workgraph_with_map
+from psteros.core.workgraph import build_core_workgraph_with_map
 
 wg = build_core_workgraph_with_map(
     structures_dir=structures_dir,
@@ -211,6 +211,6 @@ A: Yes! Set `compute_thermodynamics=True` and `relax_slabs=True` as usual.
 ## Code Changes
 
 The feature was implemented by:
-1. Adding `input_slabs` parameter to `core_workgraph()` in `teros/core/workgraph.py`
+1. Adding `input_slabs` parameter to `core_workgraph()` in `psteros/core/workgraph.py`
 2. Making slab generation parameters optional when `input_slabs` is provided
 3. Conditional logic to use provided slabs or generate them automatically

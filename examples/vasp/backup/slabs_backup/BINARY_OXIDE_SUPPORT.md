@@ -6,7 +6,7 @@ PS-TEROS now fully supports **binary oxide systems** (e.g., Ag₂O, CuO, ZnO) in
 
 ## Changes Made
 
-### 1. Core Workgraph Module (`teros/core/workgraph.py`)
+### 1. Core Workgraph Module (`psteros/core/workgraph.py`)
 
 **Modified Functions:**
 - `core_workgraph()` - Main @task.graph function
@@ -57,12 +57,12 @@ PS-TEROS now fully supports **binary oxide systems** (e.g., Ag₂O, CuO, ZnO) in
 
 The following modules already supported binary oxides:
 
-**`teros/core/hf.py`:**
+**`psteros/core/hf.py`:**
 - `calculate_formation_enthalpy()` automatically detects binary vs ternary oxides
 - For binary: ignores nonmetal contribution even if dummy values are provided
 - Returns `oxide_type = 'binary'` in output Dict
 
-**`teros/core/thermodynamics.py`:**
+**`psteros/core/thermodynamics.py`:**
 - `identify_oxide_type()` identifies binary (1 metal) vs ternary (2 metals)
 - `calculate_surface_energy_binary()` computes γ(Δμ_O) for binary oxides
 - `calculate_surface_energy_ternary()` computes γ(Δμ_M, Δμ_O) for ternary oxides
@@ -72,7 +72,7 @@ The following modules already supported binary oxides:
 ### For Binary Oxides (e.g., Ag₂O)
 
 ```python
-from teros.core.workgraph import build_core_workgraph_with_map
+from psteros.core.workgraph import build_core_workgraph_with_map
 
 wg = build_core_workgraph_with_map(
     structures_dir="path/to/structures",

@@ -12,10 +12,10 @@ parallel:
   exceptions = session: implementer
     prompt: """Create the custom exception hierarchy for PS-TEROS.
 
-    Write to: /home/thiagotd/git/PS-TEROS/teros/core/exceptions.py
+    Write to: /home/thiagotd/git/PS-TEROS/psteros/core/exceptions.py
 
     Create these exceptions following Python best practices:
-    - TerosError: Base exception for all PS-TEROS errors
+    - PsterosError: Base exception for all PS-TEROS errors
     - ValidationError: Invalid input parameters or structures
     - StructureError: Problems with atomic structures
     - ConvergenceError: DFT calculation convergence failures
@@ -104,7 +104,7 @@ output summary = session "Update exports and create summary"
   context: { exceptions, test_fixed, test_constants, test_hf }
   prompt: """Complete the implementation:
 
-  1. Update /home/thiagotd/git/PS-TEROS/teros/core/__init__.py to export the new exceptions:
+  1. Update /home/thiagotd/git/PS-TEROS/psteros/core/__init__.py to export the new exceptions:
      - Add imports from .exceptions
      - Add to __all__ list
 

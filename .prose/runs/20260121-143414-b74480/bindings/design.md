@@ -15,7 +15,7 @@ let design = session: module-designer
 
 ### Overview
 
-This design specification details the addition of three visualization functions to make the thickness convergence module fully standalone and consistent with the ENCUT/k-points convergence visualization patterns already established in `teros/core/convergence/visualization.py`.
+This design specification details the addition of three visualization functions to make the thickness convergence module fully standalone and consistent with the ENCUT/k-points convergence visualization patterns already established in `psteros/core/convergence/visualization.py`.
 
 ### Data Structure Reference
 
@@ -292,7 +292,7 @@ __all__ = [
 ### Usage Examples
 
 ```python
-from teros.core.convergence import (
+from psteros.core.convergence import (
     build_thickness_convergence_workgraph,
     get_thickness_convergence_results,
     print_thickness_convergence_summary,

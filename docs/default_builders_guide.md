@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `teros.default_builders` module provides pre-configured VASP calculation parameters, scheduler options, and structure configurations for specific material systems. This reduces boilerplate code and ensures consistency across calculations while still allowing easy customization.
+The `psteros.default_builders` module provides pre-configured VASP calculation parameters, scheduler options, and structure configurations for specific material systems. This reduces boilerplate code and ensures consistency across calculations while still allowing easy customization.
 
 ## Features
 
@@ -31,8 +31,8 @@ Includes defaults for:
 
 ```python
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph_with_map
-from teros.default_builders import get_ag3po4_defaults
+from psteros.core.workgraph import build_core_workgraph_with_map
+from psteros.default_builders import get_ag3po4_defaults
 
 # Load AiiDA profile
 load_profile(profile='psteros')
@@ -55,7 +55,7 @@ wg = build_core_workgraph_with_map(
 ### Advanced Example (With Overrides)
 
 ```python
-from teros.default_builders import get_ag3po4_defaults
+from psteros.default_builders import get_ag3po4_defaults
 
 # Get defaults with custom overrides
 defaults = get_ag3po4_defaults(
@@ -84,7 +84,7 @@ wg = build_core_workgraph_with_map(**defaults, input_slabs=my_slabs)
 ### Manual Override After Getting Defaults
 
 ```python
-from teros.default_builders import get_ag3po4_defaults, update_builder_params
+from psteros.default_builders import get_ag3po4_defaults, update_builder_params
 
 # Get base defaults
 defaults = get_ag3po4_defaults(

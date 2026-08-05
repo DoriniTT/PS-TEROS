@@ -86,7 +86,7 @@ Create a new Python script ``beginner_ag2o.py``:
 
     import os
     from aiida import load_profile
-    from teros.core.workgraph import build_core_workgraph
+    from psteros.core.workgraph import build_core_workgraph
 
     def main():
         # Load your AiiDA profile

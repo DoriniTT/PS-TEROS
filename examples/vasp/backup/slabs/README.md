@@ -21,7 +21,7 @@ verdi daemon start
 
 # 3. Run the example
 source ~/envs/aiida/bin/activate
-cd /home/thiagotd/git/PS-TEROS/teros/examples/slabs
+cd /home/thiagotd/git/PS-TEROS/psteros/examples/slabs
 python slabs.py
 ```
 

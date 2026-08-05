@@ -14,13 +14,13 @@ Successfully merged the relaxation energy calculation module into the `develop` 
 ## What Was Merged
 
 ### Core Implementation (2 files)
-- `teros/core/slabs.py` (+241 lines)
+- `psteros/core/slabs.py` (+241 lines)
   - `scf_slabs_scatter()` - SCF workgraph
   - `calculate_relaxation_energies_scatter()` - Energy calculation workgraph
   - `calculate_energy_difference()` - Helper calcfunction
   - `scf_relax_and_calculate_relaxation_energy()` - Combined approach
 
-- `teros/core/workgraph.py` (+79 lines, -5 lines)
+- `psteros/core/workgraph.py` (+79 lines, -5 lines)
   - Added `compute_relaxation_energy` parameter
   - Conditional SCF and energy calculation workgraphs
   - Updated documentation
@@ -89,7 +89,7 @@ The feature was fully tested before merging:
 Users can now enable relaxation energy calculation:
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     # ... parameters ...

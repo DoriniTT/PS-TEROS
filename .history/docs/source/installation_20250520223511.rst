@@ -44,10 +44,10 @@ The sources for AiiDA-TEROS can be downloaded from the `Github repo`_.
 
 .. code-block:: console
 
-    $ git clone git@github.com:DoriniTT/aiida-teros.git
-    $ cd aiida-teros
+    $ git clone git@github.com:DoriniTT/aiida-psteros.git
+    $ cd aiida-psteros
     $ pip install -e .
 
 This will install the package in development mode, allowing you to modify the code and have changes immediately available.
 
-.. _Github repo: https://github.com/DoriniTT/aiida-teros
+.. _Github repo: https://github.com/DoriniTT/aiida-psteros

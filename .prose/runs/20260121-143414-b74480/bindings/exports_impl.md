@@ -5,7 +5,7 @@ kind: let
 source:
 ```prose
 let exports_impl = session: implementer
-  prompt: "Update teros/core/convergence/__init__.py..."
+  prompt: "Update psteros/core/convergence/__init__.py..."
   context: visualization_impl
 ```
 
@@ -23,16 +23,16 @@ This module provides:
 
 Usage:
     # ENCUT/k-points convergence
-    from teros.core.convergence import build_convergence_workgraph
+    from psteros.core.convergence import build_convergence_workgraph
     wg = build_convergence_workgraph(structure=..., code_label=..., ...)
 
     # After completion, visualize results
-    from teros.core.convergence import print_convergence_summary, plot_convergence
+    from psteros.core.convergence import print_convergence_summary, plot_convergence
     print_convergence_summary(wg)  # Formatted console output
     plot_convergence(wg, save_path='convergence.png')  # Plot curves
 
     # Thickness convergence
-    from teros.core.convergence import build_thickness_convergence_workgraph
+    from psteros.core.convergence import build_thickness_convergence_workgraph
     wg = build_thickness_convergence_workgraph(
         bulk_structure_path='/path/to/bulk.cif',
         miller_indices=[1, 1, 1],
@@ -41,7 +41,7 @@ Usage:
     )
 
     # After thickness convergence completion, visualize results
-    from teros.core.convergence import (
+    from psteros.core.convergence import (
         print_thickness_convergence_summary,
         plot_thickness_convergence,
         export_thickness_convergence_data,
@@ -126,4 +126,4 @@ __all__ = [
    - Usage example for thickness convergence visualization
    - Clear separation between ENCUT/k-points and thickness convergence workflows
 
-The updated file maintains the existing structure while properly exposing the new thickness convergence visualization functions, making them available for import via `from teros.core.convergence import ...`.
+The updated file maintains the existing structure while properly exposing the new thickness convergence visualization functions, making them available for import via `from psteros.core.convergence import ...`.

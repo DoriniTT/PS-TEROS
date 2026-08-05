@@ -19,7 +19,7 @@ This guide explains how to use the preset system effectively.
 Instead of manually setting 7+ boolean flags, simply specify a preset:
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     workflow_preset='surface_thermodynamics',  # One line activates full workflow!
@@ -37,7 +37,7 @@ wg = build_core_workgraph(
 To see all available presets:
 
 ```python
-from teros.core import list_workflow_presets
+from psteros.core import list_workflow_presets
 
 list_workflow_presets()
 ```
@@ -49,7 +49,7 @@ Output shows each preset with description, use cases, and required parameters.
 To see detailed configuration for a specific preset:
 
 ```python
-from teros.core import get_preset_summary
+from psteros.core import get_preset_summary
 
 print(get_preset_summary('surface_thermodynamics'))
 ```
@@ -365,7 +365,7 @@ wg = build_core_workgraph(
 Before running a workflow, you can inspect the resolved configuration:
 
 ```python
-from teros.core.workflow_presets import resolve_preset
+from psteros.core.workflow_presets import resolve_preset
 
 preset_name, flags = resolve_preset(
     'surface_thermodynamics',
@@ -513,7 +513,7 @@ compute_cleavage=False,  # Disable this feature
 
 ### Serial Surface Thermodynamics (Experimental)
 
-**Module:** `teros.experimental.surface_thermo_preset_serial`
+**Module:** `psteros.experimental.surface_thermo_preset_serial`
 
 **Status:** In active development, API may change
 
@@ -532,7 +532,7 @@ compute_cleavage=False,  # Disable this feature
 **Usage:**
 
 ```python
-from teros.experimental.surface_thermo_preset_serial import (
+from psteros.experimental.surface_thermo_preset_serial import (
     surface_thermodynamics_serial_workgraph
 )
 
@@ -567,7 +567,7 @@ wg.submit()
 **Documentation:**
 - Full guide: `docs/SERIAL_PRESET_EXPERIMENTAL.md`
 - Example: `examples/vasp/step_16_surface_thermodynamics_serial.py`
-- Module README: `teros/experimental/surface_thermo_preset_serial/README.md`
+- Module README: `psteros/experimental/surface_thermo_preset_serial/README.md`
 
 ---
 

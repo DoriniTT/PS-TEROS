@@ -9,8 +9,8 @@ Based on: docs/plans/2025-10-12-slab-electronic-properties.md
 """
 
 from aiida import orm
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders.electronic_properties_builder import (
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders.electronic_properties_builder import (
     get_electronic_properties_defaults,
     get_slab_electronic_properties_defaults,
 )

@@ -25,7 +25,7 @@ The `surface_hydroxylation` module enables systematic exploration of hydroxylate
 
 | Requirement | Decision |
 |------------|----------|
-| **Module location** | `teros/core/surface_hydroxylation/` |
+| **Module location** | `psteros/core/surface_hydroxylation/` |
 | **Module name** | `surface_hydroxylation` |
 | **Script integration** | CalcFunction wrapper around surface_modes.py |
 | **Parallelization** | WorkGraph awaitable/semaphore mechanism |
@@ -59,12 +59,12 @@ SurfaceHydroxylationWorkGraph (Main)
 ## Module Structure
 
 ```
-teros/core/surface_hydroxylation/
+psteros/core/surface_hydroxylation/
 ├── __init__.py
 ├── workgraph.py              # SurfaceHydroxylationWorkGraph
 ├── tasks.py                  # CalcFunctions (generate_structures, collect_results)
 ├── relaxations.py            # RelaxationsWorkGraph with semaphore
-├── surface_modes.py          # Moved from teros/experimental/
+├── surface_modes.py          # Moved from psteros/experimental/
 └── utils.py                  # Helper functions
 ```
 
@@ -190,7 +190,7 @@ def collect_results(relaxations: namespace,
 
 **User Interface:**
 ```python
-from teros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph
+from psteros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph
 
 wg = SurfaceHydroxylationWorkGraph()
 
@@ -331,7 +331,7 @@ List of Dicts, one per failed relaxation:
 
 ### surface_modes.py Integration
 
-- Move from `teros/experimental/vacancies_hydroxilation/` to `teros/core/surface_hydroxylation/`
+- Move from `psteros/experimental/vacancies_hydroxilation/` to `psteros/core/surface_hydroxylation/`
 - Import as Python module (not subprocess call)
 - Use `SurfaceModifier` class directly in `generate_structures` calcfunction
 - Leverage existing functionality: `run_vacancies()`, `run_hydrogen()`, `run_combine()`

@@ -116,7 +116,7 @@ Import the slab electronic properties builder:
 
 .. code-block:: python
 
-    from teros.core.builders import (
+    from psteros.core.builders import (
         get_electronic_properties_defaults,
         get_slab_electronic_properties_defaults,  # NEW
     )

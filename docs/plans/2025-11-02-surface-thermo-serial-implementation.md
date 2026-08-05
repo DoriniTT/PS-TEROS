@@ -13,21 +13,21 @@
 ## Task 1: Create Module Structure
 
 **Files:**
-- Create: `teros/experimental/surface_thermo_preset_serial/__init__.py`
-- Create: `teros/experimental/surface_thermo_preset_serial/workgraph.py`
-- Create: `teros/experimental/surface_thermo_preset_serial/slab_operations.py`
-- Create: `teros/experimental/surface_thermo_preset_serial/thermodynamics_operations.py`
-- Create: `teros/experimental/surface_thermo_preset_serial/utils.py`
+- Create: `psteros/experimental/surface_thermo_preset_serial/__init__.py`
+- Create: `psteros/experimental/surface_thermo_preset_serial/workgraph.py`
+- Create: `psteros/experimental/surface_thermo_preset_serial/slab_operations.py`
+- Create: `psteros/experimental/surface_thermo_preset_serial/thermodynamics_operations.py`
+- Create: `psteros/experimental/surface_thermo_preset_serial/utils.py`
 
 **Step 1: Create directory**
 
 ```bash
-mkdir -p teros/experimental/surface_thermo_preset_serial
+mkdir -p psteros/experimental/surface_thermo_preset_serial
 ```
 
 **Step 2: Create __init__.py with exports**
 
-Create: `teros/experimental/surface_thermo_preset_serial/__init__.py`
+Create: `psteros/experimental/surface_thermo_preset_serial/__init__.py`
 
 ```python
 """
@@ -45,15 +45,15 @@ __all__ = ['surface_thermodynamics_serial_workgraph']
 **Step 3: Create empty module files**
 
 Create empty files for now:
-- `teros/experimental/surface_thermo_preset_serial/workgraph.py`
-- `teros/experimental/surface_thermo_preset_serial/slab_operations.py`
-- `teros/experimental/surface_thermo_preset_serial/thermodynamics_operations.py`
-- `teros/experimental/surface_thermo_preset_serial/utils.py`
+- `psteros/experimental/surface_thermo_preset_serial/workgraph.py`
+- `psteros/experimental/surface_thermo_preset_serial/slab_operations.py`
+- `psteros/experimental/surface_thermo_preset_serial/thermodynamics_operations.py`
+- `psteros/experimental/surface_thermo_preset_serial/utils.py`
 
 **Step 4: Commit module structure**
 
 ```bash
-git add teros/experimental/surface_thermo_preset_serial/
+git add psteros/experimental/surface_thermo_preset_serial/
 git commit -m "feat: create surface_thermo_preset_serial module structure"
 ```
 
@@ -62,11 +62,11 @@ git commit -m "feat: create surface_thermo_preset_serial module structure"
 ## Task 2: Implement Utilities Module
 
 **Files:**
-- Modify: `teros/experimental/surface_thermo_preset_serial/utils.py`
+- Modify: `psteros/experimental/surface_thermo_preset_serial/utils.py`
 
 **Step 1: Implement parameter preparation utilities**
 
-Write: `teros/experimental/surface_thermo_preset_serial/utils.py`
+Write: `psteros/experimental/surface_thermo_preset_serial/utils.py`
 
 ```python
 """Utility functions for the serial surface thermodynamics preset."""
@@ -167,7 +167,7 @@ def create_default_scf_parameters() -> dict:
 **Step 2: Commit utilities**
 
 ```bash
-git add teros/experimental/surface_thermo_preset_serial/utils.py
+git add psteros/experimental/surface_thermo_preset_serial/utils.py
 git commit -m "feat: add parameter preparation utilities"
 ```
 
@@ -176,11 +176,11 @@ git commit -m "feat: add parameter preparation utilities"
 ## Task 3: Implement Slab Operations Module
 
 **Files:**
-- Modify: `teros/experimental/surface_thermo_preset_serial/slab_operations.py`
+- Modify: `psteros/experimental/surface_thermo_preset_serial/slab_operations.py`
 
 **Step 1: Implement node builder for slab relaxation**
 
-Write: `teros/experimental/surface_thermo_preset_serial/slab_operations.py`
+Write: `psteros/experimental/surface_thermo_preset_serial/slab_operations.py`
 
 ```python
 """Node builders for slab-related operations."""
@@ -320,7 +320,7 @@ def build_energy_extraction_nodes(
         Dictionary of {slab_id: energy_extraction_node}
     """
     # Import the existing extract_total_energy calcfunction
-    from teros.core.slabs import extract_total_energy
+    from psteros.core.slabs import extract_total_energy
 
     energy_nodes = {}
 
@@ -384,7 +384,7 @@ def calculate_relaxation_energy(
 **Step 2: Commit slab operations**
 
 ```bash
-git add teros/experimental/surface_thermo_preset_serial/slab_operations.py
+git add psteros/experimental/surface_thermo_preset_serial/slab_operations.py
 git commit -m "feat: add slab operation node builders"
 ```
 
@@ -393,11 +393,11 @@ git commit -m "feat: add slab operation node builders"
 ## Task 4: Implement Thermodynamics Operations Module
 
 **Files:**
-- Modify: `teros/experimental/surface_thermo_preset_serial/thermodynamics_operations.py`
+- Modify: `psteros/experimental/surface_thermo_preset_serial/thermodynamics_operations.py`
 
 **Step 1: Implement node builder for surface energies**
 
-Write: `teros/experimental/surface_thermo_preset_serial/thermodynamics_operations.py`
+Write: `psteros/experimental/surface_thermo_preset_serial/thermodynamics_operations.py`
 
 ```python
 """Node builders for thermodynamics calculations."""
@@ -436,7 +436,7 @@ def build_surface_energy_nodes(
         Dictionary of {slab_id: surface_energy_node}
     """
     # Import existing calcfunctions
-    from teros.core.thermodynamics import (
+    from psteros.core.thermodynamics import (
         calculate_surface_energy_binary,
         calculate_surface_energy_ternary,
     )
@@ -509,7 +509,7 @@ def select_surface_energy_by_oxide_type(
 **Step 2: Commit thermodynamics operations**
 
 ```bash
-git add teros/experimental/surface_thermo_preset_serial/thermodynamics_operations.py
+git add psteros/experimental/surface_thermo_preset_serial/thermodynamics_operations.py
 git commit -m "feat: add thermodynamics operation node builders"
 ```
 
@@ -518,11 +518,11 @@ git commit -m "feat: add thermodynamics operation node builders"
 ## Task 5: Implement Main Workgraph
 
 **Files:**
-- Modify: `teros/experimental/surface_thermo_preset_serial/workgraph.py`
+- Modify: `psteros/experimental/surface_thermo_preset_serial/workgraph.py`
 
 **Step 1: Implement main workgraph function (Part 1: Setup and bulk)**
 
-Write: `teros/experimental/surface_thermo_preset_serial/workgraph.py`
+Write: `psteros/experimental/surface_thermo_preset_serial/workgraph.py`
 
 ```python
 """Main workgraph for serial surface thermodynamics preset."""
@@ -533,9 +533,9 @@ from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, WorkGraph
 from ase.io import read
 
-from teros.core.slabs import generate_slab_structures, extract_total_energy
-from teros.core.hf import calculate_formation_enthalpy
-from teros.core.thermodynamics import identify_oxide_type
+from psteros.core.slabs import generate_slab_structures, extract_total_energy
+from psteros.core.hf import calculate_formation_enthalpy
+from psteros.core.thermodynamics import identify_oxide_type
 
 from .slab_operations import (
     build_scf_slabs_nodes,
@@ -804,7 +804,7 @@ def surface_thermodynamics_serial_workgraph(
 
 **Step 2: Continue main workgraph (Part 2: Slabs and thermodynamics)**
 
-Append to `teros/experimental/surface_thermo_preset_serial/workgraph.py`:
+Append to `psteros/experimental/surface_thermo_preset_serial/workgraph.py`:
 
 ```python
     # =========================================================================
@@ -1058,7 +1058,7 @@ def build_reference_energies_dict(
 **Step 3: Commit main workgraph**
 
 ```bash
-git add teros/experimental/surface_thermo_preset_serial/workgraph.py
+git add psteros/experimental/surface_thermo_preset_serial/workgraph.py
 git commit -m "feat: implement main serial surface thermodynamics workgraph"
 ```
 
@@ -1092,7 +1092,7 @@ from aiida import orm
 from aiida.engine import submit
 from ase.io import read
 
-from teros.experimental.surface_thermo_preset_serial import (
+from psteros.experimental.surface_thermo_preset_serial import (
     surface_thermodynamics_serial_workgraph
 )
 
@@ -1328,7 +1328,7 @@ git commit -m "docs: update implementation status in design document"
 
 After completing all tasks:
 
-- [ ] Module structure created in `teros/experimental/surface_thermo_preset_serial/`
+- [ ] Module structure created in `psteros/experimental/surface_thermo_preset_serial/`
 - [ ] Utilities module implemented
 - [ ] Slab operations module implemented
 - [ ] Thermodynamics operations module implemented

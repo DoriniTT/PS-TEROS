@@ -9,7 +9,7 @@ from aiida import orm
 from aiida.engine import submit
 from ase.io import read
 
-from teros.experimental.surface_thermo_preset_serial import (
+from psteros.experimental.surface_thermo_preset_serial import (
     surface_thermodynamics_serial_workgraph
 )
 

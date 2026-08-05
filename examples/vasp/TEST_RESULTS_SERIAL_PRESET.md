@@ -101,7 +101,7 @@ Phase 2: SCF + Energy extraction (queued)  ⏳ WAITING
 ### 1. Flat-Graph Architecture
 **Implementation:** All VASP nodes added directly to main graph with `wg.add_task()`
 **Benefit:** max_number_jobs controls ALL VASP calculations
-**Location:** `teros/experimental/surface_thermo_preset_serial/`
+**Location:** `psteros/experimental/surface_thermo_preset_serial/`
 
 **Files:**
 - `workgraph.py` - Main workflow (no @task.graph decorator)
@@ -181,7 +181,7 @@ bulk_builder = {
 | **Node Creation** | `@task.graph` decorators | Direct `wg.add_task()` |
 | **Provenance** | Multiple graph levels | Single graph level |
 | **Builder Support** | No | Yes (full control) |
-| **Module Location** | `teros.core.workgraph` | `teros.experimental.surface_thermo_preset_serial` |
+| **Module Location** | `psteros.core.workgraph` | `psteros.experimental.surface_thermo_preset_serial` |
 | **Stability** | Stable production code | Experimental development |
 
 ---
@@ -310,7 +310,7 @@ verdi calcjob res 122023
 - `docs/CONCURRENCY_CONTROL.md` - max_number_jobs documentation
 
 ### Module Documentation
-- `teros/experimental/surface_thermo_preset_serial/README.md` - Module README
+- `psteros/experimental/surface_thermo_preset_serial/README.md` - Module README
 - `examples/vasp/step_16_DOCUMENTATION.md` - Example documentation
 
 ### Test Scripts

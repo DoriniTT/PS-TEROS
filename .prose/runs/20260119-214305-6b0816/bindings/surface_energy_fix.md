@@ -5,14 +5,14 @@ kind: let
 source:
 ```prose
 surface_energy_fix = session: fixer
-  prompt: """Update teros/core/surface_hydroxylation/surface_energy.py to use modern task decorators."""
+  prompt: """Update psteros/core/surface_hydroxylation/surface_energy.py to use modern task decorators."""
 ```
 
 ---
 
 ## Summary of Changes
 
-Updated `teros/core/surface_hydroxylation/surface_energy.py` to use modern AiiDA-WorkGraph task decorators.
+Updated `psteros/core/surface_hydroxylation/surface_energy.py` to use modern AiiDA-WorkGraph task decorators.
 
 ### Changes Made
 

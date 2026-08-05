@@ -113,7 +113,7 @@ Where:
 
 ## 5. Recommendation
 
-**FIX REQUIRED in `/home/trevizam/git/PS-TEROS/teros/core/thermodynamics.py`**
+**FIX REQUIRED in `/home/trevizam/git/PS-TEROS/psteros/core/thermodynamics.py`**
 
 Change lines 456-462 from:
 ```python

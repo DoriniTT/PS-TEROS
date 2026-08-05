@@ -27,7 +27,7 @@ from pymatgen.core import Structure, Lattice
 # Load AiiDA profile
 load_profile('presto')
 
-from teros.core.u_calculation import build_u_calculation_workgraph
+from psteros.core.u_calculation import build_u_calculation_workgraph
 
 # ==============================================================================
 # CONFIGURATION - Obelix cluster

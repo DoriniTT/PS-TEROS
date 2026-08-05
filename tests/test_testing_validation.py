@@ -1,4 +1,4 @@
-"""Tests for teros.core.testing.validation module.
+"""Tests for psteros.core.testing.validation module.
 
 These are Tier 1 tests - pure Python, no AiiDA required.
 """
@@ -14,28 +14,28 @@ class TestValidationResult:
 
     def test_is_valid_no_errors(self):
         """Test is_valid returns True when no errors."""
-        from teros.core.testing import ValidationResult
+        from psteros.core.testing import ValidationResult
 
         result = ValidationResult()
         assert result.is_valid is True
 
     def test_is_valid_with_errors(self):
         """Test is_valid returns False when errors present."""
-        from teros.core.testing import ValidationResult
+        from psteros.core.testing import ValidationResult
 
         result = ValidationResult(errors=['Something wrong'])
         assert result.is_valid is False
 
     def test_is_valid_with_warnings_only(self):
         """Test is_valid returns True with warnings but no errors."""
-        from teros.core.testing import ValidationResult
+        from psteros.core.testing import ValidationResult
 
         result = ValidationResult(warnings=['A warning'])
         assert result.is_valid is True
 
     def test_str_representation(self):
         """Test string representation."""
-        from teros.core.testing import ValidationResult
+        from psteros.core.testing import ValidationResult
 
         result = ValidationResult(
             errors=['Error 1'],
@@ -57,7 +57,7 @@ class TestValidateIncar:
 
     def test_valid_relaxation(self):
         """Test valid relaxation settings pass."""
-        from teros.core.testing import validate_incar
+        from psteros.core.testing import validate_incar
 
         result = validate_incar({
             'encut': 520,
@@ -70,7 +70,7 @@ class TestValidateIncar:
 
     def test_ibrion_without_nsw(self):
         """Test warning for IBRION without NSW."""
-        from teros.core.testing import validate_incar
+        from psteros.core.testing import validate_incar
 
         result = validate_incar({
             'encut': 520,
@@ -81,7 +81,7 @@ class TestValidateIncar:
 
     def test_isif_3_without_ibrion(self):
         """Test warning for ISIF=3 without relaxation."""
-        from teros.core.testing import validate_incar
+        from psteros.core.testing import validate_incar
 
         result = validate_incar({
             'encut': 520,
@@ -92,21 +92,21 @@ class TestValidateIncar:
 
     def test_low_encut_warning(self):
         """Test warning for very low ENCUT."""
-        from teros.core.testing import validate_incar
+        from psteros.core.testing import validate_incar
 
         result = validate_incar({'encut': 100})
         assert any('ENCUT=100' in w and 'low' in w for w in result.warnings)
 
     def test_high_encut_warning(self):
         """Test warning for very high ENCUT."""
-        from teros.core.testing import validate_incar
+        from psteros.core.testing import validate_incar
 
         result = validate_incar({'encut': 900})
         assert any('ENCUT=900' in w and 'high' in w for w in result.warnings)
 
     def test_sigma_with_ismear_0(self):
         """Test warning for large SIGMA with ISMEAR=0."""
-        from teros.core.testing import validate_incar
+        from psteros.core.testing import validate_incar
 
         result = validate_incar({
             'ismear': 0,
@@ -116,7 +116,7 @@ class TestValidateIncar:
 
     def test_ispin_magmom_consistency(self):
         """Test warning for MAGMOM without ISPIN=2."""
-        from teros.core.testing import validate_incar
+        from psteros.core.testing import validate_incar
 
         result = validate_incar({
             'ispin': 1,
@@ -126,7 +126,7 @@ class TestValidateIncar:
 
     def test_case_insensitivity(self):
         """Test that uppercase keys are handled."""
-        from teros.core.testing import validate_incar
+        from psteros.core.testing import validate_incar
 
         result = validate_incar({
             'ENCUT': 520,
@@ -146,7 +146,7 @@ class TestValidateBuilderInputs:
 
     def test_valid_builder_inputs(self):
         """Test valid builder_inputs pass."""
-        from teros.core.testing import validate_builder_inputs
+        from psteros.core.testing import validate_builder_inputs
 
         result = validate_builder_inputs({
             'parameters': {
@@ -165,7 +165,7 @@ class TestValidateBuilderInputs:
 
     def test_missing_parameters(self):
         """Test error for missing parameters key."""
-        from teros.core.testing import validate_builder_inputs
+        from psteros.core.testing import validate_builder_inputs
 
         result = validate_builder_inputs({
             'options': {'resources': {}},
@@ -175,7 +175,7 @@ class TestValidateBuilderInputs:
 
     def test_missing_incar(self):
         """Test error for missing incar key."""
-        from teros.core.testing import validate_builder_inputs
+        from psteros.core.testing import validate_builder_inputs
 
         result = validate_builder_inputs({
             'parameters': {},  # No incar
@@ -185,7 +185,7 @@ class TestValidateBuilderInputs:
 
     def test_coarse_kpoints_warning(self):
         """Test warning for coarse k-points spacing."""
-        from teros.core.testing import validate_builder_inputs
+        from psteros.core.testing import validate_builder_inputs
 
         result = validate_builder_inputs({
             'parameters': {'incar': {'encut': 520}},
@@ -195,7 +195,7 @@ class TestValidateBuilderInputs:
 
     def test_fine_kpoints_warning(self):
         """Test warning for very fine k-points spacing."""
-        from teros.core.testing import validate_builder_inputs
+        from psteros.core.testing import validate_builder_inputs
 
         result = validate_builder_inputs({
             'parameters': {'incar': {'encut': 520}},
@@ -205,7 +205,7 @@ class TestValidateBuilderInputs:
 
     def test_missing_resources_warning(self):
         """Test warning for missing resources."""
-        from teros.core.testing import validate_builder_inputs
+        from psteros.core.testing import validate_builder_inputs
 
         result = validate_builder_inputs({
             'parameters': {'incar': {'encut': 520}},
@@ -223,7 +223,7 @@ class TestEstimateKpointsMesh:
 
     def test_cubic_cell(self):
         """Test k-points for cubic cell."""
-        from teros.core.testing import estimate_kpoints_mesh
+        from psteros.core.testing import estimate_kpoints_mesh
 
         # Simple cubic with a=4 A
         lattice = [[4, 0, 0], [0, 4, 0], [0, 0, 4]]
@@ -235,7 +235,7 @@ class TestEstimateKpointsMesh:
 
     def test_orthorhombic_cell(self):
         """Test k-points for orthorhombic cell."""
-        from teros.core.testing import estimate_kpoints_mesh
+        from psteros.core.testing import estimate_kpoints_mesh
 
         # Different lattice parameters
         lattice = [[10, 0, 0], [0, 5, 0], [0, 0, 2]]
@@ -246,7 +246,7 @@ class TestEstimateKpointsMesh:
 
     def test_fine_spacing_more_kpoints(self):
         """Test finer spacing gives more k-points."""
-        from teros.core.testing import estimate_kpoints_mesh
+        from psteros.core.testing import estimate_kpoints_mesh
 
         lattice = [[4, 0, 0], [0, 4, 0], [0, 0, 4]]
         mesh_coarse = estimate_kpoints_mesh(lattice, spacing=0.1)
@@ -264,7 +264,7 @@ class TestGenerateIncarFromDict:
 
     def test_basic_incar(self):
         """Test basic INCAR generation."""
-        from teros.core.testing import generate_incar_from_dict
+        from psteros.core.testing import generate_incar_from_dict
 
         content = generate_incar_from_dict({
             'ENCUT': 520,
@@ -278,7 +278,7 @@ class TestGenerateIncarFromDict:
 
     def test_boolean_values(self):
         """Test boolean conversion."""
-        from teros.core.testing import generate_incar_from_dict
+        from psteros.core.testing import generate_incar_from_dict
 
         content = generate_incar_from_dict({
             'LWAVE': True,
@@ -290,7 +290,7 @@ class TestGenerateIncarFromDict:
 
     def test_list_values(self):
         """Test list conversion."""
-        from teros.core.testing import generate_incar_from_dict
+        from psteros.core.testing import generate_incar_from_dict
 
         content = generate_incar_from_dict({
             'MAGMOM': [0.6, 0.6, -0.6, -0.6],
@@ -308,7 +308,7 @@ class TestGenerateKpointsFromMesh:
 
     def test_gamma_centered(self):
         """Test Gamma-centered mesh generation."""
-        from teros.core.testing import generate_kpoints_from_mesh
+        from psteros.core.testing import generate_kpoints_from_mesh
 
         content = generate_kpoints_from_mesh((4, 4, 4))
 
@@ -317,7 +317,7 @@ class TestGenerateKpointsFromMesh:
 
     def test_with_shift(self):
         """Test mesh with shift."""
-        from teros.core.testing import generate_kpoints_from_mesh
+        from psteros.core.testing import generate_kpoints_from_mesh
 
         content = generate_kpoints_from_mesh((4, 4, 4), shift=(0.5, 0.5, 0.5))
 
@@ -333,36 +333,36 @@ class TestModuleImports:
 
     def test_import_validation_result(self):
         """Test ValidationResult import."""
-        from teros.core.testing import ValidationResult
+        from psteros.core.testing import ValidationResult
         assert ValidationResult is not None
 
     def test_import_validate_incar(self):
         """Test validate_incar import."""
-        from teros.core.testing import validate_incar
+        from psteros.core.testing import validate_incar
         assert callable(validate_incar)
 
     def test_import_validate_builder_inputs(self):
         """Test validate_builder_inputs import."""
-        from teros.core.testing import validate_builder_inputs
+        from psteros.core.testing import validate_builder_inputs
         assert callable(validate_builder_inputs)
 
     def test_import_estimate_kpoints_mesh(self):
         """Test estimate_kpoints_mesh import."""
-        from teros.core.testing import estimate_kpoints_mesh
+        from psteros.core.testing import estimate_kpoints_mesh
         assert callable(estimate_kpoints_mesh)
 
     def test_import_incar_rules(self):
         """Test INCAR_RULES import."""
-        from teros.core.testing import INCAR_RULES
+        from psteros.core.testing import INCAR_RULES
         assert isinstance(INCAR_RULES, list)
         assert len(INCAR_RULES) > 0
 
     def test_import_generate_incar_from_dict(self):
         """Test generate_incar_from_dict import."""
-        from teros.core.testing import generate_incar_from_dict
+        from psteros.core.testing import generate_incar_from_dict
         assert callable(generate_incar_from_dict)
 
     def test_import_generate_kpoints_from_mesh(self):
         """Test generate_kpoints_from_mesh import."""
-        from teros.core.testing import generate_kpoints_from_mesh
+        from psteros.core.testing import generate_kpoints_from_mesh
         assert callable(generate_kpoints_from_mesh)

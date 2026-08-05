@@ -67,7 +67,7 @@ Most common pattern - equilibrate first, then collect statistics:
 
 .. code-block:: python
 
-   from teros.core.aimd import aimd_single_stage_scatter
+   from psteros.core.aimd import aimd_single_stage_scatter
    from aiida import orm
 
    # Prepare AIMD parameters
@@ -360,7 +360,7 @@ Full workflow with all stages in one script:
 .. code-block:: python
 
    from aiida_workgraph import WorkGraph
-   from teros.core.aimd import aimd_single_stage_scatter, prepare_aimd_parameters
+   from psteros.core.aimd import aimd_single_stage_scatter, prepare_aimd_parameters
    from aiida import orm, load_profile
 
    load_profile()

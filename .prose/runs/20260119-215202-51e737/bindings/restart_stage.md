@@ -14,11 +14,11 @@ let restart_stage = session: developer
 
 ## Summary
 
-Successfully extracted the restart handling logic (lines 1170-1218) from `build_core_workgraph()` into a new stage module at `teros/core/stages/restart_handling.py`.
+Successfully extracted the restart handling logic (lines 1170-1218) from `build_core_workgraph()` into a new stage module at `psteros/core/stages/restart_handling.py`.
 
 ## Files Created/Modified
 
-### Created: `teros/core/stages/restart_handling.py`
+### Created: `psteros/core/stages/restart_handling.py`
 
 New module implementing Stage 3 (Restart Handling) with the following components:
 
@@ -84,7 +84,7 @@ def prepare_input_slabs(
 - Overrides `input_slabs` with `restart_data.slabs` if available
 - Computes `use_input_slabs` flag for downstream logic
 
-### Modified: `teros/core/stages/__init__.py`
+### Modified: `psteros/core/stages/__init__.py`
 
 Updated to import from the new module:
 
@@ -117,7 +117,7 @@ Added to `__all__`:
 restart_folders = None
 restart_slabs = None
 if restart_from_node is not None:
-    from teros.core.slabs import extract_restart_folders_from_node
+    from psteros.core.slabs import extract_restart_folders_from_node
     logger.info("=" * 70)
     logger.info("RESTART MODE: Loading data from node %s", restart_from_node)
     logger.info("=" * 70)
@@ -165,7 +165,7 @@ use_input_slabs = input_slabs is not None and len(input_slabs) > 0
 ## Usage Example
 
 ```python
-from teros.core.stages import (
+from psteros.core.stages import (
     handle_restart_from_node,
     prepare_input_slabs,
     RestartData,
@@ -189,10 +189,10 @@ input_slabs, use_input_slabs = prepare_input_slabs(input_slabs, restart_data)
 ## Verification
 
 ```bash
-$ python -c "from teros.core.stages.restart_handling import RestartData, handle_restart_from_node, prepare_input_slabs; print('Import successful')"
+$ python -c "from psteros.core.stages.restart_handling import RestartData, handle_restart_from_node, prepare_input_slabs; print('Import successful')"
 Import successful
 
-$ python -c "from teros.core.stages import RestartData, handle_restart_from_node, extract_restart_data, prepare_input_slabs; print(f'extract_restart_data is handle_restart_from_node: {extract_restart_data is handle_restart_from_node}')"
+$ python -c "from psteros.core.stages import RestartData, handle_restart_from_node, extract_restart_data, prepare_input_slabs; print(f'extract_restart_data is handle_restart_from_node: {extract_restart_data is handle_restart_from_node}')"
 Import from __init__ successful
 extract_restart_data is handle_restart_from_node: True
 ```

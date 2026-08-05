@@ -95,7 +95,7 @@ All documentation now:
 ```python
 from aiida import load_profile, orm
 from ase.io import read
-from teros.core.workgraph import build_core_workgraph_with_map
+from psteros.core.workgraph import build_core_workgraph_with_map
 
 load_profile()
 

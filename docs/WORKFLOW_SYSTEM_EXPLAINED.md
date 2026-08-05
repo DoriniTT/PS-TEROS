@@ -300,7 +300,7 @@ wg = build_core_workgraph(
 
 ### Pattern 4: Inspect Before Running
 ```python
-from teros.core.workflow_presets import resolve_preset, get_preset_summary
+from psteros.core.workflow_presets import resolve_preset, get_preset_summary
 
 # See what a preset will do
 print(get_preset_summary('surface_thermodynamics'))
@@ -322,7 +322,7 @@ print(f"Final flags: {flags}")
 
 **A:** Use `get_preset_summary()`:
 ```python
-from teros.core import get_preset_summary
+from psteros.core import get_preset_summary
 print(get_preset_summary('surface_thermodynamics'))
 ```
 
@@ -332,7 +332,7 @@ print(get_preset_summary('surface_thermodynamics'))
 
 **A:** Check the preset defaults. Some features are optional:
 ```python
-from teros.core.workflow_presets import WORKFLOW_PRESETS
+from psteros.core.workflow_presets import WORKFLOW_PRESETS
 print(WORKFLOW_PRESETS['surface_thermodynamics']['flags'])
 ```
 
@@ -342,7 +342,7 @@ print(WORKFLOW_PRESETS['surface_thermodynamics']['flags'])
 
 **A:** Use `resolve_preset()`:
 ```python
-from teros.core.workflow_presets import resolve_preset
+from psteros.core.workflow_presets import resolve_preset
 
 preset_name, flags = resolve_preset(
     'surface_thermodynamics',

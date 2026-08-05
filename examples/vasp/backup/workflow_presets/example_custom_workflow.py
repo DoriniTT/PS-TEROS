@@ -13,8 +13,8 @@ Overrides:
 Result: Surface thermodynamics without cleavage/relaxation analysis
 """
 
-from teros.core.workgraph import build_core_workgraph
-from teros.core import list_workflow_presets, get_preset_summary
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core import list_workflow_presets, get_preset_summary
 from aiida.engine import submit
 
 # ============================================================================

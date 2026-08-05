@@ -7,7 +7,7 @@ Theory
 Ab Initio Atomistic Thermodynamics
 ----------------------------------
 
-The TEROS package implements ab initio atomistic thermodynamics for calculating surface energies of oxide materials. This approach combines density functional theory (DFT) calculations with thermodynamics to model surface properties under realistic conditions.
+The PSTEROS package implements ab initio atomistic thermodynamics for calculating surface energies of oxide materials. This approach combines density functional theory (DFT) calculations with thermodynamics to model surface properties under realistic conditions.
 
 Surface Energy Calculation
 --------------------------

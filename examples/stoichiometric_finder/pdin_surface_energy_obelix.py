@@ -16,7 +16,7 @@ ideal test case for the stoichiometric finder since different Miller
 indices can have varying stoichiometry behavior.
 
 Note: The surface_energy module ONLY works with stoichiometric+symmetric
-surfaces. For non-stoichiometric surfaces, use teros.core.thermodynamics.
+surfaces. For non-stoichiometric surfaces, use psteros.core.thermodynamics.
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -24,7 +24,7 @@ Usage:
 
 After completion:
     verdi process show <PK>
-    python -c "from teros.core.surface_energy import get_wulff_shape_summary; ..."
+    python -c "from psteros.core.surface_energy import get_wulff_shape_summary; ..."
 """
 
 import sys
@@ -32,7 +32,7 @@ from aiida import load_profile, orm
 from pymatgen.core import Lattice, Structure
 from pymatgen.io.ase import AseAtomsAdaptor
 
-from teros.core.surface_energy import (
+from psteros.core.surface_energy import (
     build_metal_surface_energy_workgraph,
     analyze_miller_feasibility,
     get_feasibility_summary,
@@ -129,7 +129,7 @@ def run_feasibility_analysis(pmg_structure):
 
     This analysis runs BEFORE any DFT calculations and helps identify:
     - Orientations suitable for this module (stoichiometric+symmetric)
-    - Orientations that need teros.core.thermodynamics instead
+    - Orientations that need psteros.core.thermodynamics instead
     """
     print("\n" + "-" * 70)
     print("PRE-FLIGHT FEASIBILITY ANALYSIS")
@@ -164,7 +164,7 @@ def run_feasibility_analysis(pmg_structure):
     if not all_feasible:
         print("\n  WARNING: Some orientations have no stoichiometric+symmetric surfaces!")
         print("  These orientations will raise NoStoichiometricSymmetricSurfaceError.")
-        print("  Remove them from MILLER_INDICES or use teros.core.thermodynamics.")
+        print("  Remove them from MILLER_INDICES or use psteros.core.thermodynamics.")
 
     return reports, all_feasible
 
@@ -256,7 +256,7 @@ Expected Outputs:
 After Completion - View Results:
 
   from aiida import orm
-  from teros.core.surface_energy import get_wulff_shape_summary, visualize_wulff_shape
+  from psteros.core.surface_energy import get_wulff_shape_summary, visualize_wulff_shape
 
   wg = orm.load_node({wg.pk})
 
@@ -285,7 +285,7 @@ Module Behavior:
   - Non-stoichiometric terminations filtered BEFORE DFT
   - Saves computational resources
   - If no valid surface exists: NoStoichiometricSymmetricSurfaceError raised
-  - For non-stoichiometric surfaces: use teros.core.thermodynamics
+  - For non-stoichiometric surfaces: use psteros.core.thermodynamics
 """)
 
     print("=" * 70 + "\n")
@@ -325,7 +325,7 @@ def main():
         print("\n  Some Miller indices have no valid stoichiometric+symmetric surfaces.")
         print("  Options:")
         print("    1. Remove problematic Miller indices from MILLER_INDICES")
-        print("    2. Use teros.core.thermodynamics for those orientations")
+        print("    2. Use psteros.core.thermodynamics for those orientations")
         sys.exit(1)
 
     # 5. Print post-submission information

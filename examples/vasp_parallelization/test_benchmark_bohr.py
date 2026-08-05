@@ -17,7 +17,7 @@ Usage:
        verdi process report <PK>
 
     4. After completion, view results:
-       python -c "from teros.core.vasp_parallelization import print_benchmark_summary; print_benchmark_summary(<PK>)"
+       python -c "from psteros.core.vasp_parallelization import print_benchmark_summary; print_benchmark_summary(<PK>)"
 
 Note:
     This test uses a small Si structure (2 atoms) with minimal k-points
@@ -33,7 +33,7 @@ from pymatgen.core import Lattice, Structure
 
 load_profile()
 
-from teros.core.vasp_parallelization import (
+from psteros.core.vasp_parallelization import (
     build_parallelization_benchmark_workgraph,
     generate_benchmark_combinations,
 )
@@ -177,11 +177,11 @@ def main():
 
     print(f"\n3. After completion, view results:")
     print(
-        f'   python -c "from teros.core.vasp_parallelization import print_benchmark_summary; print_benchmark_summary({wg.pk})"'
+        f'   python -c "from psteros.core.vasp_parallelization import print_benchmark_summary; print_benchmark_summary({wg.pk})"'
     )
 
     print(f"\n4. Or get results programmatically:")
-    print(f"   from teros.core.vasp_parallelization import get_benchmark_results")
+    print(f"   from psteros.core.vasp_parallelization import get_benchmark_results")
     print(f"   results = get_benchmark_results({wg.pk})")
     print(f"   print(results['recommended'])")
 

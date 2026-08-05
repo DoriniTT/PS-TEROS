@@ -21,7 +21,7 @@ The electronic properties feature uses AiiDA-VASP's `vasp.v2.bands` workchain to
 The `get_electronic_properties_defaults()` builder provides material-agnostic parameters for DOS and band structure calculations:
 
 ```python
-from teros.core.builders import get_electronic_properties_defaults
+from psteros.core.builders import get_electronic_properties_defaults
 
 ep_defaults = get_electronic_properties_defaults(
     energy_cutoff=500,              # ENCUT (eV)
@@ -41,7 +41,7 @@ ep_defaults = get_electronic_properties_defaults(
 Enable electronic properties in any PS-TEROS workflow:
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     structures_dir="structures",
@@ -335,11 +335,11 @@ PS-TEROS Workflow
 
 The electronic properties feature consists of:
 
-1. **Builder**: `teros/core/builders/electronic_properties_builder.py`
+1. **Builder**: `psteros/core/builders/electronic_properties_builder.py`
    - Material-agnostic parameter defaults
    - Returns structured dict for vasp.v2.bands
 
-2. **Core Integration**: `teros/core/workgraph.py`
+2. **Core Integration**: `psteros/core/workgraph.py`
    - `core_workgraph()` - Adds electronic properties task
    - `build_core_workgraph()` - Manual task setup with namespace handling
    - `build_core_workgraph_with_map()` - Parameter forwarding

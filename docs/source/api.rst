@@ -4,26 +4,34 @@
 API Reference
 =============
 
-Core Module
------------
+Public API
+----------
 
-.. automodule:: teros.core.workgraph
+``psteros`` deliberately exposes a small, typed public API.  QE through
+``aiida-quantumespresso`` is the primary implementation; VASP configuration
+is retained for established VASP studies.
+
+.. automodule:: psteros
    :members:
    :undoc-members:
-   :show-inheritance:
 
-Slabs Module
+Workflow API
 ------------
 
-.. automodule:: teros.core.slabs
+.. automodule:: psteros.workflow
    :members:
    :undoc-members:
-   :show-inheritance:
 
-Thermodynamics Module
----------------------
+Configuration API
+-----------------
 
-.. automodule:: teros.core.thermodynamics
+.. automodule:: psteros.config
    :members:
    :undoc-members:
-   :show-inheritance:
+
+Compatibility API
+-----------------
+
+The pre-1.0 VASP builders are isolated under ``psteros.compat`` only for
+existing projects.  New workflows must use the typed public API above;
+retired interfaces have no supported import path.

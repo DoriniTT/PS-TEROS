@@ -25,7 +25,7 @@ Example:
     Or interactively:
     >>> from aiida import orm, load_profile
     >>> load_profile()
-    >>> from teros.core.fukui import run_perturbative_expansion_calcfunc
+    >>> from psteros.core.fukui import run_perturbative_expansion_calcfunc
     >>> locpot = orm.load_node(12345)
     >>> fukui_pot = orm.load_node(12346)
     >>> result = run_perturbative_expansion_calcfunc(
@@ -39,7 +39,7 @@ Example:
 import sys
 from pathlib import Path
 from aiida import orm, load_profile
-from teros.core.fukui import (
+from psteros.core.fukui import (
     get_fukui_results,
     print_fukui_summary,
     run_perturbative_expansion_calcfunc,

@@ -38,7 +38,7 @@ except ImportError:
 # ==============================================================================
 
 from aiida import load_profile, orm
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 
 def create_ag_oh_structure(site_type='hollow'):

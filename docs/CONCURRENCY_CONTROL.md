@@ -23,7 +23,7 @@ PS-TEROS workflows can run many VASP calculations in parallel. The `max_concurre
 ### Basic Usage
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 # Serial mode (one VASP at a time)
 wg = build_core_workgraph(

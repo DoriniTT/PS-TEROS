@@ -10,7 +10,7 @@ Version 0.3.0 introduces a dedicated module for computing surface energies of **
 
 ### New Feature: Metal Surface Energy Module
 
-**Module:** `teros.core.metal_surface_energy`
+**Module:** `psteros.core.metal_surface_energy`
 
 **Overview:** Computes surface energies for pure metals using the simple formula:
 
@@ -27,7 +27,7 @@ This is much simpler than oxide thermodynamics since there are no chemical poten
 
 **API:**
 ```python
-from teros.core.metal_surface_energy import build_metal_surface_energy_workgraph
+from psteros.core.metal_surface_energy import build_metal_surface_energy_workgraph
 
 wg = build_metal_surface_energy_workgraph(
     bulk_structure_path='/path/to/au.cif',
@@ -74,7 +74,7 @@ WorkGraph<MetalSurfaceEnergy>
 **Output:** `surface_energies` Dict with results in eV/Ų and J/m² for each orientation.
 
 **New Files:**
-- `teros/core/metal_surface_energy/` - Complete module package
+- `psteros/core/metal_surface_energy/` - Complete module package
   - `__init__.py` - Module exports
   - `surface_energy.py` - Core calcfunctions
   - `workgraph.py` - WorkGraph builder
@@ -88,7 +88,7 @@ WorkGraph<MetalSurfaceEnergy>
 - Wulff construction input (equilibrium crystal shape)
 - Surface energy comparisons across orientations
 
-**Documentation:** `docs/metal_surface_energy.md`, `teros/core/metal_surface_energy/README.md`
+**Documentation:** `docs/metal_surface_energy.md`, `psteros/core/metal_surface_energy/README.md`
 
 ---
 
@@ -118,8 +118,8 @@ wg = build_surface_hydroxylation_workgraph(
 ```
 
 **Modified Files:**
-- `teros/core/surface_hydroxylation/workgraph.py`
-- `teros/core/surface_hydroxylation/relaxations.py`
+- `psteros/core/surface_hydroxylation/workgraph.py`
+- `psteros/core/surface_hydroxylation/relaxations.py`
 
 ---
 
@@ -145,15 +145,15 @@ wg = build_custom_calculation_workgraph(
 ```
 
 **Modified Files:**
-- `teros/core/custom_calculation/workgraph.py`
-- `teros/core/custom_calculation/tasks.py`
+- `psteros/core/custom_calculation/workgraph.py`
+- `psteros/core/custom_calculation/tasks.py`
 
 ---
 
 ### Other Changes
 
 **Core module exports:**
-- Added `calculate_metal_surface_energy` and `build_metal_surface_energy_workgraph` to `teros.core.__init__.py`
+- Added `calculate_metal_surface_energy` and `build_metal_surface_energy_workgraph` to `psteros.core.__init__.py`
 
 **Repository cleanup:**
 - Removed `.worktree` tracking files
@@ -196,7 +196,7 @@ Version 0.2.0 represents a major advancement in PS-TEROS functionality with four
 
 ### New Feature: AIMD Standalone Module with Override System
 
-**Module:** `teros.core.aimd`
+**Module:** `psteros.core.aimd`
 
 **Overview:** Complete standalone AIMD (Ab Initio Molecular Dynamics) module enabling flexible MD simulations on any structures with per-structure, per-stage, and per-combination parameter customization.
 
@@ -216,7 +216,7 @@ Version 0.2.0 represents a major advancement in PS-TEROS functionality with four
 
 **API:**
 ```python
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 
 wg = build_aimd_workgraph(
     structures={'slab1': structure1, 'slab2': structure2},
@@ -237,7 +237,7 @@ wg = build_aimd_workgraph(
 ```
 
 **New Files:**
-- `teros/core/aimd/` - Complete module package
+- `psteros/core/aimd/` - Complete module package
 - `docs/aimd_standalone_module.md` - Comprehensive user guide (19KB)
 - `examples/vasp/step_18_aimd_standalone.py` - Basic example
 - `examples/vasp/step_19_aimd_with_overrides.py` - Override system demo
@@ -308,11 +308,11 @@ wg = build_surface_hydroxylation_workgraph(
 - `None` - Unlimited (queue-managed systems)
 
 **Files Modified:**
-- `teros/core/aimd.py` - VASP AIMD
-- `teros/core/aimd_cp2k.py` - CP2K AIMD
-- `teros/core/surface_hydroxylation/relaxations.py` - Hydroxylation
-- `teros/core/custom_calculation/workgraph.py` - Custom calculations
-- `teros/core/workgraph.py` - Propagation to AIMD stages
+- `psteros/core/aimd.py` - VASP AIMD
+- `psteros/core/aimd_cp2k.py` - CP2K AIMD
+- `psteros/core/surface_hydroxylation/relaxations.py` - Hydroxylation
+- `psteros/core/custom_calculation/workgraph.py` - Custom calculations
+- `psteros/core/workgraph.py` - Propagation to AIMD stages
 
 **Documentation:**
 - `docs/CONCURRENCY_CONTROL.md` - Complete feature guide
@@ -388,7 +388,7 @@ wg = build_core_workgraph(
 
 ### New Feature: Surface Hydroxylation Module
 
-**Module:** `teros.core.surface_hydroxylation`
+**Module:** `psteros.core.surface_hydroxylation`
 
 **Overview:** Automated generation and relaxation of surface variants with different hydroxylation coverages and oxygen vacancy configurations for studying surface chemistry and catalytic activity.
 
@@ -424,7 +424,7 @@ The deduplication algorithm:
 
 **API:**
 ```python
-from teros.core.surface_hydroxylation import (
+from psteros.core.surface_hydroxylation import (
     build_surface_hydroxylation_workgraph,
     organize_hydroxylation_results,
 )
@@ -493,7 +493,7 @@ Results use descriptive naming: `{index}_{variant_name}`
 - `2_vac_000_5_2341` - Third structure, 5.23 vacancies/nm²
 
 **New Files:**
-- `teros/core/surface_hydroxylation/` - Complete module package
+- `psteros/core/surface_hydroxylation/` - Complete module package
 - `docs/surface_hydroxylation.md` - Comprehensive user guide (30KB)
 - `examples/hydroxylation/` - Example workflows
 
@@ -614,7 +614,7 @@ wg = build_core_workgraph(
 
 **To use new AIMD module:**
 ```python
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 
 wg = build_aimd_workgraph(
     structures={'slab': structure},
@@ -758,13 +758,13 @@ build_core_workgraph(
 ### Modified Files
 
 **Core Implementation**:
-- `teros/core/slabs.py`:
+- `psteros/core/slabs.py`:
   - Added `scf_slabs_scatter()` - SCF workgraph for unrelaxed slabs
   - Added `calculate_relaxation_energies_scatter()` - Energy calculation workgraph
   - Added `calculate_energy_difference()` - Helper calcfunction
   - Added `scf_relax_and_calculate_relaxation_energy()` - Combined function (alternative approach)
 
-- `teros/core/workgraph.py`:
+- `psteros/core/workgraph.py`:
   - Added `compute_relaxation_energy` parameter to `core_workgraph()`
   - Added conditional logic to create SCF and relaxation energy workgraphs
   - Updated `build_core_workgraph()` to pass new parameter
@@ -822,7 +822,7 @@ wg = build_core_workgraph(
 ### Implementation
 
 **Core Module**:
-- `teros/core/builders/electronic_properties_builder.py`:
+- `psteros/core/builders/electronic_properties_builder.py`:
   - `get_electronic_properties_defaults()`: Builder for bulk structures
   - `get_slab_electronic_properties_defaults()`: Builder for slab structures (denser k-point sampling)
   - Returns complete parameter sets for vasp.v2.bands workchain
@@ -875,7 +875,7 @@ For slabs (when `compute_electronic_properties_slabs=True`):
 
 **Bulk Electronic Properties**:
 ```python
-from teros.core.builders import get_electronic_properties_defaults
+from psteros.core.builders import get_electronic_properties_defaults
 
 # Get default configuration
 ep_defaults = get_electronic_properties_defaults(
@@ -902,7 +902,7 @@ wg = build_core_workgraph(
 
 **Slab Electronic Properties**:
 ```python
-from teros.core.builders import get_slab_electronic_properties_defaults
+from psteros.core.builders import get_slab_electronic_properties_defaults
 
 # Get slab-tuned configuration (denser k-points for 2D systems)
 slab_ep_defaults = get_slab_electronic_properties_defaults(
@@ -939,7 +939,7 @@ wg = build_core_workgraph(
 ### Modified Files
 
 **Core Implementation**:
-- `teros/core/workgraph.py`:
+- `psteros/core/workgraph.py`:
   - Added electronic properties integration for both bulk and slabs
   - Added conditional logic to create vasp.v2.bands workgraphs
   - Updated `build_core_workgraph()` with new parameters
@@ -947,7 +947,7 @@ wg = build_core_workgraph(
 ### New Files
 
 **Core Modules**:
-- `teros/core/builders/electronic_properties_builder.py`: Material-agnostic parameter builders
+- `psteros/core/builders/electronic_properties_builder.py`: Material-agnostic parameter builders
 
 **Examples**:
 - `examples/electronic_properties/bulk_dos_bands_ag2o.py`: Bulk DOS/bands example
@@ -998,7 +998,7 @@ wg = build_core_workgraph(
 ### Implementation
 
 **Core Module**:
-- `teros/core/aimd.py`:
+- `psteros/core/aimd.py`:
   - `aimd_single_stage_scatter()`: Run single AIMD stage on all slabs in parallel
   - `prepare_aimd_parameters()`: Helper to inject stage-specific parameters (temperature, NSW)
   - `get_settings()`: Parser settings for trajectory and structure output
@@ -1044,7 +1044,7 @@ aimd_single_stage_scatter(
 
 **Single-Stage AIMD**:
 ```python
-from teros.core.aimd import aimd_single_stage_scatter
+from psteros.core.aimd import aimd_single_stage_scatter
 
 # Base AIMD parameters (constant for all stages)
 aimd_parameters = {
@@ -1128,7 +1128,7 @@ for temp in temps:
 ### Modified Files
 
 **Core Implementation**:
-- `teros/core/aimd.py`: New module with AIMD functionality
+- `psteros/core/aimd.py`: New module with AIMD functionality
 
 ### New Files
 
@@ -1187,7 +1187,7 @@ for temp in temps:
 - Enables precise control over surface structures and terminations
 
 #### Cleavage Energy Module
-- New module `teros/core/cleavage.py` for calculating cleavage energies
+- New module `psteros/core/cleavage.py` for calculating cleavage energies
 - Computes energy required to split crystals into complementary surfaces
 - Automatic pairing of complementary terminations following pymatgen convention
 - Parallel computation using scatter-gather pattern
@@ -1196,7 +1196,7 @@ for temp in temps:
 - Reference: See `examples/cleavage/*.md` for implementation details
 
 #### Default Builders
-- Added `teros.default_builders` module for simplified workflow setup
+- Added `psteros.default_builders` module for simplified workflow setup
 - Pre-configured parameter sets for common oxide systems
 - Reduces workflow script complexity by ~200 lines
 - Easy parameter override capability
@@ -1212,8 +1212,8 @@ for temp in temps:
 - Reference: See `examples/restart/*.md` for usage patterns
 
 ### Implementation Details
-- Modified `teros/core/workgraph.py`: Added restart logic and cleavage integration
-- Modified `teros/core/slabs.py`: Added restart folder extraction and collection functions
+- Modified `psteros/core/workgraph.py`: Added restart logic and cleavage integration
+- Modified `psteros/core/slabs.py`: Added restart folder extraction and collection functions
 - Updated all builder functions to support new parameters
 - Enhanced documentation throughout core modules
 
@@ -1231,7 +1231,7 @@ for temp in temps:
 
 ### API Changes
 - Added `input_slabs` parameter to core workflow functions:
-  - `core_workgraph()` in `teros/core/workgraph.py`
+  - `core_workgraph()` in `psteros/core/workgraph.py`
   - `build_core_workgraph()`
   - `build_core_workgraph_with_map()`
 - Made slab generation parameters optional when `input_slabs` is provided:
@@ -1239,7 +1239,7 @@ for temp in temps:
   - Generation parameters ignored when user provides slabs
 
 ### Implementation Details
-- Modified `teros/core/workgraph.py`:
+- Modified `psteros/core/workgraph.py`:
   - Added conditional logic to use provided slabs or generate them automatically
   - Updated function signatures to accept `input_slabs` parameter
   - Enhanced docstrings with new parameter documentation

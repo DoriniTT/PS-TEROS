@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AIMD standalone module (`teros.core.aimd`) provides a simplified, flexible interface for running Ab Initio Molecular Dynamics (AIMD) simulations on pre-existing structures, independent of the main bulk+slab workflow. This module is designed for users who need fine-grained control over AIMD parameters and want to run MD simulations on structures from any source.
+The AIMD standalone module (`psteros.core.aimd`) provides a simplified, flexible interface for running Ab Initio Molecular Dynamics (AIMD) simulations on pre-existing structures, independent of the main bulk+slab workflow. This module is designed for users who need fine-grained control over AIMD parameters and want to run MD simulations on structures from any source.
 
 **Key capabilities:**
 - Direct structure input (StructureData nodes or PKs)
@@ -77,7 +77,7 @@ Output: Trajectories, final structures, energies
 ### Basic Example: Single Structure, Two Stages
 
 ```python
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 from aiida import orm, load_profile
 from ase.io import read
 
@@ -581,17 +581,17 @@ structure_overrides={
 
 ## Testing
 
-Unit tests are located in `teros/core/aimd/test_*.py`:
+Unit tests are located in `psteros/core/aimd/test_*.py`:
 
 ```bash
 # Run all AIMD tests
-pytest teros/core/aimd/test_*.py -v
+pytest psteros/core/aimd/test_*.py -v
 
 # Run override system tests only
-pytest teros/core/aimd/test_overrides.py -v
+pytest psteros/core/aimd/test_overrides.py -v
 
 # Run specific test
-pytest teros/core/aimd/test_overrides.py::test_structure_overrides -v
+pytest psteros/core/aimd/test_overrides.py::test_structure_overrides -v
 ```
 
 Full workflow test:
@@ -603,7 +603,7 @@ python examples/vasp/step_19_aimd_with_overrides.py
 ## Module Structure
 
 ```
-teros/core/aimd/
+psteros/core/aimd/
 ├── __init__.py           # Exports: build_aimd_workgraph, organize_aimd_results
 ├── workgraph.py          # Main entry: build_aimd_workgraph()
 ├── tasks.py              # WorkGraph tasks: create_supercell()
@@ -616,7 +616,7 @@ teros/core/aimd/
 
 ## Relationship to Main Workflow
 
-This module is **independent** from `teros.core.workgraph.build_core_workgraph()` but reuses the underlying `aimd_single_stage_scatter()` function.
+This module is **independent** from `psteros.core.workgraph.build_core_workgraph()` but reuses the underlying `aimd_single_stage_scatter()` function.
 
 **Choose standalone AIMD when:**
 - You have pre-existing structures (from any source)
@@ -645,7 +645,7 @@ Demonstrates all three override levels with two structures and verification inst
 
 ## Implementation Notes
 
-- Reuses `aimd_single_stage_scatter()` from `teros.core.aimd_functions`
+- Reuses `aimd_single_stage_scatter()` from `psteros.core.aimd_functions`
 - Supercells created with pymatgen via ASE adapter
 - WorkGraph handles task orchestration and restart chaining
 - All AiiDA nodes stored in provenance graph
@@ -653,7 +653,7 @@ Demonstrates all three override levels with two structures and verification inst
 
 ## See Also
 
-- Module README: `teros/core/aimd/README.md`
+- Module README: `psteros/core/aimd/README.md`
 - Design document: `docs/plans/2025-11-03-aimd-override-system.md`
 - Implementation plan: `docs/plans/2025-11-03-aimd-override-implementation.md`
 - Example scripts: `examples/vasp/step_18_aimd_standalone.py`, `step_19_aimd_with_overrides.py`

@@ -22,7 +22,7 @@ Let's start with a calculation that won't converge (intentionally low NSW):
 ```python
 #!/home/thiagotd/envs/psteros/bin/python
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 load_profile('psteros')
 
@@ -156,7 +156,7 @@ The calculation stopped at NSW=20 (didn't reach convergence).
 ```python
 #!/home/thiagotd/envs/psteros/bin/python
 from aiida import load_profile, orm
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 load_profile('psteros')
 

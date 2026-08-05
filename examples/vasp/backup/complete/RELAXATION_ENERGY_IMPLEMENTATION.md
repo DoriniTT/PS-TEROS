@@ -8,12 +8,12 @@ Successfully implemented a module to calculate the relaxation energy of slab ter
 
 ### Modified Files
 
-1. **teros/core/slabs.py**
+1. **psteros/core/slabs.py**
    - Added `scf_slabs_scatter()`: Performs SCF calculations on unrelaxed slabs (NSW=0, IBRION=-1)
    - Added `calculate_relaxation_energies_scatter()`: Calculates relaxation energies for all slabs
    - Added `calculate_energy_difference()`: Helper calcfunction to compute energy differences
 
-2. **teros/core/workgraph.py**
+2. **psteros/core/workgraph.py**
    - Updated imports to include new functions
    - Modified `core_workgraph()` outputs to include:
      - `unrelaxed_slab_energies`
@@ -75,7 +75,7 @@ All three steps use the **scatter-gather pattern** for parallel execution.
 
 ```python
 from aiida import load_profile, orm
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 from aiida_workgraph import submit
 
 load_profile()
@@ -176,15 +176,15 @@ def calculate_energy_difference(
 
 ### Syntax Validation
 ```bash
-python -m py_compile teros/core/slabs.py
-python -m py_compile teros/core/workgraph.py
+python -m py_compile psteros/core/slabs.py
+python -m py_compile psteros/core/workgraph.py
 ✓ Both files pass syntax check
 ```
 
 ### Import Testing
 ```bash
-python -c "from teros.core.slabs import scf_slabs_scatter, calculate_relaxation_energies_scatter"
-python -c "from teros.core.workgraph import core_workgraph, build_core_workgraph"
+python -c "from psteros.core.slabs import scf_slabs_scatter, calculate_relaxation_energies_scatter"
+python -c "from psteros.core.workgraph import core_workgraph, build_core_workgraph"
 ✓ All imports successful
 ```
 
@@ -230,7 +230,7 @@ Potential future additions:
 Complete documentation is available in:
 - `docs/RELAXATION_ENERGY.md` - User guide and API reference
 - `examples/slabs/test_relaxation_energy.py` - Example script
-- Docstrings in `teros/core/slabs.py` and `teros/core/workgraph.py`
+- Docstrings in `psteros/core/slabs.py` and `psteros/core/workgraph.py`
 
 ## Verification Checklist
 

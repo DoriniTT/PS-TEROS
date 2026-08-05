@@ -132,7 +132,7 @@ def main():
     print("LEVEL 1: Pure Python Validation")
     print("=" * 60)
 
-    from teros.core.testing import validate_builder_inputs
+    from psteros.core.testing import validate_builder_inputs
 
     result = validate_builder_inputs(builder_inputs)
 
@@ -179,7 +179,7 @@ def main():
     else:
         try:
             from pymatgen.core import Structure, Lattice
-            from teros.core.testing import dry_run_vasp
+            from psteros.core.testing import dry_run_vasp
 
             # Example structure - Si diamond
             structure = Structure(
@@ -234,7 +234,7 @@ def main():
 
     try:
         from aiida import orm
-        from teros.core.testing import (
+        from psteros.core.testing import (
             check_workgraph_wiring,
             print_workgraph_structure,
             estimate_workgraph_complexity,
@@ -243,7 +243,7 @@ def main():
         # Try to build a simple WorkGraph for testing
         # This example uses the Fukui module if available
         try:
-            from teros.core.fukui import build_fukui_workgraph
+            from psteros.core.fukui import build_fukui_workgraph
 
             structure_node = orm.StructureData(pymatgen=structure)
             code = orm.load_code(args.code_label)

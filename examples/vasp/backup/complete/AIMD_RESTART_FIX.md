@@ -59,8 +59,8 @@ current_remotes = {}  # Empty dict for first stage (no restart)
 ```
 
 ## Files Modified
-1. `teros/core/aimd.py` - Fixed type annotation and restart_folders checks
-2. `teros/core/workgraph.py` - Initialize current_remotes with empty dict
+1. `psteros/core/aimd.py` - Fixed type annotation and restart_folders checks
+2. `psteros/core/workgraph.py` - Initialize current_remotes with empty dict
 
 ## Test Results
 ✅ **Workflow PK 35124** - Both AIMD stages running successfully:

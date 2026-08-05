@@ -86,7 +86,7 @@ Bulk → Metal → Nonmetal → Oxygen → group(all_references)
 
 ## Implementation
 
-### Module: `teros/core/workgraph.py`
+### Module: `psteros/core/workgraph.py`
 
 **Changes required:**
 
@@ -194,10 +194,10 @@ Bulk → Metal → Nonmetal → Oxygen → group(all_references)
 
 Apply same pattern to:
 
-1. ✅ `teros/core/workgraph.py` (main surface thermodynamics)
-2. ⬜ `teros/core/aimd/workgraph.py` (AIMD module)
-3. ⬜ `teros/core/surface_hydroxylation/workgraph.py` (hydroxylation)
-4. ⬜ `teros/core/custom_calculation/workgraph.py` (custom calculations)
+1. ✅ `psteros/core/workgraph.py` (main surface thermodynamics)
+2. ⬜ `psteros/core/aimd/workgraph.py` (AIMD module)
+3. ⬜ `psteros/core/surface_hydroxylation/workgraph.py` (hydroxylation)
+4. ⬜ `psteros/core/custom_calculation/workgraph.py` (custom calculations)
 
 ---
 

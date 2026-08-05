@@ -1,5 +1,5 @@
 """
-Runner script for TEROS DFT workflow using VASP.
+Runner script for PSTEROS DFT workflow using VASP.
 
 This script combines the builder configuration and workflow execution into a single file.
 It sets up the VASP calculation parameters and runs the create_teros_workgraph function for surface thermodynamics.
@@ -12,7 +12,7 @@ from aiida.plugins import WorkflowFactory
 from aiida import load_profile
 
 # Import the create_teros_workgraph function
-from teros import create_teros_workgraph
+from psteros import create_teros_workgraph
 
 # Load AiiDA profile
 load_profile()
@@ -563,7 +563,7 @@ def get_reference_builders(elements):
     for element in elements:
         if element == 'O':
             # Oxygen reference is typically an O2 molecule.
-            # The key 'O2' is used internally by TEROS to identify the oxygen reference energy (halved for E_O).
+            # The key 'O2' is used internally by PSTEROS to identify the oxygen reference energy (halved for E_O).
             ref_builders['O2'] = builder_o2_relax()
         elif element == 'Ag':
             ref_builders['Ag'] = builder_ag_relax()
@@ -576,7 +576,7 @@ def get_reference_builders(elements):
 
 def run_workflow():
     """
-    Configure and run the TEROS workflow using VASP
+    Configure and run the PSTEROS workflow using VASP
 
     Returns:
         WorkGraph: The submitted workgraph
@@ -617,7 +617,7 @@ def run_workflow():
         max_normal_search=Int(MAX_NORMAL_SEARCH) if MAX_NORMAL_SEARCH is not None else None,
     )
 
-    print(f"Submitting TEROS workflow using {CODE}...")
+    print(f"Submitting PSTEROS workflow using {CODE}...")
     print(f"Using {'manual slabs' if manual_slabs else 'automatic slab generation with default parameters'}")
 
     wg.submit(wait=False)  # wait=False submits the workflow and returns immediately (asynchronous).

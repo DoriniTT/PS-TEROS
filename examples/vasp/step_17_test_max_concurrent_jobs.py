@@ -32,7 +32,7 @@ Monitor concurrent jobs with:
 import sys
 import os
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 def main():
     """Step 17: Test max_concurrent_jobs parameter."""

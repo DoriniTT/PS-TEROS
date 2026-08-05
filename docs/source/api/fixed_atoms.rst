@@ -2,7 +2,7 @@
 Fixed Atoms Module
 ===============================
 
-.. automodule:: teros.core.fixed_atoms
+.. automodule:: psteros.core.fixed_atoms
    :members:
    :undoc-members:
    :show-inheritance:
@@ -18,7 +18,7 @@ Key Functions
 get_fixed_atoms_list()
 -----------------------
 
-.. autofunction:: teros.core.fixed_atoms.get_fixed_atoms_list
+.. autofunction:: psteros.core.fixed_atoms.get_fixed_atoms_list
 
 Description
 ^^^^^^^^^^^
@@ -56,7 +56,7 @@ Fix bottom 7 Å of all atoms:
 
 .. code-block:: python
 
-    from teros.core.fixed_atoms import get_fixed_atoms_list
+    from psteros.core.fixed_atoms import get_fixed_atoms_list
     from aiida import orm
 
     slab = orm.load_node(<STRUCTURE_PK>)
@@ -93,7 +93,7 @@ Notes
 add_fixed_atoms_to_cp2k_parameters()
 --------------------------------------
 
-.. autofunction:: teros.core.fixed_atoms.add_fixed_atoms_to_cp2k_parameters
+.. autofunction:: psteros.core.fixed_atoms.add_fixed_atoms_to_cp2k_parameters
 
 Description
 ^^^^^^^^^^^
@@ -126,11 +126,11 @@ Example
 
 .. code-block:: python
 
-    from teros.core.fixed_atoms import (
+    from psteros.core.fixed_atoms import (
         get_fixed_atoms_list,
         add_fixed_atoms_to_cp2k_parameters,
     )
-    from teros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
+    from psteros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
 
     # Get base parameters
     params = get_aimd_defaults_cp2k(cutoff=400, timestep=1.0)
@@ -187,7 +187,7 @@ Notes
 add_fixed_atoms_to_vasp_parameters()
 -------------------------------------
 
-.. autofunction:: teros.core.fixed_atoms.add_fixed_atoms_to_vasp_parameters
+.. autofunction:: psteros.core.fixed_atoms.add_fixed_atoms_to_vasp_parameters
 
 Description
 ^^^^^^^^^^^
@@ -223,7 +223,7 @@ Example
 
 .. code-block:: python
 
-    from teros.core.fixed_atoms import (
+    from psteros.core.fixed_atoms import (
         get_fixed_atoms_list,
         add_fixed_atoms_to_vasp_parameters,
     )
@@ -297,7 +297,7 @@ Let PS-TEROS calculate fixed atoms automatically:
 
 .. code-block:: python
 
-    from teros.core.workgraph import build_core_workgraph
+    from psteros.core.workgraph import build_core_workgraph
 
     wg = build_core_workgraph(
         workflow_preset='aimd_only',
@@ -328,7 +328,7 @@ For custom control, pre-compute fixed atoms:
 
 .. code-block:: python
 
-    from teros.core.fixed_atoms import get_fixed_atoms_list
+    from psteros.core.fixed_atoms import get_fixed_atoms_list
     from aiida import orm
 
     # Load slabs
@@ -349,7 +349,7 @@ For custom control, pre-compute fixed atoms:
         print(f"{label}: {len(fixed)} atoms fixed")
 
     # Pass to AIMD function directly
-    from teros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k
+    from psteros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k
 
     stage = aimd_single_stage_scatter_cp2k(
         slabs=slabs,

@@ -4,7 +4,7 @@
 agent refactorer:
   model: sonnet
   prompt: """You are a Python developer refactoring PS-TEROS code.
-  The stage functions have already been implemented in teros/core/stages/.
+  The stage functions have already been implemented in psteros/core/stages/.
   Your job is to replace inline code in build_core_workgraph() with calls to these functions.
   Maintain 100% backward compatibility - same inputs, same outputs, same behavior.
   Use the exact function signatures from the implemented stage modules."""
@@ -14,16 +14,16 @@ let slab_elec = session: refactorer
   prompt: """Replace the slab electronic properties inline code in build_core_workgraph().
 
   The stage function is already implemented at:
-  teros/core/stages/electronic_properties.py -> add_slab_electronic_properties_stage()
+  psteros/core/stages/electronic_properties.py -> add_slab_electronic_properties_stage()
 
   Read the function signature from electronic_properties.py first.
 
-  In /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py, find and replace lines 1564-1612:
+  In /home/thiagotd/git/PS-TEROS/psteros/core/workgraph.py, find and replace lines 1564-1612:
   ```python
   # NEW: Add slab electronic properties calculation if requested
   # Currently only supported for input_slabs mode (including restart)
   if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties and use_input_slabs:
-      from teros.core.slabs import calculate_electronic_properties_slabs_scatter
+      from psteros.core.slabs import calculate_electronic_properties_slabs_scatter
       ... (all the inline code)
       logger.info("  ✓ Slab electronic properties calculation enabled for %d slabs", len(slab_electronic_properties))
   ```
@@ -37,7 +37,7 @@ let slab_elec = session: refactorer
   - logger
   - Either scatter_task or collector depending on restart mode
 
-  Add the import at the top: from teros.core.stages import add_slab_electronic_properties_stage
+  Add the import at the top: from psteros.core.stages import add_slab_electronic_properties_stage
 
   Make the edit to workgraph.py."""
 
@@ -47,11 +47,11 @@ let bulk_elec = session: refactorer
   prompt: """Replace the bulk electronic properties inline code in build_core_workgraph().
 
   The stage function is already implemented at:
-  teros/core/stages/electronic_properties.py -> add_bulk_electronic_properties_stage()
+  psteros/core/stages/electronic_properties.py -> add_bulk_electronic_properties_stage()
 
   Read the function signature from electronic_properties.py.
 
-  In /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py, find and replace lines 1614-1696:
+  In /home/thiagotd/git/PS-TEROS/psteros/core/workgraph.py, find and replace lines 1614-1696:
   ```python
   # Add electronic properties calculation if requested
   if compute_electronic_properties_bulk:
@@ -76,11 +76,11 @@ let aimd_code = session: refactorer
   prompt: """Replace the AIMD inline code in build_core_workgraph().
 
   The stage function is already implemented at:
-  teros/core/stages/aimd_stage.py -> add_aimd_stage()
+  psteros/core/stages/aimd_stage.py -> add_aimd_stage()
 
   Read the function signature from aimd_stage.py.
 
-  In /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py, find and replace the AIMD section (lines ~1698-1862):
+  In /home/thiagotd/git/PS-TEROS/psteros/core/workgraph.py, find and replace the AIMD section (lines ~1698-1862):
   ```python
   # ===== AIMD CALCULATION (OPTIONAL) =====
   # Check if AIMD should be added
@@ -98,7 +98,7 @@ let aimd_code = session: refactorer
   resolve_aimd_parameters(), so pass the raw aimd_parameters/slab_parameters/bulk_parameters
   to let the function do the fallback resolution.
 
-  Add the import: from teros.core.stages import add_aimd_stage
+  Add the import: from psteros.core.stages import add_aimd_stage
 
   Make the edit to workgraph.py."""
 
@@ -108,11 +108,11 @@ let adsorption_code = session: refactorer
   prompt: """Replace the adsorption energy inline code in build_core_workgraph().
 
   The stage function is already implemented at:
-  teros/core/stages/adsorption_stage.py -> add_adsorption_energy_stage()
+  psteros/core/stages/adsorption_stage.py -> add_adsorption_energy_stage()
 
   Read the function signature from adsorption_stage.py.
 
-  In /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py, find and replace the adsorption section (lines ~1864-1965):
+  In /home/thiagotd/git/PS-TEROS/psteros/core/workgraph.py, find and replace the adsorption section (lines ~1864-1965):
   ```python
   # ===== ADSORPTION ENERGY CALCULATION (OPTIONAL) =====
   # Check if adsorption energy should be computed
@@ -126,7 +126,7 @@ let adsorption_code = session: refactorer
 
   Replace with a call to add_adsorption_energy_stage().
 
-  Add the import: from teros.core.stages import add_adsorption_energy_stage
+  Add the import: from psteros.core.stages import add_adsorption_energy_stage
 
   Make the edit to workgraph.py."""
 
@@ -135,10 +135,10 @@ let add_imports = session: refactorer
   context: adsorption_code
   prompt: """Ensure all stage imports are properly added at the top of workgraph.py.
 
-  Add or verify this import block exists near the other teros imports:
+  Add or verify this import block exists near the other psteros imports:
 
   ```python
-  from teros.core.stages import (
+  from psteros.core.stages import (
       add_slab_electronic_properties_stage,
       add_bulk_electronic_properties_stage,
       add_aimd_stage,
@@ -146,7 +146,7 @@ let add_imports = session: refactorer
   )
   ```
 
-  Check and update the imports in /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py"""
+  Check and update the imports in /home/thiagotd/git/PS-TEROS/psteros/core/workgraph.py"""
 
 # Task 6: Verify and test
 output verification = session: refactorer
@@ -154,8 +154,8 @@ output verification = session: refactorer
   prompt: """Verify the refactoring was successful.
 
   Run these commands:
-  1. python -c "from teros.core.workgraph import build_core_workgraph; print('Import OK')"
-  2. flake8 teros/core/workgraph.py teros/core/stages/ --max-line-length=120 --ignore=E501,W503,E402,F401
+  1. python -c "from psteros.core.workgraph import build_core_workgraph; print('Import OK')"
+  2. flake8 psteros/core/workgraph.py psteros/core/stages/ --max-line-length=120 --ignore=E501,W503,E402,F401
 
   Count the lines in build_core_workgraph() function (it should be shorter now).
   

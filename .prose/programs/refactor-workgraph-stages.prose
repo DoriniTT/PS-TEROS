@@ -15,7 +15,7 @@ agent implementer:
 
 # Phase 1: Analysis and Planning
 let analysis = session: architect
-  prompt: """Analyze the build_core_workgraph() function in /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py
+  prompt: """Analyze the build_core_workgraph() function in /home/thiagotd/git/PS-TEROS/psteros/core/workgraph.py
 
   The function spans lines 638-1974 (~1350 lines) and handles 10 distinct stages:
   1. Workflow preset resolution (lines 1046-1131)
@@ -30,8 +30,8 @@ let analysis = session: architect
   10. Adsorption energy calculation (lines 1864-1965)
 
   Design a refactoring plan that:
-  1. Creates a new module: teros/core/stages/__init__.py
-  2. Extracts each stage into a separate function in teros/core/stages/
+  1. Creates a new module: psteros/core/stages/__init__.py
+  2. Extracts each stage into a separate function in psteros/core/stages/
   3. Keeps build_core_workgraph() as the orchestrator calling stage functions
   4. Maintains 100% backward compatibility (same signature, same behavior)
   5. Each stage function should be <100 lines and independently testable
@@ -44,7 +44,7 @@ let stages_init = session: implementer
   context: analysis
   prompt: """Create the stages module structure.
 
-  Create the file: /home/thiagotd/git/PS-TEROS/teros/core/stages/__init__.py
+  Create the file: /home/thiagotd/git/PS-TEROS/psteros/core/stages/__init__.py
 
   This should:
   1. Import and export all stage functions
@@ -65,7 +65,7 @@ let preset_stage = session: implementer
   context: { analysis, stages_init }
   prompt: """Extract the workflow preset resolution logic into a stage function.
 
-  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/preset_resolution.py
+  Create: /home/thiagotd/git/PS-TEROS/psteros/core/stages/preset_resolution.py
 
   Extract lines 1046-1131 from build_core_workgraph() into:
   - resolve_workflow_preset() function
@@ -85,7 +85,7 @@ let validation_stage = session: implementer
   context: { analysis, stages_init }
   prompt: """Extract the input validation logic into a stage function.
 
-  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/input_validation.py
+  Create: /home/thiagotd/git/PS-TEROS/psteros/core/stages/input_validation.py
 
   Extract lines 1133-1168 from build_core_workgraph() into:
   - validate_workflow_inputs() function
@@ -103,7 +103,7 @@ let restart_stage = session: implementer
   context: { analysis, stages_init }
   prompt: """Extract the restart handling logic into a stage function.
 
-  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/restart_handling.py
+  Create: /home/thiagotd/git/PS-TEROS/psteros/core/stages/restart_handling.py
 
   Extract lines 1170-1218 from build_core_workgraph() into:
   - handle_restart_from_node() function
@@ -121,7 +121,7 @@ let electronic_stage = session: implementer
   context: { analysis, stages_init }
   prompt: """Extract the electronic properties logic into stage functions.
 
-  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/electronic_properties.py
+  Create: /home/thiagotd/git/PS-TEROS/psteros/core/stages/electronic_properties.py
 
   Extract two functions:
 
@@ -146,7 +146,7 @@ let aimd_stage = session: implementer
   context: { analysis, stages_init }
   prompt: """Extract the AIMD calculation logic into a stage function.
 
-  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/aimd_stage.py
+  Create: /home/thiagotd/git/PS-TEROS/psteros/core/stages/aimd_stage.py
 
   Extract lines 1698-1862 from build_core_workgraph() into:
   - add_aimd_stage() function
@@ -167,7 +167,7 @@ let adsorption_stage = session: implementer
   context: { analysis, stages_init }
   prompt: """Extract the adsorption energy logic into a stage function.
 
-  Create: /home/thiagotd/git/PS-TEROS/teros/core/stages/adsorption_stage.py
+  Create: /home/thiagotd/git/PS-TEROS/psteros/core/stages/adsorption_stage.py
 
   Extract lines 1864-1965 from build_core_workgraph() into:
   - add_adsorption_energy_stage() function
@@ -186,7 +186,7 @@ let main_refactor = session: implementer
   context: { analysis, stages_init, preset_stage, validation_stage, restart_stage, electronic_stage, aimd_stage, adsorption_stage }
   prompt: """Refactor build_core_workgraph() to use the new stage functions.
 
-  Update /home/thiagotd/git/PS-TEROS/teros/core/workgraph.py:
+  Update /home/thiagotd/git/PS-TEROS/psteros/core/workgraph.py:
 
   1. Add imports for the new stage modules at the top
   2. Replace the inline code blocks with calls to stage functions
@@ -240,13 +240,13 @@ let exports = session: implementer
   context: { stages_init, preset_stage, validation_stage, restart_stage, electronic_stage, aimd_stage, adsorption_stage }
   prompt: """Update the stages module exports and verify all imports work.
 
-  1. Update /home/thiagotd/git/PS-TEROS/teros/core/stages/__init__.py with all exports
+  1. Update /home/thiagotd/git/PS-TEROS/psteros/core/stages/__init__.py with all exports
   
-  2. Verify imports work by reading teros/core/__init__.py and adding stages if needed
+  2. Verify imports work by reading psteros/core/__init__.py and adding stages if needed
 
-  3. Run: python -c "from teros.core.stages import *; print('Imports OK')"
+  3. Run: python -c "from psteros.core.stages import *; print('Imports OK')"
   
-  4. Run: flake8 teros/core/stages/ --max-line-length=120 --ignore=E501,W503,E402,F401
+  4. Run: flake8 psteros/core/stages/ --max-line-length=120 --ignore=E501,W503,E402,F401
 
   Report any issues found."""
 
@@ -257,9 +257,9 @@ output summary = session "Verify refactoring success"
   prompt: """Verify the refactoring was successful.
 
   1. Check that build_core_workgraph() is now shorter (<400 lines)
-  2. Verify all stage modules exist in teros/core/stages/
-  3. Run: python -c "from teros.core.workgraph import build_core_workgraph; print('Import OK')"
-  4. Run: flake8 teros/core/workgraph.py --max-line-length=120 --ignore=E501,W503,E402,F401
+  2. Verify all stage modules exist in psteros/core/stages/
+  3. Run: python -c "from psteros.core.workgraph import build_core_workgraph; print('Import OK')"
+  4. Run: flake8 psteros/core/workgraph.py --max-line-length=120 --ignore=E501,W503,E402,F401
 
   Create a summary of:
   - Files created

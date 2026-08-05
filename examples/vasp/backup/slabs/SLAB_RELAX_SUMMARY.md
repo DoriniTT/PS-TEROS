@@ -11,7 +11,7 @@ Successfully implemented **parallel slab relaxation** functionality in PS-TEROS 
 ### 1. Core Functionality
 
 #### New `@task.graph`: `relax_all_slabs`
-**File**: `/home/thiagotd/git/PS-TEROS/teros/workgraph.py`
+**File**: `/home/thiagotd/git/PS-TEROS/psteros/workgraph.py`
 
 ```python
 @task.graph
@@ -82,7 +82,7 @@ if relax_slabs:
 ### 2. Example Scripts
 
 #### `slabs_relax.py` - Full Example
-**Path**: `/home/thiagotd/git/PS-TEROS/teros/examples/slabs/slabs_relax.py`
+**Path**: `/home/thiagotd/git/PS-TEROS/psteros/examples/slabs/slabs_relax.py`
 
 **Features**:
 - ✅ Complete workflow: bulk → slabs → relax slabs
@@ -107,7 +107,7 @@ slab_parameters = {
 ```
 
 #### `test_slab_relax.py` - Build Test
-**Path**: `/home/thiagotd/git/PS-TEROS/teros/examples/slabs/test_slab_relax.py`
+**Path**: `/home/thiagotd/git/PS-TEROS/psteros/examples/slabs/test_slab_relax.py`
 
 **Features**:
 - ✅ Tests workflow builds correctly
@@ -121,7 +121,7 @@ slab_parameters = {
 ### 3. Documentation
 
 #### README_RELAX.md
-**Path**: `/home/thiagotd/git/PS-TEROS/teros/examples/slabs/README_RELAX.md`
+**Path**: `/home/thiagotd/git/PS-TEROS/psteros/examples/slabs/README_RELAX.md`
 
 **Contents**:
 - Quick start guide
@@ -244,7 +244,7 @@ Tasks in workflow:
 ### Test 2: Module Import
 
 ```bash
-$ python -c "from teros.workgraph import relax_all_slabs; print(relax_all_slabs)"
+$ python -c "from psteros.workgraph import relax_all_slabs; print(relax_all_slabs)"
 <aiida_workgraph.task.TaskHandle object at 0x...>
 ```
 
@@ -348,13 +348,13 @@ slab_parameters = {
 ## 📁 Files Created/Modified
 
 ### Created
-1. `teros/examples/slabs/slabs_relax.py` - Full relaxation example
-2. `teros/examples/slabs/test_slab_relax.py` - Build test
-3. `teros/examples/slabs/README_RELAX.md` - Comprehensive documentation
-4. `teros/examples/slabs/SLAB_RELAX_SUMMARY.md` - This file
+1. `psteros/examples/slabs/slabs_relax.py` - Full relaxation example
+2. `psteros/examples/slabs/test_slab_relax.py` - Build test
+3. `psteros/examples/slabs/README_RELAX.md` - Comprehensive documentation
+4. `psteros/examples/slabs/SLAB_RELAX_SUMMARY.md` - This file
 
 ### Modified
-1. `teros/workgraph.py`
+1. `psteros/workgraph.py`
    - Added `relax_all_slabs` @task.graph function
    - Updated `formation_workgraph` with slab relaxation parameters
    - Updated `build_formation_workgraph` wrapper
@@ -384,7 +384,7 @@ slab_parameters = {
 To run the full workflow:
 
 ```bash
-cd /home/thiagotd/git/PS-TEROS/teros/examples/slabs
+cd /home/thiagotd/git/PS-TEROS/psteros/examples/slabs
 source ~/envs/aiida/bin/activate
 python slabs_relax.py
 ```

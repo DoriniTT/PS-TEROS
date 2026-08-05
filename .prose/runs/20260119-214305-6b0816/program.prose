@@ -9,7 +9,7 @@ agent fixer:
 
 parallel:
   aimd_fix = session: fixer
-    prompt: """Update teros/core/aimd/tasks.py to use modern task decorators.
+    prompt: """Update psteros/core/aimd/tasks.py to use modern task decorators.
 
     Current pattern (OLD):
     ```python
@@ -41,7 +41,7 @@ parallel:
     Make only these specific changes, preserve all docstrings and logic."""
 
   surface_energy_fix = session: fixer
-    prompt: """Update teros/core/surface_hydroxylation/surface_energy.py to use modern task decorators.
+    prompt: """Update psteros/core/surface_hydroxylation/surface_energy.py to use modern task decorators.
 
     Current pattern (OLD):
     ```python

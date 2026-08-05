@@ -21,7 +21,7 @@ Usage:
 import sys
 import os
 from aiida import load_profile
-from teros.core.surface_energy import build_metal_surface_energy_workgraph
+from psteros.core.surface_energy import build_metal_surface_energy_workgraph
 
 
 def main():

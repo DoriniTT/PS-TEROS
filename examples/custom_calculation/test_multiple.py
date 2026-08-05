@@ -9,7 +9,7 @@ using the same builder inputs for all.
 import sys
 from pathlib import Path
 from aiida import orm, load_profile
-from teros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
+from psteros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
 
 def main():
     """Run custom VASP calculations on multiple structures."""

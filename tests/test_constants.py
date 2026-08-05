@@ -1,7 +1,7 @@
 """
 Tests for Physical Constants and Unit Conversions
 
-This module verifies that all physical constants in teros.core.constants
+This module verifies that all physical constants in psteros.core.constants
 match CODATA 2018 recommended values and that unit conversions are
 internally consistent.
 
@@ -12,7 +12,7 @@ References:
 
 import pytest
 import math
-from teros.core import constants
+from psteros.core import constants
 
 
 @pytest.mark.tier1

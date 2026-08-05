@@ -4,7 +4,7 @@
 
 **Goal:** Add ab initio molecular dynamics (AIMD) capability to PS-TEROS as a parallel, independent analysis on slab structures with sequential temperature stages.
 
-**Architecture:** Create new `teros/core/aimd.py` module with scatter-gather pattern (similar to `slabs.py`, `thermodynamics.py`). Each slab gets sequential AIMD stages where each stage restarts from the previous one using VASP's restart_folder. AIMD runs in parallel to traditional relaxation as an optional analysis branch.
+**Architecture:** Create new `psteros/core/aimd.py` module with scatter-gather pattern (similar to `slabs.py`, `thermodynamics.py`). Each slab gets sequential AIMD stages where each stage restarts from the previous one using VASP's restart_folder. AIMD runs in parallel to traditional relaxation as an optional analysis branch.
 
 **Tech Stack:** AiiDA, AiiDA-WorkGraph, aiida-vasp, VASP (IBRION=0, MDALGO=2 for NVT), Python 3.10+
 
@@ -13,11 +13,11 @@
 ## Task 1: Create AIMD Core Module with Helper Function
 
 **Files:**
-- Create: `teros/core/aimd.py`
+- Create: `psteros/core/aimd.py`
 
 **Step 1: Create the file with imports and helper function**
 
-Create `teros/core/aimd.py`:
+Create `psteros/core/aimd.py`:
 
 ```python
 """
@@ -31,7 +31,7 @@ import typing as t
 from aiida import orm
 from aiida.plugins import WorkflowFactory
 from aiida_workgraph import task, dynamic, namespace
-from teros.core.slabs import extract_total_energy
+from psteros.core.slabs import extract_total_energy
 
 
 def prepare_aimd_parameters(
@@ -67,7 +67,7 @@ Run:
 ```bash
 source ~/envs/psteros/bin/activate
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-aimd-slabs
-python -c "from teros.core.aimd import prepare_aimd_parameters; print('Import successful')"
+python -c "from psteros.core.aimd import prepare_aimd_parameters; print('Import successful')"
 ```
 
 Expected: "Import successful"
@@ -75,7 +75,7 @@ Expected: "Import successful"
 **Step 3: Commit**
 
 ```bash
-git add teros/core/aimd.py
+git add psteros/core/aimd.py
 git commit -m "feat(aimd): add core module with prepare_aimd_parameters helper"
 ```
 
@@ -84,11 +84,11 @@ git commit -m "feat(aimd): add core module with prepare_aimd_parameters helper"
 ## Task 2: Implement Sequential AIMD for Single Slab
 
 **Files:**
-- Modify: `teros/core/aimd.py`
+- Modify: `psteros/core/aimd.py`
 
 **Step 1: Add get_settings helper reference**
 
-At the top of `teros/core/aimd.py`, add to imports:
+At the top of `psteros/core/aimd.py`, add to imports:
 
 ```python
 def get_settings():
@@ -107,7 +107,7 @@ def get_settings():
 
 **Step 2: Add aimd_sequential_slab function**
 
-Add to `teros/core/aimd.py` after `prepare_aimd_parameters`:
+Add to `psteros/core/aimd.py` after `prepare_aimd_parameters`:
 
 ```python
 @task.graph(outputs=[dynamic(namespace())])
@@ -212,7 +212,7 @@ def aimd_sequential_slab(
 
 Run:
 ```bash
-python -c "from teros.core.aimd import aimd_sequential_slab; print('Import successful')"
+python -c "from psteros.core.aimd import aimd_sequential_slab; print('Import successful')"
 ```
 
 Expected: "Import successful"
@@ -220,7 +220,7 @@ Expected: "Import successful"
 **Step 4: Commit**
 
 ```bash
-git add teros/core/aimd.py
+git add psteros/core/aimd.py
 git commit -m "feat(aimd): add aimd_sequential_slab for single slab AIMD chain"
 ```
 
@@ -229,11 +229,11 @@ git commit -m "feat(aimd): add aimd_sequential_slab for single slab AIMD chain"
 ## Task 3: Implement Scatter Function for All Slabs
 
 **Files:**
-- Modify: `teros/core/aimd.py`
+- Modify: `psteros/core/aimd.py`
 
 **Step 1: Add aimd_slabs_scatter function**
 
-Add to `teros/core/aimd.py` after `aimd_sequential_slab`:
+Add to `psteros/core/aimd.py` after `aimd_sequential_slab`:
 
 ```python
 def aimd_slabs_scatter(
@@ -296,7 +296,7 @@ def aimd_slabs_scatter(
 
 Run:
 ```bash
-python -c "from teros.core.aimd import aimd_slabs_scatter; print('Import successful')"
+python -c "from psteros.core.aimd import aimd_slabs_scatter; print('Import successful')"
 ```
 
 Expected: "Import successful"
@@ -304,7 +304,7 @@ Expected: "Import successful"
 **Step 3: Commit**
 
 ```bash
-git add teros/core/aimd.py
+git add psteros/core/aimd.py
 git commit -m "feat(aimd): add aimd_slabs_scatter for parallel AIMD on all slabs"
 ```
 
@@ -313,12 +313,12 @@ git commit -m "feat(aimd): add aimd_slabs_scatter for parallel AIMD on all slabs
 ## Task 4: Create AIMD Builder for Default Parameters
 
 **Files:**
-- Create: `teros/core/builders/aimd_builder.py`
-- Modify: `teros/core/builders/__init__.py`
+- Create: `psteros/core/builders/aimd_builder.py`
+- Modify: `psteros/core/builders/__init__.py`
 
 **Step 1: Create aimd_builder.py**
 
-Create `teros/core/builders/aimd_builder.py`:
+Create `psteros/core/builders/aimd_builder.py`:
 
 ```python
 """
@@ -396,17 +396,17 @@ def get_aimd_defaults(
 
 **Step 2: Update builders __init__.py**
 
-Modify `teros/core/builders/__init__.py` to add:
+Modify `psteros/core/builders/__init__.py` to add:
 
 ```python
-from teros.core.builders.aimd_builder import get_aimd_defaults
+from psteros.core.builders.aimd_builder import get_aimd_defaults
 ```
 
 **Step 3: Verify imports**
 
 Run:
 ```bash
-python -c "from teros.core.builders import get_aimd_defaults; print(get_aimd_defaults())"
+python -c "from psteros.core.builders import get_aimd_defaults; print(get_aimd_defaults())"
 ```
 
 Expected: Dictionary with AIMD parameters printed
@@ -414,7 +414,7 @@ Expected: Dictionary with AIMD parameters printed
 **Step 4: Commit**
 
 ```bash
-git add teros/core/builders/aimd_builder.py teros/core/builders/__init__.py
+git add psteros/core/builders/aimd_builder.py psteros/core/builders/__init__.py
 git commit -m "feat(aimd): add aimd_builder with get_aimd_defaults"
 ```
 
@@ -423,14 +423,14 @@ git commit -m "feat(aimd): add aimd_builder with get_aimd_defaults"
 ## Task 5: Integrate AIMD into core_workgraph Function
 
 **Files:**
-- Modify: `teros/core/workgraph.py`
+- Modify: `psteros/core/workgraph.py`
 
 **Step 1: Add aimd import at top of file**
 
-In `teros/core/workgraph.py`, add to imports (around line 13-27):
+In `psteros/core/workgraph.py`, add to imports (around line 13-27):
 
 ```python
-from teros.core.aimd import aimd_slabs_scatter
+from psteros.core.aimd import aimd_slabs_scatter
 ```
 
 **Step 2: Add aimd_results to outputs decorator**
@@ -496,7 +496,7 @@ In the return statement at the end of `core_workgraph()` (around line 416-438), 
 
 Run:
 ```bash
-python -c "from teros.core.workgraph import core_workgraph; print('Import successful')"
+python -c "from psteros.core.workgraph import core_workgraph; print('Import successful')"
 ```
 
 Expected: "Import successful"
@@ -504,7 +504,7 @@ Expected: "Import successful"
 **Step 7: Commit**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat(aimd): integrate AIMD into core_workgraph as optional branch"
 ```
 
@@ -513,7 +513,7 @@ git commit -m "feat(aimd): integrate AIMD into core_workgraph as optional branch
 ## Task 6: Add AIMD Parameters to build_core_workgraph
 
 **Files:**
-- Modify: `teros/core/workgraph.py`
+- Modify: `psteros/core/workgraph.py`
 
 **Step 1: Add AIMD parameters to function signature**
 
@@ -558,7 +558,7 @@ In the `core_workgraph.build()` call (around line 635-677), add after `compute_c
 
 Run:
 ```bash
-python -c "from teros.core.workgraph import build_core_workgraph; print('Import successful')"
+python -c "from psteros.core.workgraph import build_core_workgraph; print('Import successful')"
 ```
 
 Expected: "Import successful"
@@ -573,7 +573,7 @@ find . -type d -name __pycache__ -exec rm -rf {} + && find . -name "*.pyc" -dele
 **Step 6: Commit**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat(aimd): add AIMD parameters to build_core_workgraph"
 ```
 
@@ -591,7 +591,7 @@ Copy `examples/complete/complete_ag2o_example.py` to `examples/complete/complete
 Add after line 37 (after imports):
 
 ```python
-from teros.core.builders import get_aimd_defaults
+from psteros.core.builders import get_aimd_defaults
 ```
 
 Add after line 313 (after electronic properties section):
@@ -823,8 +823,8 @@ AIMD capability allows running sequential molecular dynamics simulations on slab
 ## Usage
 
 ```python
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_aimd_defaults
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders import get_aimd_defaults
 
 # Define AIMD parameters
 aimd_parameters = get_aimd_defaults(

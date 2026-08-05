@@ -41,7 +41,7 @@ def run_level1_validation(builder_inputs: dict) -> bool:
     print("LEVEL 1: Pure Python Validation")
     print("=" * 70)
 
-    from teros.core.testing import validate_builder_inputs, validate_incar
+    from psteros.core.testing import validate_builder_inputs, validate_incar
 
     # Validate full builder_inputs
     result = validate_builder_inputs(builder_inputs)
@@ -92,8 +92,8 @@ def run_level2_workgraph_check(structure, builder_inputs: dict, nelect: int, cod
 
     from aiida import orm
     from aiida.orm import QueryBuilder
-    from teros.core.fukui import build_fukui_workgraph
-    from teros.core.testing import (
+    from psteros.core.fukui import build_fukui_workgraph
+    from psteros.core.testing import (
         check_workgraph_wiring,
         print_workgraph_structure,
         estimate_workgraph_complexity,
@@ -192,7 +192,7 @@ def run_level3_dry_run(structure, builder_inputs: dict, code_label: str) -> bool
     print("LEVEL 3: Dry-Run Input Generation")
     print("=" * 70)
 
-    from teros.core.testing import dry_run_vasp
+    from psteros.core.testing import dry_run_vasp
 
     output_dir = Path('./test_dry_run_output')
 

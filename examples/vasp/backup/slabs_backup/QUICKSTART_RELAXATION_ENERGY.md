@@ -15,7 +15,7 @@ Negative values (typical) indicate that relaxation stabilizes the surface.
 Simply set `relax_slabs=True` when building your workgraph. The relaxation energy calculation is **automatically included** – no additional parameters needed!
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 from aiida_workgraph import submit
 from aiida import load_profile, orm
 
@@ -105,7 +105,7 @@ With `relax_slabs=True`, you get access to:
 """Example: Ag2O (100) surface with relaxation energy calculation."""
 
 from aiida import load_profile, orm
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 from aiida_workgraph import submit
 
 load_profile()

@@ -13,20 +13,20 @@
 ## Task 1: Add `_build_vasp_inputs()` Helper Function
 
 **Files:**
-- Modify: `teros/core/adsorption_energy.py` (add after line 23, before `parse_formula()`)
+- Modify: `psteros/core/adsorption_energy.py` (add after line 23, before `parse_formula()`)
 
 **Context:** This helper constructs VASP WorkChain inputs from either new-style builder_inputs or old-style parameters dict, with automatic SCF enforcement.
 
 **Step 1: Write failing test for new-style builder inputs**
 
-Create test file `teros/core/tests/test_adsorption_energy_builder.py`:
+Create test file `psteros/core/tests/test_adsorption_energy_builder.py`:
 
 ```python
 """Tests for VASP builder input construction in adsorption_energy module."""
 
 import pytest
 from aiida import orm
-from teros.core.adsorption_energy import _build_vasp_inputs
+from psteros.core.adsorption_energy import _build_vasp_inputs
 
 
 def test_build_vasp_inputs_from_builder_dict():
@@ -71,14 +71,14 @@ def test_build_vasp_inputs_from_builder_dict():
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-adsorption-energy
 source ~/envs/aiida/bin/activate
-pytest teros/core/tests/test_adsorption_energy_builder.py::test_build_vasp_inputs_from_builder_dict -v
+pytest psteros/core/tests/test_adsorption_energy_builder.py::test_build_vasp_inputs_from_builder_dict -v
 ```
 
 Expected: `ImportError: cannot import name '_build_vasp_inputs'` or `AttributeError`
 
 **Step 3: Write failing test for old-style parameters**
 
-Add to `teros/core/tests/test_adsorption_energy_builder.py`:
+Add to `psteros/core/tests/test_adsorption_energy_builder.py`:
 
 ```python
 def test_build_vasp_inputs_from_parameters_dict():
@@ -132,7 +132,7 @@ def test_build_vasp_inputs_from_parameters_dict():
 
 **Step 4: Write failing test for force_scf enforcement**
 
-Add to `teros/core/tests/test_adsorption_energy_builder.py`:
+Add to `psteros/core/tests/test_adsorption_energy_builder.py`:
 
 ```python
 def test_build_vasp_inputs_force_scf():
@@ -169,14 +169,14 @@ def test_build_vasp_inputs_force_scf():
 **Step 5: Run tests to verify they fail**
 
 ```bash
-pytest teros/core/tests/test_adsorption_energy_builder.py -v
+pytest psteros/core/tests/test_adsorption_energy_builder.py -v
 ```
 
 Expected: All 3 tests FAIL (function not defined yet)
 
 **Step 6: Implement `_build_vasp_inputs()` helper function**
 
-Add to `teros/core/adsorption_energy.py` after line 23:
+Add to `psteros/core/adsorption_energy.py` after line 23:
 
 ```python
 def _build_vasp_inputs(
@@ -272,7 +272,7 @@ def _build_vasp_inputs(
 **Step 7: Run tests to verify they pass**
 
 ```bash
-pytest teros/core/tests/test_adsorption_energy_builder.py -v
+pytest psteros/core/tests/test_adsorption_energy_builder.py -v
 ```
 
 Expected: All 3 tests PASS
@@ -280,7 +280,7 @@ Expected: All 3 tests PASS
 **Step 8: Commit**
 
 ```bash
-git add teros/core/adsorption_energy.py teros/core/tests/test_adsorption_energy_builder.py
+git add psteros/core/adsorption_energy.py psteros/core/tests/test_adsorption_energy_builder.py
 git commit -m "feat: add _build_vasp_inputs helper for flexible VASP input construction"
 ```
 
@@ -289,13 +289,13 @@ git commit -m "feat: add _build_vasp_inputs helper for flexible VASP input const
 ## Task 2: Update `compute_adsorption_energies_scatter()` Signature
 
 **Files:**
-- Modify: `teros/core/adsorption_energy.py:280-297` (function signature and docstring)
+- Modify: `psteros/core/adsorption_energy.py:280-297` (function signature and docstring)
 
 **Context:** Add new parameters for relaxation control and SCF builder inputs while maintaining backward compatibility.
 
 **Step 1: Update function signature**
 
-Modify `teros/core/adsorption_energy.py` line 280:
+Modify `psteros/core/adsorption_energy.py` line 280:
 
 ```python
 @task.graph
@@ -412,7 +412,7 @@ Replace docstring at line 299-325:
 **Step 3: Verify syntax**
 
 ```bash
-python3 -m py_compile teros/core/adsorption_energy.py
+python3 -m py_compile psteros/core/adsorption_energy.py
 ```
 
 Expected: No syntax errors
@@ -420,7 +420,7 @@ Expected: No syntax errors
 **Step 4: Commit**
 
 ```bash
-git add teros/core/adsorption_energy.py
+git add psteros/core/adsorption_energy.py
 git commit -m "feat: update compute_adsorption_energies_scatter signature with relax/scf params"
 ```
 
@@ -429,7 +429,7 @@ git commit -m "feat: update compute_adsorption_energies_scatter signature with r
 ## Task 3: Implement Phase 1 (Optional Relaxation)
 
 **Files:**
-- Modify: `teros/core/adsorption_energy.py:360-361` (after validation, before Phase 2)
+- Modify: `psteros/core/adsorption_energy.py:360-361` (after validation, before Phase 2)
 
 **Context:** Add relaxation logic that runs before structure separation when `relax_before_adsorption=True`.
 
@@ -479,7 +479,7 @@ Insert after line 360 (after input validation, before Phase 2 separation loop):
 **Step 2: Verify syntax**
 
 ```bash
-python3 -m py_compile teros/core/adsorption_energy.py
+python3 -m py_compile psteros/core/adsorption_energy.py
 ```
 
 Expected: No syntax errors
@@ -487,7 +487,7 @@ Expected: No syntax errors
 **Step 3: Commit**
 
 ```bash
-git add teros/core/adsorption_energy.py
+git add psteros/core/adsorption_energy.py
 git commit -m "feat: implement Phase 1 optional relaxation for complete structures"
 ```
 
@@ -496,7 +496,7 @@ git commit -m "feat: implement Phase 1 optional relaxation for complete structur
 ## Task 4: Update Phase 2 (Separation) to Use Conditional Input
 
 **Files:**
-- Modify: `teros/core/adsorption_energy.py:364-377` (separation loop)
+- Modify: `psteros/core/adsorption_energy.py:364-377` (separation loop)
 
 **Context:** Update separation phase to use `structures_to_separate` instead of `structures` directly.
 
@@ -526,7 +526,7 @@ Replace the separation loop (currently at lines 364-377):
 **Step 2: Verify syntax**
 
 ```bash
-python3 -m py_compile teros/core/adsorption_energy.py
+python3 -m py_compile psteros/core/adsorption_energy.py
 ```
 
 Expected: No syntax errors
@@ -534,7 +534,7 @@ Expected: No syntax errors
 **Step 3: Commit**
 
 ```bash
-git add teros/core/adsorption_energy.py
+git add psteros/core/adsorption_energy.py
 git commit -m "refactor: use structures_to_separate in Phase 2 separation"
 ```
 
@@ -543,7 +543,7 @@ git commit -m "refactor: use structures_to_separate in Phase 2 separation"
 ## Task 5: Update Phase 3 (SCF) to Use New Builder Inputs
 
 **Files:**
-- Modify: `teros/core/adsorption_energy.py:379-413` (VASP calculations loop)
+- Modify: `psteros/core/adsorption_energy.py:379-413` (VASP calculations loop)
 
 **Context:** Replace current VASP task creation with new builder-based approach using `vasp.v2.vasp` plugin explicitly.
 
@@ -602,7 +602,7 @@ These are now defined earlier in Phase 1 implementation.
 **Step 3: Verify syntax**
 
 ```bash
-python3 -m py_compile teros/core/adsorption_energy.py
+python3 -m py_compile psteros/core/adsorption_energy.py
 ```
 
 Expected: No syntax errors
@@ -610,7 +610,7 @@ Expected: No syntax errors
 **Step 4: Commit**
 
 ```bash
-git add teros/core/adsorption_energy.py
+git add psteros/core/adsorption_energy.py
 git commit -m "feat: update Phase 3 SCF to use new builder inputs with force_scf"
 ```
 
@@ -619,7 +619,7 @@ git commit -m "feat: update Phase 3 SCF to use new builder inputs with force_scf
 ## Task 6: Update Return Statement with Relaxed Structures
 
 **Files:**
-- Modify: `teros/core/adsorption_energy.py:396-413` (Phase 4 and return statement)
+- Modify: `psteros/core/adsorption_energy.py:396-413` (Phase 4 and return statement)
 
 **Context:** Add `relaxed_complete_structures` to the output namespace.
 
@@ -660,7 +660,7 @@ Replace the return statement (around line 407):
 **Step 3: Verify syntax**
 
 ```bash
-python3 -m py_compile teros/core/adsorption_energy.py
+python3 -m py_compile psteros/core/adsorption_energy.py
 ```
 
 Expected: No syntax errors
@@ -668,7 +668,7 @@ Expected: No syntax errors
 **Step 4: Commit**
 
 ```bash
-git add teros/core/adsorption_energy.py
+git add psteros/core/adsorption_energy.py
 git commit -m "feat: add relaxed_complete_structures to output namespace"
 ```
 
@@ -677,8 +677,8 @@ git commit -m "feat: add relaxed_complete_structures to output namespace"
 ## Task 7: Integrate into `build_core_workgraph()`
 
 **Files:**
-- Modify: `teros/core/workgraph.py:149-160` (add parameters to function signature)
-- Modify: `teros/core/workgraph.py:1556-1603` (update adsorption task creation)
+- Modify: `psteros/core/workgraph.py:149-160` (add parameters to function signature)
+- Modify: `psteros/core/workgraph.py:1556-1603` (update adsorption task creation)
 
 **Context:** Add new parameters to the main workgraph builder and connect the new outputs.
 
@@ -788,7 +788,7 @@ Find the adsorption energy section (around line 1556-1603) and replace with:
 **Step 3: Verify syntax**
 
 ```bash
-python3 -m py_compile teros/core/workgraph.py
+python3 -m py_compile psteros/core/workgraph.py
 ```
 
 Expected: No syntax errors
@@ -805,7 +805,7 @@ Expected: Script runs without errors (backward compatible)
 **Step 5: Commit**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: integrate relaxation support into build_core_workgraph with backward compat"
 ```
 
@@ -814,14 +814,14 @@ git commit -m "feat: integrate relaxation support into build_core_workgraph with
 ## Task 8: Update LaMnO3 Example to Use New API
 
 **Files:**
-- Modify: `teros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py`
+- Modify: `psteros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py`
 
 **Context:** Convert the LaMnO3 example to use new builder-based API with relaxation enabled.
 
 **Step 1: Read current file**
 
 ```bash
-cat teros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py
+cat psteros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py
 ```
 
 **Step 2: Update to new builder-based API**
@@ -1023,7 +1023,7 @@ Replace the output information section (lines 170-194):
 **Step 5: Verify syntax**
 
 ```bash
-python3 -m py_compile teros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py
+python3 -m py_compile psteros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py
 ```
 
 Expected: No syntax errors
@@ -1031,7 +1031,7 @@ Expected: No syntax errors
 **Step 6: Commit**
 
 ```bash
-git add teros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py
+git add psteros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py
 git commit -m "refactor: update LaMnO3 example to use builder API with relaxation"
 ```
 
@@ -1071,7 +1071,7 @@ System: Ag(111) + OH radical
 from aiida import load_profile, orm
 from ase import Atoms
 from ase.build import fcc111, add_adsorbate
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 
 def create_ag_oh_structure():
@@ -1516,7 +1516,7 @@ Migration is optional and gradual.
 - Tests: New API with relaxation enabled
 
 **Test 3: Production example**
-- File: `teros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py`
+- File: `psteros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py`
 - Tests: Perovskite oxide with relaxation (real-world case)
 
 ### Validation Checklist

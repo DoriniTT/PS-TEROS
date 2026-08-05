@@ -44,8 +44,8 @@ except ImportError:
 # ==============================================================================
 
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_electronic_properties_defaults
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders import get_electronic_properties_defaults
 
 
 def main():

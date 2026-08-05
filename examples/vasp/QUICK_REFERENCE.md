@@ -133,13 +133,13 @@ See `examples/step_by_step/`:
 ## List Available Presets
 
 ```python
-from teros.core.workflow_presets import list_workflow_presets
+from psteros.core.workflow_presets import list_workflow_presets
 list_workflow_presets()
 ```
 
 ## Get Preset Details
 
 ```python
-from teros.core.workflow_presets import get_preset_summary
+from psteros.core.workflow_presets import get_preset_summary
 print(get_preset_summary('surface_thermodynamics'))
 ```

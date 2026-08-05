@@ -40,7 +40,7 @@ Successfully implemented the PS-TEROS Workflow Preset System according to the sp
 ### New Files (8 files, ~2,000 lines)
 
 ```
-teros/core/workflow_presets.py                    593 lines
+psteros/core/workflow_presets.py                    593 lines
 docs/WORKFLOW_PRESETS_GUIDE.md                    380 lines
 docs/WORKFLOW_PRESETS_EXAMPLES.md                 580 lines
 examples/workflow_presets/example_surface_thermo.py    155 lines
@@ -53,8 +53,8 @@ examples/workflow_presets/README.md                   110 lines
 ### Modified Files (2 files)
 
 ```
-teros/core/workgraph.py      ~100 lines changed
-teros/core/__init__.py        ~15 lines changed
+psteros/core/workgraph.py      ~100 lines changed
+psteros/core/__init__.py        ~15 lines changed
 ```
 
 ---
@@ -75,10 +75,10 @@ Results: 5/5 tests passed (100%)
 
 ### Manual Verification
 ```bash
-$ python -c "from teros.core import list_workflow_presets; list_workflow_presets()"
+$ python -c "from psteros.core import list_workflow_presets; list_workflow_presets()"
 # Output: 9 presets listed correctly ✓
 
-$ python -c "from teros.core.workflow_presets import resolve_preset; \
+$ python -c "from psteros.core.workflow_presets import resolve_preset; \
   p, f = resolve_preset('bulk_only'); print(f'Preset: {p}')"
 # Output: Preset: bulk_only ✓
 
@@ -138,7 +138,7 @@ wg = build_core_workgraph(
 
 ### 3. Discoverability
 ```python
-from teros.core import list_workflow_presets
+from psteros.core import list_workflow_presets
 list_workflow_presets()  # Shows all presets
 ```
 
@@ -187,7 +187,7 @@ list_workflow_presets()  # Shows all presets
 ### Main Functions
 
 ```python
-# In teros.core module
+# In psteros.core module
 list_workflow_presets()           # List all available presets
 get_preset_config(name)           # Get preset configuration
 get_preset_summary(name)          # Get formatted summary
@@ -288,12 +288,12 @@ The following are optional enhancements for future work:
 
 1. **See available presets:**
    ```bash
-   python -c "from teros.core import list_workflow_presets; list_workflow_presets()"
+   python -c "from psteros.core import list_workflow_presets; list_workflow_presets()"
    ```
 
 2. **Use a preset in your workflow:**
    ```python
-   from teros.core.workgraph import build_core_workgraph
+   from psteros.core.workgraph import build_core_workgraph
    
    wg = build_core_workgraph(
        workflow_preset='surface_thermodynamics',
@@ -307,7 +307,7 @@ The following are optional enhancements for future work:
 
 3. **Get detailed help:**
    ```python
-   from teros.core import get_preset_summary
+   from psteros.core import get_preset_summary
    print(get_preset_summary('surface_thermodynamics'))
    ```
 
@@ -331,7 +331,7 @@ verdi daemon restart
 ### Validation Errors
 ```python
 # Check what preset requires
-from teros.core import get_preset_config
+from psteros.core import get_preset_config
 config = get_preset_config('surface_thermodynamics')
 print(config['requires'])
 ```

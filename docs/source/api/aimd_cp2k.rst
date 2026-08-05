@@ -2,7 +2,7 @@
 AIMD CP2K Module
 ===============================
 
-.. automodule:: teros.core.aimd_cp2k
+.. automodule:: psteros.core.aimd_cp2k
    :members:
    :undoc-members:
    :show-inheritance:
@@ -13,7 +13,7 @@ Key Functions
 aimd_single_stage_scatter_cp2k()
 ---------------------------------
 
-.. autofunction:: teros.core.aimd_cp2k.aimd_single_stage_scatter_cp2k
+.. autofunction:: psteros.core.aimd_cp2k.aimd_single_stage_scatter_cp2k
 
 Description
 ^^^^^^^^^^^
@@ -96,8 +96,8 @@ Basic usage:
 
 .. code-block:: python
 
-    from teros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k
-    from teros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
+    from psteros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k
+    from psteros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
     from aiida import orm
     import io
 
@@ -116,7 +116,7 @@ Basic usage:
     ]
 
     # Prepare basis and pseudo files
-    from teros.core.builders.aimd_builder_cp2k import (
+    from psteros.core.builders.aimd_builder_cp2k import (
         get_basis_molopt_content,
         get_gth_potentials_content,
     )
@@ -183,7 +183,7 @@ Notes
 See Also
 ^^^^^^^^
 
-* :func:`~teros.core.aimd.aimd_single_stage_scatter` - VASP equivalent
-* :func:`~teros.core.builders.aimd_builder_cp2k.get_aimd_defaults_cp2k` - Default parameters
-* :func:`~teros.core.fixed_atoms.get_fixed_atoms_list` - Calculate fixed atoms
-* :func:`~teros.core.fixed_atoms.add_fixed_atoms_to_cp2k_parameters` - Add constraints
+* :func:`~psteros.core.aimd.aimd_single_stage_scatter` - VASP equivalent
+* :func:`~psteros.core.builders.aimd_builder_cp2k.get_aimd_defaults_cp2k` - Default parameters
+* :func:`~psteros.core.fixed_atoms.get_fixed_atoms_list` - Calculate fixed atoms
+* :func:`~psteros.core.fixed_atoms.add_fixed_atoms_to_cp2k_parameters` - Add constraints

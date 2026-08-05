@@ -31,7 +31,7 @@ PS-TEROS demonstrates excellent architectural design for a scientific workflow f
 
 **Hierarchical Core Structure:**
 ```
-teros/core/
+psteros/core/
 ├── workgraph.py              # 1992 LOC - Main orchestrator
 ├── workflow_presets.py       # 765 LOC - High-level API
 ├── thermodynamics.py         # 589 LOC - Domain logic

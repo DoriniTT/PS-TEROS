@@ -2,13 +2,13 @@
 """Test script for Map-based slab relaxations."""
 
 from aiida import load_profile
-from teros.workgraph_map import build_core_workgraph_with_map
+from psteros.workgraph_map import build_core_workgraph_with_map
 
 print("Loading AiiDA profile...")
 load_profile()
 
 # Define structures directory
-structures_dir = "/home/thiagotd/git/PS-TEROS/teros/structures"
+structures_dir = "/home/thiagotd/git/PS-TEROS/psteros/structures"
 
 # Define calculation parameters
 code_label = "VASP-VTST-6.4.3@bohr"

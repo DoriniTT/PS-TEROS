@@ -25,7 +25,7 @@ Cluster Configuration:
 
 import sys
 from aiida import orm, load_profile
-from teros.core.convergence import (
+from psteros.core.convergence import (
     build_convergence_workgraph,
     get_convergence_results,
     print_convergence_summary,

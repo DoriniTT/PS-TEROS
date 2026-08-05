@@ -9,7 +9,7 @@ with full control over builder inputs.
 import sys
 from pathlib import Path
 from aiida import orm, load_profile
-from teros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
+from psteros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
 
 def main():
     """Run custom VASP calculation on single structure."""
@@ -116,7 +116,7 @@ def main():
     # Note: To get results, run with wait=True or check later
     print(f"\n   To get results after completion:")
     print(f"     from aiida import orm")
-    print(f"     from teros.core.custom_calculation import get_custom_results")
+    print(f"     from psteros.core.custom_calculation import get_custom_results")
     print(f"     wg = orm.load_node({wg.pk})")
     print(f"     results = get_custom_results(wg)")
     print(f"     print(results['energies'])")

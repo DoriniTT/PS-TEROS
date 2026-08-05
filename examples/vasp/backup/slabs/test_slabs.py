@@ -18,7 +18,7 @@ def test_slab_generation():
     load_profile()
 
     # Load a test structure
-    structures_dir = '/home/thiagotd/git/PS-TEROS/teros/structures'
+    structures_dir = '/home/thiagotd/git/PS-TEROS/psteros/structures'
     structure_file = f'{structures_dir}/ag3po4.cif'
 
     print(f"Loading structure from: {structure_file}")

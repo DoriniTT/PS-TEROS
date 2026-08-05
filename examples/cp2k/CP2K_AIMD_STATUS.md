@@ -54,15 +54,15 @@ The error occurs deep in AiiDA's serialization when storing node attributes. Pot
 ## 📦 Deliverables
 
 **New Modules:**
-- `teros/core/fixed_atoms.py` (184 lines)
-- `teros/core/aimd_cp2k.py` (137 lines)  
-- `teros/core/builders/aimd_builder_cp2k.py` (248 lines)
+- `psteros/core/fixed_atoms.py` (184 lines)
+- `psteros/core/aimd_cp2k.py` (137 lines)  
+- `psteros/core/builders/aimd_builder_cp2k.py` (248 lines)
 - `examples/cp2k/step_07a_aimd_autogenerate_slabs.py` (195 lines)
 - `examples/cp2k/step_07b_aimd_input_slabs.py` (205 lines)
 
 **Modified:**
-- `teros/core/builders/__init__.py` - Exports added
-- `teros/core/workgraph.py` - Calculator routing, aimd_code_label, fixed atoms support
+- `psteros/core/builders/__init__.py` - Exports added
+- `psteros/core/workgraph.py` - Calculator routing, aimd_code_label, fixed atoms support
 
 **Total:** 16 commits, ~1200 lines of new code
 

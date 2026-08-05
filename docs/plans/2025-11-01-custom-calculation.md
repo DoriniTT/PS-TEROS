@@ -13,17 +13,17 @@
 ## Task 1: Create Module Structure
 
 **Files:**
-- Create: `teros/core/custom_calculation/__init__.py`
-- Create: `teros/core/custom_calculation/tasks.py`
-- Create: `teros/core/custom_calculation/workgraph.py`
+- Create: `psteros/core/custom_calculation/__init__.py`
+- Create: `psteros/core/custom_calculation/tasks.py`
+- Create: `psteros/core/custom_calculation/workgraph.py`
 
 **Step 1: Create module directory**
 
 ```bash
-mkdir -p teros/core/custom_calculation
+mkdir -p psteros/core/custom_calculation
 ```
 
-Run: `ls -la teros/core/custom_calculation`
+Run: `ls -la psteros/core/custom_calculation`
 Expected: Directory exists
 
 **Step 2: Create empty __init__.py**
@@ -42,7 +42,7 @@ __all__ = [
 ]
 ```
 
-File: `teros/core/custom_calculation/__init__.py`
+File: `psteros/core/custom_calculation/__init__.py`
 
 **Step 3: Create empty tasks.py with docstring**
 
@@ -53,7 +53,7 @@ from aiida import orm
 from aiida_workgraph import task
 ```
 
-File: `teros/core/custom_calculation/tasks.py`
+File: `psteros/core/custom_calculation/tasks.py`
 
 **Step 4: Create empty workgraph.py with docstring**
 
@@ -65,13 +65,13 @@ from aiida.plugins import WorkflowFactory
 from aiida_workgraph import WorkGraph, task
 ```
 
-File: `teros/core/custom_calculation/workgraph.py`
+File: `psteros/core/custom_calculation/workgraph.py`
 
 **Step 5: Verify module imports**
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -c "from teros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results"
+source ~/envs/aiida/bin/activate && python -c "from psteros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results"
 ```
 
 Expected: No import errors (functions don't exist yet, but module should be importable)
@@ -79,7 +79,7 @@ Expected: No import errors (functions don't exist yet, but module should be impo
 **Step 6: Commit module structure**
 
 ```bash
-git add teros/core/custom_calculation/
+git add psteros/core/custom_calculation/
 git commit -m "feat(custom_calculation): create module structure
 
 Add empty module files for custom VASP calculation module:
@@ -97,7 +97,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 2: Implement Energy Extraction Task
 
 **Files:**
-- Modify: `teros/core/custom_calculation/tasks.py`
+- Modify: `psteros/core/custom_calculation/tasks.py`
 
 **Step 1: Add extract_total_energy function**
 
@@ -132,7 +132,7 @@ def extract_total_energy(misc: orm.Dict) -> orm.Float:
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -c "from teros.core.custom_calculation.tasks import extract_total_energy; print(extract_total_energy)"
+source ~/envs/aiida/bin/activate && python -c "from psteros.core.custom_calculation.tasks import extract_total_energy; print(extract_total_energy)"
 ```
 
 Expected: Function object printed, no import errors
@@ -140,7 +140,7 @@ Expected: Function object printed, no import errors
 **Step 3: Commit energy extraction**
 
 ```bash
-git add teros/core/custom_calculation/tasks.py
+git add psteros/core/custom_calculation/tasks.py
 git commit -m "feat(custom_calculation): add extract_total_energy task
 
 Extract total energy from VASP misc output.
@@ -156,7 +156,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 3: Implement Structure Extraction Task
 
 **Files:**
-- Modify: `teros/core/custom_calculation/tasks.py`
+- Modify: `psteros/core/custom_calculation/tasks.py`
 
 **Step 1: Add extract_relaxed_structure function**
 
@@ -186,7 +186,7 @@ def extract_relaxed_structure(misc: orm.Dict) -> orm.StructureData:
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -c "from teros.core.custom_calculation.tasks import extract_relaxed_structure; print(extract_relaxed_structure)"
+source ~/envs/aiida/bin/activate && python -c "from psteros.core.custom_calculation.tasks import extract_relaxed_structure; print(extract_relaxed_structure)"
 ```
 
 Expected: Function object printed, no import errors
@@ -194,7 +194,7 @@ Expected: Function object printed, no import errors
 **Step 3: Commit structure extraction**
 
 ```bash
-git add teros/core/custom_calculation/tasks.py
+git add psteros/core/custom_calculation/tasks.py
 git commit -m "feat(custom_calculation): add extract_relaxed_structure task
 
 Extract relaxed structure from VASP misc output.
@@ -209,7 +209,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 4: Implement Single Structure WorkGraph Builder
 
 **Files:**
-- Modify: `teros/core/custom_calculation/workgraph.py`
+- Modify: `psteros/core/custom_calculation/workgraph.py`
 
 **Step 1: Import required modules**
 
@@ -359,7 +359,7 @@ def _prepare_builder_inputs(builder_inputs):
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -c "from teros.core.custom_calculation import build_custom_calculation_workgraph; print(build_custom_calculation_workgraph)"
+source ~/envs/aiida/bin/activate && python -c "from psteros.core.custom_calculation import build_custom_calculation_workgraph; print(build_custom_calculation_workgraph)"
 ```
 
 Expected: Function object printed, no errors
@@ -367,7 +367,7 @@ Expected: Function object printed, no errors
 **Step 4: Commit single structure builder**
 
 ```bash
-git add teros/core/custom_calculation/workgraph.py
+git add psteros/core/custom_calculation/workgraph.py
 git commit -m "feat(custom_calculation): add single structure workgraph builder
 
 Implement build_custom_calculation_workgraph for single structures:
@@ -386,7 +386,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 5: Implement Multiple Structure Support
 
 **Files:**
-- Modify: `teros/core/custom_calculation/workgraph.py`
+- Modify: `psteros/core/custom_calculation/workgraph.py`
 
 **Step 1: Replace NotImplementedError with multiple structure logic**
 
@@ -457,7 +457,7 @@ Replace the `else:` block in `build_custom_calculation_workgraph` (around line 7
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -c "from teros.core.custom_calculation import build_custom_calculation_workgraph; print('OK')"
+source ~/envs/aiida/bin/activate && python -c "from psteros.core.custom_calculation import build_custom_calculation_workgraph; print('OK')"
 ```
 
 Expected: "OK" printed, no errors
@@ -465,7 +465,7 @@ Expected: "OK" printed, no errors
 **Step 3: Commit multiple structure support**
 
 ```bash
-git add teros/core/custom_calculation/workgraph.py
+git add psteros/core/custom_calculation/workgraph.py
 git commit -m "feat(custom_calculation): add multiple structure support
 
 Extend build_custom_calculation_workgraph for multiple structures:
@@ -484,7 +484,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Task 6: Implement Result Extraction Helper
 
 **Files:**
-- Modify: `teros/core/custom_calculation/workgraph.py`
+- Modify: `psteros/core/custom_calculation/workgraph.py`
 
 **Step 1: Add get_custom_results function**
 
@@ -531,7 +531,7 @@ Verify that `__init__.py` already exports `get_custom_results` (added in Task 1)
 
 Run:
 ```bash
-source ~/envs/aiida/bin/activate && python -c "from teros.core.custom_calculation import get_custom_results; print(get_custom_results)"
+source ~/envs/aiida/bin/activate && python -c "from psteros.core.custom_calculation import get_custom_results; print(get_custom_results)"
 ```
 
 Expected: Function object printed, no errors
@@ -539,7 +539,7 @@ Expected: Function object printed, no errors
 **Step 4: Commit result extraction helper**
 
 ```bash
-git add teros/core/custom_calculation/workgraph.py
+git add psteros/core/custom_calculation/workgraph.py
 git commit -m "feat(custom_calculation): add get_custom_results helper
 
 Add convenience function to extract results from WorkGraph:
@@ -615,7 +615,7 @@ with full control over builder inputs.
 import sys
 from pathlib import Path
 from aiida import orm, load_profile
-from teros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
+from psteros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
 
 def main():
     """Run custom VASP calculation on single structure."""
@@ -722,7 +722,7 @@ def main():
     # Note: To get results, run with wait=True or check later
     print(f"\n   To get results after completion:")
     print(f"     from aiida import orm")
-    print(f"     from teros.core.custom_calculation import get_custom_results")
+    print(f"     from psteros.core.custom_calculation import get_custom_results")
     print(f"     wg = orm.load_node({wg.pk})")
     print(f"     results = get_custom_results(wg)")
     print(f"     print(results['energies'])")
@@ -835,7 +835,7 @@ After WorkGraph finishes (check with `verdi process show <PK>`):
 
 ```python
 from aiida import orm
-from teros.core.custom_calculation import get_custom_results
+from psteros.core.custom_calculation import get_custom_results
 
 wg = orm.load_node(<PK>)
 results = get_custom_results(wg)
@@ -868,7 +868,7 @@ using the same builder inputs for all.
 import sys
 from pathlib import Path
 from aiida import orm, load_profile
-from teros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
+from psteros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
 
 def main():
     """Run custom VASP calculations on multiple structures."""
@@ -1020,7 +1020,7 @@ with different builder inputs for each structure.
 
 import sys
 from aiida import orm, load_profile
-from teros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
+from psteros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
 
 def main():
     """Run custom VASP calculations with different settings per structure."""
@@ -1224,11 +1224,11 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ```bash
 source ~/envs/aiida/bin/activate && python -c "
-from teros.core.custom_calculation import (
+from psteros.core.custom_calculation import (
     build_custom_calculation_workgraph,
     get_custom_results
 )
-from teros.core.custom_calculation.tasks import (
+from psteros.core.custom_calculation.tasks import (
     extract_total_energy,
     extract_relaxed_structure
 )
@@ -1251,13 +1251,13 @@ Expected: Clean cache, daemon restarted
 **Step 3: Check module structure**
 
 ```bash
-tree teros/core/custom_calculation/
+tree psteros/core/custom_calculation/
 tree examples/custom_calculation/
 ```
 
 Expected:
 ```
-teros/core/custom_calculation/
+psteros/core/custom_calculation/
 ├── __init__.py
 ├── tasks.py
 └── workgraph.py
@@ -1298,7 +1298,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ## Success Criteria
 
 ✅ **Module Structure**
-- `teros/core/custom_calculation/` exists with `__init__.py`, `tasks.py`, `workgraph.py`
+- `psteros/core/custom_calculation/` exists with `__init__.py`, `tasks.py`, `workgraph.py`
 - All files import without errors
 
 ✅ **Functionality**

@@ -14,7 +14,7 @@ let analysis = session: architect
 
 ## Executive Summary
 
-The `build_core_workgraph()` function (lines 638-1974, ~1350 lines) orchestrates 10 distinct stages of workflow construction. This plan proposes extracting each stage into a dedicated module under `teros/core/stages/`, maintaining 100% backward compatibility while improving testability and maintainability.
+The `build_core_workgraph()` function (lines 638-1974, ~1350 lines) orchestrates 10 distinct stages of workflow construction. This plan proposes extracting each stage into a dedicated module under `psteros/core/stages/`, maintaining 100% backward compatibility while improving testability and maintainability.
 
 ## Current Architecture Analysis
 
@@ -41,7 +41,7 @@ The `build_core_workgraph()` function (lines 638-1974, ~1350 lines) orchestrates
 ## Proposed Module Structure
 
 ```
-teros/core/stages/
+psteros/core/stages/
     __init__.py                    # Public API exports
     _types.py                      # Shared type definitions & dataclasses
     preset_resolution.py           # Stage 1: Preset resolution
@@ -123,7 +123,7 @@ class StageContext:
 """Stage 1: Workflow preset resolution and validation."""
 
 from typing import Tuple, Optional
-from teros.core.stages._types import ResolvedFlags
+from psteros.core.stages._types import ResolvedFlags
 
 def resolve_workflow_preset(
     workflow_preset: Optional[str],
@@ -187,7 +187,7 @@ def resolve_workflow_preset(
 
 from typing import Optional
 import logging
-from teros.core.stages._types import ResolvedFlags
+from psteros.core.stages._types import ResolvedFlags
 
 logger = logging.getLogger(__name__)
 
@@ -240,7 +240,7 @@ def log_workflow_configuration(
 from typing import Optional
 import logging
 from aiida import orm
-from teros.core.stages._types import RestartData
+from psteros.core.stages._types import RestartData
 
 logger = logging.getLogger(__name__)
 
@@ -292,7 +292,7 @@ def prepare_input_slabs(
 from typing import Optional
 import logging
 from aiida import orm
-from teros.core.stages._types import CP2KFiles
+from psteros.core.stages._types import CP2KFiles
 
 logger = logging.getLogger(__name__)
 
@@ -464,7 +464,7 @@ from typing import Optional, Dict, Any
 import logging
 from aiida import orm
 from aiida_workgraph import WorkGraph
-from teros.core.stages._types import RestartData, SlabParameters
+from psteros.core.stages._types import RestartData, SlabParameters
 
 logger = logging.getLogger(__name__)
 
@@ -601,7 +601,7 @@ from typing import Optional, Dict, Any
 import logging
 from aiida import orm
 from aiida_workgraph import WorkGraph
-from teros.core.stages._types import RestartData
+from psteros.core.stages._types import RestartData
 
 logger = logging.getLogger(__name__)
 
@@ -702,7 +702,7 @@ from typing import Optional, Dict, List, Any
 import logging
 from aiida import orm
 from aiida_workgraph import WorkGraph
-from teros.core.stages._types import CP2KFiles
+from psteros.core.stages._types import CP2KFiles
 
 logger = logging.getLogger(__name__)
 
@@ -1015,7 +1015,7 @@ def build_core_workgraph(
     
     [Same docstring, but now refers to stages module for implementation details]
     """
-    from teros.core.stages import (
+    from psteros.core.stages import (
         resolve_workflow_preset,
         validate_required_inputs,
         extract_restart_data,
@@ -1107,7 +1107,7 @@ def build_core_workgraph(
 ## Implementation Strategy
 
 ### Phase 1: Create Module Structure (Week 1)
-1. Create `teros/core/stages/` directory
+1. Create `psteros/core/stages/` directory
 2. Implement `_types.py` with dataclasses
 3. Implement `__init__.py` with imports
 

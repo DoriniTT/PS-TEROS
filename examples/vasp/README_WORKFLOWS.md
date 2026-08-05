@@ -258,13 +258,13 @@ All workflow flags (can be set individually or via preset):
 ## Listing Available Presets
 
 ```python
-from teros.core.workflow_presets import list_workflow_presets
+from psteros.core.workflow_presets import list_workflow_presets
 
 # Print all available presets
 list_workflow_presets()
 
 # Get detailed info about a specific preset
-from teros.core.workflow_presets import get_preset_summary
+from psteros.core.workflow_presets import get_preset_summary
 print(get_preset_summary('surface_thermodynamics'))
 ```
 

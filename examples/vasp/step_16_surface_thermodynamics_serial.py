@@ -29,7 +29,7 @@ import sys
 import os
 from aiida import load_profile, orm
 from aiida.engine import submit
-from teros.experimental.surface_thermo_preset_serial import surface_thermodynamics_serial_workgraph
+from psteros.experimental.surface_thermo_preset_serial import surface_thermodynamics_serial_workgraph
 
 
 def main():

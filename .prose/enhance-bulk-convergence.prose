@@ -5,7 +5,7 @@ session "Analyze existing convergence module and design enhancements"
   prompt: """
   I've analyzed the existing PS-TEROS convergence module. Here's what exists:
 
-  ## Current Implementation (teros/core/convergence/)
+  ## Current Implementation (psteros/core/convergence/)
 
   1. **build_convergence_workgraph()** - Wraps vasp.v2.converge plugin
      - Inputs: structure, code_label, builder_inputs, conv_settings, convergence_threshold

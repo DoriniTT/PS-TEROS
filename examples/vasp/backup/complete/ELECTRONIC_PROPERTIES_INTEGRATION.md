@@ -11,7 +11,7 @@ Successfully integrated DOS (Density of States) and band structure calculations 
 ### 1. Import Statement (Line 36)
 Added import for electronic properties builder:
 ```python
-from teros.core.builders import get_electronic_properties_defaults
+from psteros.core.builders import get_electronic_properties_defaults
 ```
 
 ### 2. Documentation Update (Lines 1-29)
@@ -261,8 +261,8 @@ verdi process report <PK>  # Detailed progress
 - `examples/electronic_properties/bulk_dos_bands_ag2o.py` - Standalone electronic properties example
 - `examples/electronic_properties/IMPLEMENTATION_SUMMARY.md` - Technical implementation details
 - `examples/electronic_properties/BUGFIX_SUMMARY.md` - AiiDA-VASP plugin fix documentation
-- `teros/core/builders/electronic_properties_builder.py` - Electronic properties builder
-- `teros/core/workgraph.py` - Core workgraph with electronic properties integration
+- `psteros/core/builders/electronic_properties_builder.py` - Electronic properties builder
+- `psteros/core/workgraph.py` - Core workgraph with electronic properties integration
 
 ## Status
 

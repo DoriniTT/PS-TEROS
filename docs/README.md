@@ -1,6 +1,6 @@
 # How to create a documentation
 
-This directory contains the source files for the documentation of TEROS.
+This directory contains the source files for the documentation of PSTEROS.
 
 ## Building the documentation
 

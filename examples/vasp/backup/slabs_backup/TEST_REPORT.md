@@ -92,7 +92,7 @@ build_core_workgraph_with_map(
 
 ### Syntax Checks
 ```bash
-✅ teros/core/workgraph.py - Valid Python
+✅ psteros/core/workgraph.py - Valid Python
 ✅ examples/slabs/slabs_input_relax.py - Valid Python
 ✅ examples/slabs/compare_modes.py - Valid Python
 ✅ examples/slabs/simple_test.py - Valid Python
@@ -100,9 +100,9 @@ build_core_workgraph_with_map(
 
 ### Import Tests
 ```bash
-✅ from teros.core.workgraph import build_core_workgraph
-✅ from teros.core.workgraph import build_core_workgraph_with_map
-✅ from teros.core.workgraph import core_workgraph
+✅ from psteros.core.workgraph import build_core_workgraph
+✅ from psteros.core.workgraph import build_core_workgraph_with_map
+✅ from psteros.core.workgraph import core_workgraph
 ✅ All imports successful
 ```
 
@@ -126,7 +126,7 @@ python examples/slabs/slabs_input_relax.py
 
 ## Feature Validation Checklist
 
-- [x] Core implementation (`teros/core/workgraph.py`)
+- [x] Core implementation (`psteros/core/workgraph.py`)
 - [x] Parameter added to all functions
 - [x] Conditional logic implemented
 - [x] Default values set correctly
@@ -196,11 +196,11 @@ source ~/envs/psteros/bin/activate
 python examples/slabs/simple_test.py
 
 # Check syntax
-python -m py_compile teros/core/workgraph.py
+python -m py_compile psteros/core/workgraph.py
 python -m py_compile examples/slabs/slabs_input_relax.py
 
 # Test imports
-python -c "from teros.core.workgraph import build_core_workgraph_with_map"
+python -c "from psteros.core.workgraph import build_core_workgraph_with_map"
 ```
 
 ## Final Assessment

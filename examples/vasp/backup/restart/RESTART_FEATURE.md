@@ -16,12 +16,12 @@ The PS-TEROS restart feature allows restarting slab relaxation calculations from
 
 ### Changes Made
 
-**`teros/core/slabs.py`:**
+**`psteros/core/slabs.py`:**
 - Added `remote_folders=dynamic(orm.RemoteData)` to `relax_slabs_scatter()` return type
 - Captured `relaxation.remote_folder` for each VASP slab calculation
 - Returned `remote_folders` dictionary in outputs
 
-**`teros/core/workgraph.py`:**
+**`psteros/core/workgraph.py`:**
 - Added `'slab_remote'` to outputs list in `core_workgraph()`
 - Extracted and exposed remote folders from relaxation outputs
 - Connected outputs in both automatic and manual slab input paths
@@ -38,7 +38,7 @@ The PS-TEROS restart feature allows restarting slab relaxation calculations from
 
 ### Changes Made
 
-**`teros/core/slabs.py`:**
+**`psteros/core/slabs.py`:**
 
 1. **Added `extract_restart_folders_from_node()` helper function:**
    - Loads a previous PS-TEROS workgraph node by PK
@@ -56,7 +56,7 @@ The PS-TEROS restart feature allows restarting slab relaxation calculations from
    - When restart_folders are provided, adds them to VASP calculation inputs as `restart_folder`
    - Ensures correct RemoteData goes to corresponding slab calculation (matched by label)
 
-**`teros/core/workgraph.py`:**
+**`psteros/core/workgraph.py`:**
 
 1. **Added `restart_from_node` parameter to `build_core_workgraph()`:**
    - Accepts PK of previous PS-TEROS workgraph
@@ -95,7 +95,7 @@ When `restart_folder` (RemoteData) is provided to VaspWorkChain:
 
 ### Changes Made
 
-**`teros/core/workgraph.py` - Restart Mode Output Handling:**
+**`psteros/core/workgraph.py` - Restart Mode Output Handling:**
 
 1. **Added output collection in restart mode:**
    - Collects relaxed structures from individual VASP tasks
@@ -154,7 +154,7 @@ When `restart_folder` (RemoteData) is provided to VaspWorkChain:
 
 ```python
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 load_profile('psteros')
 
@@ -188,7 +188,7 @@ wg.submit(wait=False)
 For more control, you can manually extract restart folders:
 
 ```python
-from teros.core.slabs import extract_restart_folders_from_node
+from psteros.core.slabs import extract_restart_folders_from_node
 
 # Extract restart data
 restart_folders = extract_restart_folders_from_node(19774)
@@ -494,12 +494,12 @@ Submit workgraph
 
 ### Files Modified
 
-- `teros/core/slabs.py`:
+- `psteros/core/slabs.py`:
   - `extract_restart_folders_from_node()` - NEW
   - `collect_slab_outputs()` - NEW
   - `relax_slabs_scatter()` - Modified (added restart_folders param)
 
-- `teros/core/workgraph.py`:
+- `psteros/core/workgraph.py`:
   - `core_workgraph()` - Modified (skip cleavage when use_input_slabs)
   - `build_core_workgraph()` - Modified (added restart logic)
 
@@ -666,7 +666,7 @@ verdi daemon restart
 ### Restart a Calculation
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     # ... all your normal parameters ...

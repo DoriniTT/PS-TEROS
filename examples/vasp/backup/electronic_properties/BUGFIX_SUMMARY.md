@@ -102,7 +102,7 @@ Change: Added compute_cleavage=False flag
 
 ### 3. PS-TEROS Builder (No changes needed)
 ```
-File: teros/core/builders/electronic_properties_builder.py
+File: psteros/core/builders/electronic_properties_builder.py
 Backup: electronic_properties_builder.py.backup_20251012_094513
 Note: ISMEAR=0 is fine for DOS with Gaussian smearing; ISMEAR=-5 is alternative
 ```
@@ -154,8 +154,8 @@ cp /home/thiagotd/envs/aiida/lib/python3.13/site-packages/aiida_vasp/workchains/
    /home/thiagotd/envs/aiida/lib/python3.13/site-packages/aiida_vasp/workchains/v2/bands.py
 
 # Restore original builder
-cp /home/thiagotd/git/PS-TEROS/.worktree/feature-dos-bands/teros/core/builders/electronic_properties_builder.py.backup_20251012_094513 \
-   /home/thiagotd/git/PS-TEROS/.worktree/feature-dos-bands/teros/core/builders/electronic_properties_builder.py
+cp /home/thiagotd/git/PS-TEROS/.worktree/feature-dos-bands/psteros/core/builders/electronic_properties_builder.py.backup_20251012_094513 \
+   /home/thiagotd/git/PS-TEROS/.worktree/feature-dos-bands/psteros/core/builders/electronic_properties_builder.py
 
 # Restart daemon
 verdi daemon restart

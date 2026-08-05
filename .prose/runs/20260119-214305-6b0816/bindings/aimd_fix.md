@@ -5,12 +5,12 @@ kind: let
 source:
 ```prose
 aimd_fix = session: fixer
-  prompt: """Update teros/core/aimd/tasks.py..."""
+  prompt: """Update psteros/core/aimd/tasks.py..."""
 ```
 
 ---
 
-Updated `teros/core/aimd/tasks.py` to use modern task decorators:
+Updated `psteros/core/aimd/tasks.py` to use modern task decorators:
 
 1. **Removed** `from aiida.engine import calcfunction` import
 2. **Changed** `@calcfunction` to `@task.calcfunction` decorator

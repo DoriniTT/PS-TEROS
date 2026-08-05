@@ -13,12 +13,12 @@
 ## Task 1: Add max_concurrent_jobs to build_core_workgraph()
 
 **Files:**
-- Modify: `teros/core/workgraph.py:572` (function signature)
-- Modify: `teros/core/workgraph.py:~1410` (before return statement)
+- Modify: `psteros/core/workgraph.py:572` (function signature)
+- Modify: `psteros/core/workgraph.py:~1410` (before return statement)
 
 **Step 1: Add parameter to function signature**
 
-In `teros/core/workgraph.py`, locate the `build_core_workgraph()` function at line 572.
+In `psteros/core/workgraph.py`, locate the `build_core_workgraph()` function at line 572.
 
 Add the new parameter after existing parameters, before `name`:
 
@@ -46,7 +46,7 @@ Add these lines BEFORE the return statement:
 
 **Step 3: Verify syntax**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from teros.core.workgraph import build_core_workgraph; print('✓ Syntax valid')"`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from psteros.core.workgraph import build_core_workgraph; print('✓ Syntax valid')"`
 
 Expected: `✓ Syntax valid`
 
@@ -58,7 +58,7 @@ Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && fi
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: add max_concurrent_jobs parameter to build_core_workgraph()"
 ```
 
@@ -67,12 +67,12 @@ git commit -m "feat: add max_concurrent_jobs parameter to build_core_workgraph()
 ## Task 2: Add max_concurrent_jobs to build_core_workgraph_with_map()
 
 **Files:**
-- Modify: `teros/core/workgraph.py:2080` (function signature)
-- Modify: `teros/core/workgraph.py:~2350` (before return statement)
+- Modify: `psteros/core/workgraph.py:2080` (function signature)
+- Modify: `psteros/core/workgraph.py:~2350` (before return statement)
 
 **Step 1: Add parameter to function signature**
 
-In `teros/core/workgraph.py`, locate the `build_core_workgraph_with_map()` function at line 2080.
+In `psteros/core/workgraph.py`, locate the `build_core_workgraph_with_map()` function at line 2080.
 
 Add the new parameter after existing parameters, before `name`:
 
@@ -100,7 +100,7 @@ Add these lines BEFORE the return statement:
 
 **Step 3: Verify syntax**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from teros.core.workgraph import build_core_workgraph_with_map; print('✓ Syntax valid')"`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from psteros.core.workgraph import build_core_workgraph_with_map; print('✓ Syntax valid')"`
 
 Expected: `✓ Syntax valid`
 
@@ -112,7 +112,7 @@ Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && fi
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: add max_concurrent_jobs parameter to build_core_workgraph_with_map()"
 ```
 
@@ -121,12 +121,12 @@ git commit -m "feat: add max_concurrent_jobs parameter to build_core_workgraph_w
 ## Task 3: Add max_concurrent_jobs to build_surface_hydroxylation_workgraph()
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py:281` (function signature)
-- Modify: `teros/core/surface_hydroxylation/workgraph.py:~550` (before return statement)
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py:281` (function signature)
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py:~550` (before return statement)
 
 **Step 1: Add parameter to function signature**
 
-In `teros/core/surface_hydroxylation/workgraph.py`, locate the `build_surface_hydroxylation_workgraph()` function at line 281.
+In `psteros/core/surface_hydroxylation/workgraph.py`, locate the `build_surface_hydroxylation_workgraph()` function at line 281.
 
 Add the new parameter after existing parameters, before `name`:
 
@@ -154,7 +154,7 @@ Add these lines BEFORE the return statement:
 
 **Step 3: Verify syntax**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from teros.core.surface_hydroxylation.workgraph import build_surface_hydroxylation_workgraph; print('✓ Syntax valid')"`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from psteros.core.surface_hydroxylation.workgraph import build_surface_hydroxylation_workgraph; print('✓ Syntax valid')"`
 
 Expected: `✓ Syntax valid`
 
@@ -166,7 +166,7 @@ Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && fi
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: add max_concurrent_jobs parameter to build_surface_hydroxylation_workgraph()"
 ```
 
@@ -175,11 +175,11 @@ git commit -m "feat: add max_concurrent_jobs parameter to build_surface_hydroxyl
 ## Task 4: Remove serialization from workflow_presets.py
 
 **Files:**
-- Modify: `teros/core/workflow_presets.py`
+- Modify: `psteros/core/workflow_presets.py`
 
 **Step 1: Read current workflow_presets.py**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -n "serialization" teros/core/workflow_presets.py | head -20`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -n "serialization" psteros/core/workflow_presets.py | head -20`
 
 This will show all occurrences of 'serialization' in the file.
 
@@ -223,13 +223,13 @@ PRESETS = {
 
 **Step 4: Verify syntax**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from teros.core.workflow_presets import WORKFLOW_FLAGS, PRESETS; print(f'✓ Syntax valid. {len(PRESETS)} presets loaded.')"`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from psteros.core.workflow_presets import WORKFLOW_FLAGS, PRESETS; print(f'✓ Syntax valid. {len(PRESETS)} presets loaded.')"`
 
 Expected: `✓ Syntax valid. 12 presets loaded.` (or similar number)
 
 **Step 5: Verify 'serialization' is gone**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -i "serialization" teros/core/workflow_presets.py`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -i "serialization" psteros/core/workflow_presets.py`
 
 Expected: No output (grep finds nothing)
 
@@ -241,7 +241,7 @@ Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && fi
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs
-git add teros/core/workflow_presets.py
+git add psteros/core/workflow_presets.py
 git commit -m "refactor: remove serialization flag from workflow presets"
 ```
 
@@ -250,7 +250,7 @@ git commit -m "refactor: remove serialization flag from workflow presets"
 ## Task 5: Delete serialization.py and old documentation files
 
 **Files:**
-- Delete: `teros/core/serialization.py`
+- Delete: `psteros/core/serialization.py`
 - Delete: `docs/SERIALIZATION_FEATURE.md`
 - Delete: `docs/SERIALIZATION_V1_LIMITATIONS.md`
 - Delete: `examples/vasp/step_14_serialized_surface_thermodynamics.py`
@@ -260,7 +260,7 @@ git commit -m "refactor: remove serialization flag from workflow presets"
 
 **Step 1: Verify files exist**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && ls -lh teros/core/serialization.py docs/SERIALIZATION_FEATURE.md docs/SERIALIZATION_V1_LIMITATIONS.md`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && ls -lh psteros/core/serialization.py docs/SERIALIZATION_FEATURE.md docs/SERIALIZATION_V1_LIMITATIONS.md`
 
 Expected: Files are listed with sizes
 
@@ -268,7 +268,7 @@ Expected: Files are listed with sizes
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs
-git rm teros/core/serialization.py
+git rm psteros/core/serialization.py
 git rm docs/SERIALIZATION_FEATURE.md
 git rm docs/SERIALIZATION_V1_LIMITATIONS.md
 git rm examples/vasp/step_14_serialized_surface_thermodynamics.py
@@ -289,7 +289,7 @@ Expected: Shows "deleted: " for all 7 files
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs
 git commit -m "refactor: delete serialization implementation and documentation
 
-- Delete teros/core/serialization.py (400+ lines)
+- Delete psteros/core/serialization.py (400+ lines)
 - Delete beta documentation
 - Delete old example scripts
 - Delete old design documents
@@ -302,11 +302,11 @@ Replaced with simpler max_concurrent_jobs parameter."
 ## Task 6: Remove serialization code from workgraph.py
 
 **Files:**
-- Modify: `teros/core/workgraph.py`
+- Modify: `psteros/core/workgraph.py`
 
 **Step 1: Find serialization imports**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -n "from teros.core.serialization import" teros/core/workgraph.py`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -n "from psteros.core.serialization import" psteros/core/workgraph.py`
 
 Expected: Shows line numbers with serialization imports
 
@@ -314,7 +314,7 @@ Expected: Shows line numbers with serialization imports
 
 Remove all import lines like:
 ```python
-from teros.core.serialization import (
+from psteros.core.serialization import (
     create_serial_reference_calculations,
     serial_slab_relaxations_graph,
     create_serial_scf_calculations,
@@ -323,7 +323,7 @@ from teros.core.serialization import (
 
 **Step 3: Find serialization parameter in function signature**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -n "serialization.*bool.*False" teros/core/workgraph.py`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -n "serialization.*bool.*False" psteros/core/workgraph.py`
 
 Expected: Shows line with `serialization: bool = False` parameter
 
@@ -336,7 +336,7 @@ In `build_core_workgraph()` function signature, remove:
 
 **Step 5: Find the if serialization: branch**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -n "if serialization:" teros/core/workgraph.py`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -n "if serialization:" psteros/core/workgraph.py`
 
 Expected: Shows line number (around 1170)
 
@@ -375,13 +375,13 @@ After:
 
 **Step 8: Verify syntax**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from teros.core.workgraph import build_core_workgraph; print('✓ Syntax valid')"`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from psteros.core.workgraph import build_core_workgraph; print('✓ Syntax valid')"`
 
 Expected: `✓ Syntax valid`
 
 **Step 9: Verify no serialization references remain**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -i "serialization" teros/core/workgraph.py`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -i "serialization" psteros/core/workgraph.py`
 
 Expected: No output (or only comments mentioning removal)
 
@@ -393,7 +393,7 @@ Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && fi
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "refactor: remove serialization implementation from build_core_workgraph()
 
 - Delete serialization imports
@@ -439,7 +439,7 @@ PS-TEROS workflows can run many VASP calculations in parallel. The `max_concurre
 ### Basic Usage
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 # Serial mode (one VASP at a time)
 wg = build_core_workgraph(
@@ -676,7 +676,7 @@ Usage:
 import sys
 import os
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 
 def main():
@@ -884,7 +884,7 @@ Create temporary test file: `/tmp/test_max_concurrent_jobs.py`
 
 import sys
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 load_profile(profile='psteros')
 
@@ -992,19 +992,19 @@ ALL TESTS PASSED
 
 **Step 5: Test build_core_workgraph_with_map()**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from teros.core.workgraph import build_core_workgraph_with_map; print('✓ build_core_workgraph_with_map imports successfully')"`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from psteros.core.workgraph import build_core_workgraph_with_map; print('✓ build_core_workgraph_with_map imports successfully')"`
 
 Expected: `✓ build_core_workgraph_with_map imports successfully`
 
 **Step 6: Test build_surface_hydroxylation_workgraph()**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from teros.core.surface_hydroxylation.workgraph import build_surface_hydroxylation_workgraph; print('✓ build_surface_hydroxylation_workgraph imports successfully')"`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && source ~/envs/aiida/bin/activate && python -c "from psteros.core.surface_hydroxylation.workgraph import build_surface_hydroxylation_workgraph; print('✓ build_surface_hydroxylation_workgraph imports successfully')"`
 
 Expected: `✓ build_surface_hydroxylation_workgraph imports successfully`
 
 **Step 7: Verify no serialization references remain**
 
-Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -r "serialization" teros/core/ --include="*.py" | grep -v "__pycache__" | grep -v ".pyc"`
+Run: `cd /home/thiagotd/git/PS-TEROS/.worktree/feature-max-concurrent-jobs && grep -r "serialization" psteros/core/ --include="*.py" | grep -v "__pycache__" | grep -v ".pyc"`
 
 Expected: No output (all serialization code removed)
 

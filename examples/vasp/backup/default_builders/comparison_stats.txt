@@ -15,9 +15,9 @@ Simplified file (using default_builders):
   Size: $(du -h slabs_input_relax_ag3po4_simplified.py | cut -f1)
 
 Default builders module:
-  File: ../../teros/default_builders.py
-  Lines: $(wc -l < ../../teros/default_builders.py)
-  Size: $(du -h ../../teros/default_builders.py | cut -f1)
+  File: ../../psteros/default_builders.py
+  Lines: $(wc -l < ../../psteros/default_builders.py)
+  Size: $(du -h ../../psteros/default_builders.py | cut -f1)
 
 ====================================================================
 CODE REDUCTION:
@@ -25,5 +25,5 @@ CODE REDUCTION:
 
   377 slabs_input_relax_ag3po4.py
   193 slabs_input_relax_ag3po4_simplified.py
-  325 ../../teros/default_builders.py
+  325 ../../psteros/default_builders.py
   895 total

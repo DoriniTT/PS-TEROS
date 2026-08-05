@@ -15,10 +15,10 @@ output implementation_plan = session "Create final implementation summary"
 
 ## Executive Summary
 
-The thickness convergence module in PS-TEROS (`teros/core/convergence/`) is a complete, production-ready feature for determining minimum slab thickness needed for converged surface energy calculations. The core workflow, slab generation, and result extraction are fully implemented and operational.
+The thickness convergence module in PS-TEROS (`psteros/core/convergence/`) is a complete, production-ready feature for determining minimum slab thickness needed for converged surface energy calculations. The core workflow, slab generation, and result extraction are fully implemented and operational.
 
 **What was analyzed:**
-- Complete codebase review of `/home/thiagotd/git/PS-TEROS/teros/core/convergence/`
+- Complete codebase review of `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/`
 - Comparison with ENCUT/k-points convergence visualization patterns
 - Identification of missing visualization functions
 - Design of three new functions to complete the module
@@ -39,12 +39,12 @@ The module is **90% complete** but lacks user-facing visualization and export fu
 
 ## Files to Modify
 
-### 1. `/home/thiagotd/git/PS-TEROS/teros/core/convergence/visualization.py`
+### 1. `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/visualization.py`
 **Action:** Add four new functions after line 694 (end of file)
 **Lines to add:** ~350 lines
 **Status:** NOT YET IMPLEMENTED
 
-### 2. `/home/thiagotd/git/PS-TEROS/teros/core/convergence/__init__.py`
+### 2. `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/__init__.py`
 **Action:** Replace entire file with updated version
 **Current lines:** 71
 **New lines:** 107
@@ -58,7 +58,7 @@ The module is **90% complete** but lacks user-facing visualization and export fu
 
 ## Complete Code for visualization.py
 
-**INSERT THE FOLLOWING CODE at the end of `/home/thiagotd/git/PS-TEROS/teros/core/convergence/visualization.py` (after line 694):**
+**INSERT THE FOLLOWING CODE at the end of `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/visualization.py` (after line 694):**
 
 ```python
 # ============================================================================
@@ -109,7 +109,7 @@ def print_thickness_convergence_summary(workgraph: Union[int, str, WorkGraph]) -
         workgraph: WorkGraph PK (int), PK as string, or WorkGraph object
 
     Example:
-        >>> from teros.core.convergence import print_thickness_convergence_summary
+        >>> from psteros.core.convergence import print_thickness_convergence_summary
         >>> print_thickness_convergence_summary(12345)  # Using PK
         >>> print_thickness_convergence_summary(wg)      # Using WorkGraph object
     """
@@ -201,7 +201,7 @@ def plot_thickness_convergence(
         matplotlib.figure.Figure: The figure object for further customization
 
     Example:
-        >>> from teros.core.convergence import plot_thickness_convergence
+        >>> from psteros.core.convergence import plot_thickness_convergence
         >>> fig = plot_thickness_convergence(12345)
         >>> fig = plot_thickness_convergence(wg, save_path='thickness_conv.png')
     """
@@ -303,7 +303,7 @@ def export_thickness_convergence_data(
         dict: Mapping of file types to file paths created
 
     Example:
-        >>> from teros.core.convergence import export_thickness_convergence_data
+        >>> from psteros.core.convergence import export_thickness_convergence_data
         >>> files = export_thickness_convergence_data(12345, '/path/to/output')
         >>> print(files)
         {'csv': '/path/to/output/thickness_conv.csv', 'summary_json': '...'}
@@ -390,7 +390,7 @@ def export_thickness_convergence_data(
 
 ## Complete Updated __init__.py
 
-**REPLACE THE ENTIRE CONTENT of `/home/thiagotd/git/PS-TEROS/teros/core/convergence/__init__.py` with:**
+**REPLACE THE ENTIRE CONTENT of `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/__init__.py` with:**
 
 ```python
 """Convergence testing module for PS-TEROS.
@@ -402,16 +402,16 @@ This module provides:
 
 Usage:
     # ENCUT/k-points convergence
-    from teros.core.convergence import build_convergence_workgraph
+    from psteros.core.convergence import build_convergence_workgraph
     wg = build_convergence_workgraph(structure=..., code_label=..., ...)
 
     # After completion, visualize results
-    from teros.core.convergence import print_convergence_summary, plot_convergence
+    from psteros.core.convergence import print_convergence_summary, plot_convergence
     print_convergence_summary(wg)  # Formatted console output
     plot_convergence(wg, save_path='convergence.png')  # Plot curves
 
     # Thickness convergence
-    from teros.core.convergence import build_thickness_convergence_workgraph
+    from psteros.core.convergence import build_thickness_convergence_workgraph
     wg = build_thickness_convergence_workgraph(
         bulk_structure_path='/path/to/bulk.cif',
         miller_indices=[1, 1, 1],
@@ -420,7 +420,7 @@ Usage:
     )
 
     # After thickness convergence completion, visualize results
-    from teros.core.convergence import (
+    from psteros.core.convergence import (
         print_thickness_convergence_summary,
         plot_thickness_convergence,
         export_thickness_convergence_data,
@@ -499,7 +499,7 @@ verdi daemon restart
 
 ### 2. Verify imports work
 ```bash
-python -c "from teros.core.convergence import (
+python -c "from psteros.core.convergence import (
     print_thickness_convergence_summary,
     plot_thickness_convergence,
     export_thickness_convergence_data
@@ -510,8 +510,8 @@ python -c "from teros.core.convergence import (
 ### 3. Run linting
 ```bash
 cd /home/thiagotd/git/PS-TEROS
-flake8 teros/core/convergence/visualization.py --max-line-length=120 --ignore=E501,W503,E402,F401
-flake8 teros/core/convergence/__init__.py --max-line-length=120 --ignore=E501,W503,E402,F401
+flake8 psteros/core/convergence/visualization.py --max-line-length=120 --ignore=E501,W503,E402,F401
+flake8 psteros/core/convergence/__init__.py --max-line-length=120 --ignore=E501,W503,E402,F401
 ```
 **Expected:** No errors (or only minor warnings)
 
@@ -519,7 +519,7 @@ flake8 teros/core/convergence/__init__.py --max-line-length=120 --ignore=E501,W5
 ```bash
 # If you have a completed thickness convergence WorkGraph
 python -c "
-from teros.core.convergence import print_thickness_convergence_summary
+from psteros.core.convergence import print_thickness_convergence_summary
 print_thickness_convergence_summary(<PK>)
 "
 ```
@@ -527,14 +527,14 @@ print_thickness_convergence_summary(<PK>)
 
 ### 5. Test plotting (if WorkGraph available)
 ```python
-from teros.core.convergence import plot_thickness_convergence
+from psteros.core.convergence import plot_thickness_convergence
 fig = plot_thickness_convergence(<PK>, save_path='/tmp/thickness_test.png')
 ```
 **Expected:** PNG file created with convergence plot
 
 ### 6. Test export (if WorkGraph available)
 ```python
-from teros.core.convergence import export_thickness_convergence_data
+from psteros.core.convergence import export_thickness_convergence_data
 files = export_thickness_convergence_data(<PK>, '/tmp/')
 print(files)
 ```
@@ -548,7 +548,7 @@ cd /home/thiagotd/git/PS-TEROS/examples/convergence/thickness_convergence
 python -c "from ase.build import bulk; from ase.io import write; write('Au.cif', bulk('Au', 'fcc', a=4.08))"
 
 # Test imports
-python -c "from teros.core.convergence import build_thickness_convergence_workgraph"
+python -c "from psteros.core.convergence import build_thickness_convergence_workgraph"
 
 # Optional: Submit workflow (only on home computer, use obelix)
 python run_thickness_convergence.py
@@ -599,8 +599,8 @@ The example script at `/home/thiagotd/git/PS-TEROS/examples/convergence/thicknes
 - ✅ Example script: Complete and ready to use
 
 **Files to modify:**
-1. `/home/thiagotd/git/PS-TEROS/teros/core/convergence/visualization.py` - Add ~350 lines
-2. `/home/thiagotd/git/PS-TEROS/teros/core/convergence/__init__.py` - Replace with 107-line version
+1. `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/visualization.py` - Add ~350 lines
+2. `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/__init__.py` - Replace with 107-line version
 
 **Next Actions:**
 1. Apply visualization.py changes (insert code at end of file)

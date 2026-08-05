@@ -210,7 +210,7 @@ class TestFormationEnthalpyLogic:
 
     def test_unit_conversion_ev_to_kjmol(self):
         """Test conversion from eV to kJ/mol."""
-        from teros.core.constants import EV_TO_KJ_PER_MOL
+        from psteros.core.constants import EV_TO_KJ_PER_MOL
 
         formation_ev = -5.5  # eV per formula unit
         formation_kjmol = formation_ev * EV_TO_KJ_PER_MOL
@@ -273,7 +273,7 @@ class TestCalculateFormationEnthalpy:
 
     def test_calcfunction_exists(self):
         """Test that calculate_formation_enthalpy TaskHandle is properly defined."""
-        from teros.core.hf import calculate_formation_enthalpy
+        from psteros.core.hf import calculate_formation_enthalpy
 
         assert calculate_formation_enthalpy is not None
 
@@ -283,7 +283,7 @@ class TestCalculateFormationEnthalpy:
         from collections import Counter
         from math import gcd
         from functools import reduce
-        from teros.core.constants import EV_TO_KJ_PER_MOL
+        from psteros.core.constants import EV_TO_KJ_PER_MOL
 
         # Create structures
         bulk = create_ag2o_structure()
@@ -352,7 +352,7 @@ class TestCalculateFormationEnthalpy:
         from collections import Counter
         from math import gcd
         from functools import reduce
-        from teros.core.constants import EV_TO_KJ_PER_MOL
+        from psteros.core.constants import EV_TO_KJ_PER_MOL
 
         # Create structures
         bulk = create_ag3po4_structure()

@@ -30,7 +30,7 @@ parallel:
   arch = session: architect
     prompt: """Review PS-TEROS architecture and design:
 
-    Codebase location: /home/thiagotd/git/PS-TEROS/teros/
+    Codebase location: /home/thiagotd/git/PS-TEROS/psteros/
 
     Analyze:
     1. Module organization (core/, experimental/, external/)
@@ -45,7 +45,7 @@ parallel:
   qual = session: quality
     prompt: """Review PS-TEROS code quality and best practices:
 
-    Codebase location: /home/thiagotd/git/PS-TEROS/teros/
+    Codebase location: /home/thiagotd/git/PS-TEROS/psteros/
 
     Analyze:
     1. Python best practices (type hints, error handling, logging)
@@ -63,7 +63,7 @@ parallel:
     Files to analyze:
     - /home/thiagotd/git/PS-TEROS/CLAUDE.md
     - /home/thiagotd/git/PS-TEROS/README.md (if exists)
-    - Docstrings across all modules in teros/
+    - Docstrings across all modules in psteros/
     - Example scripts in examples/
 
     Analyze:
@@ -79,7 +79,7 @@ parallel:
   aiida = session: integration
     prompt: """Review PS-TEROS AiiDA/WorkGraph integration:
 
-    Codebase location: /home/thiagotd/git/PS-TEROS/teros/
+    Codebase location: /home/thiagotd/git/PS-TEROS/psteros/
 
     Analyze:
     1. @task.calcfunction and @task.graph decorator usage

@@ -6,7 +6,7 @@ Successfully implemented a new cleavage energy calculation module for PS-TEROS t
 
 ## Implementation Details
 
-### 1. New Module: `teros/core/cleavage.py`
+### 1. New Module: `psteros/core/cleavage.py`
 
 Created a complete cleavage energy calculation module with:
 
@@ -30,7 +30,7 @@ Created a complete cleavage energy calculation module with:
 - Surface area calculation for general (non-orthogonal) cells
 - Comprehensive output data including compositions and energies
 
-### 2. WorkGraph Integration: `teros/core/workgraph.py`
+### 2. WorkGraph Integration: `psteros/core/workgraph.py`
 
 Updated the core workgraph to include cleavage energy calculations:
 
@@ -60,7 +60,7 @@ Updated the example to demonstrate cleavage energy calculations:
 - Added example code for accessing cleavage energy results
 - Updated expected outputs section
 
-### 4. Module Exports: `teros/core/__init__.py`
+### 4. Module Exports: `psteros/core/__init__.py`
 
 Added cleavage module exports:
 - `calculate_cleavage_energy`
@@ -131,8 +131,8 @@ Each pair returns a Dict with:
 ## Testing
 
 All modules successfully import and pass syntax validation:
-- ✓ `teros.core.cleavage` module imports correctly
-- ✓ `teros.core.workgraph` module imports correctly
+- ✓ `psteros.core.cleavage` module imports correctly
+- ✓ `psteros.core.workgraph` module imports correctly
 - ✓ Example script syntax is valid
 - ✓ Complementary pairing logic tested for n=2 to 8 terminations
 - ✓ AiiDA daemon restarted successfully

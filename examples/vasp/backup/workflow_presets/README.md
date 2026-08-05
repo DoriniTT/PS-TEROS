@@ -6,7 +6,7 @@ This directory contains example scripts demonstrating the workflow preset system
 
 1. **List available presets:**
    ```bash
-   python -c "from teros.core import list_workflow_presets; list_workflow_presets()"
+   python -c "from psteros.core import list_workflow_presets; list_workflow_presets()"
    ```
 
 2. **Run a simple example:**
@@ -80,7 +80,7 @@ Demonstrates how to override preset defaults for custom workflows.
 
 3. **Check available presets:**
    ```python
-   from teros.core import list_workflow_presets
+   from psteros.core import list_workflow_presets
    list_workflow_presets()
    ```
 
@@ -116,15 +116,15 @@ Demonstrates how to override preset defaults for custom workflows.
 
 ```python
 # List all presets with descriptions
-from teros.core import list_workflow_presets
+from psteros.core import list_workflow_presets
 list_workflow_presets()
 
 # Get detailed info about a specific preset
-from teros.core import get_preset_summary
+from psteros.core import get_preset_summary
 print(get_preset_summary('surface_thermodynamics'))
 
 # Get preset configuration
-from teros.core import get_preset_config
+from psteros.core import get_preset_config
 config = get_preset_config('bulk_only')
 print(config)
 ```

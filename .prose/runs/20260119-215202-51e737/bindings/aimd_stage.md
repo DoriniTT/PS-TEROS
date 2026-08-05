@@ -6,7 +6,7 @@ Successfully extracted AIMD calculation logic from `build_core_workgraph()` (lin
 
 ## Created File
 
-**File:** `/home/thiagotd/git/PS-TEROS/teros/core/stages/aimd_stage.py`
+**File:** `/home/thiagotd/git/PS-TEROS/psteros/core/stages/aimd_stage.py`
 
 ## Functions Implemented
 
@@ -82,10 +82,10 @@ All existing logic from the original implementation was preserved:
 ## Dependencies
 
 ```python
-from teros.core.aimd_functions import aimd_single_stage_scatter  # VASP
-from teros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k  # CP2K
-from teros.core.aimd.tasks import create_supercells_scatter
-from teros.core.fixed_atoms import get_fixed_atoms_list
+from psteros.core.aimd_functions import aimd_single_stage_scatter  # VASP
+from psteros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k  # CP2K
+from psteros.core.aimd.tasks import create_supercells_scatter
+from psteros.core.fixed_atoms import get_fixed_atoms_list
 from aiida.orm import load_code
 ```
 
@@ -103,7 +103,7 @@ __all__ = [
 ## Usage Example
 
 ```python
-from teros.core.stages.aimd_stage import add_aimd_stage, resolve_aimd_parameters
+from psteros.core.stages.aimd_stage import add_aimd_stage, resolve_aimd_parameters
 
 # Resolve parameters
 params, opts, pot_map, kpts = resolve_aimd_parameters(...)

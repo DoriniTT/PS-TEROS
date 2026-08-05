@@ -49,7 +49,7 @@ def get_workgraph_pk():
 
 def extract_results(pk):
     """Extract results from completed Fukui WorkGraph."""
-    from teros.core.fukui import get_fukui_results, print_fukui_summary
+    from psteros.core.fukui import get_fukui_results, print_fukui_summary
 
     print(f"\n{'='*60}")
     print(f"ANALYZING FUKUI WORKGRAPH PK={pk}")

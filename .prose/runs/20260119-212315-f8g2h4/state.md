@@ -21,13 +21,13 @@ output summary = session "Update exports..."     # --> __init__.py updated
 ## Results Summary
 
 ### Files Created
-- `/home/thiagotd/git/PS-TEROS/teros/core/exceptions.py` (302 lines)
+- `/home/thiagotd/git/PS-TEROS/psteros/core/exceptions.py` (302 lines)
 - `/home/thiagotd/git/PS-TEROS/tests/test_fixed_atoms.py` (42 tests)
 - `/home/thiagotd/git/PS-TEROS/tests/test_constants.py` (44 tests)
 - `/home/thiagotd/git/PS-TEROS/tests/test_hf.py` (11 tests)
 
 ### Files Modified
-- `/home/thiagotd/git/PS-TEROS/teros/core/__init__.py` (added exception exports)
+- `/home/thiagotd/git/PS-TEROS/psteros/core/__init__.py` (added exception exports)
 
 ### Test Results
 - test_constants.py: 44/44 passed

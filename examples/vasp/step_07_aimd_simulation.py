@@ -60,8 +60,8 @@ except ImportError:
 # ==============================================================================
 
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_aimd_defaults
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders import get_aimd_defaults
 
 
 def main():

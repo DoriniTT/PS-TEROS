@@ -75,7 +75,7 @@ jobs:
 
     - name: Check Python syntax (all files)
       run: |
-        python -m py_compile teros/core/*.py
+        python -m py_compile psteros/core/*.py
         echo "✓ All Python files have valid syntax"
 
     - name: Configure AiiDA
@@ -123,10 +123,10 @@ jobs:
       run: |
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           echo "Running fast tests (tier1) for PR"
-          pytest tests/ -v --tb=short --cov=teros --cov-report=xml -m "tier1"
+          pytest tests/ -v --tb=short --cov=psteros --cov-report=xml -m "tier1"
         else
           echo "Running all tests for push"
-          pytest tests/ -v --tb=short --cov=teros --cov-report=xml
+          pytest tests/ -v --tb=short --cov=psteros --cov-report=xml
         fi
 
     - name: Upload coverage to Codecov
@@ -138,7 +138,7 @@ jobs:
     - name: Run linting (non-blocking)
       continue-on-error: true
       run: |
-        flake8 teros/ --max-line-length=120 --ignore=E501,W503,E402,F401 --statistics
+        flake8 psteros/ --max-line-length=120 --ignore=E501,W503,E402,F401 --statistics
 
     - name: Stop AiiDA daemon
       if: always()

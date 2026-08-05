@@ -182,7 +182,7 @@ The max_concurrent_jobs implementation is **fully functional** and ready for pro
 ### For Real VASP Calculations
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     workflow_preset='surface_thermodynamics',

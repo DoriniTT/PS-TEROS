@@ -77,13 +77,13 @@ class TestDeepMergeDicts:
         """Get the deep_merge_dicts function from various possible locations."""
         # Try importing from different modules
         try:
-            from teros.core.slabs import deep_merge_dicts
+            from psteros.core.slabs import deep_merge_dicts
             return deep_merge_dicts
         except ImportError:
             pass
 
         try:
-            from teros.core.adsorption_energy import deep_merge_dicts
+            from psteros.core.adsorption_energy import deep_merge_dicts
             return deep_merge_dicts
         except ImportError:
             pass

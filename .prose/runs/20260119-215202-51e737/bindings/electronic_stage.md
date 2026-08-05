@@ -4,7 +4,7 @@
 
 ## Created File
 
-`/home/thiagotd/git/PS-TEROS/teros/core/stages/electronic_properties.py`
+`/home/thiagotd/git/PS-TEROS/psteros/core/stages/electronic_properties.py`
 
 ## Extracted Functions
 

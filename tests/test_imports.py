@@ -15,12 +15,12 @@ class TestCoreModuleImports:
 
     def test_import_workflow_presets(self):
         """Test importing workflow_presets module."""
-        from teros.core import workflow_presets
+        from psteros.core import workflow_presets
         assert workflow_presets is not None
 
     def test_import_workflow_presets_functions(self):
         """Test importing specific functions from workflow_presets."""
-        from teros.core.workflow_presets import (
+        from psteros.core.workflow_presets import (
             WORKFLOW_PRESETS,
             DEFAULT_PRESET,
             list_workflow_presets,
@@ -37,32 +37,32 @@ class TestCoreModuleImports:
 
     def test_import_helper_functions(self):
         """Test importing helper_functions module."""
-        from teros.core import helper_functions
+        from psteros.core import helper_functions
         assert helper_functions is not None
 
     def test_import_slabs(self):
         """Test importing slabs module."""
-        from teros.core import slabs
+        from psteros.core import slabs
         assert slabs is not None
 
     def test_import_thermodynamics(self):
         """Test importing thermodynamics module."""
-        from teros.core import thermodynamics
+        from psteros.core import thermodynamics
         assert thermodynamics is not None
 
     def test_import_hf(self):
         """Test importing hf module."""
-        from teros.core import hf
+        from psteros.core import hf
         assert hf is not None
 
     def test_import_adsorption_energy(self):
         """Test importing adsorption_energy module."""
-        from teros.core import adsorption_energy
+        from psteros.core import adsorption_energy
         assert adsorption_energy is not None
 
     def test_import_workgraph(self):
         """Test importing workgraph module."""
-        from teros.core import workgraph
+        from psteros.core import workgraph
         assert workgraph is not None
 
 
@@ -99,12 +99,12 @@ class TestPythonSyntax:
     """Test Python files for syntax errors."""
 
     def get_python_files(self):
-        """Get list of Python files in teros/core."""
+        """Get list of Python files in psteros/core."""
         from pathlib import Path
 
-        core_dir = Path(__file__).parent.parent / 'teros' / 'core'
+        core_dir = Path(__file__).parent.parent / 'psteros' / 'core'
         if not core_dir.exists():
-            pytest.skip("teros/core directory not found")
+            pytest.skip("psteros/core directory not found")
 
         python_files = list(core_dir.glob('*.py'))
         return python_files
@@ -127,6 +127,6 @@ class TestModuleDocstrings:
 
     def test_workflow_presets_has_docstring(self):
         """Test workflow_presets module has docstring."""
-        from teros.core import workflow_presets
+        from psteros.core import workflow_presets
         assert workflow_presets.__doc__ is not None
         assert len(workflow_presets.__doc__) > 10

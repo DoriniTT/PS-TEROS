@@ -15,7 +15,7 @@ What this calculates:
 - Relaxation energies
 """
 
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 from aiida.engine import submit
 
 # ============================================================================

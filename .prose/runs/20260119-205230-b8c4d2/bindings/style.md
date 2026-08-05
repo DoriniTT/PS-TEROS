@@ -105,7 +105,7 @@ PS-TEROS demonstrates **strong overall code quality** with well-organized archit
 
 1. **Excellent Module Structure**: Clear separation of concerns
    ```
-   teros/core/
+   psteros/core/
    ├── workgraph.py          # Main orchestration (1992 lines - appropriate for entry point)
    ├── thermodynamics.py     # Domain-specific calculations
    ├── slabs.py              # Slab operations
@@ -181,7 +181,7 @@ PS-TEROS demonstrates **strong overall code quality** with well-organized archit
 
 4. **Experimental Code Location**
    ```
-   teros/experimental/
+   psteros/experimental/
    ├── surface_thermo_preset_serial/
    ├── max_jobs_investigation/
    └── zone_approach/
@@ -273,7 +273,7 @@ PS-TEROS demonstrates **strong overall code quality** with well-organized archit
    **Recommendation:** Add "See Also" sections pointing to tests and examples
 
 5. **TODO Comments**
-   - Only 1 TODO found: `teros/core/aimd/utils.py:128: # TODO: Implementation in next task`
+   - Only 1 TODO found: `psteros/core/aimd/utils.py:128: # TODO: Implementation in next task`
    - Generally good, but should track in issue system instead
 
 ---
@@ -609,5 +609,5 @@ The codebase is **production-ready** with minor improvements needed. The documen
 ---
 
 **Review Completed:** 2026-01-19
-**Files Analyzed:** 100+ Python files in teros/core
+**Files Analyzed:** 100+ Python files in psteros/core
 **Lines Reviewed:** ~15,000+ lines of code

@@ -40,7 +40,7 @@ The NEB method finds the minimum energy path between two stable configurations (
 
 ```python
 from aiida import load_profile, orm
-from teros.core.neb import build_neb_workgraph, print_neb_summary
+from psteros.core.neb import build_neb_workgraph, print_neb_summary
 
 load_profile()
 
@@ -143,7 +143,7 @@ The climbing image is allowed to move uphill along the reaction coordinate, prov
 ## Accessing Results
 
 ```python
-from teros.core.neb import get_neb_results, print_neb_summary
+from psteros.core.neb import get_neb_results, print_neb_summary
 
 # Get all results as a dictionary
 results = get_neb_results(wg.pk)

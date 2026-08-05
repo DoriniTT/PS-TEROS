@@ -15,10 +15,10 @@ agent fixer:
 
 parallel:                                        # (complete)
   aimd_fix = session: fixer                      # --> bindings/aimd_fix.md
-    prompt: """Update teros/core/aimd/tasks.py..."""
+    prompt: """Update psteros/core/aimd/tasks.py..."""
 
   surface_energy_fix = session: fixer            # --> bindings/surface_energy_fix.md
-    prompt: """Update teros/core/surface_hydroxylation/surface_energy.py..."""
+    prompt: """Update psteros/core/surface_hydroxylation/surface_energy.py..."""
 
 output summary = session "Verify..."             # --> bindings/summary.md (complete)
   context: { aimd_fix, surface_energy_fix }

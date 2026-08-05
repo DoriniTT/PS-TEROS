@@ -13,7 +13,7 @@
 ## Task 1: Create Data Extraction Script Foundation
 
 **Files:**
-- Create: `teros/core/surface_hydroxylation/scripts/extract_janaf_data.py`
+- Create: `psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py`
 - Test: Manual verification (no pytest for data script)
 
 **Step 1: Create script directory and basic structure**
@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS
-python teros/core/surface_hydroxylation/scripts/extract_janaf_data.py
+python psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py
 ```
 
 Expected output: Header prints
@@ -63,7 +63,7 @@ Expected output: Header prints
 **Step 3: Commit foundation**
 
 ```bash
-git add teros/core/surface_hydroxylation/scripts/extract_janaf_data.py
+git add psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py
 git commit -m "feat: add JANAF data extraction script foundation"
 ```
 
@@ -72,7 +72,7 @@ git commit -m "feat: add JANAF data extraction script foundation"
 ## Task 2: Add Data Processing Functions to Extraction Script
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/scripts/extract_janaf_data.py`
+- Modify: `psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py`
 
 **Step 1: Add function to calculate Δμ⁰**
 
@@ -147,7 +147,7 @@ def main():
 **Step 3: Run and verify calculation**
 
 ```bash
-python teros/core/surface_hydroxylation/scripts/extract_janaf_data.py
+python psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py
 ```
 
 Expected: Δμ⁰ ≈ -0.564 eV (close to Section 4 example value)
@@ -155,7 +155,7 @@ Expected: Δμ⁰ ≈ -0.564 eV (close to Section 4 example value)
 **Step 4: Commit data processing**
 
 ```bash
-git add teros/core/surface_hydroxylation/scripts/extract_janaf_data.py
+git add psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py
 git commit -m "feat: add JANAF data processing functions
 
 Implements Δμ⁰ calculation from H(T) and S(T) with unit conversions"
@@ -166,7 +166,7 @@ Implements Δμ⁰ calculation from H(T) and S(T) with unit conversions"
 ## Task 3: Add Raw JANAF Data to Extraction Script
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/scripts/extract_janaf_data.py`
+- Modify: `psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py`
 
 **Step 1: Add raw H2O data**
 
@@ -305,7 +305,7 @@ def main():
 **Step 3: Run and verify all molecules**
 
 ```bash
-python teros/core/surface_hydroxylation/scripts/extract_janaf_data.py
+python psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py
 ```
 
 Expected: Shows Δμ⁰ values for H2O, H2, O2 at 298 K
@@ -313,7 +313,7 @@ Expected: Shows Δμ⁰ values for H2O, H2, O2 at 298 K
 **Step 4: Commit raw data**
 
 ```bash
-git add teros/core/surface_hydroxylation/scripts/extract_janaf_data.py
+git add psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py
 git commit -m "feat: add raw JANAF data for H2O, H2, O2
 
 Data covers 0-2000 K range in 50 K steps from NIST-JANAF tables"
@@ -324,8 +324,8 @@ Data covers 0-2000 K range in 50 K steps from NIST-JANAF tables"
 ## Task 4: Generate JSON Output from Extraction Script
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/scripts/extract_janaf_data.py`
-- Create: `teros/core/surface_hydroxylation/thermodynamics_data.json` (generated)
+- Modify: `psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py`
+- Create: `psteros/core/surface_hydroxylation/thermodynamics_data.json` (generated)
 
 **Step 1: Add JSON generation function**
 
@@ -396,17 +396,17 @@ Add to end of `main()`:
 **Step 3: Run script and generate JSON**
 
 ```bash
-python teros/core/surface_hydroxylation/scripts/extract_janaf_data.py
+python psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py
 ```
 
-Expected: Creates `thermodynamics_data.json` in `teros/core/surface_hydroxylation/`
+Expected: Creates `thermodynamics_data.json` in `psteros/core/surface_hydroxylation/`
 
 **Step 4: Verify JSON structure**
 
 ```bash
 python -c "
 import json
-with open('teros/core/surface_hydroxylation/thermodynamics_data.json') as f:
+with open('psteros/core/surface_hydroxylation/thermodynamics_data.json') as f:
     data = json.load(f)
     print('Molecules:', list(data['molecules'].keys()))
     print('H2O at 298 K:', data['molecules']['H2O']['data']['298'])
@@ -418,8 +418,8 @@ Expected: Shows H2O, H2, O2 and 298 K data
 **Step 5: Commit extraction script and generated data**
 
 ```bash
-git add teros/core/surface_hydroxylation/scripts/extract_janaf_data.py
-git add teros/core/surface_hydroxylation/thermodynamics_data.json
+git add psteros/core/surface_hydroxylation/scripts/extract_janaf_data.py
+git add psteros/core/surface_hydroxylation/thermodynamics_data.json
 git commit -m "feat: generate thermodynamics_data.json from JANAF data
 
 Complete database with H2O, H2, O2 at 0-2000 K"
@@ -430,7 +430,7 @@ Complete database with H2O, H2, O2 at 0-2000 K"
 ## Task 5: Create JanafDatabase Class Foundation
 
 **Files:**
-- Create: `teros/core/surface_hydroxylation/thermodynamics.py`
+- Create: `psteros/core/surface_hydroxylation/thermodynamics.py`
 - Create: `tests/test_thermodynamics.py`
 
 **Step 1: Write failing test for class initialization**
@@ -442,7 +442,7 @@ Create test file:
 
 import pytest
 from pathlib import Path
-from teros.core.surface_hydroxylation.thermodynamics import JanafDatabase
+from psteros.core.surface_hydroxylation.thermodynamics import JanafDatabase
 
 
 def test_database_loads():
@@ -521,7 +521,7 @@ class JanafDatabase:
         if not json_path.exists():
             raise FileNotFoundError(
                 f"Thermodynamics data file not found: {json_path}\n"
-                f"Expected location: teros/core/surface_hydroxylation/thermodynamics_data.json"
+                f"Expected location: psteros/core/surface_hydroxylation/thermodynamics_data.json"
             )
 
         with open(json_path) as f:
@@ -551,7 +551,7 @@ Expected: Both tests PASS
 **Step 5: Commit foundation**
 
 ```bash
-git add teros/core/surface_hydroxylation/thermodynamics.py
+git add psteros/core/surface_hydroxylation/thermodynamics.py
 git add tests/test_thermodynamics.py
 git commit -m "feat: add JanafDatabase class foundation
 
@@ -563,7 +563,7 @@ Implements JSON loading and basic properties"
 ## Task 6: Implement get_mu_correction Method
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/thermodynamics.py`
+- Modify: `psteros/core/surface_hydroxylation/thermodynamics.py`
 - Modify: `tests/test_thermodynamics.py`
 
 **Step 1: Write failing test**
@@ -683,7 +683,7 @@ Expected: Both tests PASS
 **Step 5: Commit implementation**
 
 ```bash
-git add teros/core/surface_hydroxylation/thermodynamics.py
+git add psteros/core/surface_hydroxylation/thermodynamics.py
 git add tests/test_thermodynamics.py
 git commit -m "feat: implement get_mu_correction method
 
@@ -695,7 +695,7 @@ Returns chemical potential corrections with temperature and pressure support"
 ## Task 7: Implement Error Handling and Validation
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/thermodynamics.py`
+- Modify: `psteros/core/surface_hydroxylation/thermodynamics.py`
 - Modify: `tests/test_thermodynamics.py`
 
 **Step 1: Write failing tests for error cases**
@@ -756,7 +756,7 @@ Validates species and temperature validation"
 ## Task 8: Implement get_raw_data and list_temperatures Methods
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/thermodynamics.py`
+- Modify: `psteros/core/surface_hydroxylation/thermodynamics.py`
 - Modify: `tests/test_thermodynamics.py`
 
 **Step 1: Write failing tests**
@@ -871,7 +871,7 @@ Expected: Both tests PASS
 **Step 5: Commit implementation**
 
 ```bash
-git add teros/core/surface_hydroxylation/thermodynamics.py
+git add psteros/core/surface_hydroxylation/thermodynamics.py
 git add tests/test_thermodynamics.py
 git commit -m "feat: implement get_raw_data and list_temperatures methods
 
@@ -1037,7 +1037,7 @@ Validates calculation correctness and thermodynamic consistency"
 ## Task 11: Update Module __init__ for Easy Import
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/__init__.py`
+- Modify: `psteros/core/surface_hydroxylation/__init__.py`
 
 **Step 1: Write test for import convenience**
 
@@ -1049,7 +1049,7 @@ Add new test file `tests/test_thermodynamics_import.py`:
 
 def test_import_from_surface_hydroxylation():
     """Test import from main module."""
-    from teros.core.surface_hydroxylation import JanafDatabase
+    from psteros.core.surface_hydroxylation import JanafDatabase
 
     db = JanafDatabase()
     assert db is not None
@@ -1057,7 +1057,7 @@ def test_import_from_surface_hydroxylation():
 
 def test_direct_import():
     """Test direct import from thermodynamics."""
-    from teros.core.surface_hydroxylation.thermodynamics import (
+    from psteros.core.surface_hydroxylation.thermodynamics import (
         JanafDatabase,
         KJ_TO_EV,
         KB_EV,
@@ -1078,7 +1078,7 @@ Expected: ImportError (JanafDatabase not exported from __init__)
 
 **Step 3: Update __init__.py**
 
-Add to `teros/core/surface_hydroxylation/__init__.py`:
+Add to `psteros/core/surface_hydroxylation/__init__.py`:
 
 ```python
 from .thermodynamics import JanafDatabase
@@ -1100,11 +1100,11 @@ Expected: Both tests PASS
 **Step 5: Commit export**
 
 ```bash
-git add teros/core/surface_hydroxylation/__init__.py
+git add psteros/core/surface_hydroxylation/__init__.py
 git add tests/test_thermodynamics_import.py
 git commit -m "feat: export JanafDatabase from surface_hydroxylation module
 
-Enables: from teros.core.surface_hydroxylation import JanafDatabase"
+Enables: from psteros.core.surface_hydroxylation import JanafDatabase"
 ```
 
 ---
@@ -1125,7 +1125,7 @@ Expected: All tests PASS
 **Step 2: Check test coverage**
 
 ```bash
-pytest tests/test_thermodynamics.py tests/test_thermodynamics_import.py --cov=teros.core.surface_hydroxylation.thermodynamics --cov-report=term-missing
+pytest tests/test_thermodynamics.py tests/test_thermodynamics_import.py --cov=psteros.core.surface_hydroxylation.thermodynamics --cov-report=term-missing
 ```
 
 Expected: >90% coverage
@@ -1134,7 +1134,7 @@ Expected: >90% coverage
 
 ```bash
 python -c "
-from teros.core.surface_hydroxylation import JanafDatabase
+from psteros.core.surface_hydroxylation import JanafDatabase
 
 db = JanafDatabase()
 print('✓ Database loaded')
@@ -1158,7 +1158,7 @@ Expected: All checks pass
 
 ```bash
 python -c "
-from teros.core.surface_hydroxylation import JanafDatabase
+from psteros.core.surface_hydroxylation import JanafDatabase
 
 db = JanafDatabase()
 
@@ -1187,7 +1187,7 @@ Expected: All values within ~0.01 eV of example
 ## Task 13: Create Usage Documentation and Examples
 
 **Files:**
-- Create: `teros/core/surface_hydroxylation/examples/thermodynamics_usage.py`
+- Create: `psteros/core/surface_hydroxylation/examples/thermodynamics_usage.py`
 
 **Step 1: Create examples file**
 
@@ -1201,7 +1201,7 @@ This script demonstrates how to use the JanafDatabase class for
 chemical potential corrections in surface energy calculations.
 """
 
-from teros.core.surface_hydroxylation import JanafDatabase
+from psteros.core.surface_hydroxylation import JanafDatabase
 
 
 def example_basic_usage():
@@ -1332,7 +1332,7 @@ if __name__ == '__main__':
 **Step 2: Run examples to verify**
 
 ```bash
-python teros/core/surface_hydroxylation/examples/thermodynamics_usage.py
+python psteros/core/surface_hydroxylation/examples/thermodynamics_usage.py
 ```
 
 Expected: All examples run without errors, show reasonable values
@@ -1340,7 +1340,7 @@ Expected: All examples run without errors, show reasonable values
 **Step 3: Commit examples**
 
 ```bash
-git add teros/core/surface_hydroxylation/examples/thermodynamics_usage.py
+git add psteros/core/surface_hydroxylation/examples/thermodynamics_usage.py
 git commit -m "docs: add comprehensive usage examples for thermodynamics module
 
 Demonstrates basic usage, temperature/pressure corrections, and surface energy calculations"
@@ -1368,7 +1368,7 @@ source ~/envs/aiida/bin/activate && python -c "
 from aiida import load_profile
 load_profile('presto')
 
-from teros.core.surface_hydroxylation import JanafDatabase
+from psteros.core.surface_hydroxylation import JanafDatabase
 
 db = JanafDatabase()
 print('✓ JanafDatabase works in AiiDA context')
@@ -1384,7 +1384,7 @@ Expected: Import and usage work correctly
 
 ```bash
 python -c "
-from teros.core.surface_hydroxylation import JanafDatabase
+from psteros.core.surface_hydroxylation import JanafDatabase
 
 # Simulate integration with hydroxylation workflow
 db = JanafDatabase()
@@ -1414,9 +1414,9 @@ Find and update the "Module Integration" section in Section 4:
 ```latex
 \textbf{Module Integration:}
 \begin{itemize}
-    \item \textbf{Implementation:} Thermodynamics module now available at \texttt{teros/core/surface\_hydroxylation/thermodynamics.py}
+    \item \textbf{Implementation:} Thermodynamics module now available at \texttt{psteros/core/surface\_hydroxylation/thermodynamics.py}
     \item \textbf{Data:} JANAF data stored in \texttt{thermodynamics\_data.json} covering 0-2000 K in 50 K steps
-    \item \textbf{Usage:} Import with \texttt{from teros.core.surface\_hydroxylation import JanafDatabase}
+    \item \textbf{Usage:} Import with \texttt{from psteros.core.surface\_hydroxylation import JanafDatabase}
     \item \textbf{Example:}
     \begin{verbatim}
 db = JanafDatabase()

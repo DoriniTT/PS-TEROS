@@ -13,21 +13,21 @@
 ## Task 1: Create Module Structure
 
 **Files:**
-- Create: `teros/core/surface_hydroxylation/__init__.py`
-- Create: `teros/core/surface_hydroxylation/workgraph.py`
-- Create: `teros/core/surface_hydroxylation/tasks.py`
-- Create: `teros/core/surface_hydroxylation/relaxations.py`
-- Create: `teros/core/surface_hydroxylation/utils.py`
+- Create: `psteros/core/surface_hydroxylation/__init__.py`
+- Create: `psteros/core/surface_hydroxylation/workgraph.py`
+- Create: `psteros/core/surface_hydroxylation/tasks.py`
+- Create: `psteros/core/surface_hydroxylation/relaxations.py`
+- Create: `psteros/core/surface_hydroxylation/utils.py`
 
 **Step 1: Create module directory**
 
 ```bash
-mkdir -p teros/core/surface_hydroxylation
+mkdir -p psteros/core/surface_hydroxylation
 ```
 
 **Step 2: Create __init__.py with exports**
 
-File: `teros/core/surface_hydroxylation/__init__.py`
+File: `psteros/core/surface_hydroxylation/__init__.py`
 
 ```python
 """Surface hydroxylation module for PS-TEROS."""
@@ -40,10 +40,10 @@ __all__ = ['SurfaceHydroxylationWorkGraph']
 **Step 3: Create placeholder files**
 
 Create empty files:
-- `teros/core/surface_hydroxylation/workgraph.py`
-- `teros/core/surface_hydroxylation/tasks.py`
-- `teros/core/surface_hydroxylation/relaxations.py`
-- `teros/core/surface_hydroxylation/utils.py`
+- `psteros/core/surface_hydroxylation/workgraph.py`
+- `psteros/core/surface_hydroxylation/tasks.py`
+- `psteros/core/surface_hydroxylation/relaxations.py`
+- `psteros/core/surface_hydroxylation/utils.py`
 
 Each should have a module docstring:
 
@@ -54,7 +54,7 @@ Each should have a module docstring:
 **Step 4: Verify directory structure**
 
 ```bash
-ls -la teros/core/surface_hydroxylation/
+ls -la psteros/core/surface_hydroxylation/
 ```
 
 Expected: 5 files (__init__.py, workgraph.py, tasks.py, relaxations.py, utils.py)
@@ -62,7 +62,7 @@ Expected: 5 files (__init__.py, workgraph.py, tasks.py, relaxations.py, utils.py
 **Step 5: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/
+git add psteros/core/surface_hydroxylation/
 git commit -m "feat: create surface_hydroxylation module structure"
 ```
 
@@ -71,26 +71,26 @@ git commit -m "feat: create surface_hydroxylation module structure"
 ## Task 2: Move and Refactor surface_modes.py
 
 **Files:**
-- Move: `teros/experimental/vacancies_hydroxilation/surface_modes.py` → `teros/core/surface_hydroxylation/surface_modes.py`
-- Modify: `teros/core/surface_hydroxylation/__init__.py`
+- Move: `psteros/experimental/vacancies_hydroxilation/surface_modes.py` → `psteros/core/surface_hydroxylation/surface_modes.py`
+- Modify: `psteros/core/surface_hydroxylation/__init__.py`
 
 **Step 1: Copy surface_modes.py to new location**
 
 ```bash
-cp teros/experimental/vacancies_hydroxilation/surface_modes.py teros/core/surface_hydroxylation/surface_modes.py
+cp psteros/experimental/vacancies_hydroxilation/surface_modes.py psteros/core/surface_hydroxylation/surface_modes.py
 ```
 
 **Step 2: Verify imports work**
 
 ```bash
-/home/thiagotd/envs/aiida/bin/python -c "from teros.core.surface_hydroxylation.surface_modes import SurfaceModifier; print('Import successful')"
+/home/thiagotd/envs/aiida/bin/python -c "from psteros.core.surface_hydroxylation.surface_modes import SurfaceModifier; print('Import successful')"
 ```
 
 Expected: "Import successful"
 
 **Step 3: Update __init__.py to export SurfaceModifier**
 
-File: `teros/core/surface_hydroxylation/__init__.py`
+File: `psteros/core/surface_hydroxylation/__init__.py`
 
 ```python
 """Surface hydroxylation module for PS-TEROS."""
@@ -104,7 +104,7 @@ __all__ = ['SurfaceHydroxylationWorkGraph', 'SurfaceModifier']
 **Step 4: Test import from module**
 
 ```bash
-/home/thiagotd/envs/aiida/bin/python -c "from teros.core.surface_hydroxylation import SurfaceModifier; print('Export successful')"
+/home/thiagotd/envs/aiida/bin/python -c "from psteros.core.surface_hydroxylation import SurfaceModifier; print('Export successful')"
 ```
 
 Expected: "Export successful"
@@ -112,7 +112,7 @@ Expected: "Export successful"
 **Step 5: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/surface_modes.py teros/core/surface_hydroxylation/__init__.py
+git add psteros/core/surface_hydroxylation/surface_modes.py psteros/core/surface_hydroxylation/__init__.py
 git commit -m "feat: move surface_modes.py to core module"
 ```
 
@@ -121,7 +121,7 @@ git commit -m "feat: move surface_modes.py to core module"
 ## Task 3: Implement Utils (Structure Conversion)
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/utils.py`
+- Modify: `psteros/core/surface_hydroxylation/utils.py`
 
 **Step 1: Write test for AiiDA → ASE conversion**
 
@@ -133,7 +133,7 @@ Create test file: `tests/core/surface_hydroxylation/test_utils.py`
 import pytest
 from aiida.orm import StructureData
 from ase import Atoms
-from teros.core.surface_hydroxylation.utils import aiida_to_ase, ase_to_aiida
+from psteros.core.surface_hydroxylation.utils import aiida_to_ase, ase_to_aiida
 
 
 def test_aiida_to_ase_conversion():
@@ -162,7 +162,7 @@ Expected: FAIL with "cannot import name 'aiida_to_ase'"
 
 **Step 3: Implement aiida_to_ase**
 
-File: `teros/core/surface_hydroxylation/utils.py`
+File: `psteros/core/surface_hydroxylation/utils.py`
 
 ```python
 """Utility functions for surface_hydroxylation module."""
@@ -234,7 +234,7 @@ Expected: PASS
 **Step 7: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/utils.py tests/core/surface_hydroxylation/test_utils.py
+git add psteros/core/surface_hydroxylation/utils.py tests/core/surface_hydroxylation/test_utils.py
 git commit -m "feat: add structure conversion utilities"
 ```
 
@@ -243,7 +243,7 @@ git commit -m "feat: add structure conversion utilities"
 ## Task 4: Implement generate_structures CalcFunction
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/tasks.py`
+- Modify: `psteros/core/surface_hydroxylation/tasks.py`
 
 **Step 1: Write test for generate_structures**
 
@@ -256,7 +256,7 @@ import pytest
 from aiida.orm import StructureData, Dict
 from aiida.engine import run
 from ase.build import fcc111
-from teros.core.surface_hydroxylation.tasks import generate_structures
+from psteros.core.surface_hydroxylation.tasks import generate_structures
 
 
 def test_generate_structures_hydrogen_mode():
@@ -302,7 +302,7 @@ Expected: FAIL with "cannot import name 'generate_structures'"
 
 **Step 3: Implement generate_structures**
 
-File: `teros/core/surface_hydroxylation/tasks.py`
+File: `psteros/core/surface_hydroxylation/tasks.py`
 
 ```python
 """Task functions (CalcFunctions) for surface_hydroxylation module."""
@@ -415,7 +415,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/tasks.py tests/core/surface_hydroxylation/test_tasks.py
+git add psteros/core/surface_hydroxylation/tasks.py tests/core/surface_hydroxylation/test_tasks.py
 git commit -m "feat: implement generate_structures calcfunction"
 ```
 
@@ -424,7 +424,7 @@ git commit -m "feat: implement generate_structures calcfunction"
 ## Task 5: Implement collect_results CalcFunction
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/tasks.py`
+- Modify: `psteros/core/surface_hydroxylation/tasks.py`
 
 **Step 1: Write test for collect_results**
 
@@ -432,7 +432,7 @@ Add to `tests/core/surface_hydroxylation/test_tasks.py`:
 
 ```python
 from aiida.orm import Int, Float, Namespace
-from teros.core.surface_hydroxylation.tasks import collect_results
+from psteros.core.surface_hydroxylation.tasks import collect_results
 
 
 def test_collect_results_with_mixed_success_failure():
@@ -490,7 +490,7 @@ Expected: FAIL with "cannot import name 'collect_results'"
 
 **Step 3: Implement collect_results**
 
-Add to `teros/core/surface_hydroxylation/tasks.py`:
+Add to `psteros/core/surface_hydroxylation/tasks.py`:
 
 ```python
 @calcfunction
@@ -581,7 +581,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/tasks.py tests/core/surface_hydroxylation/test_tasks.py
+git add psteros/core/surface_hydroxylation/tasks.py tests/core/surface_hydroxylation/test_tasks.py
 git commit -m "feat: implement collect_results calcfunction"
 ```
 
@@ -590,21 +590,21 @@ git commit -m "feat: implement collect_results calcfunction"
 ## Task 6: Implement RelaxationsWorkGraph with Semaphore
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/relaxations.py`
+- Modify: `psteros/core/surface_hydroxylation/relaxations.py`
 
 **Step 1: Study existing scatter-gather VASP patterns**
 
 Read existing PS-TEROS code to understand pattern:
 
 ```bash
-grep -r "scatter.*relax" teros/core/ | head -5
+grep -r "scatter.*relax" psteros/core/ | head -5
 ```
 
 Look for existing WorkGraph examples with semaphore usage.
 
 **Step 2: Write skeleton RelaxationsWorkGraph**
 
-File: `teros/core/surface_hydroxylation/relaxations.py`
+File: `psteros/core/surface_hydroxylation/relaxations.py`
 
 ```python
 """Child WorkGraph for parallel VASP relaxations."""
@@ -675,7 +675,7 @@ class RelaxationsWorkGraph(WorkGraph):
 **Step 3: Verify imports work**
 
 ```bash
-/home/thiagotd/envs/aiida/bin/python -c "from teros.core.surface_hydroxylation.relaxations import RelaxationsWorkGraph; print('Import successful')"
+/home/thiagotd/envs/aiida/bin/python -c "from psteros.core.surface_hydroxylation.relaxations import RelaxationsWorkGraph; print('Import successful')"
 ```
 
 Expected: "Import successful"
@@ -683,7 +683,7 @@ Expected: "Import successful"
 **Step 4: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/relaxations.py
+git add psteros/core/surface_hydroxylation/relaxations.py
 git commit -m "feat: implement RelaxationsWorkGraph with semaphore"
 ```
 
@@ -692,11 +692,11 @@ git commit -m "feat: implement RelaxationsWorkGraph with semaphore"
 ## Task 7: Implement Main SurfaceHydroxylationWorkGraph
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py`
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py`
 
 **Step 1: Write skeleton main WorkGraph**
 
-File: `teros/core/surface_hydroxylation/workgraph.py`
+File: `psteros/core/surface_hydroxylation/workgraph.py`
 
 ```python
 """Main WorkGraph for surface hydroxylation workflow."""
@@ -772,7 +772,7 @@ class SurfaceHydroxylationWorkGraph(WorkGraph):
 **Step 2: Verify imports work**
 
 ```bash
-/home/thiagotd/envs/aiida/bin/python -c "from teros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph; print('Import successful')"
+/home/thiagotd/envs/aiida/bin/python -c "from psteros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph; print('Import successful')"
 ```
 
 Expected: "Import successful"
@@ -780,7 +780,7 @@ Expected: "Import successful"
 **Step 3: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: implement main SurfaceHydroxylationWorkGraph"
 ```
 
@@ -813,7 +813,7 @@ Uses small Pt(111) slab with O adlayer for fast testing.
 from aiida import orm, load_profile
 from aiida_workgraph import WorkGraph
 from ase.build import fcc111
-from teros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph
+from psteros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph
 
 # Load AiiDA profile
 load_profile('psteros')
@@ -1068,7 +1068,7 @@ Uses realistic perovskite oxide surface with production VASP settings.
 """
 
 from aiida import orm, load_profile
-from teros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph
+from psteros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph
 
 # Load AiiDA profile
 load_profile('psteros')
@@ -1178,7 +1178,7 @@ Expected: All tests PASS
 **Step 2: Verify imports work**
 
 ```bash
-/home/thiagotd/envs/aiida/bin/python -c "from teros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph; print('Module ready')"
+/home/thiagotd/envs/aiida/bin/python -c "from psteros.core.surface_hydroxylation import SurfaceHydroxylationWorkGraph; print('Module ready')"
 ```
 
 Expected: "Module ready"
@@ -1203,7 +1203,7 @@ Expected: ~10-12 commits with clear messages
 
 ## Completion Checklist
 
-- [ ] Module structure created (`teros/core/surface_hydroxylation/`)
+- [ ] Module structure created (`psteros/core/surface_hydroxylation/`)
 - [ ] `surface_modes.py` moved and refactored
 - [ ] Utils implemented (structure conversion)
 - [ ] `generate_structures` calcfunction implemented

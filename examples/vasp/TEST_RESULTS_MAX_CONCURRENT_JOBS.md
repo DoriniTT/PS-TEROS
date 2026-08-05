@@ -36,16 +36,16 @@ def my_function(..., max_number_jobs: int = None):
 
 ### Files Modified
 
-#### 1. Core Task Functions (teros/core/slabs.py)
+#### 1. Core Task Functions (psteros/core/slabs.py)
 - ✅ `scf_slabs_scatter` (lines 359-434)
 - ✅ `relax_slabs_scatter` (lines 437-510)
 - ✅ `scf_relax_and_calculate_relaxation_energy` (lines 238-365)
 - ✅ `calculate_electronic_properties_slabs_scatter` (lines 584-656)
 
-#### 2. Adsorption Energy (teros/core/adsorption_energy.py)
+#### 2. Adsorption Energy (psteros/core/adsorption_energy.py)
 - ✅ `compute_adsorption_energies_scatter` (lines 551-815)
 
-#### 3. Main WorkGraph (teros/core/workgraph.py)
+#### 3. Main WorkGraph (psteros/core/workgraph.py)
 - ✅ Added `max_concurrent_jobs` parameter to `core_workgraph` function
 - ✅ Passed `max_concurrent_jobs` to all @task.graph function calls:
   - `scf_slabs_scatter` (line 428)
@@ -138,7 +138,7 @@ Creates VASP tasks with concurrency limit applied
 ## Usage Example
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     workflow_preset='surface_thermodynamics',
@@ -215,7 +215,7 @@ wg = build_core_workgraph(
 
 ## Technical Documentation
 
-**Investigation Folder**: `/home/thiagotd/git/PS-TEROS/teros/experimental/max_jobs_investigation/`
+**Investigation Folder**: `/home/thiagotd/git/PS-TEROS/psteros/experimental/max_jobs_investigation/`
 
 **Key Documents**:
 - `SUCCESS.md` - Discovery of the solution

@@ -172,7 +172,7 @@ ag3o4
 cu3mo2o9  
 gamma_tungstato
 *.aiida
-teros.egg-info
+psteros.egg-info
 legacy
 results_vasp
 article
@@ -189,4 +189,4 @@ venv/
 git-commit.sh
 
 # External dependencies (cloned repos)
-teros/external/FukuiGrid/
+psteros/external/FukuiGrid/

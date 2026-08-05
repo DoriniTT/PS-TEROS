@@ -35,7 +35,7 @@ python test_dos.py
 To retrieve results after completion:
 ```python
 from aiida import orm
-from teros.core.custom_calculation import get_dos_results
+from psteros.core.custom_calculation import get_dos_results
 
 wg = orm.load_node(<PK>)
 results = get_dos_results(wg)

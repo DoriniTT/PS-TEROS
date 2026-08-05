@@ -20,7 +20,7 @@ PS-TEROS now supports using pre-generated slab structures as input, giving users
 
 ### Modified Functions
 
-All functions in `teros/core/workgraph.py` now accept an optional `input_slabs` parameter:
+All functions in `psteros/core/workgraph.py` now accept an optional `input_slabs` parameter:
 
 1. `core_workgraph()` - Main task graph
 2. `build_core_workgraph()` - Builder function
@@ -52,7 +52,7 @@ When `input_slabs` is `None`:
 ## Implementation Details
 
 ### Code Location
-- **File**: `teros/core/workgraph.py`
+- **File**: `psteros/core/workgraph.py`
 - **Lines**: ~244-267 (slab generation section)
 
 ### Logic Flow
@@ -108,7 +108,7 @@ wg = build_core_workgraph_with_map(
 ## Files Modified
 
 ### Core Files
-1. **`teros/core/workgraph.py`**
+1. **`psteros/core/workgraph.py`**
    - Added `input_slabs` parameter to `core_workgraph()`
    - Added conditional logic for slab generation vs. user input
    - Updated docstrings
@@ -154,7 +154,7 @@ wg = build_core_workgraph_with_map(
 
 ### Syntax Check
 ```bash
-python -m py_compile teros/core/workgraph.py
+python -m py_compile psteros/core/workgraph.py
 python -m py_compile examples/slabs/slabs_input_relax.py
 ```
 

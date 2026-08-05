@@ -90,10 +90,10 @@ verdi status
 pytest tests/ -v
 
 # Run with coverage
-pytest tests/ --cov=teros --cov-report=html
+pytest tests/ --cov=psteros --cov-report=html
 
 # Run linting
-flake8 teros/ --max-line-length=120 --ignore=E501,W503
+flake8 psteros/ --max-line-length=120 --ignore=E501,W503
 ```
 
 ---

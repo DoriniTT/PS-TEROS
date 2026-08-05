@@ -32,17 +32,17 @@ class TestDOSFunctions:
 
     def test_build_dos_calculation_workgraph_import(self):
         """Test that build_dos_calculation_workgraph can be imported."""
-        from teros.core.custom_calculation import build_dos_calculation_workgraph
+        from psteros.core.custom_calculation import build_dos_calculation_workgraph
         assert callable(build_dos_calculation_workgraph)
 
     def test_get_dos_results_import(self):
         """Test that get_dos_results can be imported."""
-        from teros.core.custom_calculation import get_dos_results
+        from psteros.core.custom_calculation import get_dos_results
         assert callable(get_dos_results)
 
     def test_dos_functions_in_init(self):
         """Test that DOS functions are properly exported in __init__.py."""
-        from teros.core.custom_calculation import (
+        from psteros.core.custom_calculation import (
             build_dos_calculation_workgraph,
             get_dos_results,
         )
@@ -145,7 +145,7 @@ class TestDOSWorkGraphConstruction:
         self, mock_structure, mock_code_label, scf_inputs, dos_inputs
     ):
         """Test building a DOS workgraph for a single structure."""
-        from teros.core.custom_calculation import build_dos_calculation_workgraph
+        from psteros.core.custom_calculation import build_dos_calculation_workgraph
 
         wg = build_dos_calculation_workgraph(
             structure=mock_structure,
@@ -170,7 +170,7 @@ class TestDOSWorkGraphConstruction:
         self, mock_structure, mock_code_label, scf_inputs, dos_inputs
     ):
         """Test building a DOS workgraph for multiple structures."""
-        from teros.core.custom_calculation import build_dos_calculation_workgraph
+        from psteros.core.custom_calculation import build_dos_calculation_workgraph
         from aiida import orm
         from ase import Atoms
 
@@ -214,7 +214,7 @@ class TestDOSResultsExtraction:
 
     def test_get_dos_results_returns_dict_with_expected_keys(self):
         """Test that get_dos_results returns a dict with expected keys."""
-        from teros.core.custom_calculation import get_dos_results
+        from psteros.core.custom_calculation import get_dos_results
 
         # Create a mock workgraph with no tasks
         class MockWorkGraph:
@@ -237,7 +237,7 @@ class TestDOSInputPreparation:
 
     def test_sanitize_key_function(self):
         """Test the _sanitize_key function."""
-        from teros.core.custom_calculation.workgraph import _sanitize_key
+        from psteros.core.custom_calculation.workgraph import _sanitize_key
 
         # Test normal label
         assert _sanitize_key('my_structure', 0) == 'my_structure'

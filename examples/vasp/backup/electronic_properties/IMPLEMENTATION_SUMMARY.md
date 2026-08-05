@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `calculate_surface_energy_ternary` function in `teros/core/thermodynamics.py` has been extended to compute surface free energy with respect to **both** metal elements in a ternary oxide system.
+The `calculate_surface_energy_ternary` function in `psteros/core/thermodynamics.py` has been extended to compute surface free energy with respect to **both** metal elements in a ternary oxide system.
 
 ## What Was Added
 
@@ -138,7 +138,7 @@ See `derivation_B_element.tex` for the complete mathematical derivation of the B
 
 ## Files Modified
 
-1. **teros/core/thermodynamics.py**
+1. **psteros/core/thermodynamics.py**
    - Modified `calculate_surface_energy_ternary()` function
    - Added ~80 lines of code for B-based computation
    - Maintained backward compatibility

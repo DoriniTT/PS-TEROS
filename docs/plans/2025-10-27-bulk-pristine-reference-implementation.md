@@ -15,7 +15,7 @@
 ## Task 1: Add New Parameters to SurfaceHydroxylationWorkGraph
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py:22-32`
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py:22-32`
 
 **Step 1: Add bulk parameters to function signature**
 
@@ -66,7 +66,7 @@ Add to the docstring Args section (after `builder_inputs`):
 **Step 3: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: add bulk_structure and bulk_builder_inputs parameters to SurfaceHydroxylationWorkGraph"
 ```
 
@@ -75,7 +75,7 @@ git commit -m "feat: add bulk_structure and bulk_builder_inputs parameters to Su
 ## Task 2: Add Bulk Relaxation Task
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py:133-145`
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py:133-145`
 
 **Step 1: Add bulk relaxation task implementation**
 
@@ -122,7 +122,7 @@ Insert after line 136 (after `surface_params = orm.Dict(dict=surface_params)`):
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/bulk-pristine-reference
-grep -n "extract_total_energy" teros/core/surface_hydroxylation/utils.py
+grep -n "extract_total_energy" psteros/core/surface_hydroxylation/utils.py
 ```
 
 Expected: Function exists or needs to be created
@@ -130,7 +130,7 @@ Expected: Function exists or needs to be created
 **Step 3: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: add bulk relaxation task to workflow"
 ```
 
@@ -139,7 +139,7 @@ git commit -m "feat: add bulk relaxation task to workflow"
 ## Task 3: Add Pristine Slab Relaxation Task
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py` (after bulk task)
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py` (after bulk task)
 
 **Step 1: Add pristine slab relaxation task**
 
@@ -182,7 +182,7 @@ Insert immediately after the bulk relaxation task:
 **Step 2: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: add pristine slab relaxation task to workflow"
 ```
 
@@ -191,7 +191,7 @@ git commit -m "feat: add pristine slab relaxation task to workflow"
 ## Task 4: Update Return Statement with New Outputs
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py:160-167`
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py:160-167`
 
 **Step 1: Add new outputs to return dict**
 
@@ -215,7 +215,7 @@ Modify the return statement at the end of `SurfaceHydroxylationWorkGraph`:
 **Step 2: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: add bulk and pristine outputs to workflow return"
 ```
 
@@ -224,7 +224,7 @@ git commit -m "feat: add bulk and pristine outputs to workflow return"
 ## Task 5: Add Bulk Parameters to build_surface_hydroxylation_workgraph
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py:169-180`
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py:169-180`
 
 **Step 1: Add bulk parameters to builder function**
 
@@ -271,7 +271,7 @@ Add to Args section:
 **Step 3: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: add bulk parameters to build_surface_hydroxylation_workgraph"
 ```
 
@@ -280,7 +280,7 @@ git commit -m "feat: add bulk parameters to build_surface_hydroxylation_workgrap
 ## Task 6: Add Bulk Structure Validation Logic
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py:344-392`
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py:344-392`
 
 **Step 1: Add validation after code loading (after line 343)**
 
@@ -362,7 +362,7 @@ Insert after the code loading section:
 **Step 2: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: add bulk structure validation and loading logic"
 ```
 
@@ -371,7 +371,7 @@ git commit -m "feat: add bulk structure validation and loading logic"
 ## Task 7: Add Default bulk_builder_inputs
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py` (after bulk validation)
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py` (after bulk validation)
 
 **Step 1: Add default bulk builder inputs**
 
@@ -419,7 +419,7 @@ Insert after bulk structure validation:
 **Step 2: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: add default bulk_builder_inputs with ISIF=3"
 ```
 
@@ -428,7 +428,7 @@ git commit -m "feat: add default bulk_builder_inputs with ISIF=3"
 ## Task 8: Update WorkGraph Build Call
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py:405-421`
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py:405-421`
 
 **Step 1: Pass bulk parameters to WorkGraph.build**
 
@@ -454,7 +454,7 @@ Modify the `SurfaceHydroxylationWorkGraph.build()` call:
 **Step 2: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: pass bulk parameters to WorkGraph build"
 ```
 
@@ -463,7 +463,7 @@ git commit -m "feat: pass bulk parameters to WorkGraph build"
 ## Task 9: Update organize_hydroxylation_results Helper
 
 **Files:**
-- Modify: `teros/core/surface_hydroxylation/workgraph.py:424-494`
+- Modify: `psteros/core/surface_hydroxylation/workgraph.py:424-494`
 
 **Step 1: Add reference_data to return dict**
 
@@ -517,7 +517,7 @@ def organize_hydroxylation_results(workflow_node):
 **Step 2: Commit**
 
 ```bash
-git add teros/core/surface_hydroxylation/workgraph.py
+git add psteros/core/surface_hydroxylation/workgraph.py
 git commit -m "feat: add reference_data to organize_hydroxylation_results"
 ```
 
@@ -526,13 +526,13 @@ git commit -m "feat: add reference_data to organize_hydroxylation_results"
 ## Task 10: Check/Add extract_total_energy_from_misc Utility
 
 **Files:**
-- Check: `teros/core/surface_hydroxylation/utils.py`
+- Check: `psteros/core/surface_hydroxylation/utils.py`
 - Possibly create new function
 
 **Step 1: Check if function exists**
 
 ```bash
-grep -n "extract_total_energy" teros/core/surface_hydroxylation/utils.py
+grep -n "extract_total_energy" psteros/core/surface_hydroxylation/utils.py
 ```
 
 **Step 2a: If function exists, verify it works with misc output**
@@ -541,7 +541,7 @@ Read the function and verify it extracts from VaspWorkChain.outputs.misc
 
 **Step 2b: If function doesn't exist, create it**
 
-Add to `teros/core/surface_hydroxylation/utils.py`:
+Add to `psteros/core/surface_hydroxylation/utils.py`:
 
 ```python
 from aiida import orm
@@ -577,7 +577,7 @@ def extract_total_energy_from_misc(misc: orm.Dict) -> orm.Float:
 **Step 3: Commit (if created new function)**
 
 ```bash
-git add teros/core/surface_hydroxylation/utils.py
+git add psteros/core/surface_hydroxylation/utils.py
 git commit -m "feat: add extract_total_energy_from_misc utility function"
 ```
 
@@ -642,7 +642,7 @@ Usage:
 import sys
 from pathlib import Path
 from aiida import orm, load_profile
-from teros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
+from psteros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
 
 def main():
     """Run hydroxylation workflow with bulk and pristine reference calculations."""
@@ -855,7 +855,7 @@ def main():
     print(f"\nAfter completion, analyze results:")
     print(f"  python -c \"")
     print(f"from aiida import orm")
-    print(f"from teros.core.surface_hydroxylation import organize_hydroxylation_results")
+    print(f"from psteros.core.surface_hydroxylation import organize_hydroxylation_results")
     print(f"node = orm.load_node({pk})")
     print(f"results = organize_hydroxylation_results(node)")
     print(f"ref = results['reference_data']")
@@ -984,7 +984,7 @@ After completion, access results:
 
 ```python
 from aiida import orm
-from teros.core.surface_hydroxylation import organize_hydroxylation_results
+from psteros.core.surface_hydroxylation import organize_hydroxylation_results
 
 node = orm.load_node(<workflow_pk>)
 results = organize_hydroxylation_results(node)
@@ -1040,7 +1040,7 @@ The reference data enables surface free energy calculations per Section S2:
 
 - Design document: `/home/thiagotd/git/fosfato/calculos/hydroxylation/docs/plans/2025-10-27-bulk-pristine-reference-calculations-design.md`
 - Section S2: `surface_energy_calc_procedure.tex`
-- Main module: `teros/core/surface_hydroxylation/workgraph.py`
+- Main module: `psteros/core/surface_hydroxylation/workgraph.py`
 ```
 
 **Step 2: Commit**
@@ -1055,7 +1055,7 @@ git commit -m "docs: add README for hydroxylation v2 example"
 ## Task 14: Test Import and Syntax
 
 **Files:**
-- Test: `teros/core/surface_hydroxylation/workgraph.py`
+- Test: `psteros/core/surface_hydroxylation/workgraph.py`
 
 **Step 1: Clear Python cache**
 
@@ -1069,7 +1069,7 @@ find . -name "*.pyc" -delete 2>/dev/null
 
 ```bash
 source ~/envs/aiida/bin/activate
-python -c "from teros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph; print('✓ Import successful')"
+python -c "from psteros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph; print('✓ Import successful')"
 ```
 
 Expected: "✓ Import successful" (no errors)
@@ -1137,7 +1137,7 @@ Test building the v2 workflow without submission.
 """
 
 from aiida import orm, load_profile
-from teros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
+from psteros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
 
 load_profile(profile='presto')
 
@@ -1273,7 +1273,7 @@ wg = build_surface_hydroxylation_workgraph(
 After workflow completes:
 
 ```python
-from teros.core.surface_hydroxylation import organize_hydroxylation_results
+from psteros.core.surface_hydroxylation import organize_hydroxylation_results
 results = organize_hydroxylation_results(node)
 
 assert 'reference_data' in results

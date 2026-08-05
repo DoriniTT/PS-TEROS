@@ -155,7 +155,7 @@ A: IMPORTANT_NOTES.md provides verification steps
 ### For Developers
 1. Read `IMPLEMENTATION_SUMMARY.md` first
 2. Review `IMPORTANT_NOTES.md` for architecture
-3. See actual code in `teros/core/workgraph.py`
+3. See actual code in `psteros/core/workgraph.py`
 
 ## Files Summary
 

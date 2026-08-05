@@ -27,8 +27,8 @@ import os
 from aiida import load_profile
 from aiida import orm
 from ase.io import read
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
 
 def main():
     """Step 7B: Test AIMD with CP2K - input slabs with fixed atoms."""

@@ -28,7 +28,7 @@ from aiida.orm import (
 from aiida.plugins import WorkflowFactory
 from ase.io import read
 
-from teros.core.workgraph import create_teros_workgraph
+from psteros.core.workgraph import create_teros_workgraph
 
 # Ensure the active profile is available before touching AiiDA objects.
 load_profile()

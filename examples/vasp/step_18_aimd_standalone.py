@@ -2,7 +2,7 @@
 """
 STEP 18: Standalone AIMD Module
 
-This script demonstrates the standalone AIMD module (teros.core.aimd) which provides
+This script demonstrates the standalone AIMD module (psteros.core.aimd) which provides
 full control over multi-stage AIMD calculations on pre-existing structures.
 
 Features demonstrated:
@@ -27,7 +27,7 @@ Usage:
 import sys
 import os
 from aiida import load_profile, orm
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 from ase.io import read
 
 
@@ -183,7 +183,7 @@ def main():
     print(f"\nNote about overrides:")
     print(f"  The override parameters (structure_overrides, stage_overrides,")
     print(f"  matrix_overrides) are NOT functional in this version.")
-    print(f"  See teros/core/aimd/README.md for implementation status.")
+    print(f"  See psteros/core/aimd/README.md for implementation status.")
     print(f"\nAIMD trajectories can be analyzed for:")
     print(f"  - Temperature evolution")
     print(f"  - Atomic diffusion")

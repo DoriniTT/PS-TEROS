@@ -4,107 +4,55 @@
 Tutorial
 ========
 
-Basic Usage
------------
+This tutorial builds the supported psteros workflow: a QE calculation through
+``aiida-quantumespresso``.  It creates a graph but does not submit it, so it
+is safe to run while learning the API.
 
-This tutorial will guide you through setting up and running a basic TEROS workflow.
+Prerequisites
+-------------
 
-Setting up AiiDA
-~~~~~~~~~~~~~~~~
+Create an AiiDA profile, register a ``quantumespresso.pw`` code and install
+an ``aiida-pseudo`` family.  The maintained Bohr route uses
+``QE-7.6-PW-GPU-A100@bohr`` and ``SSSP/1.3/PBE/precision``.  Use the pinned
+environment described in :doc:`installation`.
 
-Before using TEROS, make sure you have AiiDA properly set up. 
-AiiDA's `verdi presto` command is recommended for quickly setting up a new profile with necessary services.
-
-1. Start and initialize your AiiDA profile if you haven't already:
-
-   .. code-block:: bash
-
-       verdi presto start
-
-   This command will guide you through creating a new profile (if one doesn't exist) or start an existing one, along with its associated database and message broker services.
-
-2. Configure your computer(s) and code(s) in AiiDA:
-
-   .. code-block:: bash
-
-       verdi computer setup
-       verdi computer configure
-       verdi code create
-
-Running a Simple Workflow
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Here's a simple example of how to set up and run a TEROS workflow with VASP:
+Build a QE graph
+----------------
 
 .. code-block:: python
 
-    from teros import create_teros_workgraph
-    from aiida.engine import submit
-    from aiida.orm import load_node
+   import psteros
 
-    # Prepare your DFT builders
-    # This is code-specific, here is a placeholder example
-    from aiida_vasp.workflows.relax import RelaxWorkChain
-    
-    # Set up bulk calculation builder
-    builder_bulk = RelaxWorkChain.get_builder()
-    # ... configure builder_bulk settings ...
-    
-    # Set up slab calculation builder
-    builder_slab = RelaxWorkChain.get_builder()
-    # ... configure builder_slab settings ...
-    
-    # Example: Setting up reference calculation builders for VASP
-    # Oxygen reference (assuming O2 molecule calculation)
-    builder_o2_relax = RelaxWorkChain.get_builder()
-    # ... configure builder_o2_relax for an O2 molecule ...
-    # Metal reference (assuming Ag bulk calculation)
-    builder_ag_bulk_relax = RelaxWorkChain.get_builder()
-    # ... configure builder_ag_bulk_relax for Ag bulk ...
+   parameters = {
+       "CONTROL": {"calculation": "scf", "tstress": True, "tprnfor": True},
+       "SYSTEM": {"ecutwfc": 75.0, "ecutrho": 600.0, "occupations": "fixed"},
+       "ELECTRONS": {"conv_thr": 1.0e-10},
+   }
+   recipe = psteros.SurfaceWorkflowConfig(
+       backend="qe",
+       calculation=psteros.QeCalculationConfig(
+           code_label="QE-7.6-PW-GPU-A100@bohr",
+           pseudo_family="SSSP/1.3/PBE/precision",
+           parameters=parameters,
+           kpoints_distance=0.20,
+       ),
+       execution=psteros.ExecutionPolicy(),
+       name="sno2_bulk_scf",
+   )
+   graph = psteros.build_surface_workgraph(
+       {"bulk_sno2": psteros.rutile_sno2_bulk()}, recipe
+   )
 
-    references = {
-        'O': builder_o2_relax,  # Builder for 1/2 O2 energy
-        'Ag': builder_ag_bulk_relax, # Builder for Ag bulk energy
-        # Add more references as needed
-    }
-    
-    # Create the workgraph
-    wg = create_teros_workgraph(
-        dft_workchain=RelaxWorkChain,
-        builder_bulk=builder_bulk,
-        builder_slab=builder_slab,
-        reference_builders=references,
-        code="VASP"
-    )
-    
-    # Submit the workgraph
-    node = submit(wg)
-    print(f"Submitted workgraph with pk: {node.pk}")
-
-Analyzing Results
-~~~~~~~~~~~~~~~~~~
-
-Once your workflow has completed, you can analyze the results:
+``ExecutionPolicy`` enforces one active calculation and encodes the Bohr
+``gpu_a100`` queue.  Submit only from a project controller which owns the
+global queue policy:
 
 .. code-block:: python
 
-    from aiida.orm import load_node
-    
-    # Load the completed workflow node
-    wg_node = load_node(pk)  # Replace with your workflow PK
-    
-    # Access the results
-    surface_energies = wg_node.outputs.surface_energies
-    # surface_energies is a dictionary where keys are surface identifiers (e.g., strings)
-    # and values are the calculated surface energies (e.g., floats in J/m²).
-    
-    # Print or process the results
-    for surface, energy in surface_energies.items():
-        print(f"Surface: {surface}, Energy: {energy} J/m²")
+   node = graph.submit()
+   print(node.pk)
 
-Visualization
-~~~~~~~~~~~~~
-
-Utilities for visualizing results, such as plotting surface energy diagrams, are currently under development and will be available in an upcoming release. These tools will help in analyzing the output of TEROS workflows.
-
-Stay tuned for updates on this feature!
+For a surface calculation, use ``psteros.sno2_110_slab`` to make an O, SnO,
+or Sn2O symmetric (110) starting model.  Relaxation followed by a final SCF
+is constructed with ``build_qe_relax_static_workgraph``.  See
+:doc:`qe-first-workflow` for the full method and analysis convention.

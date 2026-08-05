@@ -15,8 +15,8 @@ AIMD capability allows running sequential molecular dynamics simulations on slab
 ## Usage
 
 ```python
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_aimd_defaults
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders import get_aimd_defaults
 
 # Define AIMD parameters
 aimd_parameters = get_aimd_defaults(

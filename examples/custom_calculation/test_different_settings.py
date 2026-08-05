@@ -8,7 +8,7 @@ with different builder inputs for each structure.
 
 import sys
 from aiida import orm, load_profile
-from teros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
+from psteros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
 
 def main():
     """Run custom VASP calculations with different settings per structure."""

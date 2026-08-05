@@ -1,56 +1,25 @@
-.. _installation:
-
 ============
 Installation
 ============
 
-Requirements
-------------
-
-TEROS requires:
-
-* Python 3.9 or higher
-* AiiDA Core
-* AiiDA WorkGraph
-* pymatgen
-* numpy
-
-For running actual calculations, you will also need:
-
-* VASP (currently the only supported DFT code)
-* AiiDA-VASP plugin
-
-.. note::
-   **Current DFT Code Support**: The current version only supports VASP. CP2K and Quantum ESPRESSO are planned as future updates. If you need PS-TEROS code for these versions, please use the legacy version in the ``legacy/`` directory.
-
-AiiDA Installation
-------------------
-
-The full and complete AiiDA installation process can be found here:
-https://aiida.readthedocs.io/projects/aiida-core/en/stable/installation/guide_complete.html
-
-For an easy setup, you can follow the quick installation guide:
-https://aiida.readthedocs.io/projects/aiida-core/en/stable/installation/guide_quick.html
-
-This typically involves:
+Install psteros with the AiiDA QE dependencies:
 
 .. code-block:: console
 
-    $ pip install aiida-core
-    $ verdi presto
-    $ verdi status
+   $ python -m venv .venv
+   $ . .venv/bin/activate
+   $ python -m pip install -U pip
+   $ python -m pip install -c constraints/aiida-qe-2026-08.txt \
+       aiida-core aiida-workgraph aiida-quantumespresso aiida-pseudo pytest
+   $ python -m pip install --no-deps -e .
+   $ pytest -q tests/unit/test_public_api.py
 
-From Source
------------
+``constraints/aiida-qe-2026-08.txt`` pins the tested AiiDA/WorkGraph socket
+contract.  Use a dedicated environment: installing into an already-running
+AiiDA profile can replace its workflow dependencies.
 
-The sources for PS-TEROS can be downloaded from the `Github repo`_.
-
-.. code-block:: console
-
-    $ git clone git@github.com:DoriniTT/PS-TEROS.git
-    $ cd PS-TEROS
-    $ pip install -e .
-
-This will install the package in development mode, allowing you to modify the code and have changes immediately available.
-
-.. _Github repo: https://github.com/DoriniTT/PS-TEROS
+For calculations, configure an AiiDA profile, an aiida-quantumespresso ``pw.x``
+code, and an aiida-pseudo family.  The maintained SnO2 campaign uses QE 7.6 on
+the Bohr ``gpu_a100`` queue with ``SSSP/1.3/PBE/precision``.  VASP users may
+install the optional ``.[vasp]`` extra and select ``backend="vasp"`` in the
+same typed public workflow configuration; QE remains the primary path.

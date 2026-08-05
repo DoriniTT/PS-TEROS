@@ -13,7 +13,7 @@ Usage:
     source ~/envs/psteros/bin/activate && python test_default_builders.py
 """
 
-from teros.core.builders.default_ag3po4_builders import get_ag3po4_defaults, update_builder_params
+from psteros.core.builders.default_ag3po4_builders import get_ag3po4_defaults, update_builder_params
 
 
 def test_basic_defaults():

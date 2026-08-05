@@ -1,5 +1,5 @@
 """
-Runner script for TEROS DFT workflow using CP2K.
+Runner script for PSTEROS DFT workflow using CP2K.
 
 This script combines the builder configuration and workflow execution into a single file.
 It sets up the CP2K calculation parameters and runs the create_teros_workgraph 
@@ -14,7 +14,7 @@ from aiida.common.extendeddicts import AttributeDict
 from aiida import load_profile
 
 # Import the create_teros_workgraph function
-from teros import create_teros_workgraph
+from psteros import create_teros_workgraph
 
 # Load AiiDA profile
 load_profile()
@@ -242,7 +242,7 @@ def builder_slab_relax():
     builder = Cp2kWorkChain.get_builder()
     builder.cp2k.code = cp2k_code
     # Structure is NOT set here for the slab_relax builder.
-    # The TEROS workflow will generate slab structures using Pymatgen 
+    # The PSTEROS workflow will generate slab structures using Pymatgen 
     # and inject them into copies of this builder within the workgraph.
     builder.cp2k.parameters = Dict(parameters) # Pass the CP2K parameters dictionary
     resources = {"num_machines": NUM_MACHINES}
@@ -516,7 +516,7 @@ def get_reference_builders(elements):
     for element in elements:
         if element == 'O':
             # Oxygen reference is typically an O2 molecule (triplet state).
-            # The key 'O2' is used internally by TEROS to identify the oxygen reference energy (which is then halved for E_O).
+            # The key 'O2' is used internally by PSTEROS to identify the oxygen reference energy (which is then halved for E_O).
             ref_builders['O2'] = builder_o2_relax()
         elif element == 'Ag':
             ref_builders['Ag'] = builder_ag_relax() # Reference for elemental Ag
@@ -540,7 +540,7 @@ def run_workflow():
         workgraph_name=CUSTOM_WORKGRAPH_NAME,
         code=CODE
     )
-    print(f"Submitting TEROS workflow using {CODE}...")
+    print(f"Submitting PSTEROS workflow using {CODE}...")
     wg.submit(wait=False)  # wait=False submits the workflow and returns immediately (asynchronous execution).
                            # Set to True to make the script wait for the workflow to complete (synchronous execution).
     wg.to_html()           # Generates an HTML representation of the workgraph's structure (e.g., wg.html).

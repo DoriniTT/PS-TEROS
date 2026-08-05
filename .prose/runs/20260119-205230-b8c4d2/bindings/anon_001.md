@@ -47,7 +47,7 @@ No critical vulnerabilities or blocking issues were found. The codebase is suita
 
 **Impact:** 100-1000x speedup for surface energy calculations
 **Effort:** Low (1-2 hours)
-**Location:** `teros/core/thermodynamics.py:183-202, 251-258`
+**Location:** `psteros/core/thermodynamics.py:183-202, 251-258`
 
 **Problem:**
 ```python
@@ -75,7 +75,7 @@ gamma_grid_2d = (phi - gamma_M * delta_mu_M_grid - gamma_O * delta_mu_O_grid).to
 
 **Impact:** Prevents potential command injection
 **Effort:** Low (2-3 hours)
-**Location:** `teros/core/fukui/tasks.py:444-481, 476-481, 699-710, 830-842`
+**Location:** `psteros/core/fukui/tasks.py:444-481, 476-481, 699-710, 830-842`
 
 **Problem:**
 ```python
@@ -176,7 +176,7 @@ def load_structure_from_file(filepath: str, allowed_dirs: list = None) -> orm.St
 
 **Impact:** 40-60% reduction in memory allocation during workflow setup
 **Effort:** Medium (3-4 hours)
-**Location:** `teros/core/utils.py:98-137`
+**Location:** `psteros/core/utils.py:98-137`
 
 **Problem:**
 ```python
@@ -286,7 +286,7 @@ def calculate_surface_energy_ternary(...):
 
 **Impact:** Prevents information disclosure and disk space exhaustion
 **Effort:** Low (1-2 hours)
-**Location:** `teros/core/fukui/tasks.py:767-774`
+**Location:** `psteros/core/fukui/tasks.py:767-774`
 
 **Problem:**
 ```python
@@ -401,7 +401,7 @@ def get_settings():  # Appears in workgraph.py and surface_energy/workgraph.py
 ```
 
 **Solution:**
-- Create canonical version in `teros/core/utils.py`
+- Create canonical version in `psteros/core/utils.py`
 - Import from utils in all other locations
 - Deprecate duplicates with clear migration path
 

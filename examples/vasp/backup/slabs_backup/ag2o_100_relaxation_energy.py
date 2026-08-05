@@ -25,7 +25,7 @@ if feature_branch_path not in sys.path:
     sys.path.insert(0, feature_branch_path)
 
 from aiida import load_profile, orm
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 
 def main():

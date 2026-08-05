@@ -16,8 +16,8 @@ Usage:
 """
 
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph_with_map
-from teros.core.builders.default_ag2o_builders import get_ag2o_defaults
+from psteros.core.workgraph import build_core_workgraph_with_map
+from psteros.core.builders.default_ag2o_builders import get_ag2o_defaults
 
 
 def main():

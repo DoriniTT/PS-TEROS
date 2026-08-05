@@ -280,7 +280,7 @@ Apply the appropriate changes from Sections A, B, or C above.
 Before submitting, check what the new configuration will do:
 
 ```python
-from teros.core.workflow_presets import resolve_preset
+from psteros.core.workflow_presets import resolve_preset
 
 preset_name, flags = resolve_preset(
     'surface_thermodynamics',
@@ -334,7 +334,7 @@ wg = build_core_workgraph(
 
 **Solution:** Always check before using:
 ```python
-from teros.core import get_preset_summary
+from psteros.core import get_preset_summary
 print(get_preset_summary('surface_thermodynamics'))
 ```
 

@@ -23,9 +23,9 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders.default_ag2o_builders import get_ag2o_defaults
-from teros.core.builders import get_electronic_properties_defaults
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders.default_ag2o_builders import get_ag2o_defaults
+from psteros.core.builders import get_electronic_properties_defaults
 
 
 def main():

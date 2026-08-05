@@ -127,7 +127,7 @@ pks = parallel_algorithm_test(30001)
 Only restart specific slabs that didn't converge:
 
 ```python
-from teros.core.slabs import extract_restart_folders_from_node
+from psteros.core.slabs import extract_restart_folders_from_node
 
 def selective_restart(previous_pk, unconverged_labels):
     """

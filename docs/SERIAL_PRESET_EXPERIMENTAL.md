@@ -2,7 +2,7 @@
 
 **Status:** ⚠️ EXPERIMENTAL - In Active Development
 
-**Module:** `teros.experimental.surface_thermo_preset_serial`
+**Module:** `psteros.experimental.surface_thermo_preset_serial`
 
 **Available since:** Development version (not yet released)
 
@@ -79,12 +79,12 @@ def build_relax_slabs_nodes(wg, slabs, ...):
 The serial preset is in the experimental module:
 
 ```python
-from teros.experimental.surface_thermo_preset_serial import (
+from psteros.experimental.surface_thermo_preset_serial import (
     surface_thermodynamics_serial_workgraph
 )
 ```
 
-**Note:** Do not use `from teros.experimental import *`. Users must explicitly import experimental modules.
+**Note:** Do not use `from psteros.experimental import *`. Users must explicitly import experimental modules.
 
 ---
 
@@ -108,7 +108,7 @@ slabs_dict = {
 ### 2. Build Workgraph
 
 ```python
-from teros.experimental.surface_thermo_preset_serial import (
+from psteros.experimental.surface_thermo_preset_serial import (
     surface_thermodynamics_serial_workgraph
 )
 
@@ -313,7 +313,7 @@ outputs = {
 | **Slab Generation** | Dynamic from bulk | Pre-generated (required) |
 | **Node Builders** | `@task.graph` decorators | Direct `wg.add_task()` |
 | **Provenance** | Multiple graph levels | Single graph level |
-| **Module Location** | `teros.core.workgraph` | `teros.experimental.surface_thermo_preset_serial` |
+| **Module Location** | `psteros.core.workgraph` | `psteros.experimental.surface_thermo_preset_serial` |
 | **Stability** | Stable production code | Experimental development |
 
 ---
@@ -352,7 +352,7 @@ wg = surface_thermodynamics_serial_workgraph(
 ## Module Structure
 
 ```
-teros/experimental/surface_thermo_preset_serial/
+psteros/experimental/surface_thermo_preset_serial/
 ├── __init__.py              # Exports surface_thermodynamics_serial_workgraph
 ├── workgraph.py             # Main workgraph (no @task.graph decorator)
 ├── utils.py                 # Parameter preparation (prepare_vasp_parameters)
@@ -504,8 +504,8 @@ File issues at: (repository issue tracker)
 
 - **Full documentation:** `examples/vasp/step_16_DOCUMENTATION.md`
 - **Example script:** `examples/vasp/step_16_surface_thermodynamics_serial.py`
-- **Module README:** `teros/experimental/surface_thermo_preset_serial/README.md`
-- **Standard preset:** `teros/core/workgraph.build_core_workgraph()`
+- **Module README:** `psteros/experimental/surface_thermo_preset_serial/README.md`
+- **Standard preset:** `psteros/core/workgraph.build_core_workgraph()`
 - **Concurrency control:** `docs/CONCURRENCY_CONTROL.md`
 
 ---

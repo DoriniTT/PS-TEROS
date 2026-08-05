@@ -14,7 +14,7 @@ let ternary_impl = session: code_analyst
 
 ### 1. Surface Gibbs Free Energy Formula
 
-The implementation in `/home/trevizam/git/PS-TEROS/teros/core/thermodynamics.py` uses the following formula for ternary oxides (lines 75-76):
+The implementation in `/home/trevizam/git/PS-TEROS/psteros/core/thermodynamics.py` uses the following formula for ternary oxides (lines 75-76):
 
 ```
 gamma(Delta_mu_M, Delta_mu_O) = phi - Gamma_M * Delta_mu_M - Gamma_O * Delta_mu_O
@@ -58,7 +58,7 @@ ref_energies = {
 }
 ```
 
-From `/home/trevizam/git/PS-TEROS/teros/core/hf.py`:
+From `/home/trevizam/git/PS-TEROS/psteros/core/hf.py`:
 - **E_M**: Energy per atom of metal M from DFT relaxation of bulk metal
 - **E_N**: Energy per atom of metal N from DFT relaxation of bulk metal
 - **E_O**: Energy per atom from O2 molecule: `oxygen_energy.value / oxygen_count` (line 142)
@@ -104,7 +104,7 @@ The term `(N_N/y_N) * Delta_H_f` accounts for the bulk formation energy contribu
 
 ### 6. Formation Enthalpy Calculation
 
-From `/home/trevizam/git/PS-TEROS/teros/core/hf.py` (lines 145-158):
+From `/home/trevizam/git/PS-TEROS/psteros/core/hf.py` (lines 145-158):
 
 ```python
 # Calculate formation energy
@@ -179,5 +179,5 @@ mu_O_max = min(0.0, mu_O_from_formation)
 
 ### Files Analyzed
 
-- `/home/trevizam/git/PS-TEROS/teros/core/thermodynamics.py` - Main surface energy calculations
-- `/home/trevizam/git/PS-TEROS/teros/core/hf.py` - Formation enthalpy calculation
+- `/home/trevizam/git/PS-TEROS/psteros/core/thermodynamics.py` - Main surface energy calculations
+- `/home/trevizam/git/PS-TEROS/psteros/core/hf.py` - Formation enthalpy calculation

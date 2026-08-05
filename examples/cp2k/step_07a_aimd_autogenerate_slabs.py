@@ -19,8 +19,8 @@ Usage:
 import sys
 import os
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
 
 def main():
     """Step 7A: Test AIMD with CP2K - auto-generate slabs."""

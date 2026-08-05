@@ -179,7 +179,7 @@ else:
 
 ### Helper Function: `_build_vasp_inputs()`
 
-Location: `teros/core/adsorption_energy.py`
+Location: `psteros/core/adsorption_energy.py`
 
 ```python
 def _build_vasp_inputs(
@@ -579,7 +579,7 @@ wg = build_core_workgraph(
 ### Integration Tests
 1. **Test 1:** `examples/adsorption_energy/test_oh_ag111/` - Update to test new API
 2. **Test 2:** Create `examples/adsorption_energy/test_relax_oh_ag111/` - Test with `relax_before_adsorption=True`
-3. **Test 3:** Update `teros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py` to use new API
+3. **Test 3:** Update `psteros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py` to use new API
 
 ### Validation Criteria
 - All existing tests pass (backward compatibility verified)
@@ -590,13 +590,13 @@ wg = build_core_workgraph(
 ## File Modifications
 
 ### Files to Modify
-1. `teros/core/adsorption_energy.py`
+1. `psteros/core/adsorption_energy.py`
    - Add `_build_vasp_inputs()` helper function
    - Modify `compute_adsorption_energies_scatter()` signature and implementation
    - Add Phase 1 (relaxation) logic
    - Update Phase 3 to use `vasp.v2.vasp` plugin
 
-2. `teros/core/workgraph.py`
+2. `psteros/core/workgraph.py`
    - Add new parameters to `build_core_workgraph()`
    - Add backward compatibility logic
    - Update adsorption task connection with new outputs
@@ -604,7 +604,7 @@ wg = build_core_workgraph(
 3. `examples/vasp/step_12_adsorption_energy.py`
    - Add example of new API usage (optional, for demonstration)
 
-4. `teros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py`
+4. `psteros/experimental/adsorption_energy/lamno3/run_lamno3_oh_adsorption.py`
    - Update to use new builder-based API with relaxation
 
 ### Files to Create
@@ -656,4 +656,4 @@ wg = build_core_workgraph(
 - AiiDA-VASP documentation: https://aiida-vasp.readthedocs.io/
 - AiiDA-WorkGraph scatter-gather: https://aiida-workgraph.readthedocs.io/
 - Original adsorption energy design: `docs/adsorption_energy_module.md`
-- PSTEROS workflow presets: `teros/core/workgraph.py`
+- PSTEROS workflow presets: `psteros/core/workgraph.py`

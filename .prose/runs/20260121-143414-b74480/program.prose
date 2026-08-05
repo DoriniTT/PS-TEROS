@@ -34,10 +34,10 @@ agent code-reviewer:
 let analysis = session: code-explorer
   prompt: """Analyze the existing thickness convergence module in PS-TEROS:
 
-  1. Read teros/core/convergence/__init__.py to see exports
-  2. Read teros/core/convergence/workgraph.py for the main workflow
-  3. Read teros/core/convergence/slabs.py for slab generation
-  4. Read teros/core/convergence/visualization.py for current visualization
+  1. Read psteros/core/convergence/__init__.py to see exports
+  2. Read psteros/core/convergence/workgraph.py for the main workflow
+  3. Read psteros/core/convergence/slabs.py for slab generation
+  4. Read psteros/core/convergence/visualization.py for current visualization
 
   Focus on:
   - What functions are already implemented for thickness convergence
@@ -81,7 +81,7 @@ let design = session: module-designer
 let visualization_impl = session: implementer
   prompt: """Implement the thickness convergence visualization functions.
 
-  Add to teros/core/convergence/visualization.py:
+  Add to psteros/core/convergence/visualization.py:
 
   1. print_thickness_convergence_summary(workgraph)
      - Print formatted table showing:
@@ -111,7 +111,7 @@ let visualization_impl = session: implementer
 # ============================================================================
 
 let exports_impl = session: implementer
-  prompt: """Update teros/core/convergence/__init__.py to export the new
+  prompt: """Update psteros/core/convergence/__init__.py to export the new
   thickness convergence visualization functions:
 
   Add imports:

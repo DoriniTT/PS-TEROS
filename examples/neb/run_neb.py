@@ -20,7 +20,7 @@ from aiida import load_profile, orm
 # Load AiiDA profile
 load_profile()
 
-from teros.core.neb import (
+from psteros.core.neb import (
     build_neb_workgraph,
     get_neb_results,
     print_neb_summary,
@@ -247,7 +247,7 @@ def main():
     print(f"  verdi process report {wg.pk}")
 
     print("\nAfter completion, analyze results with:")
-    print(f"  from teros.core.neb import print_neb_summary, get_neb_results")
+    print(f"  from psteros.core.neb import print_neb_summary, get_neb_results")
     print(f"  print_neb_summary({wg.pk})")
     print(f"  results = get_neb_results({wg.pk})")
 

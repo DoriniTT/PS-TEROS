@@ -227,7 +227,7 @@ wg2.submit()
 Manually extract RemoteData from a previous run:
 
 ```python
-from teros.core.slabs import extract_restart_folders_from_node
+from psteros.core.slabs import extract_restart_folders_from_node
 
 restart_folders = extract_restart_folders_from_node(22223)
 # Returns: {'term_0': RemoteData(22310), 'term_1': RemoteData(22311)}

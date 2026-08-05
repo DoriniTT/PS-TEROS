@@ -82,7 +82,7 @@ Usage:
 import sys
 import os
 from aiida import load_profile
-from teros.core.convergence import (
+from psteros.core.convergence import (
     build_thickness_convergence_workgraph,
     get_thickness_convergence_results,
 )
@@ -445,7 +445,7 @@ A comprehensive README.md is also included with:
 
 The script follows PS-TEROS patterns from the ML-SAPIE reference and CLAUDE.md:
 
-1. **Module imports** - Uses `teros.core.convergence` API
+1. **Module imports** - Uses `psteros.core.convergence` API
 2. **Builder inputs** - Follows deep merge pattern with proper INCAR parameters
 3. **Obelix configuration** - Uses exact PBS scheduler commands from CLAUDE.md
 4. **Helper function** - Leverages `get_thickness_convergence_results()` from the module

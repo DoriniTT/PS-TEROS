@@ -13,7 +13,7 @@ let preset_stage = session: implementer
 
 ## Summary
 
-Created the `teros/core/stages/preset_resolution.py` module implementing Stage 1 of the `build_core_workgraph()` decomposition.
+Created the `psteros/core/stages/preset_resolution.py` module implementing Stage 1 of the `build_core_workgraph()` decomposition.
 
 ### Function Implemented
 
@@ -89,7 +89,7 @@ def resolve_workflow_preset(
 
 ### Implementation Details
 
-The function delegates to four helper functions from `teros.core.workflow_presets`:
+The function delegates to four helper functions from `psteros.core.workflow_presets`:
 
 1. `check_old_style_api()` - Emits deprecation warning if using old-style API
 2. `resolve_preset()` - Loads preset and applies overrides
@@ -99,7 +99,7 @@ The function delegates to four helper functions from `teros.core.workflow_preset
 ### Usage Example
 
 ```python
-from teros.core.stages import resolve_workflow_preset
+from psteros.core.stages import resolve_workflow_preset
 
 # Basic usage with default preset
 preset_name, flags = resolve_workflow_preset(
@@ -131,13 +131,13 @@ preset_name, flags = resolve_workflow_preset(
 
 ### Files Created/Modified
 
-- **Created**: `/home/thiagotd/git/PS-TEROS/teros/core/stages/preset_resolution.py` (~300 lines)
-- **Modified**: `/home/thiagotd/git/PS-TEROS/teros/core/stages/__init__.py` (replaced placeholder with import)
+- **Created**: `/home/thiagotd/git/PS-TEROS/psteros/core/stages/preset_resolution.py` (~300 lines)
+- **Modified**: `/home/thiagotd/git/PS-TEROS/psteros/core/stages/__init__.py` (replaced placeholder with import)
 
 ### Verification
 
 ```bash
-$ python3 -c "from teros.core.stages import resolve_workflow_preset; print('OK')"
+$ python3 -c "from psteros.core.stages import resolve_workflow_preset; print('OK')"
 OK
 ```
 
@@ -152,7 +152,7 @@ The `resolve_workflow_preset()` function is now ready to be used in the refactor
 
 ```python
 # In build_core_workgraph():
-from teros.core.stages import resolve_workflow_preset
+from psteros.core.stages import resolve_workflow_preset
 
 resolved_preset_name, resolved_flags = resolve_workflow_preset(
     workflow_preset,

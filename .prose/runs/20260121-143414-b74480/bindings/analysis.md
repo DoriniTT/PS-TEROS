@@ -14,7 +14,7 @@ let analysis = session: code-explorer
 
 ## Overview
 
-The thickness convergence module in PS-TEROS is a **complete, production-ready feature** for determining the minimum slab thickness needed for converged surface energy calculations. It's implemented in `/home/thiagotd/git/PS-TEROS/teros/core/convergence/` and follows the same architectural patterns as the ENCUT/k-points convergence testing.
+The thickness convergence module in PS-TEROS is a **complete, production-ready feature** for determining the minimum slab thickness needed for converged surface energy calculations. It's implemented in `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/` and follows the same architectural patterns as the ENCUT/k-points convergence testing.
 
 ## Current Implementation Status
 
@@ -196,14 +196,14 @@ Example script exists at:
 ### 2. Integration with Main Module
 
 **Current Status:**
-- Thickness convergence is NOT integrated into `teros.core.workgraph.build_core_workgraph()`
+- Thickness convergence is NOT integrated into `psteros.core.workgraph.build_core_workgraph()`
 - It exists as a standalone submodule
 - No workflow preset for thickness convergence in `workflow_presets.py`
 
 **To Make it a Full Feature:**
 - Add `compute_thickness_convergence: bool = False` parameter to `build_core_workgraph()`
 - Add optional thickness convergence workflow stage
-- Export from `teros.core.__init__.py` (currently only ENCUT/k-points exported)
+- Export from `psteros.core.__init__.py` (currently only ENCUT/k-points exported)
 - Add workflow preset: `'thickness_convergence'`
 
 ## Comparison with ENCUT/k-points Convergence
@@ -275,7 +275,7 @@ def get_thickness_convergence_results(workgraph) -> dict:
 ## Recommendations for Completion
 
 ### Priority 1: Visualization Functions
-Add to `/home/thiagotd/git/PS-TEROS/teros/core/convergence/visualization.py`:
+Add to `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/visualization.py`:
 
 1. **`print_thickness_convergence_summary()`**
    - Use box-drawing characters like existing function
@@ -301,7 +301,7 @@ Modify `/home/thiagotd/git/PS-TEROS/examples/convergence/thickness/thickness_con
 - Add optional export: `export_thickness_convergence_data(pk, output_dir='.')`
 
 ### Priority 3: Export to Core Module
-Update `/home/thiagotd/git/PS-TEROS/teros/core/__init__.py`:
+Update `/home/thiagotd/git/PS-TEROS/psteros/core/__init__.py`:
 
 ```python
 from .convergence import (
@@ -352,10 +352,10 @@ If desired, add thickness convergence as an optional stage in `build_core_workgr
 
 | Component | File Path | Status |
 |-----------|-----------|--------|
-| Main workflow | `/home/thiagotd/git/PS-TEROS/teros/core/convergence/workgraph.py` | ✓ Complete |
-| Slab generation | `/home/thiagotd/git/PS-TEROS/teros/core/convergence/slabs.py` | ✓ Complete |
-| Visualization | `/home/thiagotd/git/PS-TEROS/teros/core/convergence/visualization.py` | ✗ Incomplete |
-| Module exports | `/home/thiagotd/git/PS-TEROS/teros/core/convergence/__init__.py` | ✓ Complete |
+| Main workflow | `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/workgraph.py` | ✓ Complete |
+| Slab generation | `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/slabs.py` | ✓ Complete |
+| Visualization | `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/visualization.py` | ✗ Incomplete |
+| Module exports | `/home/thiagotd/git/PS-TEROS/psteros/core/convergence/__init__.py` | ✓ Complete |
 | Example script | `/home/thiagotd/git/PS-TEROS/examples/convergence/thickness/thickness_convergence_example.py` | ✓ Complete |
 
 ## Conclusion

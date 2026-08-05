@@ -41,13 +41,13 @@ output implementation_plan = session            ✓ DONE
 
 The following files were modified:
 
-1. **teros/core/convergence/visualization.py**
+1. **psteros/core/convergence/visualization.py**
    - Added `_get_thickness_structure_info()` helper
    - Added `print_thickness_convergence_summary()`
    - Added `plot_thickness_convergence()`
    - Added `export_thickness_convergence_data()`
 
-2. **teros/core/convergence/__init__.py**
+2. **psteros/core/convergence/__init__.py**
    - Added imports for new visualization functions
    - Updated `__all__` list
    - Enhanced module docstring with usage examples

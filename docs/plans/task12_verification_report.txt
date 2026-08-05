@@ -13,7 +13,7 @@ Task: Run full test suite and verify thermodynamics module implementation
 ✓ ALL 16 TESTS PASSED
 
 Test Files:
-- teros/core/tests/test_thermodynamics.py (14 tests)
+- psteros/core/tests/test_thermodynamics.py (14 tests)
 - tests/test_thermodynamics_import.py (2 tests)
 
 Test Coverage:
@@ -150,7 +150,7 @@ Core Features Tested:
 ✓ .get_mu_correction(species, T, P) method
 ✓ .get_raw_data(species, T) method
 ✓ .list_temperatures() method
-✓ Import from teros.core.surface_hydroxylation
+✓ Import from psteros.core.surface_hydroxylation
 ✓ Direct import from .thermodynamics module
 
 Data Integrity:

@@ -13,7 +13,7 @@
 ## Task 1: Create Fixed Atoms Module (Calculator-Agnostic)
 
 **Files:**
-- Create: `/home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/teros/core/fixed_atoms.py`
+- Create: `/home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/psteros/core/fixed_atoms.py`
 
 **Step 1: Create the fixed_atoms.py module**
 
@@ -208,7 +208,7 @@ def add_fixed_atoms_to_vasp_parameters(
 
 **Step 2: Verify file creation**
 
-Run: `ls -la /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/teros/core/fixed_atoms.py`
+Run: `ls -la /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/psteros/core/fixed_atoms.py`
 Expected: File exists with 200+ lines
 
 **Step 3: Test import**
@@ -217,7 +217,7 @@ Run:
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
 source ~/envs/psteros/bin/activate
-python -c "from teros.core.fixed_atoms import get_fixed_atoms_list, add_fixed_atoms_to_cp2k_parameters; print('✓ Import successful')"
+python -c "from psteros.core.fixed_atoms import get_fixed_atoms_list, add_fixed_atoms_to_cp2k_parameters; print('✓ Import successful')"
 ```
 Expected: "✓ Import successful"
 
@@ -229,7 +229,7 @@ Run: `find /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd -type d -name
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
-git add teros/core/fixed_atoms.py
+git add psteros/core/fixed_atoms.py
 git commit -m "feat: add calculator-agnostic fixed atoms utilities
 
 - get_fixed_atoms_list(): identify atoms by position (bottom/top/center)
@@ -243,7 +243,7 @@ git commit -m "feat: add calculator-agnostic fixed atoms utilities
 ## Task 2: Create CP2K AIMD Builder
 
 **Files:**
-- Create: `/home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/teros/core/builders/aimd_builder_cp2k.py`
+- Create: `/home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/psteros/core/builders/aimd_builder_cp2k.py`
 
 **Step 1: Create the aimd_builder_cp2k.py module**
 
@@ -502,7 +502,7 @@ def prepare_aimd_parameters_cp2k(
 
 **Step 2: Verify file creation**
 
-Run: `ls -la /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/teros/core/builders/aimd_builder_cp2k.py`
+Run: `ls -la /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/psteros/core/builders/aimd_builder_cp2k.py`
 Expected: File exists with 200+ lines
 
 **Step 3: Test import**
@@ -511,7 +511,7 @@ Run:
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
 source ~/envs/psteros/bin/activate
-python -c "from teros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k, get_basis_molopt_content, get_gth_potentials_content, prepare_aimd_parameters_cp2k; print('✓ Import successful')"
+python -c "from psteros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k, get_basis_molopt_content, get_gth_potentials_content, prepare_aimd_parameters_cp2k; print('✓ Import successful')"
 ```
 Expected: "✓ Import successful"
 
@@ -523,7 +523,7 @@ Run: `find /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd -type d -name
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
-git add teros/core/builders/aimd_builder_cp2k.py
+git add psteros/core/builders/aimd_builder_cp2k.py
 git commit -m "feat: add CP2K AIMD builder with defaults
 
 - get_aimd_defaults_cp2k(): default NVT parameters
@@ -537,7 +537,7 @@ git commit -m "feat: add CP2K AIMD builder with defaults
 ## Task 3: Create CP2K AIMD Scatter Function
 
 **Files:**
-- Create: `/home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/teros/core/aimd_cp2k.py`
+- Create: `/home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/psteros/core/aimd_cp2k.py`
 
 **Step 1: Create the aimd_cp2k.py module**
 
@@ -606,8 +606,8 @@ def aimd_single_stage_scatter_cp2k(
             - trajectories: Trajectory data from MD
             - retrieved: Retrieved folder data
     """
-    from teros.core.builders.aimd_builder_cp2k import prepare_aimd_parameters_cp2k
-    from teros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
+    from psteros.core.builders.aimd_builder_cp2k import prepare_aimd_parameters_cp2k
+    from psteros.core.fixed_atoms import add_fixed_atoms_to_cp2k_parameters
 
     # Get CP2K workchain
     Cp2kWorkChain = WorkflowFactory('cp2k.base')
@@ -681,7 +681,7 @@ def aimd_single_stage_scatter_cp2k(
 
 **Step 2: Verify file creation**
 
-Run: `ls -la /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/teros/core/aimd_cp2k.py`
+Run: `ls -la /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/psteros/core/aimd_cp2k.py`
 Expected: File exists with 100+ lines
 
 **Step 3: Test import**
@@ -690,7 +690,7 @@ Run:
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
 source ~/envs/psteros/bin/activate
-python -c "from teros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k; print('✓ Import successful')"
+python -c "from psteros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k; print('✓ Import successful')"
 ```
 Expected: "✓ Import successful"
 
@@ -702,7 +702,7 @@ Run: `find /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd -type d -name
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
-git add teros/core/aimd_cp2k.py
+git add psteros/core/aimd_cp2k.py
 git commit -m "feat: add CP2K AIMD scatter function
 
 - aimd_single_stage_scatter_cp2k(): parallel AIMD for all slabs
@@ -717,18 +717,18 @@ git commit -m "feat: add CP2K AIMD scatter function
 ## Task 4: Update Builders __init__.py
 
 **Files:**
-- Modify: `/home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/teros/core/builders/__init__.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/psteros/core/builders/__init__.py`
 
 **Step 1: Read current file**
 
-Run: `cat /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/teros/core/builders/__init__.py`
+Run: `cat /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/psteros/core/builders/__init__.py`
 
 **Step 2: Add CP2K builder exports**
 
 Add these imports to the file:
 
 ```python
-from teros.core.builders.aimd_builder_cp2k import (
+from psteros.core.builders.aimd_builder_cp2k import (
     get_aimd_defaults_cp2k,
     get_basis_molopt_content,
     get_gth_potentials_content,
@@ -750,7 +750,7 @@ Run:
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
 source ~/envs/psteros/bin/activate
-python -c "from teros.core.builders import get_aimd_defaults_cp2k; print('✓ Export successful')"
+python -c "from psteros.core.builders import get_aimd_defaults_cp2k; print('✓ Export successful')"
 ```
 Expected: "✓ Export successful"
 
@@ -762,7 +762,7 @@ Run: `find /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd -type d -name
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
-git add teros/core/builders/__init__.py
+git add psteros/core/builders/__init__.py
 git commit -m "feat: export CP2K AIMD builder functions"
 ```
 
@@ -771,7 +771,7 @@ git commit -m "feat: export CP2K AIMD builder functions"
 ## Task 5: Add Calculator Routing to build_core_workgraph
 
 **Files:**
-- Modify: `/home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/teros/core/workgraph.py`
+- Modify: `/home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd/psteros/core/workgraph.py`
 
 **Step 1: Add calculator parameter to function signature**
 
@@ -815,7 +815,7 @@ After the restart handling section (around line 860), add:
     pseudo_file = None
     if calculator == 'cp2k':
         import io
-        from teros.core.builders.aimd_builder_cp2k import (
+        from psteros.core.builders.aimd_builder_cp2k import (
             get_basis_molopt_content,
             get_gth_potentials_content,
         )
@@ -853,10 +853,10 @@ Locate the AIMD section (around line 1276) and replace the existing code with:
 
         # Import appropriate scatter function based on calculator
         if calculator == 'vasp':
-            from teros.core.aimd import aimd_single_stage_scatter
+            from psteros.core.aimd import aimd_single_stage_scatter
             aimd_scatter_func = aimd_single_stage_scatter
         elif calculator == 'cp2k':
-            from teros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k
+            from psteros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k
             aimd_scatter_func = aimd_single_stage_scatter_cp2k
         else:
             raise ValueError(f"Unknown calculator: {calculator}")
@@ -884,7 +884,7 @@ Locate the AIMD section (around line 1276) and replace the existing code with:
             print(f"     Thickness: {fix_thickness} Å")
             print(f"     Elements: {fix_elements if fix_elements else 'all'}")
 
-            from teros.core.fixed_atoms import get_fixed_atoms_list
+            from psteros.core.fixed_atoms import get_fixed_atoms_list
 
             # For input_slabs, calculate fixed atoms now
             if input_slabs is not None:
@@ -988,7 +988,7 @@ verdi daemon restart
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: add calculator routing and fixed atoms to build_core_workgraph
 
 - Add calculator parameter ('vasp' or 'cp2k')
@@ -1032,8 +1032,8 @@ Usage:
 import sys
 import os
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
 
 def main():
     """Step 7A: Test AIMD with CP2K - auto-generate slabs."""
@@ -1270,8 +1270,8 @@ import os
 from aiida import load_profile
 from aiida import orm
 from ase.io import read
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k
 
 def main():
     """Step 7B: Test AIMD with CP2K - input slabs with fixed atoms."""
@@ -1490,10 +1490,10 @@ Run:
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
 source ~/envs/psteros/bin/activate
 python -c "
-from teros.core.fixed_atoms import get_fixed_atoms_list, add_fixed_atoms_to_cp2k_parameters
-from teros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k
-from teros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k, get_basis_molopt_content, get_gth_potentials_content
-from teros.core.builders import get_aimd_defaults_cp2k
+from psteros.core.fixed_atoms import get_fixed_atoms_list, add_fixed_atoms_to_cp2k_parameters
+from psteros.core.aimd_cp2k import aimd_single_stage_scatter_cp2k
+from psteros.core.builders.aimd_builder_cp2k import get_aimd_defaults_cp2k, get_basis_molopt_content, get_gth_potentials_content
+from psteros.core.builders import get_aimd_defaults_cp2k
 print('✓ All imports successful')
 "
 ```
@@ -1521,15 +1521,15 @@ Print:
 ✓ CP2K AIMD Integration Complete!
 
 New Files Created:
-  - teros/core/fixed_atoms.py
-  - teros/core/aimd_cp2k.py
-  - teros/core/builders/aimd_builder_cp2k.py
+  - psteros/core/fixed_atoms.py
+  - psteros/core/aimd_cp2k.py
+  - psteros/core/builders/aimd_builder_cp2k.py
   - examples/cp2k/step_07a_aimd_autogenerate_slabs.py
   - examples/cp2k/step_07b_aimd_input_slabs.py
 
 Modified Files:
-  - teros/core/builders/__init__.py
-  - teros/core/workgraph.py
+  - psteros/core/builders/__init__.py
+  - psteros/core/workgraph.py
 
 Next Steps:
   1. Test step_07a with real structures

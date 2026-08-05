@@ -2,7 +2,7 @@
 
 ## Overview
 
-The surface hydroxylation module (`teros.core.surface_hydroxylation`) enables automated generation and relaxation of surface variants with different hydroxylation coverages and oxygen vacancy configurations. This is essential for studying surface chemistry, catalytic activity, and surface stability under reactive conditions.
+The surface hydroxylation module (`psteros.core.surface_hydroxylation`) enables automated generation and relaxation of surface variants with different hydroxylation coverages and oxygen vacancy configurations. This is essential for studying surface chemistry, catalytic activity, and surface stability under reactive conditions.
 
 **Key capabilities:**
 - Generate hydroxylated surface structures (OH groups)
@@ -68,7 +68,7 @@ The module follows PS-TEROS two-tier design:
 
 ```python
 # High-level (user-facing)
-from teros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
+from psteros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
 
 wg = build_surface_hydroxylation_workgraph(
     structure_pk=1234,
@@ -125,7 +125,7 @@ Outputs use descriptive keys in the format: `{index}_{variant_name}`
 
 ```python
 from aiida import orm
-from teros.core.surface_hydroxylation import (
+from psteros.core.surface_hydroxylation import (
     build_surface_hydroxylation_workgraph,
     organize_hydroxylation_results,
 )
@@ -330,7 +330,7 @@ wg = build_surface_hydroxylation_workgraph(..., max_parallel_jobs=10)
 **Why needed**: WorkGraph cannot pass namespace dicts containing AiiDA nodes to CalcFunctions due to JSON serialization limitations. Solution: return raw namespaces + provide Python helper.
 
 ```python
-from teros.core.surface_hydroxylation import organize_hydroxylation_results
+from psteros.core.surface_hydroxylation import organize_hydroxylation_results
 
 node = orm.load_node(workflow_pk)
 results = organize_hydroxylation_results(node)
@@ -829,7 +829,7 @@ results = organize_hydroxylation_results(node)
 best = sorted(results['successful_relaxations'], key=lambda r: r['energy'])[0]
 
 # Use in electronic structure workflow
-from teros.core.electronic_properties import build_dos_workflow
+from psteros.core.electronic_properties import build_dos_workflow
 
 dos_wg = build_dos_workflow(
     structure_pk=best['structure_pk'],

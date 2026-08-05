@@ -20,7 +20,7 @@ Usage:
 import sys
 import os
 from aiida import load_profile, orm
-from teros.core.aimd import build_aimd_workgraph
+from psteros.core.aimd import build_aimd_workgraph
 from ase.io import read
 
 

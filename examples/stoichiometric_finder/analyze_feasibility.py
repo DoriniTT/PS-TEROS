@@ -15,7 +15,7 @@ This is a pure Python analysis (no AiiDA needed) that helps decide:
 
 import os
 from pymatgen.core import Structure
-from teros.core.surface_energy import (
+from psteros.core.surface_energy import (
     analyze_miller_feasibility,
     get_feasibility_summary,
     find_stoichiometric_symmetric_slabs,
@@ -130,7 +130,7 @@ This analysis helps you decide:
    -> Surface energy = (E_slab - N*E_bulk/atom) / 2A
 
 2. For orientations with has_valid_surfaces=False:
-   -> Use build_thermodynamics_workgraph() from teros.core.thermodynamics
+   -> Use build_thermodynamics_workgraph() from psteros.core.thermodynamics
    -> Surface energy = gamma(delta_mu) requires chemical potential
 
 3. For mixed cases:

@@ -288,8 +288,8 @@ class TestCalcfunctions:
 
     def test_calcfunction_handles_exist(self):
         """Test that calcfunction TaskHandles are properly defined."""
-        from teros.core.slabs import extract_total_energy, calculate_energy_difference
-        from teros.core.thermodynamics import identify_oxide_type
+        from psteros.core.slabs import extract_total_energy, calculate_energy_difference
+        from psteros.core.thermodynamics import identify_oxide_type
 
         # Verify these are callable/have expected attributes
         assert extract_total_energy is not None
@@ -388,7 +388,7 @@ class TestAdsorptionEnergyFunctions:
 
     def test_parse_formula(self):
         """Test parse_formula function."""
-        from teros.core.adsorption_energy import parse_formula
+        from psteros.core.adsorption_energy import parse_formula
 
         result = parse_formula('OOH')
         assert result == {'O': 2, 'H': 1}
@@ -483,6 +483,6 @@ class TestFormationEnthalpyFunctions:
 
     def test_formation_enthalpy_handles_exist(self):
         """Test that formation enthalpy TaskHandle is defined."""
-        from teros.core.hf import calculate_formation_enthalpy
+        from psteros.core.hf import calculate_formation_enthalpy
 
         assert calculate_formation_enthalpy is not None

@@ -423,7 +423,7 @@ Run a single slab calculation before launching scatter-gather over all slabs:
 .. code-block:: python
 
    # Test with one slab first
-   from teros.core.slabs import generate_slabs_scatter
+   from psteros.core.slabs import generate_slabs_scatter
    test_slab = generate_slabs_scatter(
        structures=[test_structure],  # Just one
        max_index=1,

@@ -10,21 +10,21 @@ All tasks for integrating electronic properties (DOS and bands) into PS-TEROS ha
 
 ## Core Implementation
 
-- [x] **Core workgraph integration** (`teros/core/workgraph.py`)
+- [x] **Core workgraph integration** (`psteros/core/workgraph.py`)
   - [x] Add output declarations for electronic properties
   - [x] Implement BandsWorkChain task creation
   - [x] Configure namespace inputs (scf, bands, dos)
   - [x] Add metadata configuration
   - [x] Connect outputs to workgraph
 
-- [x] **Electronic properties builder** (`teros/core/builders/electronic_properties_builder.py`)
+- [x] **Electronic properties builder** (`psteros/core/builders/electronic_properties_builder.py`)
   - [x] Create `get_electronic_properties_defaults()` function
   - [x] Define SCF parameters
   - [x] Define band structure parameters
   - [x] Define DOS parameters
   - [x] Define band workflow settings
 
-- [x] **Export builder** (`teros/core/builders/__init__.py`)
+- [x] **Export builder** (`psteros/core/builders/__init__.py`)
   - [x] Add `get_electronic_properties_defaults` to exports
 
 ---
@@ -102,7 +102,7 @@ All tasks for integrating electronic properties (DOS and bands) into PS-TEROS ha
 
 ### Created Files (12)
 ```
-✅ teros/core/builders/electronic_properties_builder.py
+✅ psteros/core/builders/electronic_properties_builder.py
 ✅ examples/electronic_properties/bulk_dos_bands_ag2o.py
 ✅ examples/electronic_properties/README.md
 ✅ examples/electronic_properties/IMPLEMENTATION_SUMMARY.md
@@ -116,8 +116,8 @@ All tasks for integrating electronic properties (DOS and bands) into PS-TEROS ha
 
 ### Modified Files (4)
 ```
-✅ teros/core/workgraph.py
-✅ teros/core/builders/__init__.py
+✅ psteros/core/workgraph.py
+✅ psteros/core/builders/__init__.py
 ✅ examples/complete/complete_ag2o_example.py
 ✅ /home/thiagotd/envs/aiida/lib/python3.13/site-packages/aiida_vasp/workchains/v2/bands.py
 ```
@@ -125,7 +125,7 @@ All tasks for integrating electronic properties (DOS and bands) into PS-TEROS ha
 ### Backup Files (2)
 ```
 ✅ /home/thiagotd/envs/aiida/lib/python3.13/site-packages/aiida_vasp/workchains/v2/bands.py.backup_20251012_094444
-✅ teros/core/builders/electronic_properties_builder.py.backup_20251012_094513
+✅ psteros/core/builders/electronic_properties_builder.py.backup_20251012_094513
 ```
 
 ---
@@ -215,8 +215,8 @@ cp /home/thiagotd/envs/aiida/lib/python3.13/site-packages/aiida_vasp/workchains/
    /home/thiagotd/envs/aiida/lib/python3.13/site-packages/aiida_vasp/workchains/v2/bands.py
 
 # Restore electronic properties builder
-cp /home/thiagotd/git/PS-TEROS/.worktree/feature-dos-bands/teros/core/builders/electronic_properties_builder.py.backup_20251012_094513 \
-   /home/thiagotd/git/PS-TEROS/.worktree/feature-dos-bands/teros/core/builders/electronic_properties_builder.py
+cp /home/thiagotd/git/PS-TEROS/.worktree/feature-dos-bands/psteros/core/builders/electronic_properties_builder.py.backup_20251012_094513 \
+   /home/thiagotd/git/PS-TEROS/.worktree/feature-dos-bands/psteros/core/builders/electronic_properties_builder.py
 
 # Remove electronic properties from complete example (git checkout)
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-dos-bands

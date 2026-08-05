@@ -9,7 +9,7 @@ slabs are validated BEFORE running expensive DFT calculations.
 Material: PdIn (B2 intermetallic)
 Surfaces: (110), (100) - pre-filtered for stoichiometry+symmetry
 
-For non-stoichiometric or asymmetric surfaces, use teros.core.thermodynamics.
+For non-stoichiometric or asymmetric surfaces, use psteros.core.thermodynamics.
 
 Usage:
     source ~/envs/aiida/bin/activate
@@ -19,7 +19,7 @@ Usage:
 import sys
 import os
 from aiida import load_profile
-from teros.core.surface_energy import (
+from psteros.core.surface_energy import (
     build_metal_surface_energy_workgraph,
     analyze_miller_feasibility,
     get_feasibility_summary,
@@ -78,7 +78,7 @@ def main():
     if not all_feasible:
         print("\n   WARNING: Some orientations have no stoichiometric+symmetric surfaces!")
         print("   The workflow will raise NoStoichiometricSymmetricSurfaceError.")
-        print("   Use teros.core.thermodynamics for those orientations instead.")
+        print("   Use psteros.core.thermodynamics for those orientations instead.")
 
     # Code configuration (update for your cluster)
     code_label = 'VASP-6.5.1-idefix@obelix'
@@ -176,7 +176,7 @@ def main():
     print(f"  - Non-stoichiometric terminations filtered BEFORE DFT")
     print(f"  - Saves computational resources")
     print(f"\nFor non-stoichiometric surfaces:")
-    print(f"  Use teros.core.thermodynamics instead")
+    print(f"  Use psteros.core.thermodynamics instead")
     print(f"{'=' * 70}\n")
 
     return wg

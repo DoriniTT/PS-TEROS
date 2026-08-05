@@ -19,7 +19,7 @@ Usage:
 """
 
 from aiida import load_profile, orm
-from teros.workgraph import build_core_workgraph
+from psteros.workgraph import build_core_workgraph
 
 def main():
     """Main function to run the formation enthalpy workflow."""
@@ -29,7 +29,7 @@ def main():
     load_profile()
 
     # Define structures directory
-    structures_dir = '/home/thiagotd/git/PS-TEROS/teros/structures'
+    structures_dir = '/home/thiagotd/git/PS-TEROS/psteros/structures'
 
     # Define calculation parameters
     code_label = 'VASP-VTST-6.4.3@bohr'

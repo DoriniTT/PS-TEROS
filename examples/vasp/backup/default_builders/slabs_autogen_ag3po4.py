@@ -11,8 +11,8 @@ Usage:
 """
 
 from aiida import load_profile
-from teros.core.workgraph import build_core_workgraph_with_map
-from teros.core.builders.default_ag3po4_builders import get_ag3po4_defaults
+from psteros.core.workgraph import build_core_workgraph_with_map
+from psteros.core.builders.default_ag3po4_builders import get_ag3po4_defaults
 
 def main():
     """Main function to run the slab auto-generation and relaxation workflow."""

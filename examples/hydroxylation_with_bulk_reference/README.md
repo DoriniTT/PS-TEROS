@@ -80,7 +80,7 @@ After completion, access results:
 
 ```python
 from aiida import orm
-from teros.core.surface_hydroxylation import organize_hydroxylation_results
+from psteros.core.surface_hydroxylation import organize_hydroxylation_results
 
 node = orm.load_node(<workflow_pk>)
 results = organize_hydroxylation_results(node)
@@ -136,4 +136,4 @@ The reference data enables surface free energy calculations per Section S2:
 
 - Design document: `/home/thiagotd/git/fosfato/calculos/hydroxylation/docs/plans/2025-10-27-bulk-pristine-reference-calculations-design.md`
 - Section S2: `surface_energy_calc_procedure.tex`
-- Main module: `teros/core/surface_hydroxylation/workgraph.py`
+- Main module: `psteros/core/surface_hydroxylation/workgraph.py`

@@ -13,12 +13,12 @@
 ## Task 1: Create Electronic Properties Builder
 
 **Files:**
-- Create: `teros/core/builders/electronic_properties_builder.py`
-- Modify: `teros/core/builders/__init__.py`
+- Create: `psteros/core/builders/electronic_properties_builder.py`
+- Modify: `psteros/core/builders/__init__.py`
 
 **Step 1: Create the builder file with function signature**
 
-Create `teros/core/builders/electronic_properties_builder.py`:
+Create `psteros/core/builders/electronic_properties_builder.py`:
 
 ```python
 """
@@ -171,7 +171,7 @@ def get_electronic_properties_defaults(
 
 **Step 2: Update __init__.py to expose the builder**
 
-Modify `teros/core/builders/__init__.py`:
+Modify `psteros/core/builders/__init__.py`:
 
 ```python
 """
@@ -195,7 +195,7 @@ __all__ = [
 
 Run:
 ```bash
-source ~/envs/psteros/bin/activate && python -c "from teros.core.builders import get_electronic_properties_defaults; print(get_electronic_properties_defaults()['band_settings'])"
+source ~/envs/psteros/bin/activate && python -c "from psteros.core.builders import get_electronic_properties_defaults; print(get_electronic_properties_defaults()['band_settings'])"
 ```
 
 Expected: Should print the band_settings dictionary without errors.
@@ -203,7 +203,7 @@ Expected: Should print the band_settings dictionary without errors.
 **Step 4: Commit the builder**
 
 ```bash
-git add teros/core/builders/electronic_properties_builder.py teros/core/builders/__init__.py
+git add psteros/core/builders/electronic_properties_builder.py psteros/core/builders/__init__.py
 git commit -m "feat: add electronic properties builder for DOS and bands"
 ```
 
@@ -212,13 +212,13 @@ git commit -m "feat: add electronic properties builder for DOS and bands"
 ## Task 2: Add Electronic Properties Task to core_workgraph
 
 **Files:**
-- Modify: `teros/core/workgraph.py:58-65` (add outputs to @task.graph decorator)
-- Modify: `teros/core/workgraph.py:66-108` (add parameters to core_workgraph function)
-- Modify: `teros/core/workgraph.py:403-423` (add electronic properties calculation and outputs)
+- Modify: `psteros/core/workgraph.py:58-65` (add outputs to @task.graph decorator)
+- Modify: `psteros/core/workgraph.py:66-108` (add parameters to core_workgraph function)
+- Modify: `psteros/core/workgraph.py:403-423` (add electronic properties calculation and outputs)
 
 **Step 1: Add outputs to @task.graph decorator**
 
-In `teros/core/workgraph.py`, modify the `@task.graph` decorator (around line 58):
+In `psteros/core/workgraph.py`, modify the `@task.graph` decorator (around line 58):
 
 ```python
 @task.graph(outputs=[
@@ -234,7 +234,7 @@ In `teros/core/workgraph.py`, modify the `@task.graph` decorator (around line 58
 
 **Step 2: Add parameters to core_workgraph function signature**
 
-In `teros/core/workgraph.py`, add parameters to `core_workgraph` function (around line 100):
+In `psteros/core/workgraph.py`, add parameters to `core_workgraph` function (around line 100):
 
 ```python
 def core_workgraph(
@@ -288,7 +288,7 @@ def core_workgraph(
 
 **Step 3: Add electronic properties calculation after bulk relaxation**
 
-In `teros/core/workgraph.py`, add the electronic properties calculation after the bulk relaxation section and before slab generation (around line 291, just before the SLAB GENERATION comment):
+In `psteros/core/workgraph.py`, add the electronic properties calculation after the bulk relaxation section and before slab generation (around line 291, just before the SLAB GENERATION comment):
 
 ```python
     # ===== ELECTRONIC PROPERTIES CALCULATION (OPTIONAL) =====
@@ -323,7 +323,7 @@ In `teros/core/workgraph.py`, add the electronic properties calculation after th
 
 **Step 4: Add electronic properties to return dictionary**
 
-In `teros/core/workgraph.py`, modify the return statement (around line 403):
+In `psteros/core/workgraph.py`, modify the return statement (around line 403):
 
 ```python
     # Return all outputs
@@ -354,7 +354,7 @@ In `teros/core/workgraph.py`, modify the return statement (around line 403):
 
 **Step 5: Update docstring for core_workgraph**
 
-In `teros/core/workgraph.py`, update the docstring (around line 109):
+In `psteros/core/workgraph.py`, update the docstring (around line 109):
 
 Add to the "Calculations controlled by boolean flags" section:
 ```
@@ -381,7 +381,7 @@ Add to Returns section:
 **Step 6: Commit core_workgraph modifications**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: add electronic properties calculation to core_workgraph"
 ```
 
@@ -390,12 +390,12 @@ git commit -m "feat: add electronic properties calculation to core_workgraph"
 ## Task 3: Add Parameter Handling to build_core_workgraph
 
 **Files:**
-- Modify: `teros/core/workgraph.py:426-468` (add parameters to build_core_workgraph signature)
-- Modify: `teros/core/workgraph.py:862-865` (add electronic properties task when needed)
+- Modify: `psteros/core/workgraph.py:426-468` (add parameters to build_core_workgraph signature)
+- Modify: `psteros/core/workgraph.py:862-865` (add electronic properties task when needed)
 
 **Step 1: Add parameters to build_core_workgraph function signature**
 
-In `teros/core/workgraph.py`, modify `build_core_workgraph` function signature (around line 426):
+In `psteros/core/workgraph.py`, modify `build_core_workgraph` function signature (around line 426):
 
 ```python
 def build_core_workgraph(
@@ -450,7 +450,7 @@ def build_core_workgraph(
 
 **Step 2: Pass electronic properties parameters to core_workgraph.build()**
 
-In `teros/core/workgraph.py`, modify the `core_workgraph.build()` call (around line 608):
+In `psteros/core/workgraph.py`, modify the `core_workgraph.build()` call (around line 608):
 
 ```python
     # Build the workgraph (pass None for input_slabs to avoid serialization issues)
@@ -506,7 +506,7 @@ In `teros/core/workgraph.py`, modify the `core_workgraph.build()` call (around l
 
 **Step 3: Add manual electronic properties task when enabled**
 
-In `teros/core/workgraph.py`, add electronic properties handling after the slab handling section (around line 861, just before setting wg.name):
+In `psteros/core/workgraph.py`, add electronic properties handling after the slab handling section (around line 861, just before setting wg.name):
 
 ```python
     # NEW: Add electronic properties calculation if requested
@@ -575,7 +575,7 @@ In `teros/core/workgraph.py`, add electronic properties handling after the slab 
 
 **Step 4: Update build_core_workgraph docstring**
 
-In `teros/core/workgraph.py`, update the docstring (around line 470):
+In `psteros/core/workgraph.py`, update the docstring (around line 470):
 
 Add to main description:
 ```
@@ -596,7 +596,7 @@ Add to Args section:
 **Step 5: Commit build_core_workgraph modifications**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: add electronic properties parameter handling to build_core_workgraph"
 ```
 
@@ -605,11 +605,11 @@ git commit -m "feat: add electronic properties parameter handling to build_core_
 ## Task 4: Update build_core_workgraph_with_map Wrapper
 
 **Files:**
-- Modify: `teros/core/workgraph.py:868-972` (add parameters to wrapper function)
+- Modify: `psteros/core/workgraph.py:868-972` (add parameters to wrapper function)
 
 **Step 1: Add parameters to build_core_workgraph_with_map signature**
 
-In `teros/core/workgraph.py`, modify `build_core_workgraph_with_map` function signature (around line 868):
+In `psteros/core/workgraph.py`, modify `build_core_workgraph_with_map` function signature (around line 868):
 
 ```python
 def build_core_workgraph_with_map(
@@ -662,7 +662,7 @@ def build_core_workgraph_with_map(
 
 **Step 2: Forward new parameters to build_core_workgraph**
 
-In `teros/core/workgraph.py`, modify the return statement in `build_core_workgraph_with_map` (around line 931):
+In `psteros/core/workgraph.py`, modify the return statement in `build_core_workgraph_with_map` (around line 931):
 
 ```python
     # Simply forward to build_core_workgraph which now uses scatter-gather
@@ -717,7 +717,7 @@ In `teros/core/workgraph.py`, modify the return statement in `build_core_workgra
 **Step 3: Commit wrapper modifications**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: forward electronic properties parameters in build_core_workgraph_with_map"
 ```
 
@@ -757,8 +757,8 @@ Expected: Daemon is running
 Run:
 ```bash
 source ~/envs/psteros/bin/activate && python -c "
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders import get_electronic_properties_defaults
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders import get_electronic_properties_defaults
 print('✓ Imports successful')
 defaults = get_electronic_properties_defaults()
 print('✓ Builder returns:', list(defaults.keys()))

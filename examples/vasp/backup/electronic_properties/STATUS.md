@@ -41,14 +41,14 @@ WorkGraph<Ag2O_Bulk_Electronic_Properties><28346> Waiting
 ## Implementation Details
 
 ### Files Modified
-1. **teros/core/workgraph.py**
+1. **psteros/core/workgraph.py**
    - Added electronic properties outputs to @task.graph decorator
    - Implemented BandsWorkChain integration (lines 889-966)
    - Proper namespace structure for scf/bands/dos inputs
    - Metadata configuration to prevent exceptions
 
 ### Files Created
-1. **teros/core/builders/electronic_properties.py**
+1. **psteros/core/builders/electronic_properties.py**
    - Builder function for electronic properties defaults
    
 2. **examples/electronic_properties/bulk_dos_bands_ag2o.py**

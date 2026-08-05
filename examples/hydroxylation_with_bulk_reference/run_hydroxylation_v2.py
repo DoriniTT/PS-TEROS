@@ -19,7 +19,7 @@ Usage:
 import sys
 from pathlib import Path
 from aiida import orm, load_profile
-from teros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
+from psteros.core.surface_hydroxylation import build_surface_hydroxylation_workgraph
 
 def main():
     """Run hydroxylation workflow with bulk and pristine reference calculations."""
@@ -232,7 +232,7 @@ def main():
     print(f"\nAfter completion, analyze results:")
     print(f"  python -c \"")
     print(f"from aiida import orm")
-    print(f"from teros.core.surface_hydroxylation import organize_hydroxylation_results")
+    print(f"from psteros.core.surface_hydroxylation import organize_hydroxylation_results")
     print(f"node = orm.load_node({pk})")
     print(f"results = organize_hydroxylation_results(node)")
     print(f"ref = results['reference_data']")

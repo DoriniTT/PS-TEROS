@@ -73,13 +73,13 @@ term_1:
 
 ### Core Implementation (3 files)
 
-1. **`teros/core/slabs.py`**
+1. **`psteros/core/slabs.py`**
    - `scf_slabs_scatter()` - SCF workgraph
    - `calculate_relaxation_energies_scatter()` - Energy calculation workgraph
    - `calculate_energy_difference()` - Helper calcfunction
    - `scf_relax_and_calculate_relaxation_energy()` - Combined function (kept for potential use)
 
-2. **`teros/core/workgraph.py`**
+2. **`psteros/core/workgraph.py`**
    - Added `compute_relaxation_energy` parameter
    - Updated `core_workgraph()` to conditionally create SCF and relaxation energy workgraphs
    - Updated `build_core_workgraph()` to pass the parameter
@@ -101,7 +101,7 @@ term_1:
 ### Enable Relaxation Energy Calculation
 
 ```python
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 
 wg = build_core_workgraph(
     structures_dir="/path/to/structures",

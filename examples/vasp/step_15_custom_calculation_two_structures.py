@@ -24,7 +24,7 @@ Usage:
 import sys
 import os
 from aiida import orm, load_profile
-from teros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
+from psteros.core.custom_calculation import build_custom_calculation_workgraph, get_custom_results
 
 
 def load_structures_from_files(structures_dir):
@@ -247,7 +247,7 @@ def main():
     print(f"\n--- RETRIEVE RESULTS (after completion) ---")
     print(f"In Python:")
     print(f"  from aiida import orm, load_profile")
-    print(f"  from teros.core.custom_calculation import get_custom_results")
+    print(f"  from psteros.core.custom_calculation import get_custom_results")
     print(f"  load_profile('psteros')")
     print(f"  wg = orm.load_node({wg.pk})")
     print(f"  results = get_custom_results(wg)")

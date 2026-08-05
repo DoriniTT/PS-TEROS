@@ -33,7 +33,7 @@ Successfully implemented a three-tier workflow preset system for PS-TEROS that s
 
 ### New Files Created (7)
 
-1. **`teros/core/workflow_presets.py`** (593 lines)
+1. **`psteros/core/workflow_presets.py`** (593 lines)
    - Preset definitions (9 presets)
    - Resolution logic
    - Validation functions
@@ -75,7 +75,7 @@ Successfully implemented a three-tier workflow preset system for PS-TEROS that s
 
 ### Modified Files (2)
 
-1. **`teros/core/workgraph.py`**
+1. **`psteros/core/workgraph.py`**
    - Added imports for preset functions
    - Modified `build_core_workgraph()` signature (7 bool defaults: `True/False` → `None`)
    - Added `workflow_preset` parameter
@@ -83,7 +83,7 @@ Successfully implemented a three-tier workflow preset system for PS-TEROS that s
    - Updated docstring with preset documentation
    - Added workflow configuration output
 
-2. **`teros/core/__init__.py`**
+2. **`psteros/core/__init__.py`**
    - Added preset function exports
    - Updated `__all__` list
 
@@ -132,7 +132,7 @@ compute_cleavage=False,  # Override preset default
 
 ### 5. Discoverability
 ```python
-from teros.core import list_workflow_presets
+from psteros.core import list_workflow_presets
 list_workflow_presets()  # Shows all available presets
 ```
 
@@ -348,11 +348,11 @@ The implementation:
 
 ```python
 # See all available presets
-from teros.core import list_workflow_presets
+from psteros.core import list_workflow_presets
 list_workflow_presets()
 
 # Use a preset
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.workgraph import build_core_workgraph
 wg = build_core_workgraph(
     workflow_preset='surface_thermodynamics',
     # ... your parameters

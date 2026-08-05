@@ -13,7 +13,7 @@
 ## Task 1: Create Slab Electronic Properties Builder
 
 **Files:**
-- Modify: `teros/core/builders/electronic_properties_builder.py` (append to end of file)
+- Modify: `psteros/core/builders/electronic_properties_builder.py` (append to end of file)
 
 **Step 1: Add slab-specific builder function**
 
@@ -166,7 +166,7 @@ def get_slab_electronic_properties_defaults(
 
 ```bash
 cd /home/thiagotd/git/PS-TEROS/.worktree/feature-bands-slabs
-source ~/envs/psteros/bin/activate && python -m py_compile teros/core/builders/electronic_properties_builder.py
+source ~/envs/psteros/bin/activate && python -m py_compile psteros/core/builders/electronic_properties_builder.py
 ```
 
 Expected: No output (successful compilation)
@@ -174,7 +174,7 @@ Expected: No output (successful compilation)
 **Step 3: Commit**
 
 ```bash
-git add teros/core/builders/electronic_properties_builder.py
+git add psteros/core/builders/electronic_properties_builder.py
 git commit -m "feat: add get_slab_electronic_properties_defaults builder
 
 Added material-agnostic parameter builder for slab electronic properties
@@ -186,7 +186,7 @@ with denser k-point sampling tuned for 2D systems."
 ## Task 2: Create Scatter Function for Slab Electronic Properties
 
 **Files:**
-- Modify: `teros/core/slabs.py` (append to end of file before `if __name__`)
+- Modify: `psteros/core/slabs.py` (append to end of file before `if __name__`)
 
 **Step 1: Add scatter function**
 
@@ -349,7 +349,7 @@ def calculate_electronic_properties_slabs_scatter(
 **Step 2: Verify the function syntax**
 
 ```bash
-source ~/envs/psteros/bin/activate && python -m py_compile teros/core/slabs.py
+source ~/envs/psteros/bin/activate && python -m py_compile psteros/core/slabs.py
 ```
 
 Expected: No output (successful compilation)
@@ -357,7 +357,7 @@ Expected: No output (successful compilation)
 **Step 3: Commit**
 
 ```bash
-git add teros/core/slabs.py
+git add psteros/core/slabs.py
 git commit -m "feat: add calculate_electronic_properties_slabs_scatter function
 
 Scatter-gather function for selective slab electronic properties calculation
@@ -370,7 +370,7 @@ and seekpath parameters in separate dynamic namespaces."
 ## Task 3: Add Outputs to core_workgraph Decorator
 
 **Files:**
-- Modify: `teros/core/workgraph.py:59-68` (add new outputs to decorator)
+- Modify: `psteros/core/workgraph.py:59-68` (add new outputs to decorator)
 
 **Step 1: Add slab electronic properties outputs**
 
@@ -434,7 +434,7 @@ In the `return` statement at the end of `core_workgraph()` function (around line
 **Step 3: Verify syntax**
 
 ```bash
-source ~/envs/psteros/bin/activate && python -m py_compile teros/core/workgraph.py
+source ~/envs/psteros/bin/activate && python -m py_compile psteros/core/workgraph.py
 ```
 
 Expected: No output (successful compilation)
@@ -442,7 +442,7 @@ Expected: No output (successful compilation)
 **Step 4: Commit**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: add slab electronic properties outputs to core_workgraph
 
 Added four new outputs: slab_bands, slab_dos, slab_primitive_structures,
@@ -454,8 +454,8 @@ slab_seekpath_parameters to support selective slab electronic properties."
 ## Task 4: Add Parameters to build_core_workgraph
 
 **Files:**
-- Modify: `teros/core/workgraph.py:441-488` (add parameters to function signature)
-- Modify: `teros/core/workgraph.py:635-678` (pass parameters to core_workgraph.build())
+- Modify: `psteros/core/workgraph.py:441-488` (add parameters to function signature)
+- Modify: `psteros/core/workgraph.py:635-678` (pass parameters to core_workgraph.build())
 
 **Step 1: Add parameters to build_core_workgraph signature**
 
@@ -514,7 +514,7 @@ Add documentation for the new parameters in the docstring (after the bulk electr
 **Step 3: Verify syntax**
 
 ```bash
-source ~/envs/psteros/bin/activate && python -m py_compile teros/core/workgraph.py
+source ~/envs/psteros/bin/activate && python -m py_compile psteros/core/workgraph.py
 ```
 
 Expected: No output (successful compilation)
@@ -522,7 +522,7 @@ Expected: No output (successful compilation)
 **Step 4: Commit**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: add slab electronic properties parameters to build_core_workgraph
 
 Added compute_electronic_properties_slabs flag, slab_electronic_properties dict,
@@ -534,7 +534,7 @@ and default parameter arguments for selective slab electronic properties."
 ## Task 5: Integrate Slab Electronic Properties into build_core_workgraph
 
 **Files:**
-- Modify: `teros/core/workgraph.py` (add integration logic after cleavage calculation, around line 890)
+- Modify: `psteros/core/workgraph.py` (add integration logic after cleavage calculation, around line 890)
 
 **Step 1: Add slab electronic properties calculation**
 
@@ -543,7 +543,7 @@ After the cleavage energies block (around line 888), add this new conditional bl
 ```python
     # NEW: Add slab electronic properties calculation if requested
     if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties:
-        from teros.core.slabs import calculate_electronic_properties_slabs_scatter
+        from psteros.core.slabs import calculate_electronic_properties_slabs_scatter
 
         # Get default parameters (per-slab overrides handled in scatter function)
         default_params = slab_bands_parameters if slab_bands_parameters else {}
@@ -631,7 +631,7 @@ Replace the code from Step 1 with this simpler version:
     # NEW: Add slab electronic properties calculation if requested
     # Currently only supported for input_slabs mode (including restart)
     if compute_electronic_properties_slabs and relax_slabs and slab_electronic_properties and use_input_slabs:
-        from teros.core.slabs import calculate_electronic_properties_slabs_scatter
+        from psteros.core.slabs import calculate_electronic_properties_slabs_scatter
 
         # Get default parameters (per-slab overrides handled in scatter function)
         default_params = slab_bands_parameters if slab_bands_parameters else {}
@@ -681,7 +681,7 @@ Replace the code from Step 1 with this simpler version:
 **Step 3: Verify syntax**
 
 ```bash
-source ~/envs/psteros/bin/activate && python -m py_compile teros/core/workgraph.py
+source ~/envs/psteros/bin/activate && python -m py_compile psteros/core/workgraph.py
 ```
 
 Expected: No output (successful compilation)
@@ -695,7 +695,7 @@ find . -type d -name __pycache__ -exec rm -rf {} + && find . -name "*.pyc" -dele
 **Step 5: Commit**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: integrate slab electronic properties into build_core_workgraph
 
 Added conditional task creation for slab electronic properties calculation.
@@ -732,8 +732,8 @@ Based on: docs/plans/2025-10-12-slab-electronic-properties.md
 """
 
 from aiida import orm
-from teros.core.workgraph import build_core_workgraph
-from teros.core.builders.electronic_properties_builder import (
+from psteros.core.workgraph import build_core_workgraph
+from psteros.core.builders.electronic_properties_builder import (
     get_electronic_properties_defaults,
     get_slab_electronic_properties_defaults,
 )
@@ -860,7 +860,7 @@ calculation with per-slab parameter overrides and defaults."
 ## Task 7: Update build_core_workgraph_with_map (Deprecated Wrapper)
 
 **Files:**
-- Modify: `teros/core/workgraph.py:980-1093` (add new parameters to deprecated function)
+- Modify: `psteros/core/workgraph.py:980-1093` (add new parameters to deprecated function)
 
 **Step 1: Add parameters to deprecated function signature**
 
@@ -905,7 +905,7 @@ In the `return build_core_workgraph(...)` call (around line 1047), add the new p
 **Step 3: Verify syntax**
 
 ```bash
-source ~/envs/psteros/bin/activate && python -m py_compile teros/core/workgraph.py
+source ~/envs/psteros/bin/activate && python -m py_compile psteros/core/workgraph.py
 ```
 
 Expected: No output (successful compilation)
@@ -913,7 +913,7 @@ Expected: No output (successful compilation)
 **Step 4: Commit**
 
 ```bash
-git add teros/core/workgraph.py
+git add psteros/core/workgraph.py
 git commit -m "feat: forward slab electronic properties parameters in deprecated wrapper
 
 Updated build_core_workgraph_with_map to forward new slab electronic
@@ -949,12 +949,12 @@ Create `test_slab_electronic_properties_minimal.py`:
 """Minimal test: Check that slab electronic properties functions exist and compile"""
 
 # Test imports
-from teros.core.builders.electronic_properties_builder import (
+from psteros.core.builders.electronic_properties_builder import (
     get_electronic_properties_defaults,
     get_slab_electronic_properties_defaults,
 )
-from teros.core.slabs import calculate_electronic_properties_slabs_scatter
-from teros.core.workgraph import build_core_workgraph
+from psteros.core.slabs import calculate_electronic_properties_slabs_scatter
+from psteros.core.workgraph import build_core_workgraph
 
 # Test builder
 defaults = get_slab_electronic_properties_defaults()

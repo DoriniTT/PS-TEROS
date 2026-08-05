@@ -13,8 +13,8 @@
 ## Task 1: Create structure loader and validator
 
 **Files:**
-- Create: `teros/experimental/adsorption_energy/structures/lamno3/structure_loader.py`
-- Create test: `teros/experimental/adsorption_energy/structures/lamno3/test_structure_loader.py`
+- Create: `psteros/experimental/adsorption_energy/structures/lamno3/structure_loader.py`
+- Create test: `psteros/experimental/adsorption_energy/structures/lamno3/test_structure_loader.py`
 
 **Step 1: Write the failing test**
 
@@ -61,7 +61,7 @@ def test_load_structure_invalid_path():
 
 Run:
 ```bash
-cd /home/thiagotd/git/PS-TEROS/.worktree/feature-adsorption-energy/teros/experimental/adsorption_energy/structures/lamno3
+cd /home/thiagotd/git/PS-TEROS/.worktree/feature-adsorption-energy/psteros/experimental/adsorption_energy/structures/lamno3
 source ~/envs/aiida/bin/activate && python -m pytest test_structure_loader.py -v
 ```
 
@@ -146,8 +146,8 @@ git commit -m "feat: add structure loader with validation for LaMnO3 surface"
 ## Task 2: Identify surface Mn atom
 
 **Files:**
-- Create: `teros/experimental/adsorption_energy/structures/lamno3/surface_detector.py`
-- Create test: `teros/experimental/adsorption_energy/structures/lamno3/test_surface_detector.py`
+- Create: `psteros/experimental/adsorption_energy/structures/lamno3/surface_detector.py`
+- Create test: `psteros/experimental/adsorption_energy/structures/lamno3/test_surface_detector.py`
 
 **Step 1: Write the failing test**
 
@@ -262,8 +262,8 @@ git commit -m "feat: add surface Mn detector for topmost Mn identification"
 ## Task 3: Find coordinated O atoms
 
 **Files:**
-- Create: `teros/experimental/adsorption_energy/structures/lamno3/coordination_finder.py`
-- Create test: `teros/experimental/adsorption_energy/structures/lamno3/test_coordination_finder.py`
+- Create: `psteros/experimental/adsorption_energy/structures/lamno3/coordination_finder.py`
+- Create test: `psteros/experimental/adsorption_energy/structures/lamno3/test_coordination_finder.py`
 
 **Step 1: Write the failing test**
 
@@ -396,8 +396,8 @@ git commit -m "feat: add coordination finder for Mn-O bonds"
 ## Task 4: Select most exposed O atom
 
 **Files:**
-- Create: `teros/experimental/adsorption_energy/structures/lamno3/oxygen_selector.py`
-- Create test: `teros/experimental/adsorption_energy/structures/lamno3/test_oxygen_selector.py`
+- Create: `psteros/experimental/adsorption_energy/structures/lamno3/oxygen_selector.py`
+- Create test: `psteros/experimental/adsorption_energy/structures/lamno3/test_oxygen_selector.py`
 
 **Step 1: Write the failing test**
 
@@ -520,8 +520,8 @@ git commit -m "feat: add oxygen selector for most exposed O atom"
 ## Task 5: Construct OOH radical geometry
 
 **Files:**
-- Create: `teros/experimental/adsorption_energy/structures/lamno3/ooh_constructor.py`
-- Create test: `teros/experimental/adsorption_energy/structures/lamno3/test_ooh_constructor.py`
+- Create: `psteros/experimental/adsorption_energy/structures/lamno3/ooh_constructor.py`
+- Create test: `psteros/experimental/adsorption_energy/structures/lamno3/test_ooh_constructor.py`
 
 **Step 1: Write the failing test**
 
@@ -705,8 +705,8 @@ git commit -m "feat: add OOH radical constructor with proper bond geometry"
 ## Task 6: Export modified structure
 
 **Files:**
-- Create: `teros/experimental/adsorption_energy/structures/lamno3/structure_exporter.py`
-- Create test: `teros/experimental/adsorption_energy/structures/lamno3/test_structure_exporter.py`
+- Create: `psteros/experimental/adsorption_energy/structures/lamno3/structure_exporter.py`
+- Create test: `psteros/experimental/adsorption_energy/structures/lamno3/test_structure_exporter.py`
 
 **Step 1: Write the failing test**
 
@@ -848,7 +848,7 @@ git commit -m "feat: add structure exporter for CIF output"
 ## Task 7: Create main script with CLI
 
 **Files:**
-- Create: `teros/experimental/adsorption_energy/structures/lamno3/add_ooh_to_surface.py`
+- Create: `psteros/experimental/adsorption_energy/structures/lamno3/add_ooh_to_surface.py`
 - Test: Run the main script on actual LaMnO3_100_A4_surface.cif
 
 **Step 1: Write integration script**
@@ -980,7 +980,7 @@ if __name__ == "__main__":
 
 Run:
 ```bash
-cd /home/thiagotd/git/PS-TEROS/.worktree/feature-adsorption-energy/teros/experimental/adsorption_energy/structures/lamno3
+cd /home/thiagotd/git/PS-TEROS/.worktree/feature-adsorption-energy/psteros/experimental/adsorption_energy/structures/lamno3
 source ~/envs/aiida/bin/activate && python add_ooh_to_surface.py
 ```
 
@@ -1065,7 +1065,7 @@ git commit -m "feat: add main script for OOH surface modification with full work
 
 Run:
 ```bash
-cd /home/thiagotd/git/PS-TEROS/.worktree/feature-adsorption-energy/teros/experimental/adsorption_energy/structures/lamno3
+cd /home/thiagotd/git/PS-TEROS/.worktree/feature-adsorption-energy/psteros/experimental/adsorption_energy/structures/lamno3
 source ~/envs/aiida/bin/activate && python -m pytest test_*.py -v --tb=short
 ```
 

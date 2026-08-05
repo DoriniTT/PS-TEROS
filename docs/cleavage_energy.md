@@ -2,7 +2,7 @@
 
 ## Overview
 
-The cleavage energy module (`teros.core.cleavage`) calculates the energy required to split a crystal into two complementary surfaces. This is an important property for understanding crystal stability and surface reactivity.
+The cleavage energy module (`psteros.core.cleavage`) calculates the energy required to split a crystal into two complementary surfaces. This is an important property for understanding crystal stability and surface reactivity.
 
 ## Theory
 

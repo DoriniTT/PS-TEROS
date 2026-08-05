@@ -77,7 +77,7 @@ let reference_theory = session: theory_expert
 # Phase 2: Extract equations from PS-TEROS code
 let code_implementation = session: code_analyst
   prompt: """
-    Read the file /home/trevizam/git/PS-TEROS/teros/core/thermodynamics.py
+    Read the file /home/trevizam/git/PS-TEROS/psteros/core/thermodynamics.py
 
     Focus on the function `calculate_surface_energy_binary`.
 
