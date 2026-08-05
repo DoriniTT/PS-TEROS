@@ -20,18 +20,18 @@ Four pieces, one calculation story
    result.
 
 **Calculation recipe**
-   A ``SurfaceWorkflowConfig`` groups the settings that describe a calculation:
-   the backend, code label, pseudopotential family, Quantum ESPRESSO namelists,
-   and any per-structure overrides. It answers, “What calculation do I want to
-   run?”
+   A calculation recipe answers, “What calculation do I want to run?” In
+   psteros, ``SurfaceWorkflowConfig`` stores the selected code path, code label,
+   pseudopotential family, Quantum ESPRESSO input sections (called namelists),
+   and any per-structure changes.
 
 **Execution policy**
    An ``ExecutionPolicy`` carries scheduler queue, resource, wall-time, and MPI
    choices. The registered code in the calculation recipe selects the actual
    AiiDA computer. The policy's ``computer`` field is descriptive in the current
    API and should match that code, but the builder does not cross-check them.
-   These values belong to your own AiiDA environment and should be supplied
-   explicitly in public examples.
+   Set these values for the computer and scheduler registered in your own AiiDA
+   profile. Do not rely on the legacy deployment-specific defaults.
 
 **WorkGraph**
    A WorkGraph connects structures and recipes into an ordered set of AiiDA
@@ -47,10 +47,9 @@ record is called **provenance**. In practice, provenance lets you trace a final
 energy back to the structure, code, pseudopotentials, parameters, and scheduler
 metadata that produced it.
 
-psteros adds a small layer on top of that record: it supplies typed recipes,
-structure helpers, and a way to connect common surface-calculation stages. It
-does not replace an AiiDA profile, a scheduler, or the scientific judgement
-needed to choose converged settings.
+psteros supplies typed recipes, structure builders, and graph builders around
+that provenance record. It does not replace an AiiDA profile, a scheduler, or
+the scientific judgement needed to choose converged settings.
 
 From structures to surface energy
 ---------------------------------
@@ -63,10 +62,10 @@ A typical surface study has three stages:
 3. Pass those energies, atom counts, and surface area to a pure analysis helper
    such as ``surface_energy_oxide_equilibrium``.
 
-The analysis helper does not run Quantum ESPRESSO and cannot decide whether the
-input calculations are scientifically compatible. Its job is to make the
-thermodynamic expression explicit and return the resulting surface energy in
-both eV/Å² and J/m².
+The analysis helper evaluates the stated thermodynamic expression and returns
+eV/Å² and J/m². Supply energies from calculations that use compatible methods
+and settings; the helper does not run Quantum ESPRESSO or assess their
+scientific compatibility.
 
 The :doc:`SnO2 surface-energy model <examples>` explains this sequence with a
 symmetric slab, defines the terms used in the equation, and shows what to

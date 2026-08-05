@@ -12,6 +12,16 @@ The pages below follow the questions readers usually ask first: how to install
 the library, how to build a safe first graph, how the pieces fit together, and
 where to find the supported public API.
 
+Choose the path that matches what you need now:
+
+* **New to PS-TEROS?** :doc:`Install the package <installation>`, then
+  :doc:`build one unsubmitted graph <tutorial>`.
+* **Learning the model?** Read :doc:`how a calculation fits together <concepts>`
+  before the :doc:`SnO2 surface-energy model <examples>`.
+* **Preparing QE work?** Use the :doc:`relaxation-to-static guide
+  <qe-first-workflow>` after the tutorial.
+* **Looking up an input?** Open the :doc:`API reference <api>`.
+
 .. toctree::
    :maxdepth: 1
    :caption: Start here

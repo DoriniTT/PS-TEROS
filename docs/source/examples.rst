@@ -8,8 +8,7 @@ each structure represents and how the difference in composition enters the
 thermodynamics. This walkthrough follows that small model from its starting
 structures to the surface-energy expression.
 
-Rutile SnO2(110) keeps the example compact enough to inspect; its settings are
-not a recipe for every oxide.
+Rutile SnO2(110) keeps the model compact enough to inspect.
 
 You will learn what a slab and a surface termination are, why this example uses
 a symmetric cell, and which calculated energies the analysis helper needs. The
@@ -67,12 +66,23 @@ AiiDA profile or submit work.
    }
 
 For this ``1x1`` starting-cell model, the formulas are ``Sn18O36``,
-``Sn18O34``, and ``Sn18O32``. Nine triple layers and 20 Å of vacuum reproduce
-this example only. A real study should report the checks used to choose its
-own thickness and vacuum.
+``Sn18O34``, and ``Sn18O32``. Nine triple layers and a requested minimum vacuum
+of 20 Å reproduce this example only. A real study should report the checks used
+to choose its own thickness and vacuum.
 
-Choose compatible energy references
------------------------------------
+Calculate compatible energy references
+--------------------------------------
+
+Before applying the thermodynamic expression, produce:
+
+* one relaxed or static energy for each slab termination;
+* a bulk SnO2 energy per formula unit; and
+* a triplet O2 reference energy.
+
+Use compatible electronic-structure methods, pseudopotentials, and numerical
+settings across calculations that you compare. The :doc:`QE guide
+<qe-first-workflow>` shows how to connect relaxation and static stages; this
+page resumes once your project has checked the resulting energies.
 
 To compare slabs with different numbers of oxygen atoms, the analysis needs a
 way to account for oxygen exchanged with a reservoir. In this model, the oxygen
@@ -84,9 +94,7 @@ chemical potential is written as
 
 Here :math:`E(\mathrm{O}_2)` is the energy of the oxygen reference calculation.
 The offset :math:`\Delta\mu_{\mathrm{O}}` lets you explore oxygen-poor and
-oxygen-rich conditions. Calculate the bulk, oxygen, and slab energies with a
-compatible electronic-structure method; combining unrelated functionals,
-pseudopotential families, or numerical settings makes the comparison unclear.
+oxygen-rich conditions.
 
 Calculate the surface energy
 ----------------------------
@@ -121,7 +129,9 @@ Use the analysis helper
 
 After you have the compatible energies and the slab area, pass them to the
 pure-Python helper. This calculation is local: it does not run Quantum
-ESPRESSO or submit an AiiDA process.
+ESPRESSO or submit an AiiDA process. The energy and area names below are
+placeholders from your own calculations, so the block is a template rather
+than a runnable example until you supply them.
 
 .. code-block:: python
 
@@ -139,9 +149,7 @@ ESPRESSO or submit an AiiDA process.
    print(point.gamma_ev_per_angstrom2)
    print(point.gamma_j_per_m2)
 
-``point`` provides the surface energy in eV/Å² and J/m². The variables in this
-snippet stand for values calculated and checked by your project; they are not
-reference energies supplied by psteros.
+``point`` provides the surface energy in eV/Å² and J/m².
 
 Before you draw a conclusion
 ----------------------------
@@ -155,10 +163,9 @@ reproducible:
 * the code, pseudopotentials, scheduler configuration, and AiiDA provenance
   records that produced the energies.
 
-This is a model of clean, symmetric SnO2(110) terminations. It does not decide
-which termination is stable for another material, nor does it include every
-possible temperature, pressure, adsorbate, vibrational, or reconstruction
-effect.
+This model covers clean, symmetric SnO2(110) slabs. Add other terminations,
+adsorbates, reconstructions, or finite-temperature effects when your physical
+question requires them.
 
 For the workflow that creates a relaxation followed by a static calculation,
 see the :doc:`QE guide <qe-first-workflow>`. For the role of each object in the

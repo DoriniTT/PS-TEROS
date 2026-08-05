@@ -40,6 +40,9 @@ Check that Python can import the package and report its version:
    $ python -c "import psteros; print(psteros.__version__)"
    1.0.0
 
+The exact value follows the installed checkout; ``1.0.0`` is the output for the
+current release.
+
 Prepare AiiDA before using a calculation graph
 -----------------------------------------------
 
@@ -57,6 +60,12 @@ AiiDA stores those choices as part of the calculation record. Follow AiiDA's
 `guide to configuring and running external codes`_ for the computer and code
 setup. Use the identifiers from *your* profile in the psteros examples; do not
 copy a label, queue, or resource request from another project as a default.
+
+.. important::
+
+   Construct and pass an ``ExecutionPolicy`` explicitly in new calculations.
+   Omitting it activates legacy deployment-specific defaults retained for
+   compatibility; they are not portable recommendations.
 
 .. _guide to configuring and running external codes:
    https://aiida.readthedocs.io/projects/aiida-core/en/latest/howto/run_codes.html

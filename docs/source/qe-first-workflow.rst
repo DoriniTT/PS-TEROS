@@ -28,11 +28,12 @@ the numerical settings for your material before submitting a calculation.
 Choose one execution policy
 ---------------------------
 
-Both stages must use the same execution policy. The builder turns its queue,
-resource, wall-time, and MPI choices into AiiDA task metadata. The registered
-code in each recipe selects the actual AiiDA computer. ``ExecutionPolicy`` also
-has a descriptive ``computer`` field; keep it consistent with ``code_label``
-because the builder does not cross-check them.
+Both stages must use the same execution policy. Pass it explicitly: omitting the
+policy activates legacy deployment-specific defaults retained for compatibility.
+The builder turns its queue, resource, wall-time, and MPI choices into AiiDA task
+metadata. The registered code in each recipe selects the actual AiiDA computer.
+``ExecutionPolicy`` also has a descriptive ``computer`` field; keep it consistent
+with ``code_label`` because the builder does not cross-check them.
 
 .. code-block:: python
 
@@ -51,8 +52,8 @@ because the builder does not cross-check them.
    )
 
 ``build_qe_relax_static_workgraph`` currently permits one active calculation in
-a graph, so ``max_concurrent_jobs`` must remain ``1``. That limit belongs to
-not a recommendation about how many jobs your cluster can run.
+a graph, so ``max_concurrent_jobs`` must remain ``1``. This is a graph-local
+constraint, not a recommendation about how many jobs your cluster can run.
 
 .. warning::
 
@@ -67,7 +68,8 @@ Define the two recipes
 The helper below keeps the shared code, pseudopotential family, k-point
 spacing, and execution policy in one place. The relaxation-specific force
 criterion belongs in ``CONTROL``; psteros validates that placement before a job
-is created.
+is created. The cutoffs and ``conv_thr`` below use Ry, ``forc_conv_thr`` uses
+Ry/bohr, and ``kpoints_distance`` uses Å⁻¹.
 
 .. code-block:: python
 
@@ -83,7 +85,11 @@ is created.
        "IONS": {"ion_dynamics": "bfgs"},
    }
    static_parameters = {
-       "CONTROL": {"calculation": "scf", "tstress": True, "tprnfor": True},
+       "CONTROL": {
+           "calculation": "scf",
+           "tstress": True,
+           "tprnfor": True,
+       },
        "SYSTEM": {"ecutwfc": 80.0, "ecutrho": 640.0},
        "ELECTRONS": {"conv_thr": 1.0e-8},
    }
@@ -101,7 +107,7 @@ is created.
            name=name,
        )
 
-   relax = qe_recipe("sno2_110_relax", relax_parameters)
+   relax = qe_recipe("sno2_110", relax_parameters)
    static = qe_recipe("sno2_110_static", static_parameters)
 
 Connect the stages
@@ -125,9 +131,21 @@ first task.
        static,
    )
 
-As in the tutorial, this creates an unsubmitted graph because ``submit`` was
-not set to ``True``. Inspect the code label, pseudopotential family, input
-parameters, and scheduler metadata before you request compute time.
+   print(graph.name)
+   print(graph.max_number_jobs)
+
+You should see:
+
+.. code-block:: text
+
+   sno2_110_relax_static
+   1
+
+The name confirms that the builder connected the relaxation and static stages;
+the second line confirms the graph-local concurrency limit. This remains an
+unsubmitted graph because ``submit`` was not set to ``True``. Check the code
+label, pseudopotential family, input parameters, and scheduler metadata before
+you request compute time.
 
 Before submission
 -----------------

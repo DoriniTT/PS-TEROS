@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath('../..'))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'psteros'
-copyright = '2025, Thiago T. Dorini'
+copyright = '2025–2026, Thiago T. Dorini'
 author = 'Thiago T. Dorini'
 release = '1.0.0'
 

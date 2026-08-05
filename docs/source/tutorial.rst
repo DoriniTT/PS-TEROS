@@ -10,26 +10,29 @@ starting a calculation.
 
 By the end, you will know how to:
 
-* describe the calculation inputs with ``QeCalculationConfig``;
-* identify the registered code that selects the AiiDA computer;
-* make the queue and resource choices explicit with ``ExecutionPolicy``; and
-* build an unsubmitted graph from a labelled structure.
+* separate the calculation inputs from the scheduler settings;
+* combine them into a recipe for one labelled structure; and
+* confirm that the resulting graph remains unsubmitted.
 
 Before you start
 ----------------
 
 Complete the :doc:`installation steps <installation>` first. To build the graph,
 you also need an active AiiDA profile, a registered ``quantumespresso.pw`` code,
-and an ``aiida-pseudo`` family. The identifiers in the example below are
-placeholders. Replace them with values from your own AiiDA profile.
+and an ``aiida-pseudo`` family. The identifiers below are placeholders. Replace
+them with values from your own AiiDA profile.
 
-Build the recipe
-----------------
+Choose the calculation settings
+-------------------------------
 
-A **recipe** collects the settings that should be shared by a calculation. The
-example uses a bulk rutile SnO2 starting structure because it is small and
-makes the shape of the API easy to see. The numerical values only make this
-example concrete; converge them for the material and property you study.
+A calculation configuration describes what Quantum ESPRESSO should calculate.
+This first graph contains one bulk relaxation. The numerical settings make the
+example concrete; choose converged cutoffs and k-point spacing for your own
+system.
+
+Quantum ESPRESSO reads the namelist values in its native units. In this example,
+``ecutwfc``, ``ecutrho``, and ``conv_thr`` are in Ry, while
+``kpoints_distance`` is in Å⁻¹.
 
 .. code-block:: python
 
@@ -41,6 +44,27 @@ example concrete; converge them for the material and property you study.
        "ELECTRONS": {"conv_thr": 1.0e-8},
        "IONS": {"ion_dynamics": "bfgs"},
    }
+
+   calculation = psteros.QeCalculationConfig(
+       code_label="your-qe-code@your-computer",
+       pseudo_family="your-pseudo-family",
+       parameters=qe_parameters,
+       kpoints_distance=0.20,
+   )
+
+The registered code selects the actual AiiDA computer. The pseudopotential
+family supplies the element-specific potentials, and the parameter mapping is
+passed to ``PwBaseWorkChain``.
+
+Choose the execution settings
+-----------------------------
+
+An execution policy supplies the scheduler queue, resource request, wall time,
+and MPI choice. Set every field for your own AiiDA environment. The current API
+retains legacy deployment-specific defaults for compatibility; do not rely on
+them for new calculations.
+
+.. code-block:: python
 
    execution = psteros.ExecutionPolicy(
        computer="your-computer",
@@ -54,14 +78,22 @@ example concrete; converge them for the material and property you study.
        max_concurrent_jobs=1,
    )
 
+The ``computer`` field is descriptive in the current API. Keep it consistent
+with the computer in ``code_label`` because the builder does not cross-check
+them. ``ExecutionPolicy`` currently emits PBS-style scheduler directives; a
+different scheduler needs a validated backend adaptation before submission.
+
+Assemble and inspect the graph
+------------------------------
+
+A **recipe** combines the calculation and execution settings. Give the recipe a
+stable name, then pass it and one labelled structure to the graph builder.
+
+.. code-block:: python
+
    recipe = psteros.SurfaceWorkflowConfig(
        backend="qe",
-       calculation=psteros.QeCalculationConfig(
-           code_label="your-qe-code@your-computer",
-           pseudo_family="your-pseudo-family",
-           parameters=qe_parameters,
-           kpoints_distance=0.20,
-       ),
+       calculation=calculation,
        execution=execution,
        name="sno2_bulk_relax",
    )
@@ -82,23 +114,13 @@ You should see:
    1
 
 The first line confirms the graph name from the recipe. The second is the
-number of calculations the graph may run at once.
+number of calculations the graph may run at once. PS-TEROS currently keeps one
+active calculation in each graph; this graph-local limit does not restrict how
+many unrelated jobs your cluster can run.
 
-What the code did
------------------
-
-``QeCalculationConfig`` describes the electronic-structure calculation and
-identifies the registered code; that code selects the actual AiiDA computer.
-``ExecutionPolicy`` supplies the queue, resource, wall-time, and MPI metadata.
-Its ``computer`` field is descriptive in the current API, so keep it consistent
-with the computer in ``code_label``. The builder does not cross-check them.
-``build_surface_workgraph`` currently keeps one active calculation in a graph,
-so ``max_concurrent_jobs`` must be ``1``. The builder then connects
-the labelled structure and the recipe into an AiiDA WorkGraph.
-
-The call above leaves ``submit`` at its default value, ``False``. It builds a
-graph in your local AiiDA environment but does not request scheduler resources
-or start Quantum ESPRESSO.
+The call leaves ``submit`` at its default value, ``False``. It creates the graph
+in your local AiiDA environment but does not request scheduler resources or
+start Quantum ESPRESSO.
 
 What you have now
 -----------------
