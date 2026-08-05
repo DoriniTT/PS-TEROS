@@ -5,7 +5,9 @@ thermodynamics.  Quantum ESPRESSO, through `aiida-quantumespresso`, is the
 primary backend.  VASP remains available as a secondary, tested backend for
 existing studies.
 
-The public API is deliberately small:
+The public API is deliberately small. Use the code and pseudopotential-family
+identifiers registered in your own AiiDA profile, and set an execution policy
+that matches your scheduler and resource allocation:
 
 ```python
 import psteros
@@ -13,23 +15,35 @@ import psteros
 recipe = psteros.SurfaceWorkflowConfig(
     backend="qe",
     calculation=psteros.QeCalculationConfig(
-        code_label="QE-7.6-PW-GPU-A100@bohr",
-        pseudo_family="SSSP/1.3/PBE/precision",
+        code_label="your-qe-code@your-computer",
+        pseudo_family="your-pseudo-family",
         parameters={
             "CONTROL": {"calculation": "relax"},
             "SYSTEM": {"ecutwfc": 80.0, "ecutrho": 640.0},
             "ELECTRONS": {"conv_thr": 1.0e-8},
         },
     ),
+    execution=psteros.ExecutionPolicy(
+        computer="your-computer",
+        queue="your-scheduler-queue",
+        resources={
+            "num_machines": 1,  # adjust for your scheduler and calculation
+            "num_mpiprocs_per_machine": 1,
+        },
+        max_wallclock_seconds=86_400,  # adjust for your scheduler policy
+        with_mpi=True,  # adjust for your executable and scheduler
+        max_concurrent_jobs=1,  # public graph-local bound
+    ),
 )
 bulk = psteros.rutile_sno2_bulk()
 graph = psteros.build_surface_workgraph({"bulk_sno2": bulk}, recipe)
 ```
 
-`ExecutionPolicy` defaults to the maintained Bohr A100 contract: queue
-`gpu_a100`, one GPU job at a time, one machine, and one MPI rank.  The library
-does not start an external controller; a Tessera Odyssey Auto project owns
-campaign execution, retries, provenance, and archival.
+`ExecutionPolicy` records the graph-local execution bound and the scheduler
+settings for your environment. The public builder limits a graph to one active
+calculation. The library does not start an external controller; submission,
+monitoring, retries, provenance, and archival remain the responsibility of the
+user or operator in the selected AiiDA environment.
 
 ## SnO2(110) reference campaign
 
@@ -46,8 +60,8 @@ For slabs in bulk SnO2 equilibrium,
 
 The corresponding pure analysis helper is
 `psteros.surface_energy_oxide_equilibrium`; it returns both eV/A2 and J/m2.
-The campaign record in Tessera documents the exact convergence, structure,
-hardware, and result evidence for any published value.
+Record the exact convergence, structure, hardware, and result evidence for any
+published value in the provenance records of the project that produced it.
 
 ## Installation and verification
 
@@ -62,10 +76,10 @@ pytest -q tests/unit/test_public_api.py
 pytest -q
 ```
 
-For real QE calculations, register an AiiDA `pw.x` code and an SSSP family in
-the active profile.  The maintained Bohr campaign uses QE 7.6 GPU executables
-and `SSSP/1.3/PBE/precision`; those are campaign configuration, not hidden
-library defaults.
+For real QE calculations, register an AiiDA `pw.x` code and a pseudopotential
+family in the active profile. Choose the executable, pseudopotential family,
+and scientific parameters for your own project, then record those choices in
+its AiiDA provenance.
 
 The constraint file is intentional: psteros uses the WorkGraph task-socket
 API and therefore verifies a compatible AiiDA/WorkGraph stack rather than
