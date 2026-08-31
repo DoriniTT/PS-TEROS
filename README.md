@@ -4,16 +4,16 @@
 
 ### The Problem
 
-Under realistic operating conditions $(T, p_{\mathrm{O}_2})$, metal oxides expose multiple possible surface terminations. Determining which termination is thermodynamically stable requires calculating the grand canonical surface free energy $\gamma(T, p_{\mathrm{O}_2})$. In practice, this demands coordinating dozens of interdependent DFT simulations—bulk references, gas reservoirs, and various slab terminations—that all require strictly identical numerical settings. Managing this web of calculations manually is fragile, tedious, and hard to reproduce.
+Under realistic operating conditions (temperature and oxygen pressure, $T$ and $p_{\text{O}_2}$), metal oxides expose multiple possible surface terminations. Determining which termination is thermodynamically stable requires calculating the surface free energy $\gamma(T, p_{\text{O}_2})$. In practice, this demands coordinating dozens of interdependent DFT simulations—bulk references, gas reservoirs, and various slab terminations—that all require strictly identical numerical settings. Managing this web of calculations manually is fragile, tedious, and hard to reproduce.
 
 ### The Solution
 
 PS-TEROS automates the path from crystal structure to thermodynamic stability:
 
-- **Slab Builders:** Programmatically generates bulk references and symmetric/asymmetric oxide slabs (e.g., $\text{SnO}_2$).
+- **Slab Builders:** Programmatically generates bulk references and symmetric/asymmetric oxide slabs (e.g., SnO₂).
 - **Typed DFT Recipes:** Enforces parameter harmony across bulk, slab, and gas calculations in **Quantum ESPRESSO** and **VASP**.
 - **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation $\to$ static SCF) with bounded job concurrency and full provenance tracking.
-- **Pure-Python Thermodynamics:** Calculates surface free energies ($\text{J/m}^2$, $\text{eV/\AA}^2$) and phase diagrams directly from converged energies.
+- **Pure-Python Thermodynamics:** Calculates surface free energies (J/m², eV/Å²) and phase diagrams directly from converged energies.
 
 ## Start here
 
