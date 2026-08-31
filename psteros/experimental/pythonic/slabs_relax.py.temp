@@ -1,0 +1,100 @@
+#!/usr/bin/env python
+"""Example driver for the pythonic scatter-gather slab relaxation workflow."""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from aiida import load_profile, orm
+from ase.io import read
+
+# Ensure repository root is on ``sys.path`` when executed as a script
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
+
+from test_modules.pythonic.workgraph import (
+    build_mock_scatter_gather_workgraph,
+    build_pythonic_workgraph,
+)
+from test_modules.pythonic.aiat_ternary import (
+    create_mock_bulk_energy,
+    create_mock_formation_enthalpy,
+    create_mock_reference_energies,
+)
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Return parsed command-line arguments."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        '--mock',
+        action='store_true',
+        help='run a lightweight scatter-gather workflow that does not require VASP.',
+    )
+    parser.add_argument(
+        '--mock-count',
+        type=int,
+        default=3,
+        help='number of mock items to generate when ``--mock`` is set.',
+    )
+    parser.add_argument(
+        '--mock-delta',
+        type=float,
+        default=0.5,
+        help='offset applied to mock values when ``--mock`` is set.',
+    )
+    parser.add_argument(
+        '--with-thermodynamics',
+        action='store_true',
+        help='compute ab initio atomistic thermodynamics (surface energies).',
+    )
+    parser.add_argument(
+        '--sampling',
+        type=int,
+        default=100,
+        help='number of sampling points for chemical potential grid.',
+    )
+    return parser.parse_args(argv)
+
+
+def load_bulk_structure(structure_path: Path) -> orm.StructureData:
+    """Create a ``StructureData`` directly from a structure file."""
+    atoms = read(structure_path)
+    return orm.StructureData(ase=atoms)
+
+
+def _print_thermodynamics_results(title: str, thermo_namespace) -> None:
+    """Pretty-print thermodynamics results."""
+    print(title)
+    
+    # Try direct attribute access (after workflow.run())
+    if hasattr(thermo_namespace, '__iter__') and not isinstance(thermo_namespace, (str, bytes)):
+        try:
+            for key in thermo_namespace:
+                thermo_data = thermo_namespace[key]
+                if hasattr(thermo_data, 'get_dict'):
+                    data = thermo_data.get_dict()
+                    print(f'    {key}:')
+                    print(f'      phi: {data.get("phi", "N/A")}')
+                    print(f'      gamma_at_reference: {data.get("gamma_at_reference", "N/A")}')
+            return
+        except Exception:
+            pass
+    
+    # Try TaskSocketNamespace access (during building)
+    if hasattr(thermo_namespace, '_sockets'):
+        for key in sorted(k for k in thermo_namespace._sockets.keys() if not k.startswith('_')):
+            thermo_data = getattr(thermo_namespace, key)
+            if hasattr(thermo_data, 'get_dict'):
+                data = thermo_data.get_dict()
+                print(f'    {key}:')
+                print(f'      phi: {data.get("phi", "N/A")}')
+                print(f'      gamma_at_reference: {data.get("gamma_at_reference", "N/A")}')
+        return
+    
+    print('    (Unable to display thermodynamics results)')
+
+
