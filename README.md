@@ -19,39 +19,85 @@ PS-TEROS automates the pathway from oxide crystal structures to thermodynamic st
 
 ## Quickstart
 
-Generate starting slab models for multiple SnO₂(110) surface terminations directly in Python:
+### 1. Prepare Oxide Slabs (from pymatgen or ASE)
+
+PS-TEROS accepts structures directly from **pymatgen** or **ASE** for any metal oxide (e.g., TiO₂, ZnO, Fe₂O₃, SnO₂):
+
+```python
+from pymatgen.core import Structure
+from pymatgen.core.surface import SlabGenerator
+
+# Load any bulk oxide and generate surface terminations
+bulk = Structure.from_file("bulk_oxide.cif")  # Or from ASE: Structure.from_ase_atoms(atoms)
+generator = SlabGenerator(bulk, miller_index=(1, 1, 0), min_slab_size=12.0, min_vacuum_size=15.0)
+slabs = generator.get_slabs()
+
+# Map labelled structures for the workflow
+structures = {
+    "bulk": bulk,
+    **{f"term_{i}": slab for i, slab in enumerate(slabs)},
+}
+```
+
+### 2. Build the AiiDA WorkGraph
+
+Define typed calculation and scheduler settings, then build the inspectable WorkGraph:
 
 ```python
 import psteros
 
-# Build stoichiometric and oxygen-deficient SnO2(110) slabs
-slab_stoich, id_stoich = psteros.sno2_110_slab(
-    termination="o", triple_layers=9, vacuum_angstrom=20.0
-)
-slab_reduced, id_reduced = psteros.sno2_110_slab(
-    termination="sno", triple_layers=9, vacuum_angstrom=20.0
+# Configure DFT recipe (Quantum ESPRESSO or VASP)
+calc_config = psteros.QeCalculationConfig(
+    code_label="pw-7.2@cluster",
+    pseudo_family="SSSP/1.3/PBE/efficiency",
+    parameters={
+        "CONTROL": {"calculation": "relax"},
+        "SYSTEM": {"ecutwfc": 60.0, "ecutrho": 480.0},
+        "ELECTRONS": {"conv_thr": 1.0e-8},
+    },
+    kpoints_distance=0.25,
 )
 
-print(id_stoich.termination, slab_stoich.composition)    # o    Sn18 O36
-print(id_reduced.termination, slab_reduced.composition)  # sno  Sn18 O34
+exec_policy = psteros.ExecutionPolicy(
+    computer="cluster",
+    queue="standard",
+    max_concurrent_jobs=1,  # Safe concurrency limit
+)
+
+recipe = psteros.SurfaceWorkflowConfig(
+    backend="qe",
+    calculation=calc_config,
+    execution=exec_policy,
+    name="oxide_surface_study",
+)
+
+# Build the graph (inspectable before submission)
+workgraph = psteros.build_surface_workgraph(structures, recipe, submit=False)
 ```
 
-Evaluate surface free energies directly from converged DFT outputs:
+### 3. Evaluate Surface Thermodynamics
+
+Extract geometry properties directly from the slab structure and compute surface free energies from converged DFT outputs:
 
 ```python
-# Calculate surface energy for an oxide in equilibrium with bulk
+# Programmatically extract geometry from the slab
+area = slab.surface_area                      # Exposed surface area (Å²)
+n_metal = int(slab.composition["Ti"])         # Metal atom count
+n_oxygen = int(slab.composition["O"])        # Oxygen atom count
+
+# Compute surface free energy (γ) as a function of oxygen chemical potential (Δμ_O)
 point = psteros.surface_energy_oxide_equilibrium(
-    slab_energy_ev=-498.0,
-    n_metal=18,
-    n_oxygen=36,
-    bulk_formula_energy_ev=-28.0,
-    oxygen_reference_energy_ev=-9.8,
+    slab_energy_ev=slab_energy_from_dft,
+    n_metal=n_metal,
+    n_oxygen=n_oxygen,
+    bulk_formula_energy_ev=bulk_energy_from_dft / n_bulk_formula_units,
+    oxygen_reference_energy_ev=e_o2_from_dft,
     delta_mu_oxygen_ev=-1.0,
-    surface_area_angstrom2=45.2,
+    surface_area_angstrom2=area,
     surfaces=2,
 )
 
-print(f"{point.gamma_j_per_m2:.3f} J/m²")  # 1.063 J/m²
+print(f"Surface energy: {point.gamma_j_per_m2:.3f} J/m²")
 ```
 
 ## Installation
@@ -69,4 +115,5 @@ For configuring AiiDA computers, codes, and pseudopotential families, see the [I
 - **[SnO₂ Surface Model](docs/source/examples.rst):** Deep dive into terminations and thermodynamic reference states.
 - **[Quantum ESPRESSO Guide](docs/source/qe-first-workflow.rst):** Setting up a two-stage relaxation → static SCF workflow.
 - **[API Reference](docs/source/api.rst):** Public classes, functions, and configuration schemas.
+
 
