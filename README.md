@@ -2,6 +2,11 @@
 
 **PS-TEROS** (**P**redicting **S**tability of **TER**minations of **O**xide **S**urfaces) is a Python framework tailored for automating *ab initio* surface thermodynamics of **metal oxide surfaces** in [AiiDA](https://www.aiida.net/).
 
+[![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.apsusc.2025.164350-blue)](https://doi.org/10.1016/j.apsusc.2025.164350)
+
+> **Citation:** If you use PS-TEROS in your research, please cite:  
+> T. T. Dorini, M. A. San-Miguel, *Accelerating rational design of oxide surfaces: The PS-TEROS workflow for automated surface stability analysis*, **Applied Surface Science** (2025). [doi:10.1016/j.apsusc.2025.164350](https://doi.org/10.1016/j.apsusc.2025.164350)
+
 ### The Problem
 
 In metal oxides, a single surface orientation rarely exposes just one atomic arrangement; it can exhibit several distinct surface terminations with varying metal-to-oxygen stoichiometries (e.g., stoichiometric, oxygen-poor, or oxygen-rich cuts). *Ab initio* atomistic thermodynamics determines the relative stability of these oxide terminations by coupling slab models to chemical reservoirs of the constituent species—most notably the oxygen reservoir (*Δμ*<sub>O</sub>).
