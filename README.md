@@ -17,43 +17,56 @@ PS-TEROS automates the pathway from oxide crystal structures to thermodynamic st
 - **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation → static SCF) with bounded job concurrency and full provenance tracking.
 - **Pure-Python Thermodynamics:** Evaluates surface free energies (J/m², eV/Å²) and termination phase diagrams directly as a function of oxygen chemical potential.
 
-## Start here
+## Quickstart
 
-- **Install the library:** [installation guide](docs/source/installation.rst)
-- **Build one graph without submitting work:** [first tutorial](docs/source/tutorial.rst)
-- **Understand the pieces of a calculation:** [core concepts](docs/source/concepts.rst)
-- **Understand the SnO2 surface-energy model:**
-  [model explanation](docs/source/examples.rst)
-- **Prepare a relaxation followed by a static QE calculation:**
-  [QE guide](docs/source/qe-first-workflow.rst)
-- **Look up public names and inputs:** [reference](docs/source/api.rst)
-
-## A safe first interaction
-
-The structure helpers can be used before you connect to a scheduler or submit a
-calculation. This example creates an in-memory starting model for one rutile
-SnO2(110) surface; it does not use an AiiDA profile or external compute time.
+Generate starting slab models for multiple SnO₂(110) surface terminations directly in Python:
 
 ```python
 import psteros
 
-slab, identity = psteros.sno2_110_slab(
-    termination="o",
-    triple_layers=9,
-    vacuum_angstrom=20.0,
+# Build stoichiometric and oxygen-deficient SnO2(110) slabs
+slab_stoich, id_stoich = psteros.sno2_110_slab(
+    termination="o", triple_layers=9, vacuum_angstrom=20.0
+)
+slab_reduced, id_reduced = psteros.sno2_110_slab(
+    termination="sno", triple_layers=9, vacuum_angstrom=20.0
 )
 
-print(identity.termination)  # o
-print(slab.composition.reduced_formula)  # SnO2
+print(id_stoich.termination, slab_stoich.composition)    # o    Sn18 O36
+print(id_reduced.termination, slab_reduced.composition)  # sno  Sn18 O34
 ```
 
-A starting structure is not yet a converged result. The SnO2 model page explains
-what a slab and a termination are, which calculations provide the needed
-energies, and which assumptions must be checked before interpreting a surface
-energy.
+Evaluate surface free energies directly from converged DFT outputs:
 
-## Install
+```python
+# Calculate surface energy for an oxide in equilibrium with bulk
+point = psteros.surface_energy_oxide_equilibrium(
+    slab_energy_ev=-498.0,
+    n_metal=18,
+    n_oxygen=36,
+    bulk_formula_energy_ev=-28.0,
+    oxygen_reference_energy_ev=-9.8,
+    delta_mu_oxygen_ev=-1.0,
+    surface_area_angstrom2=45.2,
+    surfaces=2,
+)
 
-Follow the [installation guide](docs/source/installation.rst) for the source
-checkout, a clean virtual environment, package verification, and the AiiDA
-computer, code, and pseudopotential setup needed before the tutorial.
+print(f"{point.gamma_j_per_m2:.3f} J/m²")  # 1.063 J/m²
+```
+
+## Installation
+
+```bash
+pip install .
+```
+
+For configuring AiiDA computers, codes, and pseudopotential families, see the [Installation Guide](docs/source/installation.rst).
+
+## Documentation & Tutorials
+
+- **[First Tutorial](docs/source/tutorial.rst):** Build your first unsubmitted AiiDA WorkGraph.
+- **[Core Concepts](docs/source/concepts.rst):** How structures, calculation recipes, execution policies, and provenance connect.
+- **[SnO₂ Surface Model](docs/source/examples.rst):** Deep dive into terminations and thermodynamic reference states.
+- **[Quantum ESPRESSO Guide](docs/source/qe-first-workflow.rst):** Setting up a two-stage relaxation → static SCF workflow.
+- **[API Reference](docs/source/api.rst):** Public classes, functions, and configuration schemas.
+
