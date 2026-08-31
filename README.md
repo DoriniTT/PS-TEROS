@@ -1,32 +1,19 @@
 # PS-TEROS
 
-**PS-TEROS** (**P**redicting **S**tability of **TER**minations of **O**xide **S**urfaces) is a Python framework for automating and managing *ab initio* surface thermodynamics workflows in [AiiDA](https://www.aiida.net/).
+**PS-TEROS** (**P**redicting **S**tability of **TER**minations of **O**xide **S**urfaces) is a Python framework for automating *ab initio* surface thermodynamics workflows in [AiiDA](https://www.aiida.net/).
 
-## The Scientific Question
+### The Problem
 
-Oxide surfaces are rarely static or single-state systems. Under realistic operating conditions—such as varying temperatures, oxygen partial pressures, or chemical environments—metal oxides expose a multitude of possible surface terminations, ranging from stoichiometric cuts to oxygen-deficient or oxygen-rich reconstructions.
+Under realistic operating conditions $(T, p_{\mathrm{O}_2})$, metal oxides expose multiple possible surface terminations. Determining which termination is thermodynamically stable requires calculating the grand canonical surface free energy $\gamma(T, p_{\mathrm{O}_2})$. In practice, this demands coordinating dozens of interdependent DFT simulations—bulk references, gas reservoirs, and various slab terminations—that all require strictly identical numerical settings. Managing this web of calculations manually is fragile, tedious, and hard to reproduce.
 
-Determining which surface termination is stable under given environmental conditions requires *ab initio* atomistic thermodynamics: calculating the grand canonical surface free energy $\gamma(T, p_{\mathrm{O}_2})$ as a function of the chemical potential of the constituent species.
+### The Solution
 
-## The Computational Challenge
+PS-TEROS automates the path from crystal structure to thermodynamic stability:
 
-Evaluating surface stability is never a single calculation. It requires a carefully coordinated network of interdependent simulations:
-
-1. **Diverse Slab Geometries:** Generating symmetric and asymmetric slabs across multiple crystallographic facets and terminations, ensuring sufficient thickness to recover bulk-like interiors and adequate vacuum padding to prevent spurious periodic interactions.
-2. **Strict Reference Consistency:** Computing bulk reference energies per formula unit and gas-phase chemical potential reservoirs (e.g., $\text{O}_2, \text{H}_2\text{O}$). A subtle mismatch in DFT parameters (exchange-correlation functionals, cutoff energies, k-point sampling, or pseudopotentials) between bulk and slab runs will corrupt the chemical potential differences and produce unphysical phase boundaries.
-3. **Multi-Stage Orchestration & Provenance:** Submitting and tracking multi-step DFT stages (relaxation $\to$ static high-precision SCF) across HPC clusters while managing job dependencies, queue limits, and calculation provenance.
-4. **Thermodynamic Assembly:** Combining all converged total energies, atom counts, surface areas, and chemical potentials into thermodynamic stability equations.
-
-Managing this workflow manually—through disjointed shell scripts, manual geometry generation, and separate post-processing spreadsheets—is tedious, fragile, and difficult to reproduce.
-
-## How PS-TEROS Solves It
-
-PS-TEROS bridges the gap between atomic crystal structures, high-throughput DFT calculations, and surface thermodynamics:
-
-- **Programmatic Slab Building:** Generates consistent bulk references and stoichiometric/non-stoichiometric slab models (e.g., rutile $\text{SnO}_2(110)$ and other oxide facets) directly in Python.
-- **Typed Calculation Recipes:** Provides verified calculation recipes for **Quantum ESPRESSO** and **VASP** that enforce strict numerical and physical parameter harmony across all related bulk, slab, and gas-phase calculations.
-- **Inspectable AiiDA WorkGraphs:** Orchestrates multi-stage workflows as explicit directed acyclic graphs in AiiDA, featuring built-in concurrency control (preventing HPC queue overload) and automated data provenance.
-- **Decoupled Thermodynamic Analysis:** Offers pure-Python analysis helpers to directly calculate surface free energies ($\text{J/m}^2$, $\text{eV/\AA}^2$) and map surface phase diagrams from calculation outputs.
+- **Slab Builders:** Programmatically generates bulk references and symmetric/asymmetric oxide slabs (e.g., $\text{SnO}_2$).
+- **Typed DFT Recipes:** Enforces parameter harmony across bulk, slab, and gas calculations in **Quantum ESPRESSO** and **VASP**.
+- **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation $\to$ static SCF) with bounded job concurrency and full provenance tracking.
+- **Pure-Python Thermodynamics:** Calculates surface free energies ($\text{J/m}^2$, $\text{eV/\AA}^2$) and phase diagrams directly from converged energies.
 
 ## Start here
 
