@@ -1,0 +1,145 @@
+"""
+Electronic Properties Builder
+
+Material-agnostic builder for DOS and band structure calculations
+using AiiDA-VASP's vasp.v2.bands workchain.
+"""
+
+def get_electronic_properties_defaults(
+    energy_cutoff: float = 500,
+    electronic_convergence: float = 1e-5,
+    ncore: int = 4,
+    ispin: int = 2,
+    lasph: bool = True,
+    lreal: str = "Auto",
+    kpoints_mesh_density: float = 0.3,
+    band_kpoints_distance: float = 0.2,
+    dos_kpoints_distance: float = 0.2,
+    line_density: float = 0.2,
+    nedos: int = 2000,
+    sigma_bands: float = 0.01,
+    symprec: float = 1e-4,
+    band_mode: str = "seekpath-aiida",
+) -> dict:
+    """
+    Get default parameters for electronic properties (DOS and bands) calculation.
+
+    Material-agnostic builder that returns all necessary parameters for
+    vasp.v2.bands workchain. Based on proven working configuration.
+
+    Args:
+        energy_cutoff: ENCUT value (eV). Default: 500
+        electronic_convergence: EDIFF value. Default: 1e-5
+        ncore: Number of cores per band. Default: 4
+        ispin: Spin polarization (1=non-magnetic, 2=spin-polarized). Default: 2
+        lasph: Include aspherical contributions. Default: True
+        lreal: Projection operators (False for small, "Auto" for large). Default: "Auto"
+        kpoints_mesh_density: K-point density for SCF and DOS meshes. Default: 0.3
+        band_kpoints_distance: K-point spacing for band structure path. Default: 0.2
+        dos_kpoints_distance: K-point spacing for DOS calculation. Default: 0.2
+        line_density: K-point density along high-symmetry paths. Default: 0.2
+        nedos: Number of DOS grid points. Default: 2000
+        sigma_bands: Smearing width for bands (eV). Default: 0.01
+        symprec: Symmetry precision for seekpath. Default: 1e-4
+        band_mode: Band path mode (seekpath-aiida, pymatgen, etc.). Default: "seekpath-aiida"
+
+    Returns:
+        Dictionary with 'band_settings' and nested INCAR parameters for
+        scf, bands, and dos stages, ready to use with vasp.v2.bands workchain.
+
+    Example:
+        >>> defaults = get_electronic_properties_defaults()
+        >>> wg = build_core_workgraph(
+        ...     compute_electronic_properties_bulk=True,
+        ...     bands_parameters=defaults,
+        ...     band_settings=defaults['band_settings'],
+        ...     **other_params
+        ... )
+    """
+    # Common INCAR parameters used across all stages
+    common_incar = {
+        'ENCUT': energy_cutoff,
+        'EDIFF': electronic_convergence,
+        'NCORE': ncore,
+        'ISPIN': ispin,
+        'LASPH': lasph,
+        'LREAL': lreal,
+    }
+
+    # Band workflow settings - controls the vasp.v2.bands workchain behavior
+    band_settings_dict = {
+        'symprec': symprec,
+        'band_mode': band_mode,
+        'band_kpoints_distance': band_kpoints_distance,
+        'line_density': line_density,
+        'run_dos': True,  # If True, compute DOS when computing bands
+        'only_dos': False,
+        'dos_kpoints_distance': dos_kpoints_distance,
+        'kpoints_per_split': 20,
+        'hybrid_reuse_wavecar': False,  # Not relevant for standard PBE
+        'additional_band_analysis_parameters': {
+            'with_time_reversal': True,
+            'reference_distance': 0.05,
+            'threshold': 1e-5,
+        },
+    }
+
+    # SCF stage INCAR - Critical: LWAVE and LCHARG must be True for bands/DOS restart
+    scf_incar = {
+        **common_incar,
+        'SYSTEM': 'SCF_for_Electronic_Properties',
+        'ISTART': 0,
+        'PREC': 'Accurate',
+        'ALGO': 'Normal',
+        'NELM': 120,
+        'ISMEAR': 0,  # Gaussian smearing
+        'SIGMA': 0.05,
+        'LWAVE': True,   # Must be True - needed for bands restart
+        'LCHARG': True,  # Must be True - needed for DOS restart
+        'LORBIT': 11,    # L(m)-decomposed charge densities
+        'LELF': True,    # Write ELFCAR
+        'LAECHG': True,  # Write AECCAR0 and AECCAR2
+        'LVTOT': True,   # Write LOCPOT
+    }
+
+    # Band structure stage INCAR - Non-self-consistent calculation
+    bands_incar = {
+        **common_incar,
+        'SYSTEM': 'Band_Structure',
+        'ISTART': 1,     # Read from WAVECAR
+        'ICHARG': 11,    # Non-self-consistent calculation
+        'PREC': 'Accurate',
+        'ALGO': 'Normal',
+        'NELM': 60,
+        'ISMEAR': 0,     # Gaussian smearing
+        'SIGMA': sigma_bands,
+        'LREAL': False,  # Use reciprocal space for band structure
+        'LWAVE': False,
+        'LCHARG': False,
+        'LORBIT': 11,    # Calculate projected bands
+    }
+
+    # DOS stage INCAR - Non-self-consistent with tetrahedron method
+    dos_incar = {
+        **common_incar,
+        'SYSTEM': 'DOS_Calculation',
+        'ISTART': 1,     # Read from WAVECAR
+        'ICHARG': 11,    # Non-self-consistent calculation
+        'PREC': 'Accurate',
+        'ALGO': 'Normal',
+        'NELM': 60,
+        'ISMEAR': 0,    # Tetrahedron method with Blöchl corrections
+        'LREAL': False,  # Use reciprocal space
+        'LWAVE': False,
+        'LCHARG': False,
+        'LORBIT': 11,    # Calculate projected DOS
+        'NEDOS': nedos,  # Number of DOS grid points
+    }
+
+    return {
+        'band_settings': band_settings_dict,
+        'scf': scf_incar,
+        'bands': bands_incar,
+        'dos': dos_incar,
+        'scf_kpoints_distance': kpoints_mesh_density,
+    }

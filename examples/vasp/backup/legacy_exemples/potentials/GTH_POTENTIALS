@@ -1,0 +1,57 @@
+# URL: https://cp2k-basis.pierrebeaujean.net/api/pseudopotentials/GTH-PBE/data?elements=O,P,Ag
+# BUILD: 06/08/2024 @ 14:19
+# FETCHED: 07/05/2025 @ 21:43
+# ---
+# O [2|2s4p]
+# SOURCE: https://github.com/cp2k/cp2k/raw/ac0226eb549c7ef1ea50d0597d545f29d4c8fc87/data/POTENTIAL_UZH#L1037
+O  GTH-PBE-q6 GTH-GGA-q6
+2 4 0 0
+      0.24446328   2   -16.67548222     2.48908598
+     1
+      0.22097111   1    18.33446866
+# P [10|2s3p]
+# SOURCE: https://github.com/cp2k/cp2k/raw/ac0226eb549c7ef1ea50d0597d545f29d4c8fc87/data/POTENTIAL_UZH#L1103
+P  GTH-PBE-q5 GTH-GGA-q5
+2 3 0 0
+      0.43012670   1    -5.86287518
+     2
+      0.39637888   2    11.00906771    -3.47035684
+                                        4.48022987
+      0.44829366   1     3.05605781
+# Ag [46|1s]
+# SOURCE: https://github.com/cp2k/cp2k/raw/ac0226eb549c7ef1ea50d0597d545f29d4c8fc87/data/POTENTIAL_UZH#L1820
+Ag  GTH-PBE-q1 GTH-GGA-q1
+1 0 0 0
+      0.50884773   1    -0.53126024
+     3
+      0.86917507   3     0.74801842     0.12558074    -0.06394674
+                                       -0.47181808     0.24639426
+                                                      -0.34942659
+      0.93516610   2     0.51381632     0.01594188
+                                       -0.35372585
+      1.16632800   1    -0.06895972
+# Ag [36|1s10d]
+# SOURCE: https://github.com/cp2k/cp2k/raw/ac0226eb549c7ef1ea50d0597d545f29d4c8fc87/data/POTENTIAL_UZH#L1831
+Ag  GTH-PBE-q11 GTH-GGA-q11
+1 0 10 0
+      0.57261106   1    -0.09385803
+     3
+      0.52717235   3     9.59197051    -5.27424307     0.99704951
+                                        8.43011316    -2.57436732
+                                                       2.02769689
+      0.62063433   2     3.90685517    -1.68549606
+                                        2.06129973
+      0.39996164   2    -2.69173033    -0.43354834
+                                        0.39191109
+# Ag [28|3s6p10d]
+# SOURCE: https://github.com/cp2k/cp2k/raw/ac0226eb549c7ef1ea50d0597d545f29d4c8fc87/data/POTENTIAL_UZH#L1843
+Ag  GTH-PBE-q19 GTH-GGA-q19
+3 6 10 0
+      0.41063517   3    24.45695816    -4.05396301    -0.14256607
+     3
+      0.30953941   2     0.59751943     4.28491060
+                                       -5.54832982
+      0.41842518   2    -0.19048469    -0.61441831
+                                        0.71191258
+      0.45650210   2     1.74632837    -3.09368808
+                                        3.58199122

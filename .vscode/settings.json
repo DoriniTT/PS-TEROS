@@ -1,0 +1,13 @@
+{
+    "aiida.database": {
+        "port": null,
+        "timeout_ms": 2000
+    },
+    "aiida.verdi": {
+        "command": "/home/trevizam/envs/aiida/bin/verdi",
+        "path": "/home/trevizam/.aiida",
+        "profile": "presto",
+        "timeout_ms": 2000,
+        "max_buffer_kb": 1024
+    }
+}

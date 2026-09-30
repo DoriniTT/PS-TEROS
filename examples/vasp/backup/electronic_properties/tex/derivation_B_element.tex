@@ -1,0 +1,297 @@
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[version=3]{mhchem}
+\usepackage{geometry}
+\usepackage{hyperref}
+
+\geometry{a4paper, margin=1in}
+
+\title{Surface Gibbs Free Energy for Ternary Oxides:\\
+Alternative Derivation with B as Independent Variable}
+\author{}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+
+This document presents an alternative derivation of the surface Gibbs free energy for ternary oxides $A_xB_yO_z$, where the chemical potential of element B (instead of element A) is used as one of the two independent variables alongside oxygen. This formulation is particularly useful when analyzing systems like \ce{Ag3PO4}, where one might want to study surface stability as a function of phosphorus chemical potential ($\Delta\mu_P$) rather than silver chemical potential ($\Delta\mu_{Ag}$).
+
+The standard derivation (e.g., as presented in the supplementary material) treats element A as the independent variable and eliminates $\mu_B$ using the bulk equilibrium condition. Here, we reverse this approach: we treat B as independent and eliminate $\mu_A$ instead.
+
+\section{General Surface Energy Expression}
+
+For a ternary oxide slab containing $N_A$ atoms of element A, $N_B$ atoms of element B, and $N_O$ atoms of oxygen, with two symmetric surfaces each of area $A$, the surface Gibbs free energy is:
+
+\begin{equation}
+\gamma(T, p_{\text{O}_2}) = \frac{1}{2A} \left[ E^{\text{slab}} - N_A \mu_A(T, p_{\text{O}_2}) - N_B \mu_B(T, p_{\text{O}_2}) - N_O \mu_O(T, p_{\text{O}_2}) \right]
+\label{eq:gamma_general}
+\end{equation}
+
+where $E^{\text{slab}}$ is the DFT total energy of the slab, and $\mu_i$ are the chemical potentials of each species.
+
+\section{Bulk Equilibrium Condition}
+
+The bulk ternary oxide $A_xB_yO_z$ must be in thermodynamic equilibrium:
+
+\begin{equation}
+x \mu_A + y \mu_B + z \mu_O = E_{A_xB_yO_z}^{\text{bulk}}
+\label{eq:bulk_equilibrium}
+\end{equation}
+
+\section{Elimination of $\mu_A$ (A as Dependent Variable)}
+
+We solve Eq.~\ref{eq:bulk_equilibrium} for $\mu_A$ to eliminate it in favor of $\mu_B$ and $\mu_O$:
+
+\begin{equation}
+\mu_A = \frac{1}{x} \left[ E_{A_xB_yO_z}^{\text{bulk}} - y \mu_B - z \mu_O \right]
+\label{eq:mu_A_elimination}
+\end{equation}
+
+Substituting this into Eq.~\ref{eq:gamma_general}:
+
+\begin{equation}
+\gamma = \frac{1}{2A} \left[ E^{\text{slab}} - N_A \cdot \frac{1}{x}\left( E_{A_xB_yO_z}^{\text{bulk}} - y \mu_B - z \mu_O \right) - N_B \mu_B - N_O \mu_O \right]
+\label{eq:gamma_substituted}
+\end{equation}
+
+Expanding and rearranging:
+
+\begin{equation}
+\gamma = \frac{1}{2A} \left[ E^{\text{slab}} - \frac{N_A}{x} E_{A_xB_yO_z}^{\text{bulk}} + \frac{N_A y}{x} \mu_B + \frac{N_A z}{x} \mu_O - N_B \mu_B - N_O \mu_O \right]
+\label{eq:gamma_expanded}
+\end{equation}
+
+Collecting terms with $\mu_B$ and $\mu_O$:
+
+\begin{equation}
+\gamma = \frac{1}{2A} \left[ E^{\text{slab}} - \frac{N_A}{x} E_{A_xB_yO_z}^{\text{bulk}} + \left(\frac{N_A y}{x} - N_B\right) \mu_B + \left(\frac{N_A z}{x} - N_O\right) \mu_O \right]
+\label{eq:gamma_collected}
+\end{equation}
+
+\section{Reference State and Relative Chemical Potentials}
+
+We define reference states for the chemical potentials:
+\begin{align}
+\mu_B^{\text{ref}} &= E_B^{\text{bulk}} \quad \text{(bulk elemental B)} \label{eq:mu_B_ref} \\
+\mu_O^{\text{ref}} &= \frac{1}{2} E_{\text{O}_2}^{\text{DFT}} \quad \text{(O$_2$ gas at 0 K)} \label{eq:mu_O_ref}
+\end{align}
+
+The relative chemical potentials (deviations from reference) are:
+\begin{align}
+\Delta\mu_B &= \mu_B - \mu_B^{\text{ref}} = \mu_B - E_B^{\text{bulk}} \label{eq:delta_mu_B} \\
+\Delta\mu_O &= \mu_O - \mu_O^{\text{ref}} = \mu_O - \frac{1}{2} E_{\text{O}_2}^{\text{DFT}} \label{eq:delta_mu_O}
+\end{align}
+
+Substituting $\mu_B = \Delta\mu_B + E_B^{\text{bulk}}$ and $\mu_O = \Delta\mu_O + \frac{1}{2} E_{\text{O}_2}^{\text{DFT}}$ into Eq.~\ref{eq:gamma_collected}:
+
+\begin{multline}
+\gamma = \frac{1}{2A} \Bigg[ E^{\text{slab}} - \frac{N_A}{x} E_{A_xB_yO_z}^{\text{bulk}} \\
++ \left(\frac{N_A y}{x} - N_B\right) \left(\Delta\mu_B + E_B^{\text{bulk}}\right) \\
++ \left(\frac{N_A z}{x} - N_O\right) \left(\Delta\mu_O + \frac{1}{2} E_{\text{O}_2}^{\text{DFT}}\right) \Bigg]
+\label{eq:gamma_with_delta_mu}
+\end{multline}
+
+\section{Defining the Reference Surface Energy $\phi$}
+
+We define a reference surface energy $\phi$ as the value of $\gamma$ when both $\Delta\mu_B = 0$ and $\Delta\mu_O = 0$ (i.e., at the reference state, typically the B-rich and O-poor limit):
+
+\begin{multline}
+\phi = \frac{1}{2A} \Bigg[ E^{\text{slab}} - \frac{N_A}{x} E_{A_xB_yO_z}^{\text{bulk}} \\
++ \left(\frac{N_A y}{x} - N_B\right) E_B^{\text{bulk}} + \left(\frac{N_A z}{x} - N_O\right) \frac{1}{2} E_{\text{O}_2}^{\text{DFT}} \Bigg]
+\label{eq:phi_definition}
+\end{multline}
+
+\section{Final Expression with Surface Excesses}
+
+From Eq.~\ref{eq:gamma_with_delta_mu} and Eq.~\ref{eq:phi_definition}, we can write:
+
+\begin{equation}
+\gamma(\Delta\mu_B, \Delta\mu_O) = \phi + \frac{1}{2A}\left(\frac{N_A y}{x} - N_B\right) \Delta\mu_B + \frac{1}{2A}\left(\frac{N_A z}{x} - N_O\right) \Delta\mu_O
+\label{eq:gamma_with_phi}
+\end{equation}
+
+Define the surface excesses (per unit area):
+
+\begin{align}
+\Gamma_B &= \frac{1}{2A} \left(\frac{N_A y}{x} - N_B\right) = \frac{1}{2A} \left(N_B^{\text{stoich}} - N_B\right) \label{eq:Gamma_B} \\
+\Gamma_O &= \frac{1}{2A} \left(\frac{N_A z}{x} - N_O\right) = \frac{1}{2A} \left(N_O^{\text{stoich}} - N_O\right) \label{eq:Gamma_O}
+\end{align}
+
+where $N_B^{\text{stoich}} = \frac{N_A y}{x}$ and $N_O^{\text{stoich}} = \frac{N_A z}{x}$ are the number of B and O atoms needed to maintain bulk stoichiometry with the $N_A$ atoms of A present in the slab.
+
+The final expression is:
+
+\begin{equation}
+\boxed{\gamma(\Delta\mu_B, \Delta\mu_O) = \phi - \Gamma_B \Delta\mu_B - \Gamma_O \Delta\mu_O}
+\label{eq:gamma_final}
+\end{equation}
+
+Note the minus signs: when $\Gamma_B > 0$ (B-deficient surface relative to bulk stoichiometry), increasing $\Delta\mu_B$ (B-rich conditions) lowers the surface energy, which is physically intuitive.
+
+\section{Formation Energy Formulation}
+
+Using the formation energy of the bulk ternary oxide:
+
+\begin{equation}
+\Delta E_f(A_xB_yO_z) = E_{A_xB_yO_z}^{\text{bulk}} - x E_A^{\text{bulk}} - y E_B^{\text{bulk}} - z \cdot \frac{1}{2} E_{\text{O}_2}^{\text{DFT}}
+\label{eq:formation_energy}
+\end{equation}
+
+The reference surface energy $\phi$ can be rewritten as:
+
+\begin{multline}
+\phi = \frac{1}{2A} \Bigg[ E^{\text{slab}} - \frac{N_A}{x} \left( \Delta E_f(A_xB_yO_z) + x E_A^{\text{bulk}} + y E_B^{\text{bulk}} + z \cdot \frac{1}{2} E_{\text{O}_2}^{\text{DFT}} \right) \\
++ \left(\frac{N_A y}{x} - N_B\right) E_B^{\text{bulk}} + \left(\frac{N_A z}{x} - N_O\right) \frac{1}{2} E_{\text{O}_2}^{\text{DFT}} \Bigg]
+\label{eq:phi_with_formation}
+\end{multline}
+
+Simplifying:
+
+\begin{equation}
+\phi = \frac{1}{2A} \left[ E^{\text{slab}} - N_A E_A^{\text{bulk}} - N_B E_B^{\text{bulk}} - N_O \cdot \frac{1}{2} E_{\text{O}_2}^{\text{DFT}} - \frac{N_A}{x} \Delta E_f(A_xB_yO_z) \right]
+\label{eq:phi_simplified}
+\end{equation}
+
+\section{Chemical Potential Limits}
+
+The allowed range of $\Delta\mu_B$ and $\Delta\mu_O$ is constrained by thermodynamic stability requirements:
+
+\subsection{Element Precipitation Limits}
+
+To prevent precipitation of pure elements:
+\begin{align}
+\Delta\mu_B &\leq 0 \quad \text{(B-rich limit)} \label{eq:limit_B_rich} \\
+\Delta\mu_O &\leq 0 \quad \text{(O-rich limit)} \label{eq:limit_O_rich}
+\end{align}
+
+\subsection{Bulk Stability Constraint}
+
+From the elimination of $\mu_A$ (Eq.~\ref{eq:mu_A_elimination}), the condition $\mu_A \leq E_A^{\text{bulk}}$ (to prevent A precipitation) gives:
+
+\begin{equation}
+\frac{1}{x} \left[ E_{A_xB_yO_z}^{\text{bulk}} - y \mu_B - z \mu_O \right] \leq E_A^{\text{bulk}}
+\end{equation}
+
+Rearranging and using the definitions of relative chemical potentials:
+
+\begin{equation}
+y \Delta\mu_B + z \Delta\mu_O \geq \Delta E_f(A_xB_yO_z)
+\label{eq:limit_A_precip}
+\end{equation}
+
+This defines the B-poor, O-poor limit.
+
+\subsection{Binary Oxide Competition}
+
+The ternary oxide must also be stable against decomposition into binary oxides. For example:
+\begin{align}
+p\Delta\mu_B + q\Delta\mu_O &\leq \Delta E_f(B_pO_q) \quad \text{(for competing } B_pO_q) \label{eq:limit_BpOq} \\
+r\Delta\mu_A + s\Delta\mu_O &\leq \Delta E_f(A_rO_s) \quad \text{(for competing } A_rO_s) \label{eq:limit_ArOs}
+\end{align}
+
+Note that for Eq.~\ref{eq:limit_ArOs}, we need to express $\Delta\mu_A$ in terms of $\Delta\mu_B$ and $\Delta\mu_O$ using the bulk equilibrium condition.
+
+\section{Comparison with Standard A-Based Formulation}
+
+\subsection{Standard Formulation (A as independent)}
+
+In the standard formulation where A is the independent variable and B is eliminated:
+
+\begin{equation}
+\gamma(\Delta\mu_A, \Delta\mu_O) = \phi_A - \Gamma_A \Delta\mu_A - \Gamma_O^{(A)} \Delta\mu_O
+\end{equation}
+
+with:
+\begin{align}
+\Gamma_A &= \frac{1}{2A} \left(\frac{N_B x}{y} - N_A\right) \\
+\Gamma_O^{(A)} &= \frac{1}{2A} \left(\frac{N_B z}{y} - N_O\right)
+\end{align}
+
+\subsection{Current Formulation (B as independent)}
+
+In our new formulation:
+
+\begin{equation}
+\gamma(\Delta\mu_B, \Delta\mu_O) = \phi_B - \Gamma_B \Delta\mu_B - \Gamma_O^{(B)} \Delta\mu_O
+\end{equation}
+
+with:
+\begin{align}
+\Gamma_B &= \frac{1}{2A} \left(\frac{N_A y}{x} - N_B\right) \\
+\Gamma_O^{(B)} &= \frac{1}{2A} \left(\frac{N_A z}{x} - N_O\right)
+\end{align}
+
+\subsection{Relation Between Formulations}
+
+Both formulations describe the same physical surface and must give identical surface energies for equivalent thermodynamic conditions. The chemical potentials are related through the bulk equilibrium condition:
+
+\begin{equation}
+x \Delta\mu_A + y \Delta\mu_B + z \Delta\mu_O = \Delta E_f(A_xB_yO_z)
+\end{equation}
+
+This allows conversion between $(\Delta\mu_A, \Delta\mu_O)$ and $(\Delta\mu_B, \Delta\mu_O)$ coordinate systems.
+
+\section{Application to \ce{Ag3PO4}}
+
+For the specific case of \ce{Ag3PO4} ($x=3$, $y=1$, $z=4$):
+
+\begin{itemize}
+\item Element A = Ag (silver)
+\item Element B = P (phosphorus)  
+\item Element O = O (oxygen)
+\end{itemize}
+
+\subsection{Surface Excesses}
+
+\begin{align}
+\Gamma_P &= \frac{1}{2A} \left(\frac{N_{Ag}}{3} - N_P\right) \\
+\Gamma_O &= \frac{1}{2A} \left(\frac{4 N_{Ag}}{3} - N_O\right)
+\end{align}
+
+\subsection{Surface Energy}
+
+\begin{equation}
+\gamma(\Delta\mu_P, \Delta\mu_O) = \phi - \Gamma_P \Delta\mu_P - \Gamma_O \Delta\mu_O
+\end{equation}
+
+\subsection{Chemical Potential Limits}
+
+\begin{align}
+\Delta\mu_P &\leq 0 \\
+\Delta\mu_O &\leq 0 \\
+\Delta\mu_P + 4 \Delta\mu_O &\geq \Delta E_f(\text{Ag}_3\text{PO}_4)
+\end{align}
+
+Plus constraints from competing binary oxides:
+\begin{align}
+\Delta\mu_P + \frac{5}{2} \Delta\mu_O &\leq \Delta E_f(\text{P}_2\text{O}_5) / 2 \\
+2 \Delta\mu_{Ag} + \Delta\mu_O &\leq \Delta E_f(\text{Ag}_2\text{O})
+\end{align}
+
+where $\Delta\mu_{Ag}$ must be expressed in terms of $\Delta\mu_P$ and $\Delta\mu_O$ using:
+\begin{equation}
+3 \Delta\mu_{Ag} = \Delta E_f(\text{Ag}_3\text{PO}_4) - \Delta\mu_P - 4 \Delta\mu_O
+\end{equation}
+
+\section{Implementation Notes}
+
+To implement this B-based formulation in the code:
+
+\begin{enumerate}
+\item Identify elements A, B, and O from the bulk structure
+\item Choose B as the independent variable (instead of A)
+\item Calculate $\Gamma_B$ and $\Gamma_O$ using $N_B^{\text{stoich}} = N_A y / x$
+\item Compute $\phi$ using Eq.~\ref{eq:phi_simplified}
+\item Define the stability region in $(\Delta\mu_B, \Delta\mu_O)$ space
+\item Calculate $\gamma(\Delta\mu_B, \Delta\mu_O)$ on a 2D grid
+\end{enumerate}
+
+The key difference from the standard implementation is simply swapping which element is treated as independent (the "M" element) versus which is used as reference (the "N" element) before applying the same mathematical framework.
+
+\end{document}

@@ -1,0 +1,12 @@
+# Requirements specifically for ReadTheDocs
+sphinx>=4.0.0
+sphinx-rtd-theme>=1.0.0
+recommonmark
+sphinxcontrib-bibtex
+
+# This is needed to make ReadTheDocs mock these packages
+# as they are difficult to install in the ReadTheDocs environment
+aiida-core
+aiida-workgraph
+pymatgen
+numpy
