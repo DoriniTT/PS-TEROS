@@ -184,6 +184,10 @@ def core_workgraph(
     primitive: bool = True,
     in_unit_planes: bool = False,
     max_normal_search: int = None,
+    termination_mode: str = 'pymatgen',
+    oxidation_states: dict = None,
+    unit_bonds: list = None,
+    termination_supercell: list = None,
     relax_slabs: bool = True,
     compute_thermodynamics: bool = True,
     thermodynamics_sampling: int = 100,
@@ -286,6 +290,15 @@ def core_workgraph(
         primitive: Find primitive cell before slab generation. Default: True
         in_unit_planes: Restrict Miller indices to unit planes. Default: False
         max_normal_search: Max normal search for Miller indices. Default: None
+        termination_mode: 'pymatgen' keeps every SlabGenerator slab;
+            'charge_neutral' keeps only symmetric slabs with zero formal
+            charge (semiconductors and insulators). Default: 'pymatgen'
+        oxidation_states: Element -> oxidation state for 'charge_neutral',
+            e.g. {'Ag': 1, 'P': 5, 'O': -2}. Default: None (guessed)
+        unit_bonds: Bonds never broken in 'charge_neutral', e.g.
+            [['P', 'O', 1.9]] keeps PO4 whole. Default: None
+        termination_supercell: In-plane repetition [n1, n2] searched in
+            'charge_neutral', for partial coverages. Default: None ([1, 1])
         relax_slabs: Whether to relax the generated slabs with VASP. Default: False
         compute_thermodynamics: Whether to compute surface energies. Default: True (requires metal_name and oxygen_name)
         thermodynamics_sampling: Number of grid points for chemical potential sampling. Default: 100
@@ -466,6 +479,15 @@ def core_workgraph(
         slab_namespace = None
     else:
         # Generate slabs using the pythonic scatter-gather pattern
+        termination_inputs = {}
+        if termination_mode != 'pymatgen':
+            termination_inputs['termination_mode'] = orm.Str(termination_mode)
+            if oxidation_states is not None:
+                termination_inputs['oxidation_states'] = orm.Dict(dict=oxidation_states)
+            if unit_bonds is not None:
+                termination_inputs['unit_bonds'] = orm.List(list=[list(bond) for bond in unit_bonds])
+            if termination_supercell is not None:
+                termination_inputs['termination_supercell'] = orm.List(list=list(termination_supercell))
         slab_namespace = generate_slab_structures(
             bulk_structure=bulk_vasp.structure,
             miller_indices=orm.List(list=miller_indices),
@@ -475,6 +497,7 @@ def core_workgraph(
             center_slab=orm.Bool(center_slab),
             symmetrize=orm.Bool(symmetrize),
             primitive=orm.Bool(primitive),
+            **termination_inputs,
         ).slabs
 
     # ===== TASK DEPENDENCIES: Create reference group for stage separation =====
@@ -788,6 +811,10 @@ def build_core_workgraph(
     primitive: bool = True,
     in_unit_planes: bool = False,
     max_normal_search: int = None,
+    termination_mode: str = 'pymatgen',
+    oxidation_states: dict = None,
+    unit_bonds: list = None,
+    termination_supercell: list = None,
     workflow_preset: str = None,  # NEW: Workflow preset name
     relax_slabs: bool = None,  # CHANGED: Now defaults to None (preset controls)
     compute_thermodynamics: bool = None,  # CHANGED: Now defaults to None
@@ -1449,6 +1476,10 @@ def build_core_workgraph(
         primitive=primitive,
         in_unit_planes=in_unit_planes,
         max_normal_search=max_normal_search,
+        termination_mode=termination_mode,
+        oxidation_states=oxidation_states,
+        unit_bonds=unit_bonds,
+        termination_supercell=termination_supercell,
         relax_slabs=relax_slabs,
         compute_thermodynamics=compute_thermodynamics,
         thermodynamics_sampling=thermodynamics_sampling,

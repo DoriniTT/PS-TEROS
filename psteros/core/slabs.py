@@ -141,6 +141,10 @@ def generate_slab_structures(
     center_slab: orm.Bool,
     symmetrize: orm.Bool,
     primitive: orm.Bool,
+    termination_mode: orm.Str = None,
+    oxidation_states: orm.Dict = None,
+    unit_bonds: orm.List = None,
+    termination_supercell: orm.List = None,
 ) -> t.Annotated[dict, namespace(slabs=dynamic(orm.StructureData))]:
     """
     Generate slab structures from a bulk crystal structure using Pymatgen's SlabGenerator.
@@ -158,6 +162,19 @@ def generate_slab_structures(
         center_slab: Center the slab in the c direction of the cell
         symmetrize: Generate symmetrically distinct terminations
         primitive: Find primitive cell before generating slabs
+        termination_mode: ``'pymatgen'`` (default) returns every slab from
+            ``SlabGenerator``. ``'charge_neutral'`` returns only symmetric
+            slabs with zero net formal charge, for semiconductors and
+            insulators; see :mod:`psteros.core.terminations`. In that mode
+            ``symmetrize`` and ``center_slab`` are implied.
+        oxidation_states: ``'charge_neutral'`` only. Element -> nominal
+            oxidation state, e.g. ``{'Ag': 1, 'P': 5, 'O': -2}``. Guessed from
+            the bulk composition if omitted.
+        unit_bonds: ``'charge_neutral'`` only. Bonds never to break, as
+            ``[[A, B, cutoff], ...]``, e.g. ``[['P', 'O', 1.9]]`` keeps PO4
+            groups whole.
+        termination_supercell: ``'charge_neutral'`` only. In-plane repetition
+            ``[n1, n2]`` searched, to allow partial surface coverages.
 
     Returns:
         Dictionary with key 'slabs' containing a dict of slab structures.
@@ -172,6 +189,27 @@ def generate_slab_structures(
     if primitive.value:
         analyzer = SpacegroupAnalyzer(pymatgen_structure)
         pymatgen_structure = analyzer.get_primitive_standard_structure()
+
+    mode = termination_mode.value if termination_mode is not None else 'pymatgen'
+    if mode == 'charge_neutral':
+        from .terminations import find_charge_neutral_terminations
+
+        terminations = find_charge_neutral_terminations(
+            pymatgen_structure,
+            miller_indices.get_list(),
+            min_slab_thickness.value,
+            min_vacuum_thickness.value,
+            oxidation_states=oxidation_states.get_dict() if oxidation_states is not None else None,
+            unit_bonds=unit_bonds.get_list() if unit_bonds is not None else None,
+            supercell=tuple(termination_supercell.get_list()) if termination_supercell is not None else (1, 1),
+            lll_reduce=lll_reduce.value,
+        )
+        return {'slabs': {
+            f"term_{index}": orm.StructureData(ase=adaptor.get_atoms(termination.structure))
+            for index, termination in enumerate(terminations)
+        }}
+    if mode != 'pymatgen':
+        raise ValueError(f"termination_mode must be 'pymatgen' or 'charge_neutral', got {mode!r}")
 
     generator = SlabGenerator(
         pymatgen_structure,

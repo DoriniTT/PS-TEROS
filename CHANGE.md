@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased] - Charge-Neutral Terminations
+
+### New Feature: `termination_mode='charge_neutral'`
+
+**Module:** `psteros.core.terminations`
+
+Slab generation for semiconductors and insulators. Only symmetric slabs with
+zero net formal charge are returned; stoichiometry is not required. Charged
+symmetric slabs are repaired by removing symmetry-related surface units
+(layer by layer, fewest units first). Polyanions such as PO4 can be kept
+whole with `unit_bonds`, and polar directions are reported as such.
+
+- `generate_slab_structures`, `core_workgraph` and `build_core_workgraph`
+  accept `termination_mode`, `oxidation_states`, `unit_bonds` and
+  `termination_supercell`. The default (`'pymatgen'`) is unchanged.
+- Standalone API: `find_charge_neutral_terminations`, `classify_slab`,
+  `has_face_reversing_operation`, `normal_repeat`.
+- Ag3PO4(110) now gives Ag18P6O24 and Ag12P4O16 instead of six charged slabs.
+- Guide: [docs/CHARGE_NEUTRAL_TERMINATIONS.md](docs/CHARGE_NEUTRAL_TERMINATIONS.md).
+- Tests: `tests/test_terminations.py`.
+
+---
+
 ## [v0.3.0] - 2026-01-05 - Metal Surface Energy Module
 
 ### Overview
