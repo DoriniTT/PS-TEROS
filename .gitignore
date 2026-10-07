@@ -189,3 +189,6 @@ git-commit.sh
 
 # External dependencies (cloned repos)
 psteros/external/FukuiGrid/
+
+# Local agent instructions (not versioned)
+AGENTS.md
