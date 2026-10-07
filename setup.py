@@ -33,6 +33,11 @@ setup(
             "flake8",
         ]
     },
+    entry_points={
+        "console_scripts": [
+            "psteros-terminations=psteros.core.terminations:main",
+        ],
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

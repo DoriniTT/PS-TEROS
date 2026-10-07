@@ -92,7 +92,9 @@ def wrap_input_slabs(
     Returns:
         Dictionary with key 'slabs' containing a dict of slab structures.
         Each slab is keyed by termination identifier (e.g., "term_0", "term_1")
-        and contains AiiDA StructureData nodes.
+        and contains AiiDA StructureData nodes. In ``'charge_neutral'`` mode
+        there is also 'termination_report', a Dict with the summary table
+        and, per label, the formula, thickness and how the slab was obtained.
     """
     # Simply return the slabs in the same format as generate_slab_structures
     # Using @task.graph instead of @task.calcfunction avoids provenance cycles
@@ -145,7 +147,7 @@ def generate_slab_structures(
     oxidation_states: orm.Dict = None,
     unit_bonds: orm.List = None,
     termination_supercell: orm.List = None,
-) -> t.Annotated[dict, namespace(slabs=dynamic(orm.StructureData))]:
+) -> t.Annotated[dict, namespace(slabs=dynamic(orm.StructureData), termination_report=orm.Dict)]:
     """
     Generate slab structures from a bulk crystal structure using Pymatgen's SlabGenerator.
 
@@ -174,12 +176,15 @@ def generate_slab_structures(
             ``[[A, B, cutoff], ...]``, e.g. ``[['P', 'O', 1.9]]`` keeps PO4
             groups whole.
         termination_supercell: ``'charge_neutral'`` only. In-plane repetition
-            ``[n1, n2]`` searched, to allow partial surface coverages.
+            ``[n1, n2]`` searched, to allow partial surface coverages. By
+            default the smallest of 1x1, 2x1, 1x2 and 2x2 that works.
 
     Returns:
         Dictionary with key 'slabs' containing a dict of slab structures.
         Each slab is keyed by termination identifier (e.g., "term_0", "term_1")
-        and contains AiiDA StructureData nodes.
+        and contains AiiDA StructureData nodes. In ``'charge_neutral'`` mode
+        there is also 'termination_report', a Dict with the summary table
+        and, per label, the formula, thickness and how the slab was obtained.
     """
     adaptor = AseAtomsAdaptor()
 
@@ -201,13 +206,19 @@ def generate_slab_structures(
             min_vacuum_thickness.value,
             oxidation_states=oxidation_states.get_dict() if oxidation_states is not None else None,
             unit_bonds=unit_bonds.get_list() if unit_bonds is not None else None,
-            supercell=tuple(termination_supercell.get_list()) if termination_supercell is not None else (1, 1),
+            supercell=tuple(termination_supercell.get_list()) if termination_supercell is not None else None,
             lll_reduce=lll_reduce.value,
         )
-        return {'slabs': {
-            f"term_{index}": orm.StructureData(ase=adaptor.get_atoms(termination.structure))
-            for index, termination in enumerate(terminations)
-        }}
+        return {
+            'slabs': {
+                termination.label: orm.StructureData(ase=adaptor.get_atoms(termination.structure))
+                for termination in terminations
+            },
+            'termination_report': orm.Dict({
+                'summary': terminations.summary(),
+                'terminations': {termination.label: termination.to_dict() for termination in terminations},
+            }),
+        }
     if mode != 'pymatgen':
         raise ValueError(f"termination_mode must be 'pymatgen' or 'charge_neutral', got {mode!r}")
 

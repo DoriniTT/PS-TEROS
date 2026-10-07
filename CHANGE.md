@@ -10,15 +10,25 @@ Slab generation for semiconductors and insulators. Only symmetric slabs with
 zero net formal charge are returned; stoichiometry is not required. Charged
 symmetric slabs are repaired by removing symmetry-related surface units
 (layer by layer, fewest units first). Polyanions such as PO4 can be kept
-whole with `unit_bonds`, and polar directions are reported as such.
+whole with `unit_bonds`, and polar directions are reported as such. Metals
+and alloys work too (all formal charges zero).
 
 - `generate_slab_structures`, `core_workgraph` and `build_core_workgraph`
   accept `termination_mode`, `oxidation_states`, `unit_bonds` and
-  `termination_supercell`. The default (`'pymatgen'`) is unchanged.
-- Standalone API: `find_charge_neutral_terminations`, `classify_slab`,
-  `has_face_reversing_operation`, `normal_repeat`.
-- Ag3PO4(110) now gives Ag18P6O24 and Ag12P4O16 instead of six charged slabs.
+  `termination_supercell`. The default (`'pymatgen'`) is unchanged. In the
+  new mode the task also outputs a `termination_report` Dict.
+- Standalone API: `find_charge_neutral_terminations` returns a
+  `TerminationSet` that prints a summary table, renders in Jupyter, writes
+  slabs (`write`) and draws side views (`plot`).
+- Command line: `psteros-terminations bulk.cif 110 --oxidation ... --keep P-O:1.9`.
+- Surface cells are reduced to the primitive one (pymatgen's cubic (111)
+  cell is 4x too large); 2x1, 1x2 and 2x2 cells are tried automatically
+  when the 1x1 cell cannot be neutralised.
+- Tested on 60 surfaces of 20 materials: metals, alloys, covalent and III-V
+  semiconductors, wurtzites, oxides, perovskites, halides, phosphates and
+  carbonates.
 - Guide: [docs/CHARGE_NEUTRAL_TERMINATIONS.md](docs/CHARGE_NEUTRAL_TERMINATIONS.md).
+- Example: `examples/charge_neutral_terminations/preview_terminations.py`.
 - Tests: `tests/test_terminations.py`.
 
 ---
