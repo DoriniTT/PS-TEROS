@@ -388,8 +388,9 @@ in K and pressures in bar.
    block before it). ``Static`` forces ``NSW = 0``. ``Vibrations`` runs VASP
    finite differences with ``IBRION`` 5 (gas) or 6 (solid) unless ``ibrion``
    is given, and sets ``POTIM``, ``NFREE`` and ``NSW = 1`` from its fields. Its INCAR
-   defaults are ``ISIF = 2`` and ``NCORE = 1`` (VASP cannot change its k-point
-   set under band parallelisation, which displaced cells need).
+   defaults are ``ISIF = 2`` and, because VASP cannot change its k-point set
+   under band parallelisation, ``ISYM = 0`` for a gas and ``NCORE = 1`` for a
+   solid.
 
 .. _api-reference-system:
 

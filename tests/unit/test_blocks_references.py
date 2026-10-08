@@ -27,10 +27,12 @@ def test_vibrations_choose_finite_differences_by_phase() -> None:
     assert psteros.Static().required("solid") == {"nsw": 0}
 
 
-def test_vibrations_turn_off_band_parallelisation_unless_told_otherwise() -> None:
+def test_vibrations_avoid_a_k_point_change_that_band_parallelisation_forbids() -> None:
     # VASP stops with "requested a change of the k-point set ... remove NPAR" when displaced
-    # (lower-symmetry) cells are run with NCORE > 1, found on Lovelace (par128, 128 ranks).
-    assert psteros.Vibrations().defaults("gas") == {"isif": 2, "ncore": 1}
+    # (lower-symmetry) cells run with NCORE > 1; found on Lovelace (par128, 128 ranks).
+    # A gas drops the symmetry (NCORE = 1 on 128 ranks gives 128 bands for 6 occupied ones and
+    # "EDDDAV: Call to ZHEGV failed"); a solid keeps its symmetry-reduced displacements and uses NCORE = 1.
+    assert psteros.Vibrations().defaults("gas") == {"isif": 2, "isym": 0}
     assert psteros.Vibrations().defaults("solid") == {"isif": 2, "ncore": 1}
     assert psteros.Vibrations(incar={"NCORE": 4}).incar == {"ncore": 4}
     # Other blocks keep their defaults: the fix adds nothing to them.

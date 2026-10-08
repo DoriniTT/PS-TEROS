@@ -48,12 +48,14 @@ function, class, default or graph changes.
 - `AGENTS.md` is versioned: the rules for adding features without breaking
   the public API.
 - **Fixed: `Vibrations` block under band parallelisation** (new in this
-  release, no earlier behaviour changes). The block now sets `NCORE = 1` (with
-  `ISIF = 2`) by default. Found on Lovelace (128 ranks, recipe `NCORE = 16`):
-  VASP stops an `IBRION = 5/6` run with "VASP internal routines have requested
-  a change of the k-point set ... remove the tag NPAR", because displacing atoms
-  lowers the symmetry; aiida-vasp reports exit 700 and restarts the job as if it
-  were an unfinished relaxation. `Vibrations(incar={"ncore": n})` still wins;
+  release, no earlier behaviour changes). Found on Lovelace (128 ranks, recipe
+  `NCORE = 16`): VASP stops an `IBRION = 5/6` run with "VASP internal routines
+  have requested a change of the k-point set ... remove the tag NPAR", because
+  displacing atoms lowers the symmetry; aiida-vasp reports exit 700 and restarts
+  the job as if it were an unfinished relaxation. The block now defaults to
+  `ISIF = 2` and, for a gas `ISYM = 0` (keeps the recipe's `NCORE`; `NCORE = 1`
+  on 128 ranks pads a molecule to 128 bands and VASP fails with "EDDDAV: Call to
+  ZHEGV failed"), for a solid `NCORE = 1`. `Vibrations(incar={...})` still wins;
   `Relax` and `Static` keep the recipe's `NCORE`.
 
 ## [v0.3.0] - 2026-01-05 - Metal Surface Energy Module

@@ -105,17 +105,19 @@ def test_relaxed_structure_feeds_static_and_vibrations(code_label) -> None:
     assert ("o2_vibrations_vasp", "retrieved", "o2_vibrations_frequencies", "retrieved") in graph_links
 
 
-def test_vibrations_run_with_ncore_one_while_the_other_blocks_keep_the_recipe(code_label) -> None:
+def test_vibrations_avoid_band_parallelisation_while_the_other_blocks_keep_the_recipe(code_label) -> None:
     parallel = {**INCAR, "NCORE": 16}
     workgraph = psteros.build_vasp_reference_workgraph(references(), recipe(code_label, parallel))
     for label in ("o2", "sno2"):
         assert incar(workgraph, f"{label}_relax_vasp")["ncore"] == 16
         assert incar(workgraph, f"{label}_static_vasp")["ncore"] == 16
-        assert incar(workgraph, f"{label}_vibrations_vasp")["ncore"] == 1
-    # The block can still be told otherwise, and a reference override has the last word.
-    explicit = (psteros.Relax(), psteros.Static(), psteros.Vibrations(incar={"ncore": 4}))
+    gas, solid = incar(workgraph, "o2_vibrations_vasp"), incar(workgraph, "sno2_vibrations_vasp")
+    assert (gas["isym"], gas["ncore"]) == (0, 16)
+    assert (solid["ncore"], "isym" not in solid) == (1, True)
+    # The block can still be told otherwise.
+    explicit = (psteros.Relax(), psteros.Static(), psteros.Vibrations(incar={"ncore": 4, "isym": 2}))
     workgraph = psteros.build_vasp_reference_workgraph(references(), recipe(code_label, parallel), blocks=explicit)
-    assert incar(workgraph, "sno2_vibrations_vasp")["ncore"] == 4
+    assert (incar(workgraph, "sno2_vibrations_vasp")["ncore"], incar(workgraph, "o2_vibrations_vasp")["isym"]) == (4, 2)
 
 
 def test_a_recipe_without_ncore_still_gives_the_same_relax_and_static_incar(code_label) -> None:

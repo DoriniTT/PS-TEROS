@@ -50,3 +50,14 @@ Every `verdi` call uses `-p psteros_sno2_vibrations`: the default profile of thi
   Fix: `Vibrations.defaults` now returns `{"isif": 2, "ncore": 1}`; tests in `tests/unit/test_blocks_references.py`
   and `tests/test_reference_workgraph.py`; `CHANGE.md`, `docs/source/api.rst` and
   `docs/source/reference-thermochemistry.rst` updated. 331 passed, 7 skipped.
+- O2 smoke test, attempt 4: graph PK 815, after commit `a709819` (NCORE=1 for the vibrations block). AiiDA caching
+  was switched on in my profile (`verdi -p psteros_sno2_vibrations config set caching.default_enabled true`) so the
+  relax and static blocks, whose inputs are identical to attempt 3, were taken from the cache (calc 824, 839, marked
+  with the cache check-mark); only the vibrations job ran (calc 853, 38 min on 128 ranks).
+  It failed: OUTCAR "Error EDDDAV: Call to ZHEGV failed. Returncode = 137 2 256" (exit 700 again, then the work
+  chain aborted, graph exit 302). The k-point-set error is gone. Cause: with NCORE = 1 on 128 ranks VASP uses
+  NBANDS = 128 for the 12 electrons of O2 (6 occupied bands); the huge empty subspace is ill-conditioned.
+  A second psteros bug in my first fix. Fix: for a gas the Vibrations block sets `ISYM = 0` (k-point set cannot
+  change, recipe NCORE kept), for a solid `NCORE = 1` (supercell with hundreds of bands, symmetry-reduced
+  displacements kept). Tests, CHANGE.md and docs updated (the tests of `a709819` were mine and for unreleased
+  behaviour; no earlier test was edited). 331 passed, 7 skipped.
