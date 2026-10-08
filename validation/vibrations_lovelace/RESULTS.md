@@ -37,8 +37,8 @@ Job script produced for the first job (`_aiidasubmit.sh`, PK 805): `#PBS -q par1
 | refs, attempt 3 (with `PsterosVaspWorkChain`) | 797 | Killed by me after its first job (calc 805, alpha-Sn relax) failed with exit 1002: the job ran on **1 MPI rank** (5.2); calc 815 (queued second job) cancelled with 810/815 |
 | refs, attempt 4 (computer `mpirun` fixed) | 862 | **Finished [0]**, all 6 children exit 0 (PBS jobs 1028184, 1028197, 1028211, 1028247, 1028256, 1028257; calcs 870, 882, 893, 905, 916, 928) |
 | refs, attempt 5 (`kpoints_spacing=0.04`) | 977 | **Finished [0]** in 18 min (queue nearly empty), all 6 children exit 0 (calcs 985, 997, 1008, 1020, 1031, 1043). This is the `refs` graph used by the rest of the test; 862 stays as the 0.3 record (5.3) |
-| slabs (on the lattice of 977: a = 4.7652, c = 3.2219 A) | 1077 | running |
-| vibrations | | |
+| slabs (on the lattice of 977: a = 4.7652, c = 3.2219 A) | 1077 | **Finished [0]** in 32 min, 4 children exit 0 (calcs 1086, 1098, 1110, 1122; PBS 1028288, 1028289, 1028291, 1028296) |
+| vibrations (refs 977, slabs 1077) | 3400 | submitted 18:48 (CEST), 252 jobs, running |
 | ibrion5 | | |
 
 ## 3. Timings of the `refs` graph (PBS `qtime`/`stime`/`resources_used.walltime`)
