@@ -29,7 +29,7 @@ extensions = [
 ]
 
 templates_path = ['_templates']
-# The v1.0 documentation is intentionally the QE-first public surface.  The
+# The v2 documentation covers the typed public API (VASP first, QE second).  The
 # pre-migration builder manuals remain in the source tree as historical
 # material, but are not built or published as current psteros documentation.
 exclude_patterns = [

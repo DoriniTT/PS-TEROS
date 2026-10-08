@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 """
-Surface phase diagram of the non-polar ZnO faces with Quantum ESPRESSO.
+Surface phase diagram of the non-polar ZnO faces with VASP.
 
 1. Without arguments: cut the charge-neutral terminations of ZnO (10-10) and
    (11-20), print every calculation of the set and write the slabs and their
    side views to ./output/zno_study.
-2. With --submit: also submit the relaxation -> static SCF WorkGraph (edit
-   CODE, PSEUDO_FAMILY, COMPUTER and QUEUE first).
+2. With --submit: also submit the relaxation -> static WorkGraph (edit CODE,
+   POTCAR_FAMILY, COMPUTER and QUEUE first).
 3. With --analyse PK: read the finished graph and write the phase diagram.
 
 The bulk must be relaxed beforehand with the same settings; the slabs are cut
@@ -20,17 +20,17 @@ from pymatgen.core import Lattice, Structure
 
 import psteros
 
-CODE = "pw@cluster"
-PSEUDO_FAMILY = "SSSP/1.3/PBE/efficiency"
+CODE = "vasp@cluster"
+POTCAR_FAMILY = "PBE"
+POTCARS = {"Zn": "Zn", "O": "O"}
 COMPUTER = "cluster"
 QUEUE = "normal"
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUTPUT = os.path.join(HERE, "output", "zno_study")
 
-SYSTEM = {"ecutwfc": 50.0, "ecutrho": 400.0, "occupations": "smearing", "smearing": "mv", "degauss": 0.01}
-ELECTRONS = {"conv_thr": 1.0e-8, "mixing_beta": 0.4}
-RELAX = {"calculation": "relax", "forc_conv_thr": 1.0e-3, "etot_conv_thr": 1.0e-5, "nstep": 150}
-STATIC = {"calculation": "scf"}
+ELECTRONIC = {"ENCUT": 520, "PREC": "Accurate", "EDIFF": 1.0e-6, "ISMEAR": 0, "SIGMA": 0.05, "LREAL": False}
+RELAX = {"IBRION": 2, "NSW": 200, "EDIFFG": -0.01}
+STATIC = {"IBRION": -1, "NSW": 0}
 
 
 def structures():
@@ -55,18 +55,17 @@ def study():
 def recipes(calculations):
     execution = psteros.ExecutionPolicy(computer=COMPUTER, queue=QUEUE, max_concurrent_jobs=1)
 
-    def qe(control):
-        return psteros.QeCalculationConfig(
-            code_label=CODE, pseudo_family=PSEUDO_FAMILY,
-            parameters={"CONTROL": control, "SYSTEM": SYSTEM, "ELECTRONS": ELECTRONS},
-            kpoints_distance=0.25, max_iterations=3,
+    def vasp(ionic):
+        return psteros.VaspCalculationConfig(
+            code_label=CODE, incar={**ELECTRONIC, **ionic}, potential_family=POTCAR_FAMILY,
+            potential_mapping=calculations.potential_mapping(POTCARS), kpoints_spacing=0.25, max_iterations=3,
         )
 
-    relax = psteros.SurfaceWorkflowConfig(backend="qe", calculation=qe(RELAX), execution=execution,
-                                          name="zno_surfaces", role_overrides=calculations.qe_overrides("relax"))
-    static = psteros.SurfaceWorkflowConfig(backend="qe", calculation=qe(STATIC), execution=execution,
+    relax = psteros.SurfaceWorkflowConfig(backend="vasp", calculation=vasp(RELAX), execution=execution,
+                                          name="zno_surfaces", role_overrides=calculations.vasp_overrides("relax"))
+    static = psteros.SurfaceWorkflowConfig(backend="vasp", calculation=vasp(STATIC), execution=execution,
                                            name="zno_surfaces_static",
-                                           role_overrides=calculations.qe_overrides("static"))
+                                           role_overrides=calculations.vasp_overrides("static"))
     return relax, static
 
 
@@ -92,10 +91,10 @@ def main():
         load_profile()
         if args.submit:
             relax, static = recipes(calculations)
-            graph = psteros.build_qe_relax_static_workgraph(calculations.structures, relax, static, submit=True)
+            graph = psteros.build_relax_static_workgraph(calculations.structures, relax, static, submit=True)
             print(f"\nSubmitted WorkGraph {graph.pk}; analyse it with --analyse {graph.pk}")
         else:
-            energies, relaxed = psteros.read_qe_results(orm.load_node(args.analyse), calculations.structures)
+            energies, relaxed = psteros.read_vasp_results(orm.load_node(args.analyse), calculations.structures)
             result = calculations.analyse(energies, relaxed)
             print(f"\n{result}")
             result.diagram.plot(os.path.join(OUTPUT, "zno_phase_diagram.png"), title="ZnO non-polar faces")

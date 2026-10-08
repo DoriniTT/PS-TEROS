@@ -8,7 +8,8 @@ other compounds. The Python package is imported as ``psteros``. It keeps the
 starting structures,
 calculation inputs, and execution choices visible as you build a graph. It does
 not replace the scientific checks needed to choose a model or interpret a
-result.
+result. VASP, through aiida-vasp, is the central engine; Quantum ESPRESSO
+runs with the same recipes and analysis.
 
 The pages below follow the questions readers usually ask first: how to install
 the library, how to build a safe first graph, how the pieces fit together, and
@@ -20,8 +21,8 @@ Choose the path that matches what you need now:
   :doc:`build one unsubmitted graph <tutorial>`.
 * **Learning the model?** Read :doc:`how a calculation fits together <concepts>`
   before the :doc:`SnO2 surface-energy model <examples>`.
-* **Preparing QE work?** Use the :doc:`relaxation-to-static guide
-  <qe-first-workflow>` after the tutorial.
+* **Preparing VASP work?** Use the :doc:`relaxation-to-static guide
+  <vasp-workflow>` after the tutorial (Quantum ESPRESSO: :doc:`qe-workflow`).
 * **Have the energies?** :doc:`Build a surface phase diagram <phase-diagram>`
   as a figure or a CSV table.
 * **Looking up an input?** Open the :doc:`API reference <api>`.
@@ -44,7 +45,8 @@ Choose the path that matches what you need now:
    :maxdepth: 1
    :caption: Prepare a calculation
 
-   qe-first-workflow
+   vasp-workflow
+   qe-workflow
    phase-diagram
 
 .. toctree::

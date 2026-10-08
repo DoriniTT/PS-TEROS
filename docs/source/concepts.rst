@@ -21,9 +21,10 @@ Four pieces, one calculation story
 
 **Calculation recipe**
    A calculation recipe answers, “What calculation do I want to run?” In
-   psteros, ``SurfaceWorkflowConfig`` stores the selected code path, code label,
-   pseudopotential family, Quantum ESPRESSO input sections (called namelists),
-   and any per-structure changes.
+   psteros, ``SurfaceWorkflowConfig`` stores the selected engine (VASP, or
+   Quantum ESPRESSO), the code label, the potentials (a POTCAR family for
+   VASP), the input (the INCAR for VASP, namelists for QE), and any
+   per-structure changes.
 
 **Execution policy**
    An ``ExecutionPolicy`` carries scheduler queue, resource, wall-time, and MPI
@@ -64,11 +65,11 @@ A typical surface study has three stages:
 
 The analysis helper evaluates the stated thermodynamic expression and returns
 eV/Å² and J/m². Supply energies from calculations that use compatible methods
-and settings; the helper does not run Quantum ESPRESSO or assess their
-scientific compatibility.
+and settings; the helper does not run VASP or assess their scientific
+compatibility.
 
 The :doc:`SnO2 surface-energy model <examples>` explains this sequence with a
 symmetric slab, defines the terms used in the equation, and shows what to
 record before interpreting a result. If you already know the concepts and want
-to prepare a two-stage calculation, continue to the :doc:`QE guide
-<qe-first-workflow>`.
+to prepare a two-stage calculation, continue to the :doc:`VASP guide
+<vasp-workflow>` (or the :doc:`QE guide <qe-workflow>`).

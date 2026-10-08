@@ -78,12 +78,45 @@ Structures
 Calculation configuration
 -------------------------
 
+.. _api-vasp-calculation-config:
+
+.. index:: VaspCalculationConfig
+
+``VaspCalculationConfig(code_label, incar, potential_family="PBE", potential_mapping={}, kpoints_spacing=0.20, clean_workdir=False, max_iterations=None)``
+   Describe inputs shared by aiida-vasp ``VaspWorkChain`` calculations, the
+   central psteros engine.
+
+   ``code_label``
+      Full AiiDA label of a registered ``vasp.vasp`` code.
+
+   ``incar``
+      Flat mapping of INCAR tags (``{"ENCUT": 520, "IBRION": 2, ...}``) in
+      VASP's units. psteros passes it to aiida-vasp in its ``incar``
+      namespace; nested mappings are rejected.
+
+   ``potential_family`` and ``potential_mapping``
+      The uploaded POTCAR family and the POTCAR per element or kind
+      (``{"Sn": "Sn_d"}``). Elements that are not listed use the POTCAR of
+      the same name; kinds that are not elements, such as pseudo-hydrogen
+      ``H0p75``, must be listed.
+
+   ``kpoints_spacing``
+      Positive k-point spacing in Å⁻¹ (with 2π, as in aiida-vasp).
+
+   ``max_iterations``
+      Positive maximum number of work-chain restarts; aiida-vasp's default
+      when ``None``.
+
+   ``clean_workdir``
+      Whether the AiiDA work chain should clean its remote working directory.
+
 .. _api-qe-calculation-config:
 
 .. index:: QeCalculationConfig
 
 ``QeCalculationConfig(code_label, pseudo_family, parameters, kpoints_distance=0.20, max_iterations=1, clean_workdir=False)``
-   Describe inputs shared by Quantum ESPRESSO ``PwBaseWorkChain`` calculations.
+   Describe inputs shared by Quantum ESPRESSO ``PwBaseWorkChain`` calculations
+   (``pip install '.[qe]'``).
 
    ``code_label``
       Full AiiDA label of a registered ``quantumespresso.pw`` code.
@@ -109,23 +142,13 @@ Calculation configuration
    ``clean_workdir``
       Whether the AiiDA work chain should clean its remote working directory.
 
-.. _api-vasp-calculation-config:
-
-.. index:: VaspCalculationConfig
-
-``VaspCalculationConfig(code_label, incar, potential_family="PBE", potential_mapping={}, kpoints_spacing=0.20, clean_workdir=False)``
-   Describe the VASP configuration retained for established VASP studies.
-   ``code_label`` identifies the AiiDA code, ``incar`` stores INCAR settings,
-   and the potential fields select the family and optional per-element mapping.
-   ``kpoints_spacing`` is a positive reciprocal-space distance in Å⁻¹.
-
 .. _api-execution-policy:
 
 .. index:: ExecutionPolicy
 
 ``ExecutionPolicy(computer=..., queue=..., resources=..., max_concurrent_jobs=1, max_wallclock_seconds=86400, with_mpi=True, prepend_text="")``
    Supply scheduler queue, resource, wall-time, and MPI choices. The registered
-   code in ``QeCalculationConfig`` or ``VaspCalculationConfig`` selects the
+   code in ``VaspCalculationConfig`` or ``QeCalculationConfig`` selects the
    actual AiiDA computer. The policy's ``computer`` field is descriptive in the
    current API; keep it consistent with the computer in ``code_label`` because
    the builder does not cross-check them. ``resources`` is a scheduler resource
@@ -144,11 +167,14 @@ Calculation configuration
 
 .. index:: CalculationOverride
 
-``CalculationOverride(parameters=None, kpoints_distance=None, settings={}, metadata={})``
-   Describe a deliberate change for one labelled structure. For QE,
-   ``parameters`` deep-merges namelist values into the shared recipe.
-   ``settings`` and ``metadata`` are passed to the backend task. A supplied
-   k-point distance must be positive.
+``CalculationOverride(parameters=None, kpoints_distance=None, settings={}, metadata={}, fixed_sites=())``
+   Describe a deliberate change for one labelled structure. For VASP,
+   ``parameters={"INCAR": {...}}`` updates the INCAR of the shared recipe; for
+   QE, ``parameters`` deep-merges namelist values. ``kpoints_distance``
+   replaces the k-point spacing and must be positive. ``fixed_sites`` holds the
+   zero-based indices of sites kept fixed during a relaxation: VASP selective
+   dynamics, QE ``FIXED_COORDS``. ``settings`` and ``metadata`` are passed to
+   the backend task.
 
 .. _api-surface-workflow-config:
 
@@ -156,11 +182,19 @@ Calculation configuration
 
 ``SurfaceWorkflowConfig(backend, calculation, execution, name="psteros_surface", role_overrides={})``
    Combine one calculation configuration with an execution policy. Use
-   ``backend="qe"`` with ``QeCalculationConfig`` or ``backend="vasp"`` with
-   ``VaspCalculationConfig``; any other backend string or a mismatched
+   ``backend="vasp"`` with ``VaspCalculationConfig`` or ``backend="qe"`` with
+   ``QeCalculationConfig``; any other backend string or a mismatched
    configuration raises an error. ``name`` may contain letters, numbers,
    hyphens, and underscores. ``role_overrides`` maps structure labels to
    ``CalculationOverride`` objects.
+
+.. _api-central-sites:
+
+.. index:: central_sites
+
+``central_sites(structure, half_width=1.5)``
+   Indices of the sites within ``half_width`` Å of the mid-plane of a slab,
+   for ``CalculationOverride(fixed_sites=...)``.
 
 .. _api-qe-fixed-coordinate-flags:
 
@@ -186,28 +220,44 @@ Graph builders
    label becomes one backend task. The function returns the graph; with
    ``submit=True`` it also calls ``graph.submit()``.
 
+.. _api-build-relax-static-workgraph:
+
+.. index:: build_relax_static_workgraph
+
+``build_relax_static_workgraph(structures, relaxation, static, *, submit=False)``
+   Build a graph in which each static task consumes the relaxed structure
+   from its preceding relaxation, with VASP or QE. Both configurations must
+   use the same backend and share the same execution policy. The function
+   returns the graph; with ``submit=True`` it also submits it.
+
+   With VASP, every relaxation INCAR (recipe plus override) must move the ions
+   (``IBRION >= 0`` and ``NSW > 0``) and every static INCAR must not. Graph
+   outputs are ``<label>_relaxed_structure``, ``<label>_relax_misc``,
+   ``<label>_static_misc`` and the matching ``_retrieved`` folders;
+   ``read_vasp_results(graph, labels)`` reads the static energies and relaxed
+   structures. ``build_surface_workgraph`` names them ``<label>_misc``,
+   ``<label>_structure`` and ``<label>_retrieved``.
+
+   With QE, relaxations run as ``PwRelaxStageWorkChain``, a
+   ``PwBaseWorkChain`` that accepts a ``vc-relax`` whose final SCF exceeded
+   the force or stress thresholds (exit status 501), so that the static SCF
+   still runs on the relaxed structure; psteros must therefore be installed in
+   the Python environment of the AiiDA daemon. Graph outputs are
+   ``<label>_relaxed_structure``, ``<label>_relax_parameters``,
+   ``<label>_static_parameters`` and the ``_retrieved`` folders (with
+   ``build_surface_workgraph``: ``<label>_parameters``, ``<label>_structure``
+   and ``<label>_retrieved``); ``read_qe_results`` reads them.
+
+   aiida-workgraph attaches graph-level outputs only when every task finished
+   successfully; otherwise read them from the work chain called by each task.
+
 .. _api-build-qe-relax-static-workgraph:
 
 .. index:: build_qe_relax_static_workgraph
 
 ``build_qe_relax_static_workgraph(structures, relaxation, static, *, submit=False)``
-   Build a QE graph in which each static task consumes the relaxed structure
-   from its preceding relaxation. Both configurations must use the QE backend,
-   contain ``QeCalculationConfig`` objects, and share the same execution policy.
-   The function returns the graph; with ``submit=True`` it also submits it.
-
-   Relaxations run as ``PwRelaxStageWorkChain``, a ``PwBaseWorkChain`` that
-   accepts a ``vc-relax`` whose final SCF exceeded the force or stress
-   thresholds (exit status 501), so that the static SCF still runs on the
-   relaxed structure. psteros must therefore be installed in the Python
-   environment of the AiiDA daemon.
-
-   Graph-level outputs are named ``<label>_relaxed_structure``,
-   ``<label>_relax_parameters``, ``<label>_static_parameters`` and the
-   matching ``_retrieved`` folders. ``build_surface_workgraph`` names them
-   ``<label>_parameters``, ``<label>_structure`` and ``<label>_retrieved``.
-   aiida-workgraph attaches graph-level outputs only when every task finished
-   successfully; otherwise read them from the work chain called by each task.
+   ``build_relax_static_workgraph`` restricted to ``QeCalculationConfig``
+   recipes.
 
 Thermodynamic analysis
 ----------------------
@@ -424,12 +474,13 @@ The method and a worked example are in ``docs/CHARGE_NEUTRAL_TERMINATIONS.md``.
    The bulk, elemental references, competing phases and every charge-neutral
    slab as labelled ``structures`` (with ``roles``) for
    ``build_surface_workgraph`` or ``build_qe_relax_static_workgraph``;
-   ``qe_overrides(stage)``, ``vasp_overrides()`` and
-   ``potential_mapping(base)`` give their settings, and
+   ``vasp_overrides(stage)``, ``potential_mapping(base)`` and
+   ``qe_overrides(stage)`` give their settings, and
    ``analyse(energies_ev, relaxed_structures=None)`` returns a
    ``ChargeNeutralStudyResult`` with the references and the binary or
-   ternary phase diagram. ``read_qe_results(graph, labels)`` reads energies
-   and relaxed structures from a finished QE WorkGraph.
+   ternary phase diagram. ``read_vasp_results(graph, labels)`` (VASP) and
+   ``read_qe_results(graph, labels)`` (QE) read energies and relaxed
+   structures from a finished WorkGraph.
 
 Polar surfaces
 --------------
@@ -482,11 +533,12 @@ The method and a worked example are in ``docs/POLAR_SURFACES.md``.
 ``PolarSurfaceStudy(bulk, faces, references, *, bilayers=9, pseudo_hydrogen_method="molecules", cluster_sizes=(2, 3, 8, 9), eq7_check=True, nonpolar_check=None, electron_counting=True)``
    Every structure of a VASP polar-surface calculation set (``structures``,
    ``roles``), its POTCAR mapping (``potential_mapping(base)``) and INCAR
-   overrides (``vasp_overrides()``), and ``analyse(energies_ev,
+   overrides (``vasp_overrides(stage)``), and ``analyse(energies_ev,
    relaxed_structures)``, which returns the references, the pseudo chemical
    potentials, the phase diagram, the bottom checks and the consistency
    checks. ``read_vasp_results(graph, labels)`` reads energies and relaxed
-   structures from a finished VASP WorkGraph.
+   structures from a finished VASP WorkGraph (``build_surface_workgraph`` or
+   ``build_relax_static_workgraph``).
 
 .. _api-ev-per-angstrom2-to-j-per-m2:
 
@@ -499,6 +551,7 @@ The method and a worked example are in ``docs/POLAR_SURFACES.md``.
 Compatibility boundary
 ----------------------
 
-The pre-1.0 VASP builders remain under ``psteros.compat`` for existing
-projects. New work should use the typed top-level API described here. The
+The former VASP builders remain under ``psteros.compat`` and ``psteros.core``
+for existing projects. New work should use the typed top-level API described
+here, which runs VASP through the same aiida-vasp work chain. The
 compatibility layer is not part of the current tutorial path.

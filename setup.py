@@ -10,15 +10,15 @@ setup(
     install_requires=[
         "aiida-core",
         "aiida-workgraph",
-        "aiida-quantumespresso",
-        "aiida-pseudo",
+        "aiida-vasp>=5,<6",
         "pymatgen",
         "numpy",
         "matplotlib",
     ],
     extras_require={
-        "vasp": [
-            "aiida-vasp>=5,<6",
+        "qe": [
+            "aiida-quantumespresso",
+            "aiida-pseudo",
         ],
         "docs": [
             "sphinx>=4.0.0",

@@ -146,6 +146,22 @@ asymmetric slabs; `ISIF=3` for solid references; Γ-only for molecules,
 clusters and gas references, with a triplet O2. `potential_mapping()` adds the
 pseudo-hydrogen POTCARs; your POTCAR family must contain them.
 
+The solid references relax their cell, so their relaxation energies carry a
+basis-set error. For final energies, run a static calculation after every
+relaxation with the same overrides per stage:
+
+```python
+static = psteros.SurfaceWorkflowConfig(
+    backend="vasp",
+    calculation=psteros.VaspCalculationConfig(..., incar={..., "IBRION": -1, "NSW": 0}),
+    execution=config.execution, name="gaas_polar_static",
+    role_overrides=study.vasp_overrides("static"),
+)
+graph = psteros.build_relax_static_workgraph(study.structures, config, static, submit=True)
+```
+
+`read_vasp_results` reads either graph.
+
 When the graph has finished:
 
 ```python

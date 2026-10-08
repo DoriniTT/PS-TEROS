@@ -2,11 +2,32 @@
 
 ## [v2.0.0] - Unreleased - Any Material, Charge-Neutral and Polar Surfaces
 
-PS-TEROS v2: the public API is `import psteros` (Quantum ESPRESSO first,
-VASP second): typed recipes (`SurfaceWorkflowConfig`, `QeCalculationConfig`,
-`VaspCalculationConfig`, `ExecutionPolicy`), `build_surface_workgraph`,
-`build_qe_relax_static_workgraph` and surface phase diagrams. The former
-builders remain in `psteros.core`. `psteros.__version__` is `2.0.0`.
+PS-TEROS v2: the public API is `import psteros`, with VASP as the central
+engine and Quantum ESPRESSO as the second one: typed recipes
+(`SurfaceWorkflowConfig`, `VaspCalculationConfig`, `QeCalculationConfig`,
+`ExecutionPolicy`), `build_surface_workgraph`, `build_relax_static_workgraph`
+and surface phase diagrams. The former builders remain in `psteros.core`.
+`psteros.__version__` is `2.0.0`.
+
+### VASP as the central engine
+
+- `aiida-vasp` is a core dependency; Quantum ESPRESSO support is the optional
+  extra `pip install '.[qe]'`.
+- Fix: the VASP adapter now passes the INCAR in the `incar` namespace that
+  aiida-vasp 5 requires (a flat INCAR was rejected when the work chain
+  started).
+- `build_relax_static_workgraph` runs relaxation then static calculation with
+  VASP or QE; the VASP relaxation and static INCARs are checked (ions move,
+  or not). `build_qe_relax_static_workgraph` remains for QE recipes.
+- `CalculationOverride(fixed_sites=...)` fixes atoms with VASP selective
+  dynamics or QE `FIXED_COORDS`; `central_sites(slab)` selects the centre of a
+  slab.
+- `VaspCalculationConfig`: elements missing from `potential_mapping` use the
+  POTCAR of the same name; `max_iterations` limits the restarts.
+- `read_vasp_results` reads both graph layouts; the studies'
+  `vasp_overrides(stage)` give the relaxation and static settings.
+- Guides, tutorial and README use VASP; the QE guide is `qe-workflow`.
+  Example: `examples/vasp_surface_phase_diagram`.
 
 ### Charge-neutral slabs in the v2 workflow
 
@@ -15,14 +36,14 @@ builders remain in `psteros.core`. `psteros.__version__` is `2.0.0`.
 - `ChargeNeutralSurfaceStudy(bulk, miller_indices, references, ...)` cuts
   the charge-neutral terminations of every orientation and collects them
   with the bulk, the elemental references and, for a ternary compound, the
-  competing phases, as labelled structures for `build_surface_workgraph` or
-  `build_qe_relax_static_workgraph`.
-- `qe_overrides(stage)` and `vasp_overrides()`: fixed-cell bulk and slabs,
-  cell relaxation of solid references and competing phases, Gamma-only gas
-  references and triplet O2.
+  competing phases, as labelled structures for `build_relax_static_workgraph`
+  or `build_surface_workgraph`.
+- `vasp_overrides(stage)` and `qe_overrides(stage)`: fixed-cell bulk and
+  slabs, cell relaxation of solid references and competing phases,
+  Gamma-only gas references and triplet O2.
 - `analyse(energies, relaxed)`: binary, ternary or elemental phase diagram;
-  `read_qe_results` reads the energies and relaxed structures of a finished
-  graph (`read_vasp_results` for VASP).
+  `read_vasp_results` reads the energies and relaxed structures of a finished
+  graph (`read_qe_results` for QE).
 - `find_charge_neutral_terminations`, `TerminationSet` and `Termination`
   are available from `psteros`.
 

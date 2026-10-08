@@ -18,7 +18,7 @@ Determining which termination is thermodynamically favored requires coordinating
 PS-TEROS automates the pathway from crystal structures to thermodynamic stability:
 
 - **Slab Builders:** Programmatically generates bulk references and multiple symmetric/asymmetric surface terminations (e.g., rutile SnO₂).
-- **Typed DFT Recipes:** Enforces strict parameter harmony across all terminations, bulk references, and reservoirs in **Quantum ESPRESSO** and **VASP**.
+- **Typed DFT Recipes:** Enforces strict parameter harmony across all terminations, bulk references, and reservoirs in **VASP** (the central engine, through aiida-vasp); the same recipes also run **Quantum ESPRESSO**.
 - **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation → static SCF) with bounded job concurrency and full provenance tracking.
 - **Polar Surfaces:** Absolute surface energies of polar faces (zinc blende (111), wurtzite (0001)) with a pseudo-hydrogen passivated bottom, on the same scale as non-polar ones ([guide](docs/POLAR_SURFACES.md)).
 - **Charge-Neutral Terminations:** Symmetric, charge-neutral slabs for semiconductors and insulators, and `ChargeNeutralSurfaceStudy` to run all of them with their references in one graph ([guide](docs/CHARGE_NEUTRAL_TERMINATIONS.md)).
@@ -27,7 +27,8 @@ PS-TEROS automates the pathway from crystal structures to thermodynamic stabilit
 ## Quickstart
 
 The complete, tested version of these three steps is
-[`examples/qe_surface_phase_diagram`](examples/qe_surface_phase_diagram) (SnO₂(110) with Quantum ESPRESSO).
+[`examples/vasp_surface_phase_diagram`](examples/vasp_surface_phase_diagram) (SnO₂(110) with VASP;
+[`examples/qe_surface_phase_diagram`](examples/qe_surface_phase_diagram) is the same campaign with Quantum ESPRESSO).
 
 ### 1. Prepare the structures (pymatgen or ASE)
 
@@ -58,19 +59,18 @@ One recipe per stage keeps every calculation on the same numerical settings; per
 handle the bulk cell relaxations and the triplet O₂:
 
 ```python
-def recipe(calculation, overrides):
+INCAR = {"ENCUT": 520, "PREC": "Accurate", "EDIFF": 1e-6, "ISMEAR": 0, "SIGMA": 0.05, "LREAL": False}
+
+def recipe(ionic, overrides):
     return psteros.SurfaceWorkflowConfig(
-        backend="qe",
-        calculation=psteros.QeCalculationConfig(
-            code_label="pw-7.3@cluster",
-            pseudo_family="SSSP/1.3/PBE/efficiency",
-            parameters={
-                "CONTROL": {"calculation": calculation},
-                "SYSTEM": {"ecutwfc": 60.0, "ecutrho": 480.0, "occupations": "smearing", "degauss": 0.01},
-                "ELECTRONS": {"conv_thr": 1.0e-8},
-            },
-            kpoints_distance=0.25,
-            max_iterations=3,  # allow restarts, e.g. after the walltime
+        backend="vasp",
+        calculation=psteros.VaspCalculationConfig(
+            code_label="vasp-6.4@cluster",
+            incar={**INCAR, **ionic},
+            potential_family="PBE",                  # uploaded with `aiida-vasp potcar uploadfamily`
+            potential_mapping={"Sn": "Sn_d"},        # other elements use the POTCAR of the same name
+            kpoints_spacing=0.25,
+            max_iterations=3,                        # allow restarts, e.g. after the walltime
         ),
         execution=psteros.ExecutionPolicy(
             computer="cluster", queue="standard", max_concurrent_jobs=1,
@@ -79,18 +79,21 @@ def recipe(calculation, overrides):
         role_overrides=overrides,
     )
 
-vc_relax = psteros.CalculationOverride(parameters={"CONTROL": {"calculation": "vc-relax"}})
+cell = psteros.CalculationOverride(parameters={"INCAR": {"ISIF": 3}})
 triplet = psteros.CalculationOverride(
-    parameters={"SYSTEM": {"nspin": 2, "tot_magnetization": 2, "starting_magnetization": {"O": 0.5}}},
-    kpoints_distance=2.0,  # Gamma only for the molecule
+    parameters={"INCAR": {"ISPIN": 2, "MAGMOM": [1.0, 1.0]}},
+    kpoints_distance=10.0,  # Gamma only for the molecule
 )
-graph = psteros.build_qe_relax_static_workgraph(
+graph = psteros.build_relax_static_workgraph(
     {**references, **terminations},
-    recipe("relax", {"bulk": vc_relax, "metal": vc_relax, "o2": triplet}),
-    recipe("scf", {"o2": triplet}),
+    recipe({"IBRION": 2, "NSW": 200, "ISIF": 2, "EDIFFG": -0.01}, {"bulk": cell, "metal": cell, "o2": triplet}),
+    recipe({"IBRION": -1, "NSW": 0}, {"o2": triplet}),
     submit=True,  # False builds the graph for inspection only
 )
 ```
+
+Each static calculation starts from its relaxed structure, and its energy is the one used below. Slab atoms
+can be fixed with `psteros.CalculationOverride(fixed_sites=psteros.central_sites(slab))`.
 
 ### 3. Build the surface phase diagram
 
@@ -100,24 +103,25 @@ diagram **directly as a figure**, and **exports all the data as CSV** for plotti
 ```python
 from aiida import orm
 
-graph = orm.load_node(graph.pk)
-energy = lambda label: graph.outputs[f"{label}_static_parameters"]["energy"]  # eV
-relaxed = lambda label: graph.outputs[f"{label}_relaxed_structure"]
+energy, relaxed = psteros.read_vasp_results(orm.load_node(graph.pk), [*references, *terminations])
 
 oxide = psteros.BinaryOxideReferences(
-    bulk_energy_ev=energy("bulk"),
+    bulk_energy_ev=energy["bulk"],
     bulk_composition=bulk.composition,
-    oxygen_molecule_energy_ev=energy("o2"),
-    metal_energy_per_atom_ev=energy("metal") / len(metal),
+    oxygen_molecule_energy_ev=energy["o2"],
+    metal_energy_per_atom_ev=energy["metal"] / len(metal),
 )
 diagram = psteros.surface_phase_diagram(
-    [psteros.SlabTermination.from_structure(label, energy(label), relaxed(label)) for label in terminations],
+    [psteros.SlabTermination.from_structure(label, energy[label], relaxed[label]) for label in terminations],
     oxide,
 )
 print(diagram.transitions)                  # exact Δμ_O where the stable termination changes
 diagram.plot("phase_diagram.png")           # γ(Δμ_O), stability window and stable-termination strip
 diagram.to_csv("phase_diagram.csv")         # delta_mu_O_eV, gamma_<termination>_Jm2, ..., stable_termination
 ```
+
+The same graph runs with Quantum ESPRESSO: `backend="qe"` with `psteros.QeCalculationConfig` recipes and
+`psteros.read_qe_results` (install with `pip install '.[qe]'`, see the [QE guide](docs/source/qe-workflow.rst)).
 
 ## Installation
 
@@ -126,16 +130,17 @@ pip install .
 verdi daemon restart --reset
 ```
 
-Install PS-TEROS in the same Python environment as the AiiDA daemon: the relaxation stage runs a PS-TEROS work
-chain on the daemon. For configuring AiiDA computers, codes, and pseudopotential families, see the
-[Installation Guide](docs/source/installation.rst).
+This installs aiida-vasp with PS-TEROS; `pip install '.[qe]'` adds Quantum ESPRESSO support. Install PS-TEROS
+in the same Python environment as the AiiDA daemon. For configuring AiiDA computers, the VASP code and the
+POTCAR family, see the [Installation Guide](docs/source/installation.rst).
 
 ## Documentation & Tutorials
 
 - **[First Tutorial](docs/source/tutorial.rst):** Build your first unsubmitted AiiDA WorkGraph.
 - **[Core Concepts](docs/source/concepts.rst):** How structures, calculation recipes, execution policies, and provenance connect.
 - **[SnO₂ Surface Model](docs/source/examples.rst):** Deep dive into terminations and thermodynamic reference states.
-- **[Quantum ESPRESSO Guide](docs/source/qe-first-workflow.rst):** Setting up a two-stage relaxation → static SCF workflow.
+- **[VASP Guide](docs/source/vasp-workflow.rst):** Setting up a two-stage relaxation → static workflow, with per-structure settings and fixed atoms.
+- **[Quantum ESPRESSO Guide](docs/source/qe-workflow.rst):** The same workflow with Quantum ESPRESSO.
 - **[Surface Phase Diagrams](docs/source/phase-diagram.rst):** From energies to γ(Δμ<sub>O</sub>) (binary oxides) or stable-termination maps over (Δμ<sub>A</sub>, Δμ<sub>O</sub>) (ternary oxides), as a figure or a CSV table.
 - **[API Reference](docs/source/api.rst):** Public classes, functions, and configuration schemas.
 

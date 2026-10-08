@@ -12,8 +12,11 @@ Recent Updates
 
 **PS-TEROS v2**
 
-* Public API ``import psteros``: Quantum ESPRESSO first, VASP second, typed
-  recipes, ``build_surface_workgraph`` and ``build_qe_relax_static_workgraph``
+* Public API ``import psteros``: VASP as the central engine, Quantum ESPRESSO
+  as the second one, typed recipes, ``build_surface_workgraph`` and
+  ``build_relax_static_workgraph``
+* The VASP adapter passes the INCAR in aiida-vasp's ``incar`` namespace and
+  fixes atoms with selective dynamics (``CalculationOverride(fixed_sites=...)``)
 * Surface phase diagrams of any binary or ternary compound
   (``BinaryReferences``, ``TernaryReferences``); the oxide classes are kept
 * Charge-neutral symmetric terminations for semiconductors and insulators

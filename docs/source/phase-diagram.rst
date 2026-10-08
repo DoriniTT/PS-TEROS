@@ -180,11 +180,24 @@ For an oxide with an O\ :sub:`2` reference, ``BinaryReferences`` and
 From psteros graphs
 -------------------
 
-``examples/qe_surface_phase_diagram`` in the repository runs the whole
-campaign with Quantum ESPRESSO — bulk SnO\ :sub:`2`, α-Sn and O\ :sub:`2`
-references, then three SnO\ :sub:`2`\ (110) terminations built on the relaxed
-bulk lattice — and its ``phase_diagram.py`` reads the static energies and
-relaxed structures from the finished graphs before calling the functions above.
+``psteros.read_vasp_results(graph, labels)`` returns the static energies and
+relaxed structures of a finished VASP graph by label
+(``psteros.read_qe_results`` for Quantum ESPRESSO):
+
+.. code-block:: python
+
+   from aiida import orm
+
+   energies, relaxed = psteros.read_vasp_results(orm.load_node(pk), ["bulk", "metal", "o2", "term_0"])
+   termination = psteros.SlabTermination.from_structure("term_0", energies["term_0"], relaxed["term_0"])
+
+``examples/vasp_surface_phase_diagram`` in the repository runs the whole
+campaign with VASP — bulk SnO\ :sub:`2`, α-Sn and O\ :sub:`2` references,
+then three SnO\ :sub:`2`\ (110) terminations built on the relaxed bulk lattice
+— and its ``phase_diagram.py`` reads the static energies and relaxed
+structures from the finished graphs before calling the functions above.
+``examples/qe_surface_phase_diagram`` is the same campaign with Quantum
+ESPRESSO.
 
 Ternary compounds
 -----------------

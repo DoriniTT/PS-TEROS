@@ -1,12 +1,14 @@
-.. _qe-first-workflow:
+.. _qe-workflow:
 
 ========================================
 Prepare a QE relaxation-to-static graph
 ========================================
 
-Use this guide after the :doc:`first tutorial <tutorial>` when you want a final
-static Quantum ESPRESSO calculation to use the geometry from a preceding
-relaxation. The guide builds the graph only; it does not submit work.
+VASP is the central engine of psteros (see :doc:`vasp-workflow`). The same
+recipes, graph builders and analysis also run Quantum ESPRESSO, installed with
+``pip install '.[qe]'``. Use this guide when you want a final static Quantum
+ESPRESSO calculation to use the geometry from a preceding relaxation. The guide
+builds the graph only; it does not submit work.
 
 Why use two calculation stages?
 -------------------------------
@@ -51,8 +53,7 @@ with ``code_label`` because the builder does not cross-check them.
        max_concurrent_jobs=1,
    )
 
-``build_qe_relax_static_workgraph`` currently permits one active calculation in
-a graph, so ``max_concurrent_jobs`` must remain ``1``. This is a graph-local
+A graph currently permits one active calculation, so ``max_concurrent_jobs`` must remain ``1``. This is a graph-local
 constraint, not a recommendation about how many jobs your cluster can run.
 
 .. note::
@@ -115,9 +116,10 @@ Ry/bohr, and ``kpoints_distance`` uses Å⁻¹.
 Connect the stages
 ------------------
 
-Pass a labelled starting structure and the two recipes to the dedicated
-builder. The static task receives the relaxed ``StructureData`` output from the
-first task.
+Pass a labelled starting structure and the two recipes to the builder (the
+same ``build_relax_static_workgraph`` as for VASP;
+``build_qe_relax_static_workgraph`` also accepts only QE recipes). The static
+task receives the relaxed ``StructureData`` output from the first task.
 
 .. code-block:: python
 
@@ -127,7 +129,7 @@ first task.
        vacuum_angstrom=20.0,
    )
 
-   graph = psteros.build_qe_relax_static_workgraph(
+   graph = psteros.build_relax_static_workgraph(
        {"sno2_110_o": slab},
        relax,
        static,
@@ -166,7 +168,11 @@ the final SCF, recomputed with the plane-wave basis of the new cell, exceeds
 the stress threshold. The relaxation stage accepts that structure and the
 static SCF then evaluates its energy, so the graph continues. The static stage
 is also where to read the energy for thermodynamics; the relaxation energy
-belongs to the basis of the starting cell.
+belongs to the basis of the starting cell. ``psteros.read_qe_results(graph,
+labels)`` reads the static energies and relaxed structures of a finished graph.
+
+Atoms are fixed as with VASP, with ``CalculationOverride(fixed_sites=...)``;
+psteros writes the ``FIXED_COORDS`` setting of aiida-quantumespresso.
 
 The :doc:`SnO2 surface-energy model <examples>` explains how compatible bulk,
 slab, and oxygen-reference energies are combined after the calculations finish,

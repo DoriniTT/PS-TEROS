@@ -51,15 +51,24 @@ profile with three project-specific pieces:
 
 * a configured **computer**, which represents the machine or cluster that will
   run the calculation;
-* a registered Quantum ESPRESSO ``quantumespresso.pw`` **code** on that
-  computer; and
-* an ``aiida-pseudo`` **pseudopotential family** compatible with the method you
-  plan to use.
+* a registered VASP **code** on that computer, with the ``vasp.vasp`` plugin;
+  and
+* a **POTCAR family** uploaded from your licensed VASP potentials.
 
 AiiDA stores those choices as part of the calculation record. Follow AiiDA's
 `guide to configuring and running external codes`_ for the computer and code
-setup. Use the identifiers from *your* profile in the psteros examples; do not
-copy a label, queue, or resource request from another project as a default.
+setup, then upload the POTCARs once per profile, for example:
+
+.. code-block:: console
+
+   $ aiida-vasp potcar uploadfamily --path=potpaw_PBE.tgz --name=PBE \
+       --description="PBE POTCARs"
+
+The ``--name`` is the ``potential_family`` of a ``VaspCalculationConfig``.
+Polar surfaces also need the fractional pseudo-hydrogen POTCARs (``H.75``,
+``H1.25``, ...) in the same family. Use the identifiers from *your* profile in
+the psteros examples; do not copy a label, queue, or resource request from
+another project as a default.
 
 Install psteros in the environment that runs the AiiDA daemon, and restart the
 daemon after installing or upgrading it:
@@ -67,10 +76,6 @@ daemon after installing or upgrading it:
 .. code-block:: console
 
    $ verdi daemon restart --reset
-
-The relaxation stage of a relaxation-to-static graph runs a psteros work chain,
-which the daemon imports by module path. Graphs fail to start if the daemon
-cannot import ``psteros``.
 
 .. important::
 
@@ -81,15 +86,21 @@ cannot import ``psteros``.
 .. _guide to configuring and running external codes:
    https://aiida.readthedocs.io/projects/aiida-core/en/latest/howto/run_codes.html
 
-Optional VASP support
----------------------
+Optional Quantum ESPRESSO support
+---------------------------------
 
-The main supported workflow uses Quantum ESPRESSO. If you are continuing an
-existing VASP study, install its optional adapter in the same environment:
+VASP is the central engine of psteros. The same recipes, graph builders and
+analysis also run Quantum ESPRESSO; install its adapter in the same
+environment:
 
 .. code-block:: console
 
-   $ python -m pip install '.[vasp]'
+   $ python -m pip install '.[qe]'
+
+It needs a registered ``quantumespresso.pw`` code and an ``aiida-pseudo``
+pseudopotential family. The relaxation stage of a QE relaxation-to-static
+graph runs a psteros work chain, which the daemon imports by module path, so
+graphs fail to start if the daemon cannot import ``psteros``.
 
 What next?
 ----------

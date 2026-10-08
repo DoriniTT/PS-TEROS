@@ -80,8 +80,8 @@ Before applying the thermodynamic expression, produce:
 * a triplet O2 reference energy.
 
 Use compatible electronic-structure methods, pseudopotentials, and numerical
-settings across calculations that you compare. The :doc:`QE guide
-<qe-first-workflow>` shows how to connect relaxation and static stages; this
+settings across calculations that you compare. The :doc:`VASP guide
+<vasp-workflow>` shows how to connect relaxation and static stages; this
 page resumes once your project has checked the resulting energies.
 
 To compare slabs with different numbers of oxygen atoms, the analysis needs a
@@ -128,8 +128,8 @@ Use the analysis helper
 -----------------------
 
 After you have the compatible energies and the slab area, pass them to the
-pure-Python helper. This calculation is local: it does not run Quantum
-ESPRESSO or submit an AiiDA process. The energy and area names below are
+pure-Python helper. This calculation is local: it does not run VASP or
+submit an AiiDA process. The energy and area names below are
 placeholders from your own calculations, so the block is a template rather
 than a runnable example until you supply them.
 
@@ -169,6 +169,6 @@ question requires them.
 
 To compare all terminations over the whole oxygen chemical-potential range at
 once, as a figure or a CSV table, see :doc:`phase-diagram`. For the workflow
-that creates a relaxation followed by a static calculation, see the :doc:`QE
-guide <qe-first-workflow>`. For the role of each object in the larger
+that creates a relaxation followed by a static calculation, see the :doc:`VASP
+guide <vasp-workflow>`. For the role of each object in the larger
 calculation story, return to :doc:`the concepts page <concepts>`.
