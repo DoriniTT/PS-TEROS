@@ -17,7 +17,8 @@ feature lands.
 
 - **No breaking changes to the public API.** Do not rename, remove or reorder public functions, classes,
   arguments, dataclass fields, WorkGraph output names (`{label}_static_parameters`, `{label}_relaxed_structure`, ...),
-  CSV columns or figure defaults. Do not change a default value or a unit.
+  CSV columns or figure defaults. Do not change a default value or a unit. (Fixing a bug is the one exception;
+  see "Fixing bugs" below.)
 - **New behaviour is opt-in.** Add it as a new keyword argument with a default that reproduces today's behaviour
   exactly (e.g. `temperature=None` means "0 K total energies, as before"), a new optional dataclass field placed
   after the existing ones, or a new function/class. Leaving the new option out must give bit-identical numbers.
@@ -29,6 +30,21 @@ feature lands.
 - **Mixed inputs are an error, not a guess.** If an option must apply to every structure to be consistent
   (e.g. vibrations given for some terminations but not others), raise a `ValueError` that names the offending
   labels, in line with the strict recipe harmony of the rest of psteros.
+
+## Fixing bugs
+
+A bug is behaviour that contradicts the documented contract (docs, docstrings, units, examples). Fixing it may
+change numbers. That is allowed, with these rules:
+
+- **Fix it for everyone, not behind an opt-in flag**, when the old behaviour gives wrong results without an error.
+  Prefer failing loudly over a silent default.
+- **Keep the documented contract** (names, signatures, units as documented). If the documentation is what is
+  wrong, say so in the commit and fix the documentation too.
+- **Add a regression test that fails without the fix**, next to the code, and check that it does fail.
+- **Edit an existing test only if it pins the bug.** Name each such assertion in the commit message and say why it
+  was wrong. Never edit a test just to make it pass.
+- **Add a changelog entry marked "results change"**, saying which earlier calculations should be repeated.
+- One bug, one commit.
 
 ## Building blocks (one consistent way to add a calculation)
 
