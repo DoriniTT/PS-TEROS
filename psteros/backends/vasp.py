@@ -2,9 +2,25 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from psteros.config import CalculationOverride, ExecutionPolicy, VaspCalculationConfig
+
+
+def aiida_vasp_kpoints_spacing(spacing_per_angstrom: float) -> float:
+    """Convert a psteros k-point spacing to the value aiida-vasp expects.
+
+    psteros states ``kpoints_spacing`` in A^-1 *including* the 2*pi, as VASP's
+    ``KSPACING`` does: a Gamma-centred mesh has ``N_i = ceil(|b_i| / spacing)``
+    points along reciprocal vector ``b_i`` (``|b_i| = 2*pi / a`` for a cubic
+    cell of edge ``a``). aiida-vasp multiplies its ``kpoints_spacing`` input by
+    2*pi before building the mesh, so it must receive ``spacing / (2*pi)``;
+    passing the psteros value unchanged gives ``N = ceil(1 / (a * spacing))``,
+    which is a single k-point for ``a = 5.75 A`` and ``spacing = 0.2 A^-1``.
+    """
+
+    return float(spacing_per_angstrom) / (2.0 * math.pi)
 
 
 def add_vasp_task(workgraph: Any, *, label: str, structure: Any,
@@ -35,7 +51,7 @@ def add_vasp_task(workgraph: Any, *, label: str, structure: Any,
         structure=structure,
         code=orm.load_code(config.code_label),
         parameters=orm.Dict(dict=parameters),
-        kpoints_spacing=orm.Float(config.kpoints_spacing),
+        kpoints_spacing=orm.Float(aiida_vasp_kpoints_spacing(config.kpoints_spacing)),
         potential_family=orm.Str(config.potential_family),
         potential_mapping=orm.Dict(dict=dict(config.potential_mapping)),
         options=orm.Dict(dict=metadata),

@@ -117,7 +117,11 @@ Calculation configuration
    Describe the VASP configuration retained for established VASP studies.
    ``code_label`` identifies the AiiDA code, ``incar`` stores INCAR settings,
    and the potential fields select the family and optional per-element mapping.
-   ``kpoints_spacing`` is a positive reciprocal-space distance in Å⁻¹.
+   ``kpoints_spacing`` is a positive reciprocal-space distance in Å⁻¹ that
+   includes the 2π, as VASP's ``KSPACING`` does: the Γ-centred mesh has
+   ``ceil(|b_i| / kpoints_spacing)`` points along each reciprocal vector
+   (6×6×6 for GaAs, ``a = 5.75`` Å, at 0.2 Å⁻¹). The VASP adapter converts it
+   for aiida-vasp, which multiplies its own spacing input by 2π.
 
 .. _api-execution-policy:
 

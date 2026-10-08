@@ -145,7 +145,12 @@ class QeCalculationConfig:
 
 @dataclass(frozen=True)
 class VaspCalculationConfig:
-    """Inputs shared by an aiida-vasp ``VaspWorkChain`` calculation."""
+    """Inputs shared by an aiida-vasp ``VaspWorkChain`` calculation.
+
+    ``kpoints_spacing`` is in A^-1 with the 2*pi of VASP's ``KSPACING`` (a
+    Gamma-centred mesh has ``ceil(|b_i| / kpoints_spacing)`` points along each
+    reciprocal vector); the VASP adapter converts it for aiida-vasp.
+    """
 
     code_label: str
     incar: Mapping[str, Any]

@@ -10,6 +10,14 @@ Recent Updates
 Unreleased Features
 -------------------
 
+**VASP k-point spacing now matches its documented unit**
+
+* ``VaspCalculationConfig.kpoints_spacing`` is documented in Å⁻¹ with the 2π of VASP's ``KSPACING``, but was passed
+  unchanged to aiida-vasp, which multiplies it by 2π. A value such as 0.2 Å⁻¹ therefore gave a single Γ k-point
+  for any cell of about 5 Å or more (GaAs, ``a = 5.75`` Å: ``1×1×1`` instead of ``6×6×6``) and no error.
+  The adapter now converts the value. VASP calculations run with an earlier version used a much coarser mesh
+  than intended and should be repeated.
+
 **CP2K Calculator Support for AIMD**
 
 * CP2K integration for ab initio molecular dynamics simulations
