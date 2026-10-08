@@ -64,7 +64,7 @@ from .thermodynamics import (
 )
 from .workflow import build_qe_relax_static_workgraph, build_surface_workgraph
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 __all__ = [
     "CalculationOverride",

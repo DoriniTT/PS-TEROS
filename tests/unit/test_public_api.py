@@ -1,4 +1,4 @@
-"""Tier-1 tests for the psteros 1.0 public surface API."""
+"""Tier-1 tests for the psteros 2.0 public surface API."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ def qe_parameters() -> dict:
 
 
 def test_public_api_is_qe_first_and_versioned() -> None:
-    assert psteros.__version__ == "1.0.0"
+    assert psteros.__version__ == "2.0.0"
     assert callable(psteros.build_surface_workgraph)
     assert callable(psteros.build_qe_relax_static_workgraph)
     assert psteros.QeCalculationConfig is not None

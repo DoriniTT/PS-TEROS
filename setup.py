@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="psteros",
-    version="1.0.0",
+    version="2.0.0",
     description="Reproducible surface thermodynamics with AiiDA",
     author="Thiago T. Dorini",
     author_email="your.email@example.com",

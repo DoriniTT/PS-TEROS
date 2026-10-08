@@ -1,6 +1,30 @@
 # Changelog
 
-## [Unreleased] - Any-Material Thermodynamics and Polar Surfaces
+## [v2.0.0] - Unreleased - Any Material, Charge-Neutral and Polar Surfaces
+
+PS-TEROS v2: the public API is `import psteros` (Quantum ESPRESSO first,
+VASP second): typed recipes (`SurfaceWorkflowConfig`, `QeCalculationConfig`,
+`VaspCalculationConfig`, `ExecutionPolicy`), `build_surface_workgraph`,
+`build_qe_relax_static_workgraph` and surface phase diagrams. The former
+builders remain in `psteros.core`. `psteros.__version__` is `2.0.0`.
+
+### Charge-neutral slabs in the v2 workflow
+
+**Module:** `psteros.surface_study`
+
+- `ChargeNeutralSurfaceStudy(bulk, miller_indices, references, ...)` cuts
+  the charge-neutral terminations of every orientation and collects them
+  with the bulk, the elemental references and, for a ternary compound, the
+  competing phases, as labelled structures for `build_surface_workgraph` or
+  `build_qe_relax_static_workgraph`.
+- `qe_overrides(stage)` and `vasp_overrides()`: fixed-cell bulk and slabs,
+  cell relaxation of solid references and competing phases, Gamma-only gas
+  references and triplet O2.
+- `analyse(energies, relaxed)`: binary, ternary or elemental phase diagram;
+  `read_qe_results` reads the energies and relaxed structures of a finished
+  graph (`read_vasp_results` for VASP).
+- `find_charge_neutral_terminations`, `TerminationSet` and `Termination`
+  are available from `psteros`.
 
 ### Any binary or ternary compound
 
@@ -39,11 +63,7 @@ Pseudo-hydrogen passivation of the slab bottom (Zhang et al., Sci. Rep. 6,
 - Guide: [docs/POLAR_SURFACES.md](docs/POLAR_SURFACES.md). Example:
   `examples/polar_surfaces/gaas_polar_vasp.py`.
 
----
-
-## [Unreleased] - Charge-Neutral Terminations
-
-### New Feature: `termination_mode='charge_neutral'`
+### Charge-neutral terminations
 
 **Module:** `psteros.core.terminations`
 
@@ -54,8 +74,8 @@ symmetric slabs are repaired by removing symmetry-related surface units
 whole with `unit_bonds`, and polar directions are reported as such. Metals
 and alloys work too (all formal charges zero).
 
-- `generate_slab_structures`, `core_workgraph` and `build_core_workgraph`
-  accept `termination_mode`, `oxidation_states`, `unit_bonds` and
+- Legacy builders: `generate_slab_structures`, `core_workgraph` and
+  `build_core_workgraph` accept `termination_mode`, `oxidation_states`, `unit_bonds` and
   `termination_supercell`. The default (`'pymatgen'`) is unchanged. In the
   new mode the task also outputs a `termination_report` Dict.
 - Standalone API: `find_charge_neutral_terminations` returns a

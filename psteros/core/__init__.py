@@ -1,4 +1,4 @@
-"""Legacy implementation modules retained behind the psteros 1.0 API.
+"""Legacy implementation modules retained behind the psteros 2.0 API.
 
 New projects import the compact public API from :mod:`psteros`.  The modules in
 this namespace remain importable for audited VASP calculations, but the former

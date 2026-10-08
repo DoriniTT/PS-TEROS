@@ -38,9 +38,9 @@ Check that Python can import the package and report its version:
 .. code-block:: console
 
    $ python -c "import psteros; print(psteros.__version__)"
-   1.0.0
+   2.0.0
 
-The exact value follows the installed checkout; ``1.0.0`` is the output for the
+The exact value follows the installed checkout; ``2.0.0`` is the output for the
 current release.
 
 Prepare AiiDA before using a calculation graph

@@ -7,8 +7,24 @@ Complete development history and feature releases for PS-TEROS.
 Recent Updates
 ==============
 
-Unreleased Features
--------------------
+2.0.0 (unreleased)
+------------------
+
+**PS-TEROS v2**
+
+* Public API ``import psteros``: Quantum ESPRESSO first, VASP second, typed
+  recipes, ``build_surface_workgraph`` and ``build_qe_relax_static_workgraph``
+* Surface phase diagrams of any binary or ternary compound
+  (``BinaryReferences``, ``TernaryReferences``); the oxide classes are kept
+* Charge-neutral symmetric terminations for semiconductors and insulators
+  (``find_charge_neutral_terminations``) and their calculation set in the v2
+  workflow (``ChargeNeutralSurfaceStudy``)
+* Absolute surface energies of polar surfaces with pseudo-hydrogen
+  passivation (``find_polar_terminations``, ``PolarSurfaceStudy``)
+* See :doc:`/phase-diagram` and ``CHANGE.md`` for details
+
+Earlier Unreleased Features
+---------------------------
 
 **CP2K Calculator Support for AIMD**
 
