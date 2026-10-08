@@ -48,6 +48,7 @@ Choose the path that matches what you need now:
    vasp-workflow
    qe-workflow
    phase-diagram
+   vibrations
 
 .. toctree::
    :maxdepth: 1

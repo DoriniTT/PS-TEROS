@@ -542,6 +542,52 @@ The method and a worked example are in ``docs/POLAR_SURFACES.md``.
    structures from a finished VASP WorkGraph (``build_surface_workgraph`` or
    ``build_relax_static_workgraph``).
 
+Vibrational contributions
+-------------------------
+
+See :doc:`vibrations` for the model and a worked example.
+
+.. _api-harmonic-vibrations:
+
+.. index:: HarmonicVibrations
+
+``HarmonicVibrations(frequencies_cm1, composition={}, frozen_composition={}, supercell_size=1, imaginary_modes="raise", low_frequency_cutoff_cm1=None)``
+   Harmonic modes of one structure (cm^-1, imaginary ones negative, zero
+   modes removed). ``zero_point_energy_ev``, ``free_energy_ev(T)``,
+   ``internal_energy_ev(T)`` and ``entropy_ev_per_k(T)`` are per input cell
+   (a supercell is divided by ``supercell_size``). ``to_dict()`` and
+   ``from_dict(data)`` convert to and from a plain mapping or AiiDA ``Dict``.
+
+.. index:: solid_free_energy_ev, molecule_reference_energy_ev
+
+``solid_free_energy_ev(energy_ev, vibrations, temperature_k, *, bulk=None)``
+   ``E + F_vib(T)`` of a slab or bulk, to use in place of its total energy. A
+   frozen region (``vibrations.frozen_composition``) is counted as bulk with
+   the ``bulk`` vibrations and must have the bulk stoichiometry.
+``molecule_reference_energy_ev(energy_ev, vibrations)``
+   ``E + ZPE`` of a gas molecule that fixes ``Delta mu = 0`` (e.g. O2).
+
+.. index:: harmonic_vibrations_from_forces
+
+``harmonic_vibrations_from_forces(*, masses_amu, displaced_sites, displacement_angstrom, forces_plus, forces_minus, composition=None, frozen_composition=None, zero_modes=0, supercell_size=1, imaginary_modes="raise", low_frequency_cutoff_cm1=None)``
+   Γ-point modes from central finite differences of forces (eV/Å); a pure
+   numpy function, usable with forces from any code.
+
+.. _api-build-vibrations-workgraph:
+
+.. index:: build_vibrations_workgraph, VibrationsConfig, read_vibrations
+
+``build_vibrations_workgraph(structures, static, vibrations=None, *, submit=False)``
+   Γ-point finite-difference vibrations of relaxed structures with a VASP or
+   QE static recipe: 6 static calculations per displaced site, at most
+   ``static.execution.max_concurrent_jobs`` at once. The recipe's
+   ``fixed_sites`` are not displaced. Outputs ``<label>_vibrations``.
+``VibrationsConfig(displacement_angstrom=0.01, displaced_sites={}, supercells={}, molecules=())``
+   Finite-difference step, explicit sites per label, Γ-only supercells per
+   label (bulk) and the labels of gas molecules.
+``read_vibrations(graph, labels, *, imaginary_modes="raise", low_frequency_cutoff_cm1=None)``
+   ``{label: HarmonicVibrations}`` from a finished vibrations graph.
+
 .. _api-ev-per-angstrom2-to-j-per-m2:
 
 .. index:: EV_PER_ANGSTROM2_TO_J_PER_M2

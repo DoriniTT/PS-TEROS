@@ -302,8 +302,8 @@ values.
 What the model leaves out
 -------------------------
 
-The energies are 0 K total energies: vibrational and configurational
-contributions are not included, and Δμ is not converted to a temperature and
-pressure. Binary and ternary compounds are supported; slabs must be symmetric
+By default the energies are 0 K total energies. Vibrational free energies
+can be added (see :doc:`vibrations`); configurational contributions are not
+included, and Δμ is not converted to a temperature and pressure. Binary and ternary compounds are supported; slabs must be symmetric
 so that both faces are the same termination, unless they are polar slabs with
 a passivated bottom, described above.

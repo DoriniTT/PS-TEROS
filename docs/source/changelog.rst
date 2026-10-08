@@ -26,6 +26,11 @@ Recent Updates
   workflow (``ChargeNeutralSurfaceStudy``)
 * Absolute surface energies of polar surfaces with pseudo-hydrogen
   passivation (``find_polar_terminations``, ``PolarSurfaceStudy``)
+* Opt-in vibrational free energies (harmonic, Γ-point finite differences):
+  ``build_vibrations_workgraph``, ``read_vibrations``, ``HarmonicVibrations``,
+  ``solid_free_energy_ev`` and ``molecule_reference_energy_ev``; slabs with a
+  frozen centre use a partial Hessian, bulks a Γ-only supercell. Without them
+  every result is unchanged (see :doc:`/vibrations`)
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features
