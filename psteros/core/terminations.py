@@ -1125,21 +1125,10 @@ def plot_terminations(
         depth = np.cross(normal, along)
         return matrix, along, depth, normal
 
-    extents = []
+    # Project every site (and every removed site) first, so that each panel
+    # can be framed on what is actually drawn, with one scale for all panels.
+    projected = []
     for termination in terminations:
-        matrix, along, _, normal = frame(termination)
-        heights = termination.structure.cart_coords @ normal
-        extents.append((np.linalg.norm(matrix[0]) * repeat, heights.max() - heights.min()))
-    width = max(extent[0] for extent in extents) + 2.0
-    height = max(extent[1] for extent in extents) + 5.0
-    scale = 3.2 / max(width, height)
-    figure = Figure(figsize=(columns * max(2.6, width * scale), rows * (height * scale + 0.9)),
-                    constrained_layout=True)
-    axes = figure.subplots(rows, columns, squeeze=False)
-    species_seen: dict[str, tuple] = {}
-
-    for panel, termination in enumerate(terminations):
-        axis = axes[panel // columns][panel % columns]
         matrix, along, depth, normal = frame(termination)
         sites = [(site.specie.symbol, site.coords, False) for site in termination.structure]
         if show_removed:
@@ -1151,6 +1140,19 @@ def plot_terminations(
                 point = position + copy * matrix[0]
                 drawn.append((float(point @ depth), float(point @ along), float(point @ normal - bottom),
                               symbol, removed))
+        projected.append(drawn)
+    margin = 1.5
+    spans = [(min(d[1] for d in drawn), max(d[1] for d in drawn)) for drawn in projected]
+    width = max(high - low for low, high in spans) + 2 * margin
+    height = max(max(d[2] for d in drawn) - min(d[2] for d in drawn) for drawn in projected) + 5.0
+    scale = 3.2 / max(width, height)
+    figure = Figure(figsize=(columns * max(2.6, width * scale), rows * (height * scale + 0.9)),
+                    constrained_layout=True)
+    axes = figure.subplots(rows, columns, squeeze=False)
+    species_seen: dict[str, tuple] = {}
+
+    for panel, (termination, drawn) in enumerate(zip(terminations, projected)):
+        axis = axes[panel // columns][panel % columns]
         for _, x, z, symbol, removed in sorted(drawn, key=lambda item: -item[0]):
             number = atomic_numbers[symbol]
             colour = tuple(jmol_colors[number])
@@ -1162,8 +1164,11 @@ def plot_terminations(
             else:
                 axis.add_patch(Circle((x, z), radius, facecolor=colour, edgecolor='0.25',
                                       linewidth=0.5, zorder=2))
-        axis.set_xlim(-1.0, width - 1.0)
-        axis.set_ylim(-2.5, height - 2.5)
+        low, high = spans[panel]
+        centre = (low + high) / 2
+        axis.set_xlim(centre - width / 2, centre + width / 2)
+        lowest = min(d[2] for d in drawn)
+        axis.set_ylim(lowest - 2.5, lowest - 2.5 + height)
         axis.set_aspect('equal')
         axis.set_xticks([])
         axis.set_yticks([])

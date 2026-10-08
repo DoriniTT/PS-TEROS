@@ -253,6 +253,39 @@ element unless ``vertical`` says otherwise, and the CSV column becomes
 For an oxide with an O\ :sub:`2` reference, ``TernaryReferences`` and
 ``TernaryOxideReferences`` give the same diagram.
 
+Polar surfaces
+--------------
+
+A polar slab (zinc blende (111), wurtzite (0001)) has two different faces.
+With its bottom passivated by pseudo-hydrogen, the top face gets an absolute
+surface energy on the same scale as symmetric slabs:
+
+.. math::
+
+   \gamma_\mathrm{top} = \frac{E_\mathrm{slab} - \sum_i n_i \mu_i
+   - \sum_k n_k \hat\mu_k}{A},
+   \qquad \hat\mu_k = \kappa_k - \tfrac{1}{4}\mu_{X_k},
+
+where :math:`\hat\mu_k` is the pseudo chemical potential of the
+pseudo-hydrogen bonded to element :math:`X_k`, from pseudo-molecules or
+tetrahedral clusters. Build the slabs with ``find_polar_terminations``,
+turn each into a one-face termination with ``SlabTermination.from_polar`` and
+pass the pseudo-hydrogen references:
+
+.. code-block:: python
+
+   hydrogen = psteros.PseudoHydrogenReferences.from_pseudo_molecules(
+       {"As": e_as_h4, "Ga": e_ga_h4})
+   terminations = [psteros.SlabTermination.from_polar(slab, energy[slab.label])
+                   for slab in slabs] + symmetric_terminations
+   diagram = psteros.surface_phase_diagram(terminations, references, pseudo_hydrogen=hydrogen)
+
+Passivated slabs of one face must share one bottom; the diagram refuses them
+otherwise. ``PolarSurfaceStudy`` prepares the whole VASP calculation set and
+runs the post-relaxation bottom check. The repository guide
+``docs/POLAR_SURFACES.md`` describes the method, the checks and benchmark
+values.
+
 What the model leaves out
 -------------------------
 
@@ -260,4 +293,4 @@ The energies are 0 K total energies: vibrational and configurational
 contributions are not included, and Δμ is not converted to a temperature and
 pressure. Binary and ternary compounds are supported; slabs must be symmetric
 so that both faces are the same termination, unless they are polar slabs with
-a passivated bottom described below.
+a passivated bottom, described above.

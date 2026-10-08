@@ -1,5 +1,46 @@
 # Changelog
 
+## [Unreleased] - Any-Material Thermodynamics and Polar Surfaces
+
+### Any binary or ternary compound
+
+- `BinaryReferences` and `TernaryReferences` describe any compound with
+  elemental reference energies (solid, or half a molecule); the axis element
+  defaults to the most electronegative one (As for GaAs, S for CuInS2).
+  `BinaryOxideReferences` and `TernaryOxideReferences` keep their interface
+  and give identical results. CSV columns and figure labels follow the axis
+  element (`delta_mu_As_eV`, ...).
+- `surface_energy_binary_equilibrium` is the general equation.
+- PS-TEROS now reads "Predicting Stability of TERminations Of Surfaces".
+
+### Absolute surface energies of polar surfaces
+
+**Module:** `psteros.polar`, `psteros.polar_workflow`
+
+Pseudo-hydrogen passivation of the slab bottom (Zhang et al., Sci. Rep. 6,
+20055 (2016); arXiv:1510.08961) for tetrahedral III-V and II-VI compounds:
+
+- `pseudo_hydrogens`: charge 2 - Z/4, formal charge, AiiDA kind and VASP
+  POTCAR (H.75, H1.25, H.5, H1.5, ...).
+- `find_polar_terminations`: zinc blende (111)/(-1-1-1), wurtzite
+  (0001)/(000-1) and other orientations; the (hkl) face on top, the ideal top
+  and the electron-counting vacancy tops, all on one identical bottom and in
+  one cell, with a bottom fingerprint.
+- Pseudo chemical potentials from pseudo-molecules (default) or tetrahedral
+  clusters (Eq. 9 fit).
+- `surface_phase_diagram(..., pseudo_hydrogen=...)`: absolute gamma of a
+  polar face on the same scale as symmetric slabs; passivated slabs of one
+  face must share one bottom.
+- `check_bottoms`: after relaxing every atom, the bottom must be the same in
+  every slab; failing slabs are left out.
+- `eq7_check`, `nonpolar_check`: self-consistency in meV/A^2.
+- `PolarSurfaceStudy`: the whole VASP calculation set (structures, POTCAR
+  mapping, INCAR overrides with dipole correction) and its analysis.
+- Guide: [docs/POLAR_SURFACES.md](docs/POLAR_SURFACES.md). Example:
+  `examples/polar_surfaces/gaas_polar_vasp.py`.
+
+---
+
 ## [Unreleased] - Charge-Neutral Terminations
 
 ### New Feature: `termination_mode='charge_neutral'`

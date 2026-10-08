@@ -304,25 +304,30 @@ See :doc:`phase-diagram` for a worked introduction.
 
 .. index:: SlabTermination
 
-``SlabTermination(label, slab_energy_ev, composition, surface_area_angstrom2, surfaces=2)``
-   One symmetric slab termination. ``surface_area_angstrom2`` is the area of
-   one exposed face. ``SlabTermination.from_structure(label, slab_energy_ev,
+``SlabTermination(label, slab_energy_ev, composition, surface_area_angstrom2, surfaces=2, pseudo_hydrogen={}, bottom_fingerprint=None, face=None)``
+   One slab termination. ``surface_area_angstrom2`` is the area of one
+   exposed face. ``SlabTermination.from_structure(label, slab_energy_ev,
    structure, *, surfaces=2)`` reads the composition and the area of the plane
    of the first two lattice vectors from a pymatgen structure or an AiiDA
-   ``StructureData``.
+   ``StructureData``. A polar slab with a passivated bottom has
+   ``surfaces=1``, its pseudo-hydrogen counts, bottom fingerprint and face;
+   ``SlabTermination.from_polar(slab, slab_energy_ev)`` fills them from a
+   ``PolarTermination``.
 
 .. _api-surface-phase-diagram:
 
 .. index:: surface_phase_diagram
 
-``surface_phase_diagram(terminations, references, *, delta_mu_range=None, points=201)``
+``surface_phase_diagram(terminations, references, *, delta_mu_range=None, points=201, pseudo_hydrogen=None)``
    Evaluate γ(Δμ) of every termination on a common grid and return a
    ``SurfacePhaseDiagram``; ``references`` is a ``BinaryOxideReferences`` or a
    ``BinaryReferences`` and Δμ is that of its axis element. The default range
    is the stability window, from the poor limit (requires the reference of
    the other element) to Δμ = 0. A wider ``delta_mu_range`` is allowed; the
    window limits are then added to the grid. Terminations must contain only
-   the two elements of the compound, with unique labels.
+   the two elements of the compound, with unique labels. Passivated polar
+   slabs need ``pseudo_hydrogen`` (a ``PseudoHydrogenReferences``) and, per
+   face, one shared bottom.
 
 .. _api-surface-phase-diagram-class:
 
@@ -395,6 +400,63 @@ See :doc:`phase-diagram` for a worked introduction.
    ``delta_mu_<C>_eV`` (``delta_mu_O_eV`` for an oxide), ``delta_mu_<B>_eV``,
    ``gamma_<label>_Jm2`` columns,
    ``stable_termination`` and ``in_stability_region``.
+
+Polar surfaces
+--------------
+
+The method and a worked example are in ``docs/POLAR_SURFACES.md``.
+
+.. _api-polar:
+
+.. index:: find_polar_terminations, PolarTerminationSet, PolarTermination
+
+``find_polar_terminations(bulk, miller_index, *, bilayers=None, layers=None, vacuum=15.0, oxidation_states=None, electron_counting=True, include_ideal=True, supercell=None, hydrogen_bond_lengths=None, max_variants=20)``
+   Slabs of one (hkl) face of a tetrahedrally bonded compound, all on one
+   pseudo-hydrogen passivated bottom and in one surface cell: the ideal top
+   and the tops that satisfy electron counting. Returns a
+   ``PolarTerminationSet`` (printable table, ``write(directory)``,
+   ``plot(path)``, ``bottom_fingerprint``) of ``PolarTermination`` objects
+   (``structure`` with ``kind_name``, ``pseudo_hydrogen`` and ``bottom`` site
+   properties, ``composition`` without pseudo-H, ``pseudo_hydrogen_counts``,
+   ``bottom_indices``, ``electron_counting``, ``origin``).
+
+.. index:: pseudo_hydrogens, PseudoHydrogen, pseudo_hydrogen_charge
+
+``pseudo_hydrogens(bulk, oxidation_states=None)``
+   ``{element: PseudoHydrogen}`` with ``charge`` (2 − Z/4),
+   ``formal_charge``, ``kind_name`` and ``vasp_potential``.
+   ``pseudo_hydrogen_charge(element)`` returns the charge alone.
+
+.. index:: PseudoHydrogenReferences, pseudo_molecule, tetrahedral_cluster, fit_cluster_pseudo_chemical_potentials
+
+``PseudoHydrogenReferences.from_pseudo_molecules(energies_ev)``
+   Pseudo chemical potentials μ̂ = κ − μ\ :sub:`X`/4 from the energies of the
+   pseudo-molecules built by ``pseudo_molecule(bulk, element)``. For the
+   cluster method, ``tetrahedral_cluster(bulk, outer, size)`` builds the
+   clusters and ``fit_cluster_pseudo_chemical_potentials(outer, energies_ev,
+   mu_outer_ev)`` fits Eq. 9 of the Sci. Rep. paper; its ``reference`` goes
+   into a ``PseudoHydrogenReferences``.
+
+.. index:: check_bottoms, polar_slab_terminations, eq7_check, nonpolar_check
+
+``check_bottoms(terminations, relaxed_structures, *, reference=None, rmsd_tolerance=0.02, max_tolerance=0.05)``
+   Compare the relaxed bottom of each slab with the reference slab and return
+   a ``BottomCheckReport`` (``passed``, ``failed``, printable table).
+   ``polar_slab_terminations(terminations, energies_ev, relaxed_structures)``
+   returns the ``SlabTermination`` objects of the slabs that pass, with the
+   report. ``eq7_check`` and ``nonpolar_check`` report the self-consistency of
+   the pseudo-hydrogen energies in meV/Å².
+
+.. index:: PolarSurfaceStudy, read_vasp_results
+
+``PolarSurfaceStudy(bulk, faces, references, *, bilayers=9, pseudo_hydrogen_method="molecules", cluster_sizes=(2, 3, 8, 9), eq7_check=True, nonpolar_check=None, electron_counting=True)``
+   Every structure of a VASP polar-surface calculation set (``structures``,
+   ``roles``), its POTCAR mapping (``potential_mapping(base)``) and INCAR
+   overrides (``vasp_overrides()``), and ``analyse(energies_ev,
+   relaxed_structures)``, which returns the references, the pseudo chemical
+   potentials, the phase diagram, the bottom checks and the consistency
+   checks. ``read_vasp_results(graph, labels)`` reads energies and relaxed
+   structures from a finished VASP WorkGraph.
 
 .. _api-ev-per-angstrom2-to-j-per-m2:
 

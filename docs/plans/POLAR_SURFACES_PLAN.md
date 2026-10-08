@@ -78,7 +78,7 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
   phase diagram.
 - [x] 10. **Validation helpers.** Eq. 7 self-consistency and the non-polar
   comparison, reported in meV/A^2.
-- [ ] 11. **Docs and example.** Guide section, example script and a benchmark
+- [x] 11. **Docs and example.** Guide section, example script and a benchmark
   recipe against the paper values.
 - [ ] 12. **Final check.** Full test suite, lint, docs build references,
   changelog, push.
