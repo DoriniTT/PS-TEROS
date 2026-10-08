@@ -57,6 +57,14 @@ function, class, default or graph changes.
   on 128 ranks pads a molecule to 128 bands and VASP fails with "EDDDAV: Call to
   ZHEGV failed"), for a solid `NCORE = 1`. `Vibrations(incar={...})` still wins;
   `Relax` and `Static` keep the recipe's `NCORE`.
+- **Fixed: supercells of the `Vibrations` block are grouped by element** (new in
+  this release, no earlier behaviour changes). `ase` repeats cell by cell
+  (`Sn Sn O O O O Sn Sn ...`), and VASP reads every run of equal elements of the
+  POSCAR as an ion type of its own, so the 72-atom SnO2 supercell had no symmetry
+  for VASP ("1 space group operations", C_1, 216 degrees of freedom and 432
+  displacements instead of a handful). Found on Lovelace. The supercell now lists
+  all atoms of an element together, in the order the elements first appear; a
+  one-element cell such as alpha-Sn is unchanged.
 
 ## [v0.3.0] - 2026-01-05 - Metal Surface Energy Module
 

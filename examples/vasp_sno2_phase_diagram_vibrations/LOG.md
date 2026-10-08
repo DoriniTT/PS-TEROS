@@ -81,3 +81,16 @@ Every `verdi` call uses `-p psteros_sno2_vibrations`: the default profile of thi
   (`kpoints_distance=0.06`) and 24 h of walltime for the SnO2 vibrations block only (SnO2 is a wide-gap insulator and
   the cell is 9.7 A wide); relax and static keep the fine mesh. `campaign.py` updated. Graph 995 is stopped after
   the alpha-Sn vibrations and resubmitted; finished calculations come from the cache.
+- References, attempt 2: graph PK 1168 (psteros `3f71ef2`). O2 and alpha-Sn came from the cache (alpha-Sn
+  vibrations had finished in graph 995: calc 1081, frequencies 1088). SnO2 relax (calc 1271) finished:
+  a = 4.8301 A, c = 3.2434 A (PLAN: about 4.83 / 3.24), E = -37.30513 eV, max force 2 meV/A. SnO2 static
+  (calc 1288) OK. SnO2 vibrations (calc 1302, 8 k-points, 384 bands, 30 s per SCF step) printed `DOF = 216`,
+  `Found 1 space group operations` and `Total: 1/432` displacements: about 7 min each, 50 h, more than the 24 h.
+  I killed graph 1168 (calc 1302 was cancelled, nothing left on the queue) after 36 min.
+  Root cause: the POSCAR of the supercell had 24 element blocks (`Sn 2, O 4, Sn 2, O 4, ...`) because `ase`
+  repeats cell by cell and `make_supercell` kept that order; VASP treats each block as a different ion type, so it
+  found no symmetry at all (spglib finds P4_2/mnm with 192 operations in the same structure, at every tolerance
+  from 1e-8 to 1e-2, so it was not numerical noise). alpha-Sn (one element) was not affected (DOF = 1).
+  psteros bug in `make_supercell`. Fix: group the atoms by element in order of first appearance; regression
+  test `test_supercell_groups_atoms_by_element_so_that_vasp_keeps_the_symmetry` (also checks P4_2/mnm with
+  16 x 12 operations); `CHANGE.md`. 332 passed, 7 skipped. The daemon was restarted (it runs the calcfunction).

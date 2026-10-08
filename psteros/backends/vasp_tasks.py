@@ -48,9 +48,24 @@ def vasp_frequencies(retrieved: orm.FolderData) -> orm.List:
 
 @calcfunction
 def make_supercell(structure: orm.StructureData, size: orm.List) -> orm.StructureData:
-    """Repeat a structure ``size = [nx, ny, nz]`` times along its lattice vectors."""
+    """Repeat a structure ``size = [nx, ny, nz]`` times along its lattice vectors.
 
-    return orm.StructureData(ase=structure.get_ase().repeat(tuple(size.get_list())))
+    The atoms are grouped by element, in the order the elements first appear in
+    ``structure``.  ``ase`` repeats cell by cell (``Sn Sn O O O O Sn Sn ...``)
+    and VASP reads each run of equal elements of the POSCAR as an ion type of
+    its own, so an ungrouped supercell has no symmetry for VASP: it found only
+    the identity, planned 216 instead of a handful of displacements for a
+    72-atom SnO2 cell and asked for days of walltime.
+    """
+
+    atoms = structure.get_ase().repeat(tuple(size.get_list()))
+    symbols = atoms.get_chemical_symbols()
+    rank: dict[str, int] = {}
+    for symbol in symbols:
+        rank.setdefault(symbol, len(rank))
+    # sorted() is stable: the order inside an element stays cell by cell.
+    atoms = atoms[sorted(range(len(atoms)), key=lambda index: rank[symbols[index]])]
+    return orm.StructureData(ase=atoms)
 
 
 def add_vasp_block_task(

@@ -267,3 +267,33 @@ def test_calcfunctions_parse_energy_frequencies_and_build_supercells(tmp_path) -
     supercell = make_supercell(orm.StructureData(pymatgen=psteros.rutile_sno2_bulk()), orm.List([2, 2, 3]))
     assert len(supercell.sites) == 6 * 12
     assert supercell.get_pymatgen_structure().composition.reduced_formula == "SnO2"
+
+
+def test_supercell_groups_atoms_by_element_so_that_vasp_keeps_the_symmetry() -> None:
+    # ase repeats cell by cell (Sn Sn O O O O Sn Sn ...); VASP reads every run of equal elements of the
+    # POSCAR as an ion type of its own and then found no symmetry in the 72-atom SnO2 supercell (C_1,
+    # 216 degrees of freedom instead of a handful), found on Lovelace.
+    from aiida import orm
+
+    from psteros.backends.vasp_tasks import make_supercell
+
+    bulk = psteros.rutile_sno2_bulk()
+    supercell = make_supercell(orm.StructureData(pymatgen=bulk), orm.List([2, 2, 3]))
+    symbols = [site.kind_name for site in supercell.sites]
+    runs = [symbols[0]] + [b for a, b in zip(symbols, symbols[1:]) if a != b]
+    assert len(runs) == len(set(runs)) == 2
+    assert symbols.count("Sn") == 24 and symbols.count("O") == 48
+    assert runs == [bulk[0].specie.symbol, next(site.specie.symbol for site in bulk if site.specie != bulk[0].specie)]
+    # Same crystal as before: the supercell keeps the full space group of the repeated cell.
+    pytest.importorskip("spglib")
+    import spglib
+
+    structure = supercell.get_pymatgen_structure()
+    dataset = spglib.get_symmetry_dataset(
+        (structure.lattice.matrix, structure.frac_coords, [site.specie.Z for site in structure])
+    )
+    assert dataset.international == "P4_2/mnm"
+    assert len(dataset.rotations) == 16 * 12
+    # A single-element cell is untouched by the grouping.
+    metal = make_supercell(orm.StructureData(pymatgen=psteros.alpha_sn_bulk()), orm.List([1, 1, 2]))
+    assert len(metal.sites) == 16 and {site.kind_name for site in metal.sites} == {"Sn"}
