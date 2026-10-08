@@ -27,20 +27,18 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from psteros.config import CalculationOverride
-
-#: Elements whose reference is a molecule in a box (half its energy per atom).
-GAS_REFERENCES = ("H", "N", "O", "F", "Cl")
+from psteros.surface_study import (
+    GAMMA_ONLY_SPACING,
+    GAS_REFERENCES,
+    hkl_text as _hkl_text,
+    merge_overrides,
+    reference_energies_per_atom,
+    reservoir_labels,
+)
 
 #: INCAR of every slab with two different faces: dipole correction along c,
 #: centred on the slab (which psteros places at the middle of the cell).
 ASYMMETRIC_SLAB_INCAR = {"ISIF": 2, "LDIPOL": True, "IDIPOL": 3, "DIPOL": [0.5, 0.5, 0.5]}
-
-#: k-point spacing that gives a Gamma-only mesh for molecules and clusters.
-GAMMA_ONLY_SPACING = 10.0
-
-
-def _hkl_text(miller) -> str:
-    return "".join(str(v) if v >= 0 else f"m{-v}" for v in miller)
 
 
 @dataclass
@@ -218,18 +216,7 @@ class PolarSurfaceStudy:
                 incar["ISIF"] = 2
                 kpoints = gamma_only_spacing
             overrides[label] = CalculationOverride(parameters={"INCAR": incar}, kpoints_distance=kpoints)
-        for label, override in dict(extra or {}).items():
-            if label not in overrides:
-                raise ValueError(f"unknown calculation label {label!r}")
-            base = overrides[label]
-            incar = {**dict(base.parameters["INCAR"]), **dict((override.parameters or {}).get("INCAR", {}))}
-            overrides[label] = CalculationOverride(
-                parameters={"INCAR": incar},
-                kpoints_distance=override.kpoints_distance or base.kpoints_distance,
-                settings=override.settings or base.settings,
-                metadata=override.metadata or base.metadata,
-            )
-        return overrides
+        return merge_overrides(overrides, extra)
 
     # -------------------------------------------------------------- analysis
 
@@ -238,15 +225,9 @@ class PolarSurfaceStudy:
 
         from psteros.phase_diagram import BinaryReferences
 
-        references = {}
-        for element in sorted({site.specie.symbol for site in self.bulk}):
-            label = f"ref_{element}"
-            structure = self.references[element]
-            count = sum(1 for site in structure if site.specie.symbol == element)
-            if count != len(structure):
-                raise ValueError(f"reference {label} must contain only {element}")
-            references[element] = energies_ev[label] / count
-        labels = {e: ("$\\frac{1}{2}$" + e + "$_2$" if e in GAS_REFERENCES else f"{e} bulk") for e in references}
+        elements = sorted({site.specie.symbol for site in self.bulk})
+        references = reference_energies_per_atom(elements, self.references, energies_ev)
+        labels = reservoir_labels(elements)
         return BinaryReferences(
             bulk_energy_ev=energies_ev["bulk"], bulk_composition=self.bulk.composition,
             reference_energies_per_atom_ev=references, reservoir_labels=labels,

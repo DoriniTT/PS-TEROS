@@ -2,8 +2,9 @@
 
 Find the slab terminations a semiconductor or insulator can actually have:
 **two equivalent faces and zero net formal charge**. Use it to preview
-surfaces in a few seconds, to write slabs for DFT, or inside the PS-TEROS
-workflow with `termination_mode='charge_neutral'`.
+surfaces in a few seconds, to write slabs for DFT, or to run the whole
+surface calculation set with the PS-TEROS v2 workflow
+(`psteros.ChargeNeutralSurfaceStudy`).
 
 ![Three repaired terminations: Ag3PO4(110), MgO(111), GaAs(100)](images/charge_neutral_terminations.png)
 
@@ -15,7 +16,7 @@ Right: GaAs(100) keeps half of its outer Ga layer.*
 
 ```python
 from pymatgen.core import Structure
-from psteros.core.terminations import find_charge_neutral_terminations
+from psteros import find_charge_neutral_terminations
 
 bulk = Structure.from_file('ag3po4.cif')
 terminations = find_charge_neutral_terminations(
@@ -67,6 +68,76 @@ arguments. It prints the same table. Miller indices can be written `110`, `"1 1 
 status 1 and an explanation.
 
 ## In the PS-TEROS workflow
+
+`ChargeNeutralSurfaceStudy` cuts the terminations of every orientation and
+collects them with the bulk, the elemental references and (for a ternary
+compound) the competing phases. Its `structures` go straight into the v2 graph
+builders; `qe_overrides` and `vasp_overrides` give each calculation its
+settings.
+
+```python
+import psteros
+
+study = psteros.ChargeNeutralSurfaceStudy(
+    bulk,                                         # relaxed: slabs are cut at this cell
+    miller_indices=[(1, 0, 0), (1, 1, 0)],
+    references={"Ag": ag_bulk, "P": black_p, "O": o2_box},
+    competing_phases={"Ag2O": ag2o, "P2O5": p2o5}, # ternary compounds only
+    min_slab_thickness=12.0,
+    oxidation_states={"Ag": 1, "P": 5, "O": -2},
+    unit_bonds={("P", "O"): 1.9},
+)
+print(study)                                      # every calculation, and the termination tables
+
+relax = psteros.SurfaceWorkflowConfig(
+    backend="qe", calculation=psteros.QeCalculationConfig(..., parameters=relax_parameters),
+    execution=psteros.ExecutionPolicy(computer="cluster", queue="normal", max_concurrent_jobs=1),
+    role_overrides=study.qe_overrides("relax"),
+)
+static = psteros.SurfaceWorkflowConfig(
+    backend="qe", calculation=psteros.QeCalculationConfig(..., parameters=scf_parameters),
+    execution=relax.execution, name="psteros_surface_static",
+    role_overrides=study.qe_overrides("static"),
+)
+graph = psteros.build_qe_relax_static_workgraph(study.structures, relax, static, submit=True)
+```
+
+Calculation labels are `bulk`, `ref_<element>`, `phase_<label>` and
+`<formula>_<hkl>_<termination>` (`Ag3PO4_110_term_1`, negative indices as
+`m1`). The overrides relax the cell of the solid references and competing
+phases (`vc-relax`), keep the bulk and the slabs at the cell of `bulk`, and
+compute gas references at Γ, O2 as a triplet. Pass `extra={label:
+CalculationOverride(...)}` to change single calculations, for example to fix
+the central layers of a slab. With VASP, use `study.vasp_overrides()` and
+`study.potential_mapping({"Ag": "Ag", ...})` in a
+`psteros.build_surface_workgraph` recipe (`ISIF=2` for bulk and slabs,
+`ISIF=3` for solid references).
+
+When the graph has finished:
+
+```python
+from aiida import orm
+
+energies, relaxed = psteros.read_qe_results(orm.load_node(graph.pk), study.structures)
+# VASP: psteros.read_vasp_results(...)
+result = study.analyse(energies, relaxed)
+print(result)
+result.diagram.plot("ag3po4_surfaces.png")
+```
+
+A binary compound gives γ(Δμ) (`psteros.SurfacePhaseDiagram`), a ternary one
+the stability-region map (`psteros.TernarySurfacePhaseDiagram`), and an
+element its surface energies (`result.surface_energies_j_per_m2`). An element
+needs no references: the bulk is the reference. `stoichiometric_only=True`
+drops the off-stoichiometric terminations.
+
+A complete script for the non-polar ZnO faces, with a dry run that only cuts
+the slabs, is
+[`examples/charge_neutral_terminations/zno_qe_study.py`](../examples/charge_neutral_terminations/zno_qe_study.py).
+
+### Legacy builders
+
+The `psteros.core` builders take the same options:
 
 ```python
 wg = build_core_workgraph(

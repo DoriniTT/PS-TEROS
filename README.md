@@ -21,7 +21,7 @@ PS-TEROS automates the pathway from crystal structures to thermodynamic stabilit
 - **Typed DFT Recipes:** Enforces strict parameter harmony across all terminations, bulk references, and reservoirs in **Quantum ESPRESSO** and **VASP**.
 - **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation → static SCF) with bounded job concurrency and full provenance tracking.
 - **Polar Surfaces:** Absolute surface energies of polar faces (zinc blende (111), wurtzite (0001)) with a pseudo-hydrogen passivated bottom, on the same scale as non-polar ones ([guide](docs/POLAR_SURFACES.md)).
-- **Charge-Neutral Terminations:** Symmetric, charge-neutral slabs for semiconductors and insulators ([guide](docs/CHARGE_NEUTRAL_TERMINATIONS.md)).
+- **Charge-Neutral Terminations:** Symmetric, charge-neutral slabs for semiconductors and insulators, and `ChargeNeutralSurfaceStudy` to run all of them with their references in one graph ([guide](docs/CHARGE_NEUTRAL_TERMINATIONS.md)).
 - **Pure-Python Thermodynamics:** Evaluates surface free energies (J/m², eV/Å²) and termination phase diagrams directly as a function of chemical potential (Δμ<sub>O</sub> for an oxide, Δμ<sub>As</sub> for GaAs, ...).
 
 ## Quickstart
@@ -47,6 +47,10 @@ slabs = SlabGenerator(bulk, (1, 1, 0), min_slab_size=12.0, min_vacuum_size=15.0,
 terminations = {f"term_{i}": slab for i, slab in enumerate(slabs)}  # e.g. Sn6O14, Sn8O16, Sn8O14
 references = {"bulk": bulk, "metal": metal, "o2": psteros.triplet_o2_cell()}
 ```
+
+For semiconductors and insulators, `psteros.ChargeNeutralSurfaceStudy` cuts
+the charge-neutral terminations instead and also gives the per-calculation
+overrides and the analysis ([guide](docs/CHARGE_NEUTRAL_TERMINATIONS.md#in-the-ps-teros-workflow)).
 
 ### 2. Relax and compute the energies (AiiDA WorkGraph)
 

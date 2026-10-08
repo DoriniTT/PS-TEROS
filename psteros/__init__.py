@@ -52,6 +52,8 @@ from .polar import (
     tetrahedral_cluster,
 )
 from .polar_workflow import PolarSurfaceStudy, PolarStudyResult, read_vasp_results
+from .core.terminations import Termination, TerminationSet, find_charge_neutral_terminations
+from .surface_study import ChargeNeutralStudyResult, ChargeNeutralSurfaceStudy, read_qe_results
 from .thermodynamics import (
     EV_PER_ANGSTROM2_TO_J_PER_M2,
     SurfaceEnergyPoint,
@@ -105,6 +107,12 @@ __all__ = [
     "PolarSurfaceStudy",
     "PolarStudyResult",
     "read_vasp_results",
+    "Termination",
+    "TerminationSet",
+    "find_charge_neutral_terminations",
+    "ChargeNeutralStudyResult",
+    "ChargeNeutralSurfaceStudy",
+    "read_qe_results",
     "EV_PER_ANGSTROM2_TO_J_PER_M2",
     "SurfaceEnergyPoint",
     "stable_termination",

@@ -401,6 +401,36 @@ See :doc:`phase-diagram` for a worked introduction.
    ``gamma_<label>_Jm2`` columns,
    ``stable_termination`` and ``in_stability_region``.
 
+Charge-neutral surfaces
+-----------------------
+
+The method and a worked example are in ``docs/CHARGE_NEUTRAL_TERMINATIONS.md``.
+
+.. _api-charge-neutral:
+
+.. index:: find_charge_neutral_terminations, TerminationSet, Termination
+
+``find_charge_neutral_terminations(bulk, miller_index, min_slab_thickness, min_vacuum_thickness=15.0, *, oxidation_states=None, unit_bonds=None, supercell=None)``
+   Symmetric slabs with zero net formal charge, repaired by removing
+   symmetry-related surface units where needed. Returns a ``TerminationSet``
+   (printable table, ``write(directory)``, ``plot(path)``) of
+   ``Termination`` objects (``structure``, ``formula``, ``thickness``,
+   ``is_stoichiometric``, ``origin``, ``to_dict()``). Polar directions raise
+   ``NoChargeNeutralTerminationError``.
+
+.. index:: ChargeNeutralSurfaceStudy, read_qe_results
+
+``ChargeNeutralSurfaceStudy(bulk, miller_indices, references, *, competing_phases={}, min_slab_thickness=12.0, vacuum=15.0, stoichiometric_only=False, oxidation_states=None, unit_bonds=None, supercell=None, termination_options={})``
+   The bulk, elemental references, competing phases and every charge-neutral
+   slab as labelled ``structures`` (with ``roles``) for
+   ``build_surface_workgraph`` or ``build_qe_relax_static_workgraph``;
+   ``qe_overrides(stage)``, ``vasp_overrides()`` and
+   ``potential_mapping(base)`` give their settings, and
+   ``analyse(energies_ev, relaxed_structures=None)`` returns a
+   ``ChargeNeutralStudyResult`` with the references and the binary or
+   ternary phase diagram. ``read_qe_results(graph, labels)`` reads energies
+   and relaxed structures from a finished QE WorkGraph.
+
 Polar surfaces
 --------------
 
