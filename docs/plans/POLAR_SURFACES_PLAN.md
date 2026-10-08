@@ -76,7 +76,7 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
   (dipole correction for asymmetric slabs, Gamma-only molecules and clusters)
   for `build_surface_workgraph`; a collector from finished energies to the
   phase diagram.
-- [ ] 10. **Validation helpers.** Eq. 7 self-consistency and the non-polar
+- [x] 10. **Validation helpers.** Eq. 7 self-consistency and the non-polar
   comparison, reported in meV/A^2.
 - [ ] 11. **Docs and example.** Guide section, example script and a benchmark
   recipe against the paper values.

@@ -1318,3 +1318,91 @@ def polar_slab_terminations(
             stacklevel=2,
         )
     return kept, report
+
+
+# =============================================================================
+# CONSISTENCY CHECKS
+# =============================================================================
+
+@dataclass(frozen=True)
+class ConsistencyCheck:
+    """A self-consistency check of the pseudo-hydrogen energies, in meV/A^2.
+
+    ``difference_mev_per_angstrom2`` is (method - reference) per unit area;
+    the papers report a few meV/A^2 for pseudo-molecules and below 1 meV/A^2
+    for clusters.
+    """
+
+    name: str
+    method_value: float
+    reference_value: float
+    area: float
+    difference_mev_per_angstrom2: float
+    percent: float
+
+    def summary(self) -> str:
+        return (f"{self.name}: {self.difference_mev_per_angstrom2:+.2f} meV/Å² "
+                f"({self.percent:+.2f} %)")
+
+    __str__ = summary
+
+
+def eq7_check(slab: Any, slab_energy_ev: float, references: Any, pseudo_hydrogen: Any,
+              delta_mu_ev: float = 0.0) -> ConsistencyCheck:
+    """Compare the pseudo-H energies with a slab passivated on both faces (Sci. Rep. Eq. 7).
+
+    ``slab`` is the structure from :func:`doubly_passivated_slab`. The slab
+    gives sum_k n_k muhat_k = E - sum_i n_i mu_i directly; the method gives
+    it from the pseudo chemical potentials. The difference is reported per
+    face area.
+    """
+
+    import numpy as np
+
+    passivates = slab.site_properties["pseudo_hydrogen"]
+    atoms: dict[str, int] = {}
+    hydrogen: dict[str, int] = {}
+    for site, passivated in zip(slab, passivates):
+        if passivated is None:
+            atoms[site.specie.symbol] = atoms.get(site.specie.symbol, 0) + 1
+        else:
+            hydrogen[passivated] = hydrogen.get(passivated, 0) + 1
+    mu = references.chemical_potentials_ev(delta_mu_ev)
+    from_slab = slab_energy_ev - sum(count * mu[element] for element, count in atoms.items())
+    from_method = pseudo_hydrogen.reservoir_energy_ev(hydrogen, mu)
+    area = float(np.linalg.norm(np.cross(slab.lattice.matrix[0], slab.lattice.matrix[1])))
+    difference = from_method - from_slab
+    return ConsistencyCheck("Eq. 7 (both faces passivated)", from_method, from_slab, area,
+                            1000.0 * difference / area, 100.0 * difference / abs(from_slab))
+
+
+def nonpolar_check(symmetric: Any, passivated: Any, references: Any, pseudo_hydrogen: Any,
+                   delta_mu_ev: float = 0.0) -> ConsistencyCheck:
+    """Compare gamma of a non-polar face from a symmetric slab and from a passivated one.
+
+    ``symmetric`` and ``passivated`` are :class:`psteros.SlabTermination`
+    objects (``surfaces=2`` and ``surfaces=1`` with pseudo-hydrogen).
+    """
+
+    from psteros.thermodynamics import surface_energy_binary_equilibrium
+
+    def gamma(termination):
+        correction = 0.0
+        if termination.is_passivated:
+            correction = pseudo_hydrogen.reservoir_energy_ev(
+                termination.pseudo_hydrogen, references.chemical_potentials_ev(delta_mu_ev))
+        return surface_energy_binary_equilibrium(
+            slab_energy_ev=termination.slab_energy_ev,
+            n_other=termination.composition[references.other],
+            n_variable=termination.composition[references.variable],
+            bulk_formula_energy_ev=references.bulk_energy_per_formula_unit_ev,
+            variable_reference_energy_ev=references.variable_reference_energy_ev,
+            delta_mu_ev=delta_mu_ev, surface_area_angstrom2=termination.surface_area_angstrom2,
+            surfaces=termination.surfaces, formula_unit=references.formula_unit,
+            reservoir_correction_ev=correction,
+        ).gamma_ev_per_angstrom2
+
+    reference, method = gamma(symmetric), gamma(passivated)
+    return ConsistencyCheck("non-polar face, passivated vs symmetric slab", method, reference,
+                            symmetric.surface_area_angstrom2, 1000.0 * (method - reference),
+                            100.0 * (method - reference) / abs(reference))

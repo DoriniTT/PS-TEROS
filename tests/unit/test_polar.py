@@ -483,3 +483,40 @@ def test_bottom_check_accepts_aiida_structures_and_rejects_mixed_bottoms():
         polar.check_bottoms([slabs[0], other[0]], {"term_0": slabs[0].structure})
     with pytest.raises(ValueError, match="no relaxed structure"):
         polar.check_bottoms(slabs, {"term_0": slabs[0].structure})
+
+
+# ---------------------------------------------------------------------------
+# Step 10: consistency checks
+# ---------------------------------------------------------------------------
+
+def test_eq7_check_is_zero_for_consistent_energies():
+    references = gaas_references()
+    hydrogen = psteros.PseudoHydrogenReferences.from_pseudo_molecules(E_MOLECULE)
+    slab = polar.doubly_passivated_slab(gaas(), (1, 1, 1), bilayers=3)
+    mu = references.chemical_potentials_ev(0.0)
+    consistent = 3 * mu["Ga"] + 3 * mu["As"] + hydrogen.reservoir_energy_ev({"As": 1, "Ga": 1}, mu)
+    check = polar.eq7_check(slab, consistent, references, hydrogen)
+    assert check.difference_mev_per_angstrom2 == pytest.approx(0.0, abs=1e-9)
+    shifted = polar.eq7_check(slab, consistent - 0.1, references, hydrogen)
+    assert shifted.difference_mev_per_angstrom2 == pytest.approx(1000 * 0.1 / check.area)
+    assert "Eq. 7" in shifted.summary() and "meV/Å²" in shifted.summary()
+    # The sum does not depend on the chemical potential.
+    assert polar.eq7_check(slab, consistent, references, hydrogen, delta_mu_ev=-0.5).difference_mev_per_angstrom2 == \
+        pytest.approx(0.0, abs=1e-9)
+
+
+def test_nonpolar_check_compares_both_slab_types():
+    references = gaas_references()
+    hydrogen = psteros.PseudoHydrogenReferences.from_pseudo_molecules(E_MOLECULE)
+    one_sided = polar.find_polar_terminations(gaas(), (1, 1, 0))[0]
+    area = one_sided.area
+    gamma = 0.05
+    mu = references.chemical_potentials_ev(0.0)
+    symmetric = psteros.SlabTermination("sym", 12 * E_GAAS + 2 * area * gamma, {"Ga": 12, "As": 12}, area)
+    energy = 12 * E_GAAS + area * gamma + hydrogen.reservoir_energy_ev(one_sided.pseudo_hydrogen_counts, mu)
+    passivated = psteros.SlabTermination.from_polar(one_sided, energy)
+    check = polar.nonpolar_check(symmetric, passivated, references, hydrogen)
+    assert check.difference_mev_per_angstrom2 == pytest.approx(0.0, abs=1e-9)
+    worse = psteros.SlabTermination.from_polar(one_sided, energy + 0.02 * area)
+    assert polar.nonpolar_check(symmetric, worse, references, hydrogen).difference_mev_per_angstrom2 == \
+        pytest.approx(20.0)

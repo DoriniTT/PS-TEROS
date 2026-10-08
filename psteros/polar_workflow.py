@@ -314,7 +314,31 @@ class PolarSurfaceStudy:
                     ))
         diagram = surface_phase_diagram(terminations, references, pseudo_hydrogen=hydrogen,
                                         delta_mu_range=delta_mu_range, points=points)
-        return PolarStudyResult(references, hydrogen, diagram, reports)
+        return PolarStudyResult(references, hydrogen, diagram, reports,
+                                self._consistency(energies_ev, references, hydrogen))
+
+    def _consistency(self, energies_ev, references, hydrogen) -> tuple:
+        """Eq. 7 and non-polar checks for the calculations that are in the set."""
+
+        from psteros.phase_diagram import SlabTermination
+        from psteros.polar import eq7_check, nonpolar_check
+
+        checks = []
+        for label, role in self.roles.items():
+            if role == "eq7_check":
+                checks.append(eq7_check(self.structures[label], energies_ev[label], references, hydrogen))
+        symmetric = [label for label, role in self.roles.items() if role == "nonpolar_symmetric"]
+        if symmetric:
+            label = symmetric[0]
+            prefix = label[: -len("_symmetric")]
+            structure = self.structures[label]
+            one_sided = self.face_sets[f"{prefix}_check"][0]
+            checks.append(nonpolar_check(
+                SlabTermination.from_structure(label, energies_ev[label], structure),
+                SlabTermination.from_polar(one_sided, energies_ev[f"{prefix}_passivated"]),
+                references, hydrogen,
+            ))
+        return tuple(checks)
 
 
 @dataclass(frozen=True)
@@ -325,6 +349,7 @@ class PolarStudyResult:
     pseudo_hydrogen: Any
     diagram: Any
     bottom_checks: Mapping[str, Any]
+    consistency: tuple = ()
 
     def summary(self) -> str:
         lines = [f"{self.references.formula}: Delta mu_{self.references.variable} from "
@@ -333,6 +358,8 @@ class PolarStudyResult:
             lines.append(f"  muhat(H on {element}) = {reference.constant_ev:.4f} eV - mu_{element}/4 ({reference.method})")
         for prefix, report in self.bottom_checks.items():
             lines.append(f"  {prefix}: bottom check {'passed' if report.all_passed else 'FAILED for ' + ', '.join(report.failed)}")
+        for check in self.consistency:
+            lines.append(f"  {check.summary()}")
         return "\n".join(lines)
 
     __str__ = summary

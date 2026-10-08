@@ -213,3 +213,12 @@ def test_vasp_workgraph_carries_pseudo_hydrogen_kinds_and_settings(tmp_path):
     molecule = graph.tasks["pseudo_molecule_As_vasp"].inputs
     assert molecule.kpoints_spacing.value.value == pytest.approx(10.0)
     assert graph.tasks["bulk_vasp"].inputs.kpoints_spacing.value.value == pytest.approx(0.2)
+
+
+def test_analysis_reports_the_consistency_checks():
+    study = gaas_study(faces=[(1, 1, 1)], nonpolar_check=(1, 1, 0))
+    energies = fake_energies(study)
+    result = study.analyse(energies, dict(study.structures), points=5)
+    names = [check.name for check in result.consistency]
+    assert names == ["Eq. 7 (both faces passivated)", "non-polar face, passivated vs symmetric slab"]
+    assert "meV/Å²" in result.summary()
