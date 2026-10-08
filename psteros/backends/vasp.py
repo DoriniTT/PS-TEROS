@@ -103,8 +103,9 @@ def add_vasp_task(
     """
 
     from aiida import orm
-    from aiida.plugins import WorkflowFactory
     from aiida_workgraph import task
+
+    from psteros.backends.vasp_workchain import PsterosVaspWorkChain
 
     structure = as_vasp_structure(structure)
     reference = as_vasp_structure(kinds_structure if kinds_structure is not None else structure)
@@ -131,4 +132,4 @@ def add_vasp_task(
         inputs["max_iterations"] = orm.Int(config.max_iterations)
     if override and override.settings:
         inputs["settings"] = orm.Dict(dict=dict(override.settings))
-    return workgraph.add_task(task(WorkflowFactory("vasp.v2.vasp")), **inputs)
+    return workgraph.add_task(task(PsterosVaspWorkChain), **inputs)

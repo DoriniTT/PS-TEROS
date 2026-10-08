@@ -31,6 +31,12 @@ Recent Updates
   ``solid_free_energy_ev`` and ``molecule_reference_energy_ev``; slabs with a
   frozen centre use a partial Hessian, bulks a Γ-only supercell. Without them
   every result is unchanged (see :doc:`/vibrations`)
+* The VASP tasks run ``PsterosVaspWorkChain``, aiida-vasp's ``VaspWorkChain``
+  with a case-tolerant ``parameters`` validator: aiida-vasp 5 refuses the
+  upper-case INCAR tags of the recipes (``ENCUT``) on the stored ``Dict`` of a
+  WorkGraph, so no VASP graph could start. The recipes, the INCAR written to
+  the job and the graph (task names, links, outputs) are unchanged; psteros
+  must be installed in the environment of the AiiDA daemon
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features
