@@ -195,3 +195,6 @@ AGENTS.md
 
 # Output of examples/charge_neutral_terminations/preview_terminations.py
 examples/charge_neutral_terminations/output/
+
+# Papers kept locally for reference (PDFs are never committed)
+references/
