@@ -118,6 +118,9 @@ Calculation configuration
    ``code_label`` identifies the AiiDA code, ``incar`` stores INCAR settings,
    and the potential fields select the family and optional per-element mapping.
    ``kpoints_spacing`` is a positive reciprocal-space distance in Å⁻¹.
+   ``incar`` may be flat (``{"encut": 520, ...}``) or already in aiida-vasp's
+   namespaces (``{"incar": {...}, "dynamics": {...}}``); the VASP builders pass
+   the tags to aiida-vasp under ``"incar"`` either way.
 
 .. _api-execution-policy:
 
@@ -146,9 +149,12 @@ Calculation configuration
 
 ``CalculationOverride(parameters=None, kpoints_distance=None, settings={}, metadata={})``
    Describe a deliberate change for one labelled structure. For QE,
-   ``parameters`` deep-merges namelist values into the shared recipe.
-   ``settings`` and ``metadata`` are passed to the backend task. A supplied
-   k-point distance must be positive.
+   ``parameters`` deep-merges namelist values into the shared recipe; for
+   VASP, the tags under ``parameters["INCAR"]`` update the recipe INCAR.
+   ``kpoints_distance`` replaces the recipe's k-point distance (QE
+   ``kpoints_distance``, VASP ``kpoints_spacing``). ``settings`` and
+   ``metadata`` are passed to the backend task. A supplied k-point distance
+   must be positive.
 
 .. _api-surface-workflow-config:
 

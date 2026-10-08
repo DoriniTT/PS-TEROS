@@ -2,7 +2,8 @@
 
 ## [Unreleased] - Free energies of the reference systems
 
-All additions; no existing function, class, default or graph changes.
+All additions, except the VASP fix listed separately below; no other existing
+function, class, default or graph changes.
 
 - **Reference thermochemistry** (`psteros.thermochemistry`, pure Python):
   `IdealGasMolecule` (ideal gas, rigid rotor, harmonic oscillator, spin and
@@ -20,6 +21,21 @@ All additions; no existing function, class, default or graph changes.
   `reference_results` and `reference_thermochemistry` read them back by PK.
 - Guide: `docs/source/reference-thermochemistry.rst`; example:
   `examples/vasp_reference_thermochemistry/references.py`.
+- **Fixed: `build_surface_workgraph` with `backend="vasp"`** (behaviour change,
+  VASP path only; QE is unchanged).
+  - A flat `VaspCalculationConfig.incar` is now passed to aiida-vasp under its
+    `incar` namespace. Before, it was passed flat, which aiida-vasp 5 rejects at
+    run time ("The supplied namespace: encut is not supported"). A recipe
+    already written as `{"incar": {...}, ...}` is passed as before.
+  - Override INCAR tags (`CalculationOverride(parameters={"INCAR": ...})`) are
+    merged into the `incar` namespace instead of the top level.
+  - `CalculationOverride.kpoints_distance` now sets the task's
+    `kpoints_spacing`; before, it was ignored for VASP.
+  - `CalculationOverride.settings` is now passed to aiida-vasp's `settings`;
+    before, it was ignored for VASP.
+  - OUTCAR, vasprun.xml, CONTCAR and OSZICAR are kept in the `<label>_retrieved`
+    output; before, aiida-vasp retrieved them only temporarily for parsing.
+  - INCAR tag names are lower-cased (VASP tags are case-insensitive).
 - `AGENTS.md` is versioned: the rules for adding features without breaking
   the public API.
 

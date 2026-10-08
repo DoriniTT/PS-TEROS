@@ -163,13 +163,53 @@ def test_builder_reports_bad_plans_by_name(code_label) -> None:
         psteros.build_vasp_reference_workgraph({"o-2": references()["o2"]}, recipe(code_label))
 
 
-def test_existing_vasp_builder_is_unchanged(code_label) -> None:
-    """The new blocks must not change build_surface_workgraph."""
-
-    workgraph = psteros.build_surface_workgraph({"bulk": psteros.rutile_sno2_bulk()}, recipe(code_label))
+def surface_task(code_label, incar=None, override=None):
+    config = recipe(code_label, incar)
+    if override is not None:
+        config = psteros.SurfaceWorkflowConfig(
+            backend="vasp", calculation=config.calculation, execution=config.execution,
+            name=config.name, role_overrides={"bulk": override},
+        )
+    workgraph = psteros.build_surface_workgraph({"bulk": psteros.rutile_sno2_bulk()}, config)
     assert {task.name for task in workgraph.tasks} - {"graph_ctx", "graph_inputs", "graph_outputs"} == {"bulk_vasp"}
-    parameters = workgraph.tasks["bulk_vasp"].inputs.parameters.value.get_dict()
-    assert parameters == INCAR
+    return workgraph.tasks["bulk_vasp"]
+
+
+def test_surface_builder_puts_a_flat_incar_in_the_aiida_vasp_namespace(code_label) -> None:
+    from aiida_vasp.assistant.parameters import ParametersMassage
+
+    parameters = surface_task(code_label).inputs.parameters.value.get_dict()
+    assert parameters == {"incar": {key.lower(): value for key, value in INCAR.items()}}
+    # aiida-vasp 5 rejects a flat INCAR ("namespace encut is not supported").
+    assert ParametersMassage(parameters).parameters.incar["encut"] == 520
+
+
+def test_surface_builder_keeps_a_namespaced_recipe(code_label) -> None:
+    namespaced = {"incar": {"encut": 520, "nsw": 0}, "dynamics": {"positions_dof": [[True] * 3] * 6}}
+    parameters = surface_task(code_label, namespaced).inputs.parameters.value.get_dict()
+    assert parameters == namespaced
+
+
+def test_surface_builder_applies_vasp_overrides(code_label) -> None:
+    override = psteros.CalculationOverride(
+        parameters={"INCAR": {"ISIF": 3}},
+        kpoints_distance=0.5,
+        settings={"parser_settings": {"add_dos": True}},
+        metadata={"max_wallclock_seconds": 600},
+    )
+    task = surface_task(code_label, {"incar": {"encut": 520, "nsw": 50}}, override)
+    assert task.inputs.parameters.value.get_dict() == {"incar": {"encut": 520, "nsw": 50, "isif": 3}}
+    assert task.inputs.kpoints_spacing.value.value == 0.5
+    settings = task.inputs.settings.value.get_dict()
+    assert settings["parser_settings"] == {"add_dos": True}
+    assert {"OUTCAR", "vasprun.xml"} <= set(settings["ADDITIONAL_RETRIEVE_LIST"])
+    assert task.inputs.options.value.get_dict()["max_wallclock_seconds"] == 600
+
+
+def test_surface_builder_defaults_without_override(code_label) -> None:
+    task = surface_task(code_label)
+    assert task.inputs.kpoints_spacing.value.value == 0.25
+    assert set(task.inputs.settings.value.get_dict()) == {"ADDITIONAL_RETRIEVE_LIST"}
 
 
 OUTCAR = """\

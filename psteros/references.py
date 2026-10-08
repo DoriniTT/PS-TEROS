@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
+from psteros.backends.vasp import lower_keys, split_recipe_incar
 from psteros.blocks import DEFAULT_BLOCKS, Block, Phase, Relax, Static, Vibrations, check_blocks
 from psteros.config import CalculationOverride, SurfaceWorkflowConfig, VaspCalculationConfig
 
@@ -79,24 +80,6 @@ class ReferenceSystem:
                 raise ValueError(f"VASP overrides take INCAR tags under 'INCAR', got namespaces {sorted(other)}")
 
 
-def _lower(mapping: Mapping[str, Any]) -> dict[str, Any]:
-    return {str(key).lower(): value for key, value in mapping.items()}
-
-
-def _recipe_incar(incar: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Split a recipe INCAR into (INCAR tags, other aiida-vasp parameter namespaces).
-
-    A recipe may give the INCAR flat or, as aiida-vasp expects it, under
-    ``"incar"`` beside other namespaces.
-    """
-
-    lowered = _lower(incar)
-    if "incar" in lowered:
-        inner = lowered.pop("incar")
-        return _lower(inner), lowered
-    return lowered, {}
-
-
 def _block_inputs(
     reference: ReferenceSystem, block: Block, base_incar: Mapping[str, Any], config: VaspCalculationConfig
 ) -> tuple[dict[str, Any], float, dict[str, Any], dict[str, Any]]:
@@ -111,7 +94,7 @@ def _block_inputs(
     for override in (reference.override, reference.block_overrides.get(block.name)):
         if override is None:
             continue
-        incar.update(_lower((override.parameters or {}).get("INCAR", {})))
+        incar.update(lower_keys((override.parameters or {}).get("INCAR", {})))
         if override.kpoints_distance is not None:
             spacing = override.kpoints_distance
         metadata.update(dict(override.metadata))
@@ -165,7 +148,7 @@ def build_vasp_reference_workgraph(
         if unknown:
             raise ValueError(f"{label}: block_overrides name unknown blocks {sorted(unknown)}; blocks are {sorted(names)}")
     calculation = config.calculation
-    base_incar, namespaces = _recipe_incar(calculation.incar)
+    base_incar, namespaces = split_recipe_incar(calculation.incar)
     planned = {
         (label, block.name): _block_inputs(reference, block, base_incar, calculation)
         for label, reference in references.items()
