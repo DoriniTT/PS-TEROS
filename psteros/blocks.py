@@ -99,6 +99,14 @@ class Vibrations:
     The relaxation before it must be tight (forces of a few meV/A) and the
     electronic convergence strict (``EDIFF`` of 1e-7 or less), otherwise
     spurious imaginary modes appear.
+
+    The block sets ``NCORE = 1`` (and ``ISIF = 2``) unless ``incar`` says
+    otherwise.  Displacing atoms lowers the symmetry, so VASP changes its
+    k-point set during the run, and it refuses to do that with band
+    parallelisation: it stops with "VASP internal routines have requested a
+    change of the k-point set ... remove the tag NPAR".  A recipe INCAR with
+    ``NCORE > 1`` (or ``NPAR``) is therefore overridden here; ``NPAR`` must not
+    be in the recipe INCAR.
     """
 
     name: str = "vibrations"
@@ -127,7 +135,8 @@ class Vibrations:
 
     def defaults(self, phase: Phase) -> dict[str, Any]:
         # ISIF >= 3 would make IBRION = 6 also strain the cell (elastic constants).
-        return {"isif": 2}
+        # NCORE = 1: VASP cannot change its k-point set under band parallelisation.
+        return {"isif": 2, "ncore": 1}
 
     def required(self, phase: Phase) -> dict[str, Any]:
         ibrion = self.ibrion if self.ibrion is not None else (5 if phase == "gas" else 6)

@@ -23,3 +23,30 @@ Every `verdi` call uses `-p psteros_sno2_vibrations`: the default profile of thi
   k-points, options, settings, supercells (2x2x3 for SnO2 = 72 atoms, 2x2x2 for alpha-Sn = 64 atoms),
   Gamma-only O2 (`kpoints_spacing=5.0`), `IBRION` 5/6, `NSW=1`, `import_sys_environment=False` checked
   against the tables of `PLAN.md`.
+- O2 smoke test, attempt 1: graph PK 353, failed in 1 minute before anything reached the cluster.
+  `VaspCalculation` 362 excepted in the pre-submit step (`NotExistent: No PotcarFileData nodes found`).
+  Cause: my new profile had the 329 `PotcarData` nodes of family `PBE` but not their `PotcarFileData`
+  nodes (aiida-vasp keeps the POTCAR text in a second node, found by sha512). Setup problem of the
+  profile, not psteros: imported the 329 `PotcarFileData` nodes from `presto` and checked that
+  `PotcarData.find_file_node()` resolves for `Sn_d` and `O`. No psteros change.
+- O2 smoke test, attempt 2: graph PK 714 (job `aiida-723`), killed by me after 44 min of a relaxation that should take
+  seconds. The VASP output printed `running 1 mpi-ranks` 128 times: 128 independent serial copies of VASP wrote the
+  same files. Cause: `vasp_std` 6.5.1 is linked with Intel MPI (`libmpi.so.12`, `mpiifort`), but the computer
+  copied from `presto` has `mpirun_command = /opt/pub/openmpi/5.0.6/.../mpirun`, an OpenMPI launcher, so no rank
+  talked to another. Cluster/AiiDA setup problem, not psteros. Fix in my profile only: computer `lovelace`
+  `mpirun_command = mpirun -np {tot_num_mpiprocs}`; after `module load intel/2023.2.1` (code prepend text)
+  `mpirun` is Intel MPI's. The job was cancelled (gone from `qstat`). Note for the user: profile
+  `psteros_vibrations_lovelace` (other session) was set up with the same OpenMPI `mpirun` and may have the same problem.
+- O2 smoke test, attempt 3: graph PK 747 (psteros as on the branch, MPI fixed). Relax (751 / calc 756) and
+  static (766 / calc 771) finished OK; `reference_results(747)` worked while the graph was running:
+  O-O bond 1.233 A, E(O2) = -9.8847 eV (sigma -> 0). Vibrations calc 785 ended with exit 700
+  ("Calculation did not reach the end of execution") and the work chain restarted it (791) as if it were an
+  unfinished relaxation; I killed 747 and 791 (the PBS job was removed).
+  Root cause, in the retrieved OUTCAR of 785: VASP stopped itself with "VASP internal routines have requested a
+  change of the k-point set. Unfortunately, this is only possible if NPAR=number of nodes. Please remove the tag
+  NPAR". Displaced atoms lower the symmetry, so VASP changes its k-point set, and it cannot do that with band
+  parallelisation (`NCORE = 16` of the shared INCAR). This is a psteros bug (the block did not account for it),
+  and every IBRION 5/6 run with `NCORE > 1` would hit it.
+  Fix: `Vibrations.defaults` now returns `{"isif": 2, "ncore": 1}`; tests in `tests/unit/test_blocks_references.py`
+  and `tests/test_reference_workgraph.py`; `CHANGE.md`, `docs/source/api.rst` and
+  `docs/source/reference-thermochemistry.rst` updated. 331 passed, 7 skipped.

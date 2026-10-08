@@ -103,7 +103,10 @@ recipe INCAR, the block defaults, the block's own ``incar``, the reference's
 ``override`` and its ``block_overrides[<block name>]``. The tags that make a
 block what it is come last: ``NSW = 0`` for a static block; ``IBRION``
 (5 for a gas, 6 for a solid), ``POTIM``, ``NFREE`` and ``NSW = 1`` for the
-vibrations. A different protocol is a different list of blocks:
+vibrations. The vibrations block also defaults to ``ISIF = 2`` and
+``NCORE = 1``: displacing atoms lowers the symmetry, and VASP then stops with
+"requested a change of the k-point set ... remove the tag NPAR" if the run uses
+band parallelisation (``NCORE > 1``). Keep ``NPAR`` out of the recipe INCAR. A different protocol is a different list of blocks:
 
 .. code-block:: python
 

@@ -387,7 +387,9 @@ in K and pressures in bar.
    names an earlier block whose structure the block takes (by default the
    block before it). ``Static`` forces ``NSW = 0``. ``Vibrations`` runs VASP
    finite differences with ``IBRION`` 5 (gas) or 6 (solid) unless ``ibrion``
-   is given, and sets ``POTIM``, ``NFREE`` and ``NSW = 1`` from its fields.
+   is given, and sets ``POTIM``, ``NFREE`` and ``NSW = 1`` from its fields. Its INCAR
+   defaults are ``ISIF = 2`` and ``NCORE = 1`` (VASP cannot change its k-point
+   set under band parallelisation, which displaced cells need).
 
 .. _api-reference-system:
 

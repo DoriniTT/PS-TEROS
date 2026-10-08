@@ -27,6 +27,17 @@ def test_vibrations_choose_finite_differences_by_phase() -> None:
     assert psteros.Static().required("solid") == {"nsw": 0}
 
 
+def test_vibrations_turn_off_band_parallelisation_unless_told_otherwise() -> None:
+    # VASP stops with "requested a change of the k-point set ... remove NPAR" when displaced
+    # (lower-symmetry) cells are run with NCORE > 1, found on Lovelace (par128, 128 ranks).
+    assert psteros.Vibrations().defaults("gas") == {"isif": 2, "ncore": 1}
+    assert psteros.Vibrations().defaults("solid") == {"isif": 2, "ncore": 1}
+    assert psteros.Vibrations(incar={"NCORE": 4}).incar == {"ncore": 4}
+    # Other blocks keep their defaults: the fix adds nothing to them.
+    assert psteros.Relax().defaults("solid") == {}
+    assert psteros.Static().defaults("solid") == {"ibrion": -1}
+
+
 def test_block_sequence_links_only_to_earlier_blocks() -> None:
     assert len(check_blocks([psteros.Relax(), psteros.Vibrations(structure_from="relax")])) == 2
     with pytest.raises(ValueError, match="earlier block"):
