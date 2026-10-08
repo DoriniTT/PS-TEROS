@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 pytest.importorskip("pymatgen")
@@ -211,8 +213,9 @@ def test_vasp_workgraph_carries_pseudo_hydrogen_kinds_and_settings(tmp_path):
     assert incar["ldipol"] is True and incar["encut"] == 400
     assert slab.potential_mapping.value.get_dict()["H0p75"] == "H.75"
     molecule = graph.tasks["pseudo_molecule_As_vasp"].inputs
-    assert molecule.kpoints_spacing.value.value == pytest.approx(10.0)
-    assert graph.tasks["bulk_vasp"].inputs.kpoints_spacing.value.value == pytest.approx(0.2)
+    # aiida-vasp multiplies its spacing by 2*pi; psteros states it with the 2*pi (like VASP's KSPACING)
+    assert molecule.kpoints_spacing.value.value == pytest.approx(10.0 / (2 * math.pi))
+    assert graph.tasks["bulk_vasp"].inputs.kpoints_spacing.value.value == pytest.approx(0.2 / (2 * math.pi))
 
 
 def test_analysis_reports_the_consistency_checks():

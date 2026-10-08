@@ -158,7 +158,9 @@ class VaspCalculationConfig:
     ``incar`` is a flat INCAR mapping (``{"ENCUT": 520, ...}``).
     ``potential_mapping`` maps an element or kind name to its POTCAR
     (``{"Sn": "Sn_d"}``); elements that are not listed use the POTCAR of the
-    same name. ``kpoints_spacing`` is in 1/Å (with 2π, as in aiida-vasp).
+    same name. ``kpoints_spacing`` is in 1/Å with the 2π of VASP's ``KSPACING`` (the Γ-centred
+    mesh has ``ceil(|b_i| / kpoints_spacing)`` points along each reciprocal vector);
+    the VASP adapter converts it for aiida-vasp.
     ``max_iterations`` limits the restarts of the work chain (aiida-vasp's
     default when ``None``).
     """
