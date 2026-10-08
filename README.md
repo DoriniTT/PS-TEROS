@@ -1,6 +1,6 @@
 # PS-TEROS
 
-**PS-TEROS** (**P**redicting **S**tability of **TER**minations of **O**xide **S**urfaces) is a Python framework tailored for automating *ab initio* surface thermodynamics of **metal oxide surfaces** in [AiiDA](https://www.aiida.net/).
+**PS-TEROS** (**P**redicting **S**tability of **TER**minations **O**f **S**urfaces) is a Python framework for automating *ab initio* surface thermodynamics in [AiiDA](https://www.aiida.net/): oxides, semiconductors, and other compounds, including polar surfaces.
 
 [![DOI](https://img.shields.io/badge/DOI-10.1016%2Fj.apsusc.2025.164350-blue)](https://doi.org/10.1016/j.apsusc.2025.164350)
 
@@ -9,18 +9,18 @@
 
 ### The Problem
 
-In metal oxides, a single surface orientation rarely exposes just one atomic arrangement; it can exhibit several distinct surface terminations with varying metal-to-oxygen stoichiometries (e.g., stoichiometric, oxygen-poor, or oxygen-rich cuts). *Ab initio* atomistic thermodynamics determines the relative stability of these oxide terminations by coupling slab models to chemical reservoirs of the constituent species—most notably the oxygen reservoir (*Δμ*<sub>O</sub>).
+In a compound, a single surface orientation rarely exposes just one atomic arrangement; it can exhibit several distinct surface terminations with different stoichiometries (for an oxide: stoichiometric, oxygen-poor, or oxygen-rich cuts; for GaAs: Ga- or As-rich ones). *Ab initio* atomistic thermodynamics determines the relative stability of these terminations by coupling slab models to chemical reservoirs of the constituent species, such as the oxygen reservoir (*Δμ*<sub>O</sub>) of an oxide.
 
-Determining which termination is thermodynamically favored requires coordinating a complex set of interdependent DFT simulations: generating and relaxing multiple oxide slab terminations, calculating matching bulk oxide references, and evaluating gas-phase reference states under strictly identical numerical settings. Managing this multi-structure workflow manually is tedious, error-prone, and hard to reproduce.
+Determining which termination is thermodynamically favored requires coordinating a complex set of interdependent DFT simulations: generating and relaxing multiple slab terminations, calculating matching bulk references, and evaluating gas-phase reference states under strictly identical numerical settings. Managing this multi-structure workflow manually is tedious, error-prone, and hard to reproduce.
 
 ### The Solution
 
-PS-TEROS automates the pathway from oxide crystal structures to thermodynamic stability:
+PS-TEROS automates the pathway from crystal structures to thermodynamic stability:
 
-- **Oxide Slab Builders:** Programmatically generates bulk oxide references and multiple symmetric/asymmetric surface terminations (e.g., rutile SnO₂).
-- **Typed DFT Recipes:** Enforces strict parameter harmony across all oxide terminations, bulk references, and gas reservoirs in **Quantum ESPRESSO** and **VASP**.
+- **Slab Builders:** Programmatically generates bulk references and multiple symmetric/asymmetric surface terminations (e.g., rutile SnO₂).
+- **Typed DFT Recipes:** Enforces strict parameter harmony across all terminations, bulk references, and reservoirs in **Quantum ESPRESSO** and **VASP**.
 - **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation → static SCF) with bounded job concurrency and full provenance tracking.
-- **Pure-Python Thermodynamics:** Evaluates surface free energies (J/m², eV/Å²) and termination phase diagrams directly as a function of oxygen chemical potential.
+- **Pure-Python Thermodynamics:** Evaluates surface free energies (J/m², eV/Å²) and termination phase diagrams directly as a function of chemical potential (Δμ<sub>O</sub> for an oxide, Δμ<sub>As</sub> for GaAs, ...).
 
 ## Quickstart
 

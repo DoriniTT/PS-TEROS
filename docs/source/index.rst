@@ -2,8 +2,10 @@
 PS-TEROS documentation
 ======================
 
-PS-TEROS helps you organize surface thermodynamics calculations with AiiDA. The
-Python package is imported as ``psteros``. It keeps the starting structures,
+PS-TEROS (Predicting Stability of TERminations Of Surfaces) helps you organize
+surface thermodynamics calculations with AiiDA, for oxides, semiconductors and
+other compounds. The Python package is imported as ``psteros``. It keeps the
+starting structures,
 calculation inputs, and execution choices visible as you build a graph. It does
 not replace the scientific checks needed to choose a model or interpret a
 result.

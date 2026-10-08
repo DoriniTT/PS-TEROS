@@ -44,7 +44,7 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
 
 ## Steps
 
-- [ ] 1. **Name and wording.** "Predicting Stability of TERminations Of
+- [x] 1. **Name and wording.** "Predicting Stability of TERminations Of
   Surfaces" in README, docs and package docstrings; describe oxides,
   semiconductors and other compounds. Keep the PS-TEROS name and the citation.
 - [ ] 2. **Any binary compound.** `BinaryReferences` for A_xB_y with elemental
