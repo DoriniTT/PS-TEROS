@@ -802,10 +802,13 @@ def _top_removals(ideal: _IdealSlab, repeat: float, max_variants: int, symprec: 
     from psteros.core.terminations import _slab_symmetry
 
     target = ideal.charge
+    normal = np.asarray(ideal.lattice.matrix[2]) / np.linalg.norm(ideal.lattice.matrix[2])
+    heights = np.asarray(ideal.coords) @ normal
     top_planes = sorted({p for p in ideal.plane if p >= 0}, reverse=True)
-    lowest_top = max(top_planes) - max(1, int(round(repeat / 1.0)))
-    candidates = [p for p in top_planes if p >= lowest_top][:4]
-    members = {p: [i for i, q in enumerate(ideal.plane) if q == p] for p in candidates}
+    members = {p: [i for i, q in enumerate(ideal.plane) if q == p] for p in top_planes}
+    top = max(heights[i] for i in members[top_planes[0]])
+    # Planes within half a bulk repeat of the top may lose atoms.
+    candidates = [p for p in top_planes if max(heights[i] for i in members[p]) >= top - repeat / 2 - 1e-6]
     solutions: dict[int, list[tuple[int, ...]]] = {}
     for depth, p in enumerate(candidates):
         stripped = tuple(i for q in candidates[:depth] for i in members[q])

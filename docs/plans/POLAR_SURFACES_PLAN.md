@@ -80,5 +80,5 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
   comparison, reported in meV/A^2.
 - [x] 11. **Docs and example.** Guide section, example script and a benchmark
   recipe against the paper values.
-- [ ] 12. **Final check.** Full test suite, lint, docs build references,
+- [x] 12. **Final check.** Full test suite, lint, docs build references,
   changelog, push.
