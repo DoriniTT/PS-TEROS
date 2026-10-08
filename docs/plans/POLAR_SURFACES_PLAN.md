@@ -69,7 +69,7 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
 - [x] 7. **Polar thermodynamics.** One-face terminations with pseudo-H counts
   in `surface_phase_diagram`, absolute gamma on the same grid as symmetric
   slabs; refuses terminations of one face with different bottoms.
-- [ ] 8. **Post-relaxation bottom check.** Compare the relaxed bottom region of
+- [x] 8. **Post-relaxation bottom check.** Compare the relaxed bottom region of
   every slab with the shared reference (RMSD after removing a rigid shift);
   failing slabs are flagged and left out of comparisons.
 - [ ] 9. **VASP workflow.** Structures, potential mapping and INCAR overrides

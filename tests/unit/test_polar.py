@@ -420,3 +420,66 @@ def test_polar_oxide_face_with_oxygen_reference():
     assert diagram.references.variable == "O" and len(diagram.curves) == 2
     mu = oxide.chemical_potentials_ev(-1.0)
     assert mu["Zn"] + mu["O"] == pytest.approx(-9.0)
+
+
+# ---------------------------------------------------------------------------
+# Step 8: bottom check after relaxation
+# ---------------------------------------------------------------------------
+
+def _relax(termination, *, bottom_jitter=0.0, shift=(0.0, 0.0, 0.0), top_jitter=0.1, seed=0, reorder=True):
+    """A fake relaxation: move the top freely, the bottom by ``bottom_jitter``, shift and reorder sites."""
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    structure = termination.structure.copy()
+    bottom = set(termination.bottom_indices)
+    for index in range(len(structure)):
+        amount = bottom_jitter if index in bottom else top_jitter
+        structure.translate_sites([index], rng.normal(0, amount / np.sqrt(3), 3) + np.array(shift),
+                                  frac_coords=False, to_unit_cell=False)
+    if reorder:
+        structure = structure.get_sorted_structure(key=lambda site: site.specie.Z)
+    return structure
+
+
+def test_identical_bottoms_pass_and_a_distorted_bottom_fails():
+    slabs = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3)
+    ideal, vacancy = slabs
+    common = _relax(ideal, bottom_jitter=0.0, shift=(0.1, 0.0, 0.3))
+    relaxed = {"term_0": common, "term_1": _relax(vacancy, bottom_jitter=0.0, shift=(0.0, 0.05, -0.2), seed=1)}
+    report = polar.check_bottoms(slabs, relaxed)
+    assert report.all_passed and report.reference == "term_0"
+    assert report[1].rmsd == pytest.approx(0.0, abs=1e-9)
+    assert "All bottoms agree." in report.summary()
+
+    relaxed["term_1"] = _relax(vacancy, bottom_jitter=0.15, seed=2)
+    report = polar.check_bottoms(slabs, relaxed)
+    assert report.failed == ["term_1"]
+    assert "FAILED" in report.summary() and "Left out of comparisons: term_1." in report.summary()
+
+
+def test_changed_cell_fails_and_failed_slabs_are_left_out():
+    slabs = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3)
+    ideal, vacancy = slabs
+    strained = vacancy.structure.copy()
+    strained.lattice = strained.lattice.__class__(strained.lattice.matrix * [[1.01], [1.0], [1.0]])
+    relaxed = {"term_0": ideal.structure, "term_1": strained}
+    report = polar.check_bottoms(slabs, relaxed)
+    assert report[1].cell_unchanged is False and report.failed == ["term_1"]
+    with pytest.warns(UserWarning, match="left out"):
+        kept, _ = polar.polar_slab_terminations(slabs, {"term_0": -60.0, "term_1": -56.0}, relaxed)
+    assert [t.label for t in kept] == ["term_0"]
+
+
+def test_bottom_check_accepts_aiida_structures_and_rejects_mixed_bottoms():
+    pytest.importorskip("aiida")
+    from aiida import orm
+
+    slabs = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3)
+    relaxed = {t.label: orm.StructureData(pymatgen=_relax(t, seed=i)) for i, t in enumerate(slabs)}
+    assert polar.check_bottoms(slabs, relaxed).all_passed
+    other = polar.find_polar_terminations(gaas(), (-1, -1, -1), bilayers=3)
+    with pytest.raises(ValueError, match="one bottom"):
+        polar.check_bottoms([slabs[0], other[0]], {"term_0": slabs[0].structure})
+    with pytest.raises(ValueError, match="no relaxed structure"):
+        polar.check_bottoms(slabs, {"term_0": slabs[0].structure})

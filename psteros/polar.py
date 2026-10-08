@@ -1122,3 +1122,199 @@ def doubly_passivated_slab(bulk: Any, miller_index, *, bilayers: int | None = No
         properties["pseudo_hydrogen"].append(symbol)
         properties["bottom"].append(False)
     return Structure(structure.lattice, species, coords, coords_are_cartesian=True, site_properties=properties)
+
+
+# =============================================================================
+# BOTTOM CHECK AFTER RELAXATION
+# =============================================================================
+
+#: Default tolerances of the post-relaxation bottom check (A).
+BOTTOM_RMSD_TOLERANCE = 0.02
+BOTTOM_MAX_TOLERANCE = 0.05
+
+
+@dataclass(frozen=True)
+class BottomCheck:
+    """How the relaxed bottom of one slab compares with the reference slab.
+
+    ``rmsd`` and ``max_deviation`` compare the relaxed bottom (pseudo-H
+    included, rigid shift removed) with the relaxed bottom of the reference
+    slab; ``relaxation`` is the RMS displacement of the bottom from its
+    built positions, for information.
+    """
+
+    label: str
+    rmsd: float
+    max_deviation: float
+    relaxation: float
+    cell_unchanged: bool
+    passed: bool
+
+
+class BottomCheckReport(list):
+    """Results of :func:`check_bottoms`, one :class:`BottomCheck` per slab."""
+
+    def __init__(self, checks=(), *, reference: str = "", rmsd_tolerance: float = 0.0, max_tolerance: float = 0.0):
+        super().__init__(checks)
+        self.reference = reference
+        self.rmsd_tolerance = rmsd_tolerance
+        self.max_tolerance = max_tolerance
+
+    @property
+    def passed(self) -> list[str]:
+        return [check.label for check in self if check.passed]
+
+    @property
+    def failed(self) -> list[str]:
+        return [check.label for check in self if not check.passed]
+
+    @property
+    def all_passed(self) -> bool:
+        return not self.failed
+
+    def summary(self) -> str:
+        columns = ("label", "RMSD (Å)", "max (Å)", "relaxed by (Å)", "cell", "result")
+        rows = [
+            [c.label, f"{c.rmsd:.3f}", f"{c.max_deviation:.3f}", f"{c.relaxation:.3f}",
+             "same" if c.cell_unchanged else "changed", "ok" if c.passed else "FAILED"]
+            for c in self
+        ]
+        widths = [max(len(cell) for cell in column) for column in zip(columns, *rows)]
+
+        def line(cells):
+            return "  ".join(cell.ljust(width) for cell, width in zip(cells, widths)).rstrip()
+
+        text = [
+            f"Bottom after relaxation, compared with {self.reference} "
+            f"(tolerance: RMSD {self.rmsd_tolerance} Å, max {self.max_tolerance} Å)",
+            "", line(columns), line(["-" * w for w in widths]),
+        ]
+        text += [line(row) for row in rows]
+        text.append("")
+        text.append("All bottoms agree." if self.all_passed else
+                    f"Left out of comparisons: {', '.join(self.failed)}.")
+        return "\n".join(text)
+
+    __str__ = summary
+    __repr__ = summary
+
+
+def _as_pymatgen(structure: Any) -> Any:
+    if hasattr(structure, "get_pymatgen_structure"):
+        return structure.get_pymatgen_structure()
+    return structure
+
+
+def _bottom_displacements(termination: PolarTermination, relaxed: Any):
+    """Displacement of each bottom site from its built position (nearest same-element site)."""
+
+    import numpy as np
+
+    built = termination.structure
+    lattice = relaxed.lattice
+    displacements = []
+    taken: set[int] = set()
+    symbols = [site.specie.symbol for site in relaxed]
+    frac_relaxed = relaxed.frac_coords
+    for index in termination.bottom_indices:
+        symbol = built[index].specie.symbol
+        frac = lattice.get_fractional_coords(built[index].coords)
+        delta = frac_relaxed - frac
+        delta[:, :2] -= np.round(delta[:, :2])
+        distances = np.linalg.norm(lattice.get_cartesian_coords(delta), axis=1)
+        order = [j for j in np.argsort(distances) if symbols[j] == symbol and j not in taken]
+        if not order:
+            raise ValueError(f"relaxed structure of {termination.label} lacks a {symbol} site for the bottom")
+        taken.add(int(order[0]))
+        displacements.append(lattice.get_cartesian_coords(delta[order[0]]))
+    return np.array(displacements)
+
+
+def check_bottoms(
+    terminations,
+    relaxed_structures: Mapping[str, Any],
+    *,
+    reference: str | None = None,
+    rmsd_tolerance: float = BOTTOM_RMSD_TOLERANCE,
+    max_tolerance: float = BOTTOM_MAX_TOLERANCE,
+) -> BottomCheckReport:
+    """Check that the relaxed bottom is the same in every slab of one face.
+
+    Args:
+        terminations: The slabs as built (a :class:`PolarTerminationSet`),
+            all on one bottom.
+        relaxed_structures: Relaxed structure of each slab by label
+            (pymatgen ``Structure`` or AiiDA ``StructureData``). Atoms are
+            matched by element and position, so the order may differ.
+        reference: Label of the slab whose relaxed bottom is the reference;
+            default the first one.
+        rmsd_tolerance, max_tolerance: Largest RMS and largest single
+            deviation (A) from the reference bottom, after removing a rigid
+            shift of each slab.
+
+    Returns:
+        A :class:`BottomCheckReport`; ``failed`` lists the slabs to leave out.
+    """
+
+    import numpy as np
+
+    terminations = list(terminations)
+    fingerprints = {termination.bottom_fingerprint for termination in terminations}
+    if len(fingerprints) != 1:
+        raise ValueError("the slabs were not built on one bottom; check each face separately")
+    missing = [t.label for t in terminations if t.label not in relaxed_structures]
+    if missing:
+        raise ValueError(f"no relaxed structure for {missing}")
+    reference = reference or terminations[0].label
+    relative = {}
+    relaxation = {}
+    cell_unchanged = {}
+    for termination in terminations:
+        relaxed = _as_pymatgen(relaxed_structures[termination.label])
+        cell_unchanged[termination.label] = bool(np.allclose(
+            relaxed.lattice.matrix[:2], termination.structure.lattice.matrix[:2], atol=1e-3))
+        displacements = _bottom_displacements(termination, relaxed)
+        shift = displacements.mean(axis=0)
+        relative[termination.label] = displacements - shift
+        relaxation[termination.label] = float(np.sqrt(np.mean(np.sum(displacements ** 2, axis=1))))
+    if reference not in relative:
+        raise ValueError(f"unknown reference slab {reference!r}")
+    checks = []
+    for termination in terminations:
+        difference = relative[termination.label] - relative[reference]
+        norms = np.linalg.norm(difference, axis=1)
+        rmsd = float(np.sqrt(np.mean(norms ** 2)))
+        largest = float(norms.max())
+        ok = cell_unchanged[termination.label] and rmsd <= rmsd_tolerance and largest <= max_tolerance
+        checks.append(BottomCheck(termination.label, rmsd, largest, relaxation[termination.label],
+                                  cell_unchanged[termination.label], ok))
+    return BottomCheckReport(checks, reference=reference, rmsd_tolerance=rmsd_tolerance, max_tolerance=max_tolerance)
+
+
+def polar_slab_terminations(
+    terminations,
+    energies_ev: Mapping[str, float],
+    relaxed_structures: Mapping[str, Any],
+    **check_options,
+):
+    """``SlabTermination`` objects for the slabs whose relaxed bottom passes :func:`check_bottoms`.
+
+    Returns ``(slab_terminations, report)``; slabs that fail the check are
+    left out, and the report says why.
+    """
+
+    import warnings
+
+    from psteros.phase_diagram import SlabTermination
+
+    report = check_bottoms(terminations, relaxed_structures, **check_options)
+    kept = [
+        SlabTermination.from_polar(termination, energies_ev[termination.label])
+        for termination in terminations if termination.label in report.passed
+    ]
+    if report.failed:
+        warnings.warn(
+            f"bottom changed after relaxation in {', '.join(report.failed)}; left out of the phase diagram",
+            stacklevel=2,
+        )
+    return kept, report
