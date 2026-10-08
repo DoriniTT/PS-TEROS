@@ -199,3 +199,11 @@ examples/charge_neutral_terminations/output/
 # Papers kept locally for reference (PDFs are never committed)
 references/
 examples/polar_surfaces/output/
+
+# Personal working files: editor history and settings, dry-run job folders,
+# local backups and helper scripts
+.history/
+.vscode/
+submit_test/
+examples/**/backup/
+.git-commit.sh
