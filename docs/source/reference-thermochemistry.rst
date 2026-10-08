@@ -78,7 +78,7 @@ block before it (or of the block named in ``structure_from``).
            incar={"encut": 520, "ediff": 1e-7, "ismear": 0, "sigma": 0.05,
                   "ibrion": 2, "nsw": 100, "ediffg": -0.005},
            potential_mapping={"Sn": "Sn_d", "O": "O"},
-           kpoints_spacing=0.25,
+           kpoints_spacing=0.03,  # aiida-vasp units of 2*pi/A: about 0.19 1/A
        ),
        execution=psteros.ExecutionPolicy(computer="cluster", queue="standard",
                                          resources={"num_machines": 1, "num_mpiprocs_per_machine": 32}),

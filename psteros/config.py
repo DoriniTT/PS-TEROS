@@ -57,6 +57,9 @@ class ExecutionPolicy:
     ``prepend_text`` holds shell lines placed in the job script before the
     executable, such as module loads or ``export QE_MPI_RANKS=88`` for a code
     whose wrapper launches MPI itself.
+
+    ``extra_options`` adds or replaces AiiDA scheduler options, for example
+    ``{"import_sys_environment": False}``; it is applied last.
     """
 
     computer: str = "bohr"
@@ -71,6 +74,7 @@ class ExecutionPolicy:
     max_wallclock_seconds: int = 86_400
     with_mpi: bool = True
     prepend_text: str = ""
+    extra_options: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.max_concurrent_jobs != 1:
@@ -85,6 +89,8 @@ class ExecutionPolicy:
             raise ValueError("queue must not be empty")
         for key, value in self.resources.items():
             _require_positive(f"resources[{key!r}]", value)
+        if any(not isinstance(key, str) or not key for key in self.extra_options):
+            raise ValueError("extra_options keys must be AiiDA option names")
 
     def scheduler_options(self) -> dict[str, Any]:
         """Return AiiDA metadata options without mutating the source recipe."""
@@ -102,6 +108,7 @@ class ExecutionPolicy:
         }
         if self.prepend_text:
             options["prepend_text"] = self.prepend_text
+        options.update(dict(self.extra_options))
         return options
 
 

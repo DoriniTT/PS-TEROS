@@ -36,6 +36,12 @@ function, class, default or graph changes.
   - OUTCAR, vasprun.xml, CONTCAR and OSZICAR are kept in the `<label>_retrieved`
     output; before, aiida-vasp retrieved them only temporarily for parsing.
   - INCAR tag names are lower-cased (VASP tags are case-insensitive).
+- `ExecutionPolicy(extra_options={...})` (optional, default empty) adds or
+  replaces AiiDA scheduler options, e.g. `{"import_sys_environment": False}`
+  for Lovelace.
+- Docs: `VaspCalculationConfig.kpoints_spacing` is in aiida-vasp's units of
+  2*pi/A (`0.03` is about 0.19 1/A; the default `0.20` gives Gamma only for
+  most cells). The default is unchanged.
 - `AGENTS.md` is versioned: the rules for adding features without breaking
   the public API.
 

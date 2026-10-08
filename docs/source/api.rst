@@ -117,7 +117,9 @@ Calculation configuration
    Describe the VASP configuration retained for established VASP studies.
    ``code_label`` identifies the AiiDA code, ``incar`` stores INCAR settings,
    and the potential fields select the family and optional per-element mapping.
-   ``kpoints_spacing`` is a positive reciprocal-space distance in Å⁻¹.
+   ``kpoints_spacing`` is a positive reciprocal-space distance in aiida-vasp's
+   units of 2π Å⁻¹: ``0.03`` is a spacing of about 0.19 Å⁻¹, and the default
+   ``0.20`` (1.26 Å⁻¹) gives a Gamma-only mesh for most cells.
    ``incar`` may be flat (``{"encut": 520, ...}``) or already in aiida-vasp's
    namespaces (``{"incar": {...}, "dynamics": {...}}``); the VASP builders pass
    the tags to aiida-vasp under ``"incar"`` either way.
@@ -126,7 +128,7 @@ Calculation configuration
 
 .. index:: ExecutionPolicy
 
-``ExecutionPolicy(computer=..., queue=..., resources=..., max_concurrent_jobs=1, max_wallclock_seconds=86400, with_mpi=True, prepend_text="")``
+``ExecutionPolicy(computer=..., queue=..., resources=..., max_concurrent_jobs=1, max_wallclock_seconds=86400, with_mpi=True, prepend_text="", extra_options={})``
    Supply scheduler queue, resource, wall-time, and MPI choices. The registered
    code in ``QeCalculationConfig`` or ``VaspCalculationConfig`` selects the
    actual AiiDA computer. The policy's ``computer`` field is descriptive in the
@@ -135,7 +137,10 @@ Calculation configuration
    mapping accepted by AiiDA, and the wall time is in seconds. ``prepend_text``
    adds shell lines to the job script before the executable, for example
    module loads or ``export QE_MPI_RANKS=88`` for a code whose wrapper launches
-   MPI itself (then also pass ``with_mpi=False``).
+   MPI itself (then also pass ``with_mpi=False``). ``extra_options`` adds or
+   replaces AiiDA scheduler options, for example
+   ``{"import_sys_environment": False}`` on clusters whose login environment
+   breaks the scheduler parser.
 
    The graph builder currently requires ``max_concurrent_jobs=1``.
    ``scheduler_options()`` passes ``queue`` as AiiDA's ``queue_name`` option,
