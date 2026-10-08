@@ -927,7 +927,7 @@ if __name__ == '__main__':
 def build_core_workgraph(
     structures_dir: str,
     bulk_name: str,
-    code_label: str = 'VASP-VTST-6.4.3@bohr',
+    code_label: str = 'vasp@my-cluster',
     potential_family: str = 'PBE',
     bulk_potential_mapping: dict = None,
     kpoints_spacing: float = 0.4,
@@ -1517,7 +1517,7 @@ wg = build_core_workgraph(
     nonmetal_name='P.cif',
 
     # === COMPUTATION SETTINGS ===
-    code_label='VASP-VTST-6.4.3@bohr',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     clean_workdir=False,
 
@@ -1638,7 +1638,7 @@ wg = build_core_workgraph(
     input_slabs=input_slabs,
 
     # === COMPUTATION SETTINGS ===
-    code_label='VASP-VTST-6.4.3@bohr',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     clean_workdir=False,
 
@@ -1726,7 +1726,7 @@ wg = build_core_workgraph(
     nonmetal_name='P.cif',
 
     # === COMPUTATION SETTINGS ===
-    code_label='VASP-VTST-6.4.3@bohr',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     clean_workdir=False,
 

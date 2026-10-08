@@ -19,9 +19,9 @@ def build_surface_workgraph(
     """Build or submit a serial AiiDA WorkGraph for labelled structures.
 
     The same typed surface recipe supports VASP (the central backend) and
-    Quantum ESPRESSO.  Each label becomes one backend task.  The graph's hard
-    concurrency limit is taken from :class:`~psteros.config.ExecutionPolicy`,
-    currently fixed at one.
+    Quantum ESPRESSO.  Each label becomes one backend task.  The number of
+    calculations running at once is ``ExecutionPolicy.max_concurrent_jobs``
+    (one by default).
 
     Parameters
     ----------
@@ -43,7 +43,8 @@ def build_surface_workgraph(
     from aiida_workgraph import WorkGraph
 
     workgraph = WorkGraph(name=config.name)
-    workgraph.max_number_jobs = config.execution.max_concurrent_jobs
+    if config.execution.max_concurrent_jobs is not None:
+        workgraph.max_number_jobs = config.execution.max_concurrent_jobs
     for label, structure in structures.items():
         override = config.role_overrides.get(label)
         if config.backend == "qe":
@@ -98,7 +99,8 @@ def build_relax_static_workgraph(
     Each static calculation starts from the structure relaxed by the
     preceding relaxation; the static energy is the one to analyse (a
     relaxation with a changing cell has a basis-set error). Both recipes
-    share one backend and one execution policy, so no two jobs run at once.
+    share one backend and one execution policy, whose
+    ``max_concurrent_jobs`` limits the calculations running at once.
 
     Graph outputs per label: ``<label>_relaxed_structure`` and, for VASP,
     ``<label>_relax_misc`` and ``<label>_static_misc`` (energies), for QE
@@ -133,7 +135,8 @@ def build_relax_static_workgraph(
     from aiida_workgraph import WorkGraph
 
     workgraph = WorkGraph(name=f"{relaxation.name}_relax_static")
-    workgraph.max_number_jobs = relaxation.execution.max_concurrent_jobs
+    if relaxation.execution.max_concurrent_jobs is not None:
+        workgraph.max_number_jobs = relaxation.execution.max_concurrent_jobs
     for label, source_structure in structures.items():
         if relaxation.backend == "vasp":
             from psteros.backends.vasp import as_vasp_structure

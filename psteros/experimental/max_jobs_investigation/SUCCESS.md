@@ -69,14 +69,14 @@ So when your function executes, the WorkGraph IS the current graph!
 
 ### Source Code References
 
-- **Graph task execution**: `/home/thiagotd/.local/lib/python3.13/site-packages/aiida_workgraph/tasks/graph_task.py`
+- **Graph task execution**: `site-packages/aiida_workgraph/tasks/graph_task.py`
   - Line 55-64: `wg = materialize_graph(...)`
 
 - **Graph materialization**: `node_graph.utils.graph.materialize_graph()`
   - Creates WorkGraph with context manager
   - Calls user function inside context
 
-- **Manager**: `/home/thiagotd/.local/lib/python3.13/site-packages/aiida_workgraph/manager.py`
+- **Manager**: `site-packages/aiida_workgraph/manager.py`
   - Line 64-69: `get_current_graph()` function
   - Singleton pattern to track active graph
 

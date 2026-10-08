@@ -91,13 +91,13 @@ print(study)                                      # every calculation, and the t
 
 def vasp(ionic):
     return psteros.VaspCalculationConfig(
-        code_label="vasp@cluster", potential_family="PBE",
+        code_label="vasp@my-cluster", potential_family="PBE",
         incar={"ENCUT": 520, "PREC": "Accurate", "EDIFF": 1e-6, "ISMEAR": 0, "SIGMA": 0.05, **ionic},
         potential_mapping=study.potential_mapping({"Ag": "Ag"}),
         kpoints_spacing=0.25,
     )
 
-execution = psteros.ExecutionPolicy(computer="cluster", queue="normal", max_concurrent_jobs=1)
+execution = psteros.ExecutionPolicy(computer="my-cluster", queue="my-queue", max_concurrent_jobs=1)
 relax = psteros.SurfaceWorkflowConfig(
     backend="vasp", calculation=vasp({"IBRION": 2, "NSW": 200, "EDIFFG": -0.01}),
     execution=execution, name="ag3po4_surfaces", role_overrides=study.vasp_overrides("relax"),

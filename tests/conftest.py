@@ -95,12 +95,6 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers", "tier3: end-to-end tests with real calculations"
     )
-    config.addinivalue_line(
-        "markers", "localwork: tier3 tests using VASP-6.5.1@localwork"
-    )
-    config.addinivalue_line(
-        "markers", "obelix: tier3 tests using VASP-6.5.1-idefix-4@obelix"
-    )
 
 
 # =============================================================================

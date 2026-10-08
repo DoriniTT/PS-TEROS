@@ -98,7 +98,7 @@ def add_slab_electronic_properties_stage(
     Example:
         >>> add_slab_electronic_properties_stage(
         ...     wg=workgraph,
-        ...     code_label='VASP-6.5.1@cluster',
+        ...     code_label='vasp@my-cluster',
         ...     potential_family='PBE',
         ...     bulk_options={'resources': {'num_machines': 1}},
         ...     slab_potential_mapping={'Ag': 'Ag', 'O': 'O'},
@@ -226,7 +226,7 @@ def add_bulk_electronic_properties_stage(
     Example:
         >>> add_bulk_electronic_properties_stage(
         ...     wg=workgraph,
-        ...     code_label='VASP-6.5.1@cluster',
+        ...     code_label='vasp@my-cluster',
         ...     potential_family='PBE',
         ...     bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
         ...     bulk_options={'resources': {'num_machines': 1}},

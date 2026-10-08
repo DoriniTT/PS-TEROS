@@ -17,7 +17,7 @@ Usage:
     python test_fukui_calculation.py --level 2
 
     # All levels (needs AiiDA + VASP code):
-    python test_fukui_calculation.py --level 3 --code-label VASP-6.5.1@localwork
+    python test_fukui_calculation.py --level 3 --code-label vasp@my-cluster
 """
 
 import sys
@@ -250,7 +250,7 @@ def main():
     )
     parser.add_argument(
         '--code-label', type=str, default=None,
-        help='AiiDA code label for Level 3 (e.g., VASP-6.5.1@localwork)',
+        help='AiiDA code label for Level 3 (e.g., vasp@my-cluster)',
     )
     args = parser.parse_args()
 

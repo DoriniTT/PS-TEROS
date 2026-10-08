@@ -24,7 +24,7 @@ interpreting the numbers.
 ## 1. Reference calculations
 
 ```bash
-python campaign.py refs --profile MY_PROFILE --code vasp-6.4@cluster \
+python campaign.py refs --profile MY_PROFILE --code vasp@my-cluster \
     --potential-family PBE --computer cluster --queue debug --submit
 ```
 
@@ -36,7 +36,7 @@ the graph without running anything.
 ## 2. Slab terminations
 
 ```bash
-python campaign.py slabs --profile MY_PROFILE --code vasp-6.4@cluster \
+python campaign.py slabs --profile MY_PROFILE --code vasp@my-cluster \
     --potential-family PBE --refs-pk <REFS_PK> --submit
 ```
 

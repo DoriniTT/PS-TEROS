@@ -60,7 +60,7 @@ from psteros.core.convergence import build_convergence_workgraph
 
 wg = build_convergence_workgraph(
     structure=my_structure,           # StructureData
-    code_label='VASP-6.4.3@bohr',    # VASP code
+    code_label='vasp@my-cluster',    # VASP code
     builder_inputs={...},             # VASP parameters
     conv_settings={...},              # Convergence scan settings
     convergence_threshold=0.001,      # 1 meV/atom
@@ -196,7 +196,7 @@ from psteros.core.convergence import build_thickness_convergence_workgraph
 
 wg = build_thickness_convergence_workgraph(
     bulk_structure_path='/path/to/bulk.cif',
-    code_label='VASP-6.4.3@bohr',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     potential_mapping={'Au': 'Au'},
     miller_indices=[1, 1, 1],
@@ -296,7 +296,7 @@ builder_inputs = {
             'num_cores_per_machine': 40,  # PBS
             # or 'num_mpiprocs_per_machine': 4  # for hybrid MPI+OpenMP
         },
-        'queue_name': 'par40',
+        'queue_name': 'my-queue',
         # 'custom_scheduler_commands': '...'  # for special clusters
     },
     'kpoints_spacing': 0.05,      # Starting value
@@ -344,7 +344,7 @@ conv_settings = {
 
 ```python
 #!/usr/bin/env python
-"""Si convergence test on bohr cluster (par40 queue)."""
+"""Si convergence test on your cluster."""
 
 from aiida import orm, load_profile
 from ase.build import bulk
@@ -360,7 +360,7 @@ load_profile()
 ase_si = bulk('Si', 'diamond', a=5.431)
 structure = orm.StructureData(ase=ase_si)
 
-# VASP parameters for bohr cluster
+# VASP parameters and scheduler options for your computer
 builder_inputs = {
     'parameters': {
         'incar': {
@@ -378,7 +378,7 @@ builder_inputs = {
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'queue_name': 'par40',
+        'queue_name': 'my-queue',
     },
     'kpoints_spacing': 0.05,
     'potential_family': 'PBE',
@@ -401,7 +401,7 @@ conv_settings = {
 # Build and submit
 wg = build_convergence_workgraph(
     structure=structure,
-    code_label='VASP-6.4.3@bohr',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
     conv_settings=conv_settings,
     convergence_threshold=0.001,  # 1 meV/atom
@@ -417,7 +417,7 @@ print(f"Monitor: verdi process show {wg.pk}")
 # plot_convergence(wg.pk, save_path='Si_convergence.png')
 ```
 
-### Metal Convergence (obelix cluster)
+### Metal Convergence
 
 ```python
 from aiida import orm, load_profile
@@ -430,7 +430,7 @@ load_profile()
 ase_au = bulk('Au', 'fcc', a=4.08)
 structure = orm.StructureData(ase=ase_au)
 
-# Obelix cluster configuration (hybrid MPI+OpenMP)
+# Scheduler options for your computer (here 4 MPI processes)
 builder_inputs = {
     'parameters': {
         'incar': {
@@ -448,10 +448,7 @@ builder_inputs = {
             'num_machines': 1,
             'num_mpiprocs_per_machine': 4,  # Hybrid mode
         },
-        'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N Au_conv''',
+        # 'queue_name': 'my-queue',  # your queue or partition
     },
     'kpoints_spacing': 0.05,
     'potential_family': 'PBE',
@@ -461,7 +458,7 @@ builder_inputs = {
 
 wg = build_convergence_workgraph(
     structure=structure,
-    code_label='VASP-6.5.1-idefix@obelix',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
     convergence_threshold=0.001,
     name='Au_convergence',

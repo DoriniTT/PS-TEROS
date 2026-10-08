@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 Test Script: Slab Generation from RELAXED Bulk
 
@@ -41,7 +41,7 @@ def main():
     print(f"\n2. Structures directory: {structures_dir}")
 
     # Code configuration
-    code_label = 'VASP-6.5.0@bohr-new'
+    code_label = 'vasp@my-cluster'
     code = orm.load_code(code_label)
     potential_family = 'PBE'
 
@@ -55,7 +55,7 @@ def main():
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'queue_name': 'par40',
+        'queue_name': 'my-queue',
     }
 
     # VASP parameters - VERY LIGHT for quick testing

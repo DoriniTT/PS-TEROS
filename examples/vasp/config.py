@@ -23,8 +23,8 @@ AIIDA_PROFILE = 'presto'
 # ==============================================================================
 
 # VASP code label (check with: verdi code list)
-# Common formats: 'VASP-6.4.1@cluster', 'vasp_std@supercomputer'
-VASP_CODE = 'VASP-6.4.1@cluster'
+# Common formats: 'vasp@my-cluster', 'vasp_std@supercomputer'
+VASP_CODE = 'vasp@my-cluster'
 
 # PAW potential family (check with: verdi data vasp-potcar listfamilies)
 POTENTIAL_FAMILY = 'PBE'
@@ -50,7 +50,7 @@ LARGE_OPTIONS = {
         'num_machines': 1,
         'num_cores_per_machine': 40,
     },
-    'queue_name': 'par40',
+    'queue_name': 'my-queue',
 }
 
 # ==============================================================================

@@ -46,5 +46,5 @@ print(results['projectors']) # Projected DOS data
 ## Requirements
 
 - AiiDA profile: `psteros`
-- VASP code: `VASP-6.4.1@cluster02` (or modify code_label in scripts)
+- VASP code: `vasp@my-cluster` (or modify code_label in scripts)
 - AiiDA daemon running: `verdi daemon start`

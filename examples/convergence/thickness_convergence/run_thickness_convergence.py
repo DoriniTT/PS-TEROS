@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Slab Thickness Convergence Test for FCC Gold (Au) on obelix cluster.
+Slab Thickness Convergence Test for FCC Gold (Au).
 
 This script demonstrates the thickness_convergence module for determining
 the minimum slab thickness needed for converged surface energy calculations.
@@ -39,11 +39,9 @@ Setup:
     5. After completion, get results:
        python run_thickness_convergence.py <PK>
 
-Cluster Configuration (obelix):
-    - Code: VASP-6.5.1-idefix@obelix
-    - Parallelization: Hybrid MPI+OpenMP (4 MPI processes)
-    - Nodes: Skylake (88 cores per node)
-    - Scheduler: PBS
+Configuration (edit for your computer):
+    - Code: vasp@my-cluster
+    - Parallelization: 4 MPI processes
 
 Usage:
     # Submit new workflow
@@ -63,12 +61,11 @@ from psteros.core.convergence import (
 
 
 def submit_thickness_convergence():
-    """Submit thickness convergence test for Au(111) on obelix cluster."""
+    """Submit thickness convergence test for Au(111)."""
 
     print("\n" + "="*70)
     print("SLAB THICKNESS CONVERGENCE TEST")
     print("Material: FCC Au (111)")
-    print("Cluster: obelix (Skylake, PBS)")
     print("="*70)
 
     # Load AiiDA profile
@@ -94,8 +91,8 @@ def submit_thickness_convergence():
         print(f"   ```")
         sys.exit(1)
 
-    # Code configuration for obelix cluster
-    code_label = 'VASP-6.5.1-idefix@obelix'
+    # AiiDA label of your VASP code
+    code_label = 'vasp@my-cluster'
     potential_family = 'PBE'
 
     print(f"\n3. Code configuration:")
@@ -124,16 +121,13 @@ def submit_thickness_convergence():
     slab_parameters = bulk_parameters.copy()
     slab_parameters['isif'] = 2  # Fix cell, relax ions only
 
-    # Scheduler options for obelix (PBS with Skylake nodes)
+    # Scheduler options of your computer
     common_options = {
         'resources': {
             'num_machines': 1,
             'num_mpiprocs_per_machine': 4,  # Hybrid MPI+OpenMP
         },
-        'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N Au_conv''',
+        # 'queue_name': 'my-queue',  # your queue or partition
     }
 
     # Convergence test parameters

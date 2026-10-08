@@ -90,8 +90,8 @@ def main():
     # Define builder inputs
     print("\n4. Defining VASP calculation inputs...")
 
-    # Code label for obelix cluster
-    code_label = 'VASP-6.5.1-idefix-4@obelix'
+    # AiiDA label of your VASP code
+    code_label = 'vasp@my-cluster'
 
     builder_inputs = {
         'parameters': {
@@ -125,7 +125,7 @@ def main():
                 # Spin settings - spin-polarized
                 'ispin': 2,
 
-                # Parallelization for obelix (4 cores per node in idefix-4)
+                # Parallelization: 4 MPI processes
                 'ncore': 2,
                 'kpar': 1,
             }
@@ -135,10 +135,7 @@ def main():
                 'num_machines': 1,
                 'num_mpiprocs_per_machine': 4,
             },
-            'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N Fukui_SnO2_110_plus''',
+            # 'queue_name': 'my-queue',  # your queue or partition
         },
         'kpoints_spacing': 0.03,              # Good k-points density for charge density
         'potential_family': potential_family,
@@ -170,7 +167,7 @@ def main():
         fukui_type='plus',
         compute_fukui=True,       # Run FukuiGrid to compute Fukui function
         compute_planar_average=True,
-        max_concurrent_jobs=4,    # obelix can handle multiple jobs
+        max_concurrent_jobs=4,    # calculations running at once
         name='Fukui_SnO2_110_plus',
     )
     print(f"   WorkGraph created: {wg.name}")

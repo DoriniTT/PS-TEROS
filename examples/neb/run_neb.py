@@ -33,10 +33,8 @@ from psteros.core.neb import (
 # =============================================================================
 
 # Code label (must be VTST-compiled VASP)
-# Use appropriate label for your cluster:
-# - 'VASP-6.4.3@bohr' for bohr cluster
-# - 'VASP-6.5.1-idefix@obelix' for obelix cluster
-CODE_LABEL = 'VASP-6.4.3@bohr'
+# Use the AiiDA label of your VTST-compiled VASP code
+CODE_LABEL = 'vasp@my-cluster'
 
 # Number of intermediate NEB images (typically 3-7)
 # More images = more accurate path but higher cost
@@ -69,9 +67,9 @@ BUILDER_INPUTS = {
     'options': {
         'resources': {
             'num_machines': 3,             # 3 nodes for parallel NEB
-            'num_cores_per_machine': 40,   # 40 cores per node on bohr
+            'num_cores_per_machine': 40,   # cores per node of your computer
         },
-        'queue_name': 'par120',            # Use par120 for multi-node jobs
+        'queue_name': 'my-queue',      # your queue for multi-node jobs
     },
 }
 

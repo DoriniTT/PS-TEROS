@@ -1,4 +1,4 @@
-#!/home/trevizam/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 Metal Surface Energy Calculation and Wulff Shape for FCC Gold (Au)
 
@@ -47,7 +47,7 @@ def main():
     print(f"   Bulk:   {bulk_structure_path}")
     
     # Code configuration
-    code_label = 'VASP-6.5.1-idefix-4-12@obelix'
+    code_label = 'vasp@my-cluster'
     potential_family = 'PBE'
     
     # VASP parameters for metals
@@ -72,16 +72,13 @@ def main():
     slab_parameters = bulk_parameters.copy()
     slab_parameters['isif'] = 2  # Fix cell, relax ions
     
-    # Scheduler options for IdeFix
+    # Scheduler options of your computer
     common_options = {
         'resources': {
             'num_machines': 1,
             'num_mpiprocs_per_machine': 4,  # PROCESS_MPI=4 (hybrid MPI+OpenMP)
         },
-        'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=idefix-4-12:ppn=88:skylake
-#PBS -j oe
-#PBS -N Au_surf''',
+        # 'queue_name': 'my-queue',  # your queue or partition
     }
     
     # Surface orientations to study - all in ONE WorkGraph!

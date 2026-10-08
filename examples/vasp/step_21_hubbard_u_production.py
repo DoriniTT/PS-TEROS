@@ -1,4 +1,4 @@
-#!/home/trevizam/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 Production: Calculate Hubbard U for NiO using linear response method.
 
@@ -30,23 +30,20 @@ load_profile('presto')
 from psteros.core.u_calculation import build_u_calculation_workgraph
 
 # ==============================================================================
-# CONFIGURATION - Obelix cluster
+# CONFIGURATION - edit for your computer
 # ==============================================================================
 
-VASP_CODE = 'VASP-6.5.1-idefix-4@obelix'
+VASP_CODE = 'vasp@my-cluster'
 POTENTIAL_FAMILY = 'PBE'
 POTENTIAL_MAPPING = {'Ni': 'Ni', 'O': 'O'}
 
-# Obelix cluster options
+# Scheduler options of your computer
 CLUSTER_OPTIONS = {
     'resources': {
         'num_machines': 1,
         'num_mpiprocs_per_machine': 4,
     },
-    'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N NiO_HubbardU''',
+    # 'queue_name': 'my-queue',  # your queue or partition
 }
 
 # Production INCAR parameters matching VASP wiki
@@ -217,7 +214,7 @@ def main():
     print(f"   Total VASP calculations: {n_vasp_calcs}")
 
     # Submit
-    print("\n5. Submitting to obelix cluster...")
+    print("\n5. Submitting...")
     wg.submit()
     print(f"   WorkGraph PK: {wg.pk}")
 
@@ -231,7 +228,7 @@ def main():
     print(f"   Detailed: verdi process report {wg.pk}")
 
     print("\n" + "=" * 70)
-    print("WorkGraph submitted! Expected runtime: ~1-2 hours on obelix")
+    print("WorkGraph submitted! Expected runtime: ~1-2 hours on one node")
     print("Expected result: U ~ 5-6 eV for Ni d-electrons")
     print("=" * 70 + "\n")
 

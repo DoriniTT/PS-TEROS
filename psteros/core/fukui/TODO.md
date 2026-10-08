@@ -69,7 +69,7 @@ from psteros.core.fukui import build_fukui_workgraph, run_fukui_interpolation
 wg = build_fukui_workgraph(
     structure=my_structure,
     nelect_neutral=312,
-    code_label='VASP-6.5.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs={...},
     fukui_type='plus',
     compute_fukui=True,  # <-- Enable FukuiGrid interpolation
@@ -143,7 +143,7 @@ from psteros.core.fukui import build_fukui_workgraph
 wg = build_fukui_workgraph(
     structure=slab_structure,
     nelect_neutral=312,
-    code_label='VASP-6.5.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs={
         'parameters': {'incar': {'encut': 520, 'ediff': 1e-6}},
         'options': {'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 4}},
@@ -226,7 +226,7 @@ from psteros.core.fukui import build_fukui_workgraph
 wg = build_fukui_workgraph(
     structure=slab_structure,
     nelect_neutral=312,
-    code_label='VASP-6.5.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs={
         'parameters': {'incar': {'encut': 520, 'ediff': 1e-6}},
         'options': {'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 4}},

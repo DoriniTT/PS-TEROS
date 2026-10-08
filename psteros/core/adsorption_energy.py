@@ -655,7 +655,7 @@ def compute_adsorption_energies_scatter(
     Example:
         >>> relax_params = {'NSW': 200, 'IBRION': 2, 'ISIF': 2, 'EDIFFG': -0.05, 'ENCUT': 520, ...}
         >>> scf_params = {'ENCUT': 520, 'EDIFF': 1e-6, ...}  # NSW=0 added automatically
-        >>> options = {'resources': {'num_machines': 1, 'num_cores_per_machine': 40}, 'queue_name': 'par40'}
+        >>> options = {'resources': {'num_machines': 1, 'num_cores_per_machine': 40}, 'queue_name': 'my-queue'}
         >>> results = compute_adsorption_energies_scatter(
         ...     structures={'oh_lamno3': structure},
         ...     adsorbate_formulas={'oh_lamno3': 'OH'},
@@ -1148,7 +1148,7 @@ def compute_adsorption_energies_from_completed(
         ...         'ooh_on_O_000_O32_top': 'OOH',
         ...         'ooh_on_Ni_000_Ni13_top': 'OOH',
         ...     },
-        ...     code=orm.load_code('VASP-6.5.1@cluster'),
+        ...     code=orm.load_code('vasp@my-cluster'),
         ...     scf_builder_inputs={
         ...         'parameters': {'incar': {'ENCUT': 500, 'EDIFF': 1e-4}},
         ...         'options': {'resources': {'num_machines': 1}},
@@ -1475,7 +1475,7 @@ def build_adsorption_energy_from_completed_workgraph(
         complete_retrieved: Direct input of retrieved files (alternative to PK)
         adsorbate_formulas: Dictionary mapping structure keys to adsorbate formulas
                            Example: {'ooh_on_O_000': 'OOH', 'ooh_on_Ni_000': 'OOH'}
-        code_label: VASP code label (e.g., 'VASP-6.5.1@cluster')
+        code_label: VASP code label (e.g., 'vasp@my-cluster')
         scf_builder_inputs: VASP builder parameters for SCF calculations
         substrate_scf_builder_inputs: Optional overrides for substrate SCF calculations.
                                       Deep-merged with scf_builder_inputs. Useful for setting
@@ -1492,7 +1492,7 @@ def build_adsorption_energy_from_completed_workgraph(
         >>> wg = build_adsorption_energy_from_completed_workgraph(
         ...     completed_workgraph_pk=32945,
         ...     adsorbate_formulas={'ooh_on_O_000': 'OOH'},
-        ...     code_label='VASP-6.5.1@cluster',
+        ...     code_label='vasp@my-cluster',
         ...     scf_builder_inputs={...},
         ... )
         >>> wg.submit()

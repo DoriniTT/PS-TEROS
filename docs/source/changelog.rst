@@ -17,6 +17,8 @@ Recent Updates
   ``build_relax_static_workgraph``
 * The VASP adapter passes the INCAR in aiida-vasp's ``incar`` namespace and
   fixes atoms with selective dynamics (``CalculationOverride(fixed_sites=...)``)
+* No machine-specific defaults: ``ExecutionPolicy`` assumes no computer, queue
+  or scheduler directive, and every recipe takes the user's own code label
 * Surface phase diagrams of any binary or ternary compound
   (``BinaryReferences``, ``TernaryReferences``); the oxide classes are kept
 * Charge-neutral symmetric terminations for semiconductors and insulators

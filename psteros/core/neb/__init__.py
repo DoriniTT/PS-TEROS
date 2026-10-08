@@ -29,12 +29,12 @@ Example (basic NEB):
     ...     initial_structure=initial,
     ...     final_structure=final,
     ...     n_images=5,
-    ...     code_label='VASP-6.4.3@bohr',
+    ...     code_label='vasp@my-cluster',
     ...     builder_inputs={
     ...         'parameters': {'incar': {'encut': 520, 'ismear': 0}},
     ...         'options': {
     ...             'resources': {'num_machines': 3, 'num_cores_per_machine': 40},
-    ...             'queue_name': 'par120',
+    ...             'queue_name': 'my-queue',
     ...         },
     ...         'kpoints_spacing': 0.03,
     ...         'potential_family': 'PBE',
@@ -50,7 +50,7 @@ Example (quick estimate without endpoint relaxation):
     ...     initial_structure=relaxed_initial,
     ...     final_structure=relaxed_final,
     ...     n_images=3,
-    ...     code_label='VASP-6.4.3@bohr',
+    ...     code_label='vasp@my-cluster',
     ...     builder_inputs={...},
     ...     relax_endpoints=False,
     ...     climb=False,  # Single NEB stage

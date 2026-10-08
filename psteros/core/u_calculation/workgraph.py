@@ -64,7 +64,7 @@ def build_u_calculation_workgraph(
 
     Args:
         structure: AiiDA StructureData for the material
-        code_label: VASP code label (e.g., 'VASP-6.5.1@cluster')
+        code_label: VASP code label (e.g., 'vasp@my-cluster')
         potential_family: POTCAR family name (e.g., 'PBE.54')
         potential_mapping: Element to potential mapping (e.g., {'Fe': 'Fe', 'O': 'O'})
         target_species: Element symbol for Hubbard U (e.g., 'Fe', 'Ni', 'Mn')
@@ -86,7 +86,7 @@ def build_u_calculation_workgraph(
         >>> structure = orm.load_node(123)  # Your NiO structure
         >>> wg = build_u_calculation_workgraph(
         ...     structure=structure,
-        ...     code_label='VASP-6.5.1@cluster',
+        ...     code_label='vasp@my-cluster',
         ...     potential_family='PBE.54',
         ...     potential_mapping={'Ni': 'Ni', 'O': 'O'},
         ...     target_species='Ni',

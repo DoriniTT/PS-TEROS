@@ -73,7 +73,7 @@ from psteros.core.surface_hydroxylation import build_surface_hydroxylation_workg
 wg = build_surface_hydroxylation_workgraph(
     structure_pk=1234,
     surface_params=params,
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,  # Complete VASP builder configuration
     max_parallel_jobs=3,
     fix_type='bottom',              # Optional: fix bottom atoms
@@ -166,7 +166,7 @@ builder_inputs = {
             'num_machines': 1,
             'num_mpiprocs_per_machine': 40,
         },
-        'queue_name': 'par40',
+        'queue_name': 'my-queue',
         'max_wallclock_seconds': 3600 * 10,
     },
     'clean_workdir': False,
@@ -176,7 +176,7 @@ builder_inputs = {
 wg = build_surface_hydroxylation_workgraph(
     structure_pk=1234,
     surface_params=surface_params,
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
     max_parallel_jobs=3,
 )
@@ -293,7 +293,7 @@ builder_inputs = {
             'num_machines': 1,
             'num_mpiprocs_per_machine': 40,
         },
-        'queue_name': 'par40',
+        'queue_name': 'my-queue',
         'max_wallclock_seconds': 3600 * 10,
     },
 }
@@ -439,7 +439,7 @@ When studying surface hydroxylation, it's often desirable to fix the substrate a
 wg = build_surface_hydroxylation_workgraph(
     structure_pk=1234,
     surface_params=surface_params,
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
     max_parallel_jobs=3,
     # Selective dynamics parameters
@@ -557,7 +557,7 @@ structure_specific_builder_inputs = {
 wg = build_surface_hydroxylation_workgraph(
     structure_pk=1234,
     surface_params=surface_params,
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,  # Default for all
     structure_specific_builder_inputs=structure_specific_builder_inputs,  # Overrides
     max_parallel_jobs=10,
@@ -846,7 +846,7 @@ def build_surface_hydroxylation_workgraph(
     structure: orm.StructureData = None,
     structure_pk: int = None,
     surface_params: dict = None,
-    code_label: str = 'VASP-VTST-6.4.3@bohr',
+    code_label: str = 'vasp@my-cluster',
     builder_inputs: dict = None,
     max_parallel_jobs: int = 2,
     fix_type: str = None,
@@ -863,7 +863,7 @@ Build a WorkGraph for surface hydroxylation/vacancy calculations.
 - `structure` (StructureData): Input relaxed slab structure (either this or `structure_pk`)
 - `structure_pk` (int): PK of relaxed slab structure (either this or `structure`)
 - `surface_params` (dict): Surface modification parameters (see Parameters Reference)
-- `code_label` (str): Label of VASP code (default: 'VASP-VTST-6.4.3@bohr')
+- `code_label` (str): Label of VASP code (default: 'vasp@my-cluster')
 - `builder_inputs` (dict): Complete VASP builder configuration (see Parameters Reference)
 - `max_parallel_jobs` (int): Number of structures to process (default: 2)
 - `fix_type` (str): Where to fix atoms - 'bottom'/'top'/'center'/None (default: None)
@@ -880,7 +880,7 @@ Build a WorkGraph for surface hydroxylation/vacancy calculations.
 wg = build_surface_hydroxylation_workgraph(
     structure_pk=1234,
     surface_params={'mode': 'hydrogen', 'coverage_bins': 5},
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
     max_parallel_jobs=3,
     fix_type='bottom',

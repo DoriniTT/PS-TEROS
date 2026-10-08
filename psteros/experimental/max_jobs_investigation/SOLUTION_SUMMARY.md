@@ -187,6 +187,6 @@ def relax_slabs_scatter(
 
 ---
 
-**Investigation**: `/home/thiagotd/git/PS-TEROS/psteros/experimental/max_jobs_investigation/`
+**Investigation**: `psteros/experimental/max_jobs_investigation/`
 **Test Results**: See `SUCCESS.md` for full details
 **Date**: 2025-11-02

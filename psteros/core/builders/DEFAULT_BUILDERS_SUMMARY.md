@@ -104,7 +104,7 @@ For Ag₃PO₄ system:
 
 ### Bulk Relaxation
 - VASP INCAR parameters (ENCUT=520, EDIFF=1e-6, ISMEAR=0, etc.)
-- Scheduler options (40 cores, par40 queue)
+- Scheduler options (from the `options` argument; one machine by default)
 - Structure file: `ag3po4.cif`
 - Potential mapping: Ag→Ag, P→P, O→O
 
@@ -144,7 +144,7 @@ For Ag₃PO₄ system:
 All functionality is tested and validated:
 
 ```bash
-cd /home/thiagotd/git/worktree/PS-TEROS/default-builders
+cd PS-TEROS
 source ~/envs/psteros/bin/activate
 python examples/default_builders/test_default_builders.py
 ```
@@ -163,7 +163,7 @@ Tests validate:
 ### Complete Workflow
 
 ```python
-#!/home/thiagotd/envs/psteros/bin/python
+#!/usr/bin/env python
 from aiida import load_profile, orm
 from ase.io import read
 from psteros.core.workgraph import build_core_workgraph_with_map
@@ -180,8 +180,8 @@ for i in range(3):
 
 # Get defaults with optional overrides
 defaults = get_ag3po4_defaults(
-    structures_dir="/home/thiagotd/git/PS-TEROS/examples/structures",
-    code_label="VASP-VTST-6.4.3@bohr",
+    structures_dir="examples/structures",
+    code_label="vasp@my-cluster",
     potential_family="PBE",
     # Optional: override specific parameters
     bulk_parameters={'ENCUT': 600},

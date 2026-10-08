@@ -39,21 +39,18 @@ from psteros.core.vasp_parallelization import (
 # =============================================================================
 
 # VASP code configuration
-# For obelix cluster (from home computer):
-CODE_LABEL = "VASP-6.5.1-idefix@obelix"
+# AiiDA label of your VASP code
+CODE_LABEL = "vasp@my-cluster"
 POTENTIAL_FAMILY = "PBE"
 NUM_PROCS = 4  # Number of MPI processes (PROCESS_MPI for hybrid MPI+OpenMP)
 
-# Scheduler options for PBS on obelix
+# Scheduler options of your computer
 OPTIONS = {
     "resources": {
         "num_machines": 1,
         "num_mpiprocs_per_machine": NUM_PROCS,
     },
-    "custom_scheduler_commands": """#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N VASPBenchmark""",
+    # "queue_name": "my-queue",  # your queue or partition
 }
 
 # Benchmark settings

@@ -195,7 +195,7 @@ This might be a feature request:
 
 ## Test Files Created
 
-All test files are in: `/home/thiagotd/git/PS-TEROS/psteros/experimental/max_jobs_investigation/`
+All test files are in: `psteros/experimental/max_jobs_investigation/`
 
 - `workgraph_functions.py` - @task.graph functions for testing
 - `mock_tasks.py` - Mock VASP calculations

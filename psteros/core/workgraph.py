@@ -767,7 +767,7 @@ def core_workgraph(
 def build_core_workgraph(
     structures_dir: str = None,
     bulk_name: str = None,
-    code_label: str = "VASP-VTST-6.4.3@bohr",
+    code_label: str = None,
     calculator: str = "vasp",  # NEW: 'vasp' or 'cp2k'
     aimd_code_label: str = None,  # NEW: Optional separate code for AIMD
     bulk_code_label: str = None,  # NEW: Optional separate code for bulk calculations
@@ -915,7 +915,7 @@ def build_core_workgraph(
                         Use list_workflow_presets() to see available presets.
         structures_dir: Directory containing structure files
         bulk_name: Filename of bulk structure (e.g., 'ag3po4.cif')
-        code_label: VASP code label in AiiDA. Default: 'VASP-VTST-6.4.3@bohr'
+        code_label: AiiDA label of your VASP code (required), e.g. 'vasp@my-cluster'.
                    Used for slab calculations and as fallback for references.
         bulk_code_label: Optional separate VASP code for bulk calculations.
                         Default: None (uses code_label)
@@ -1205,6 +1205,11 @@ def build_core_workgraph(
         run_aimd,
         run_adsorption_energy,
     )
+
+    if not code_label:
+        raise ValueError(
+            "code_label is required: the AiiDA label of your VASP code, e.g. 'vasp@my-cluster'"
+        )
 
     # Extract resolved flags
     relax_slabs = resolved_flags["relax_slabs"]

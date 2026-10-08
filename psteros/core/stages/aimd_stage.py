@@ -320,7 +320,7 @@ def add_aimd_stage(
         ...         {'TEBEG': 300, 'NSW': 1000},
         ...         {'TEBEG': 500, 'NSW': 2000},
         ...     ],
-        ...     code_label='VASP-6.5.1@cluster',
+        ...     code_label='vasp@my-cluster',
         ...     aimd_code_label=None,
         ...     aimd_parameters={'incar': {'IBRION': 0, 'MDALGO': 2}},
         ...     ...

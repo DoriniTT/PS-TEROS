@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 STEP 18: Standalone AIMD Module
 
@@ -60,8 +60,8 @@ def main():
     print(f"     - Structure 1: {len(ag_structure1.sites)} atoms")
     print(f"     - Structure 2: {len(ag_structure2.sites)} atoms")
 
-    # Code configuration (use the code with 24 processors from cluster02)
-    code_label = 'VASP6.5.0@cluster02'  # No dash between VASP and version
+    # AiiDA label of your VASP code
+    code_label = 'vasp@my-cluster'  # No dash between VASP and version
     potential_family = 'PBE'
 
     print(f"\n3. VASP configuration:")

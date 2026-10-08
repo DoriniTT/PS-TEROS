@@ -135,7 +135,7 @@ def build_custom_calculation_workgraph(
 
     Args:
         structure: StructureData or list of StructureData
-        code_label: str, VASP code label (e.g., 'VASP-6.4.1@cluster02')
+        code_label: str, VASP code label (e.g., 'vasp@my-cluster')
         builder_inputs: dict or list of dicts with VASP builder parameters:
             - parameters: Dict with nested 'incar' dict
             - options: Dict with resources, queue, etc.
@@ -460,7 +460,7 @@ def build_dos_calculation_workgraph(
 
     Args:
         structure: StructureData or list of StructureData
-        code_label: str, VASP code label (e.g., 'VASP-6.4.1@cluster')
+        code_label: str, VASP code label (e.g., 'vasp@my-cluster')
         scf_inputs: dict with SCF calculation parameters:
             - parameters: Dict with nested 'incar' dict for SCF
             - kpoints_spacing: float, k-point spacing for SCF
@@ -488,7 +488,7 @@ def build_dos_calculation_workgraph(
         ... }
         >>> wg = build_dos_calculation_workgraph(
         ...     structure=my_structure,
-        ...     code_label='VASP-6.4.1@cluster',
+        ...     code_label='vasp@my-cluster',
         ...     scf_inputs=scf_inputs,
         ...     dos_inputs=dos_inputs,
         ... )

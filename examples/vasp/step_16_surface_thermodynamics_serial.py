@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 STEP 16: Surface Thermodynamics - Serial Preset (Experimental)
 
@@ -54,7 +54,7 @@ def main():
     print(f"   Oxygen: {structures_dir}/O2.cif")
 
     # Code configuration
-    code_label = 'VASP-6.5.0@bohr-new'
+    code_label = 'vasp@my-cluster'
     code = orm.load_code(code_label)
     potential_family = 'PBE'
 
@@ -68,7 +68,7 @@ def main():
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'queue_name': 'par40',
+        'queue_name': 'my-queue',
     }
 
     # =========================================================================

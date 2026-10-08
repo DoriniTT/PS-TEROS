@@ -7,7 +7,7 @@ SnO₂(110) terminations, written both as a figure and as a CSV table.
 |---|---|
 | `campaign.py` | Builds (and optionally submits) the two AiiDA WorkGraphs. |
 | `phase_diagram.py` | Reads the finished graphs and writes `<out>.png` and `<out>.csv`. |
-| `results/` | Output of the smoke test on Bohr's `teste` queue (see below). |
+| `results/` | Output of the smoke test on a 4-core debug queue (see below). |
 
 ## Before you start
 
@@ -25,19 +25,20 @@ before interpreting the numbers.
 ## 1. Reference calculations
 
 ```bash
-python campaign.py refs --profile MY_PROFILE --code QE-7.3.1@bohr \
+python campaign.py refs --profile MY_PROFILE --code pw@my-cluster \
     --pseudo-family SSSP/1.3/PBE/efficiency --submit
 ```
 
 One graph, six jobs run one after the other: bulk rutile SnO₂ and α-Sn
 (`vc-relax` → static SCF) and a triplet O₂ molecule (`relax` → static SCF).
 Omit `--submit` to build and inspect the graph without running anything.
-Use `--computer` and `--queue` for a machine other than Bohr's `teste` queue.
+Give your queue with `--queue` and the job time limit with `--walltime`
+(20 minutes by default).
 
 ## 2. Slab terminations
 
 ```bash
-python campaign.py slabs --profile MY_PROFILE --code QE-7.3.1@bohr \
+python campaign.py slabs --profile MY_PROFILE --code pw@my-cluster \
     --pseudo-family SSSP/1.3/PBE/efficiency --refs-pk <REFS_PK> --submit
 ```
 
@@ -75,7 +76,7 @@ diagram.plot("sno2_110.png")
 diagram.to_csv("sno2_110.csv")
 ```
 
-## Smoke-test results (Bohr `teste`, QE 7.3.1, 4 MPI ranks)
+## Smoke-test results (4-core debug queue, QE 7.3.1, 4 MPI ranks)
 
 | Quantity | Value |
 |---|---|

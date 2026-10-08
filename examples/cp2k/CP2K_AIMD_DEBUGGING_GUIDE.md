@@ -29,7 +29,7 @@ This means `clean_value` is trying to iterate over something expecting a diction
 
 ### 2. Compare with Working Example
 
-Look at `/home/thiagotd/projects/fosfato-h2o/calculos/hydrosurface/_110/st-2/calculo/wg_AIMD_CP2K_3D_single_slab_updated.py`:
+Compare with a CP2K AIMD script that is known to work:
 
 **Working code (lines 504-505):**
 ```python
@@ -206,7 +206,7 @@ print(f"  options: {aimd_opts}")
 3. **Run the test and check output:**
 
 ```bash
-cd /home/thiagotd/git/PS-TEROS/.worktree/feature-cp2k-aimd
+cd PS-TEROS
 source ~/envs/aiida/bin/activate
 verdi daemon restart
 python examples/cp2k/step_07a_aimd_autogenerate_slabs.py

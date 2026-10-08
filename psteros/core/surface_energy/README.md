@@ -161,7 +161,7 @@ load_profile('myprofile')
 
 wg = build_metal_surface_energy_workgraph(
     bulk_structure_path='/path/to/au.cif',
-    code_label='VASP-6.5.1@cluster',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     potential_mapping={'Au': 'Au'},
 
@@ -201,7 +201,7 @@ load_profile('myprofile')
 
 wg = build_metal_surface_energy_workgraph(
     bulk_structure_path='/path/to/pdin.cif',
-    code_label='VASP-6.5.1@cluster',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     potential_mapping={'Pd': 'Pd', 'In': 'In'},  # Map both elements
 
@@ -540,7 +540,7 @@ wg = build_metal_surface_energy_workgraph(
     stoichiometric_strategies=['filter_first', 'thickness_scan'],
     stoichiometric_max_thickness=30.0,
 
-    code_label='VASP-6.5.1@cluster',
+    code_label='vasp@my-cluster',
     potential_mapping={'Pd': 'Pd', 'In': 'In'},
     ...
 )

@@ -10,7 +10,7 @@ literature on the same slab models.
 | `campaign.py` | Builds (and optionally submits) the three graphs below. |
 | `analysis.py` | Builds the phase diagram and writes `validation.md`, `validation.json`, `phase_diagram.png`, `phase_diagram.csv`. |
 | `compare_literature.py` | Puts the results and published LDA/B3PW calculations on one convention; writes `literature_comparison.md` and `.png`. |
-| `results/` | Output of the Obelix run. |
+| `results/` | Output of the validation run (one 44-core node per job). |
 
 ## Calculations
 
@@ -27,19 +27,18 @@ O₂). Every bulk phase is `vc-relax`ed and then recomputed in a static SCF.
    cleavage energy: 2 jobs.
 
 ```bash
-python campaign.py refs      --profile P --submit
-python campaign.py slabs     --profile P --refs-pk <REFS_PK> --submit
-python campaign.py unrelaxed --profile P --refs-pk <REFS_PK> --submit
+python campaign.py refs      --profile P --code pw@my-cluster --queue my-queue --ranks 32 --submit
+python campaign.py slabs     --profile P --code pw@my-cluster --refs-pk <REFS_PK> --submit
+python campaign.py unrelaxed --profile P --code pw@my-cluster --refs-pk <REFS_PK> --submit
 python analysis.py --profile P --refs-pk <REFS_PK> --slabs-pk <SLABS_PK> --unrelaxed-pk <UNRELAXED_PK> --out results
 ```
 
-The defaults target Obelix: queue `MONARIS`, one whole node per job (the site
-scheduler plugin books `nodes=1:ppn=88`, i.e. 88 hardware threads on 44
-physical cores), 44 MPI ranks launched by the QE wrapper
-(`ExecutionPolicy(with_mpi=False, prepend_text="export QE_MPI_RANKS=44")`),
-k-point pools through `-nk`, and one active job at a time. OpenMPI binds one
-rank per physical core, so 88 ranks are refused ("binding processes to more
-cpus than are available"). Run the three graphs one after the other.
+Set `--ranks`, `--walltime` and `--queue` for your computer (the number of
+ranks must be divisible by the k-point pools, 4 and 2). A QE wrapper that
+launches MPI itself takes `--no-mpi` and its settings through `--prepend`, for
+example `--no-mpi --prepend "export QE_MPI_RANKS=44"`. The recorded results
+used one 44-core node per job with 44 ranks, k-point pools through `-nk` and
+one active job at a time. Run the three graphs one after the other.
 
 ## What is compared, and with what
 

@@ -7,6 +7,7 @@ This script sets up and submits a VASP calculation using AiiDA
 from aiida import orm, load_profile
 from aiida.engine import submit
 from aiida.plugins import CalculationFactory, DataFactory
+import os
 import sys
 
 # Load the AiiDA profile
@@ -40,7 +41,7 @@ def create_kpoints():
 
 def load_potcar_for_element(element):
     """Load POTCAR from file for specific element"""
-    potcar_file = '/home/thiagotd/git/PS-TEROS/psteros/experimental/calculation_localhost/POTCAR'
+    potcar_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'POTCAR')
 
     try:
         # Use get_or_create_from_file to create PotcarData node

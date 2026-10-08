@@ -1,25 +1,24 @@
 #!/usr/bin/env python
 """
-Example: VASP ENCUT and k-points convergence testing for Si on bohr cluster.
+Example: VASP ENCUT and k-points convergence testing for Si.
 
 This script demonstrates how to use the convergence module to determine
-optimal ENCUT and k-points spacing for a silicon structure using the
-bohr cluster with par40 queue.
+optimal ENCUT and k-points spacing for a silicon structure. Set the code
+label and scheduler options for your own computer first.
 
 Usage:
     # Submit the convergence test
-    python convergence_si_bohr.py
+    python convergence_si.py
 
     # Get results after completion (replace PK with your workflow PK)
-    python convergence_si_bohr.py 12345
+    python convergence_si.py 12345
 
     # Plot results
-    python convergence_si_bohr.py 12345 --plot
+    python convergence_si.py 12345 --plot
 
-Cluster Configuration:
-    - Computer: bohr
-    - Queue: par40 (40 cores, 1 node, max 3 days)
-    - VASP code: VASP-6.4.3@bohr
+Configuration (edit for your computer):
+    - Queue: my-queue
+    - VASP code: vasp@my-cluster
     - POTCAR family: PBE
 """
 
@@ -42,7 +41,7 @@ def create_si_structure():
 
 
 def submit_convergence_test():
-    """Submit a convergence test workflow for Si on bohr cluster."""
+    """Submit a convergence test workflow for Si."""
     load_profile()
 
     # Check daemon is running
@@ -54,7 +53,7 @@ def submit_convergence_test():
         return None
 
     print("\n" + "=" * 70)
-    print("      VASP CONVERGENCE TEST - Si on bohr (par40)")
+    print("      VASP CONVERGENCE TEST - Si")
     print("=" * 70)
 
     # Create Si structure
@@ -62,10 +61,7 @@ def submit_convergence_test():
     print(f"Structure: {structure.get_formula()} ({len(structure.sites)} atoms)")
 
     # =====================================================
-    # BOHR CLUSTER CONFIGURATION (par40 queue)
-    # =====================================================
-    # - par40: up to 40 cores (1 node), max walltime 3 days
-    # - PBS scheduler
+    # SCHEDULER CONFIGURATION: edit for your computer
     # =====================================================
 
     builder_inputs = {
@@ -86,9 +82,9 @@ def submit_convergence_test():
         'options': {
             'resources': {
                 'num_machines': 1,
-                'num_cores_per_machine': 40,  # par40 queue
+                'num_cores_per_machine': 40,  # cores per node of your computer
             },
-            'queue_name': 'par40',
+            'queue_name': 'my-queue',
             'max_wallclock_seconds': 3 * 24 * 3600,  # 3 days max
         },
         'kpoints_spacing': 0.1,  # Starting value (will be overridden in scan)
@@ -131,7 +127,7 @@ def submit_convergence_test():
     # Build WorkGraph
     wg = build_convergence_workgraph(
         structure=structure,
-        code_label='VASP-6.4.3@bohr',
+        code_label='vasp@my-cluster',
         builder_inputs=builder_inputs,
         conv_settings=conv_settings,
         convergence_threshold=0.001,  # 1 meV/atom

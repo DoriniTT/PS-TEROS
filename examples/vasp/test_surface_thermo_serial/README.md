@@ -9,7 +9,7 @@ Test that the flat-graph implementation correctly limits concurrent VASP jobs us
 ## Prerequisites
 
 1. Pre-generated slab structures (or modify script to use miller_indices)
-2. VASP code configured: `VASP-6.4.1@cluster02`
+2. VASP code configured: `vasp@my-cluster`
 3. Potential family: `PBE.54`
 4. Structure files in a directory
 

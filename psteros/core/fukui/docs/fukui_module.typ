@@ -170,7 +170,7 @@ wg = build_fukui_workgraph(
     structure=structure,
     nelect_neutral=192,           # REQUIRED: verify from VASP OUTCAR
     delta_n_values=[0.0, 0.05, 0.10, 0.15],
-    code_label='VASP-6.5.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs={
         'parameters': {
             'incar': {

@@ -21,9 +21,9 @@ from pymatgen.core import Lattice, Structure
 
 import psteros
 
-CODE = "vasp@cluster"
-COMPUTER = "cluster"
-QUEUE = "normal"
+CODE = "vasp@my-cluster"
+COMPUTER = "my-cluster"
+QUEUE = "my-queue"
 POTCARS = {"Ga": "Ga_d", "As": "As"}
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUTPUT = os.path.join(HERE, "output")

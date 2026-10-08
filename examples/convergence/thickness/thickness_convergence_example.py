@@ -73,7 +73,7 @@ def submit_thickness_convergence():
         # bulk_structure_path='/absolute/path/to/bulk.cif',  # Alternative
 
         # VASP configuration
-        code_label='VASP-6.5.1@cluster02',  # Replace with your code label
+        code_label='vasp@my-cluster',  # Replace with your code label
         potential_family='PBE.54',
         potential_mapping={'Au': 'Au'},
         kpoints_spacing=0.03,

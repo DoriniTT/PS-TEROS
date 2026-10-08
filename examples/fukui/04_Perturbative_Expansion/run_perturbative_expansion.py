@@ -210,8 +210,8 @@ def main():
     # Define builder inputs
     print("\n6. Defining VASP calculation inputs...")
 
-    # Code label for obelix cluster
-    code_label = 'VASP-6.5.1-idefix@obelix'
+    # AiiDA label of your VASP code
+    code_label = 'vasp@my-cluster'
 
     # Common VASP settings for charge density calculations
     builder_inputs = {
@@ -256,10 +256,7 @@ def main():
                 'num_machines': 1,
                 'num_mpiprocs_per_machine': 4,
             },
-            'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N Perturbative_SnO2''',
+            # 'queue_name': 'my-queue',  # your queue or partition
         },
         'kpoints_spacing': 0.03,
         'potential_family': potential_family,
@@ -286,10 +283,7 @@ def main():
                 'num_machines': 1,
                 'num_mpiprocs_per_machine': 4,
             },
-            'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N DFPT_SnO2_bulk''',
+            # 'queue_name': 'my-queue',  # your queue or partition
         },
         'kpoints_spacing': 0.02,    # Finer k-mesh for DFPT
         'potential_family': potential_family,

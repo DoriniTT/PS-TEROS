@@ -1,16 +1,15 @@
 #!/usr/bin/env python
-"""Test script: VASP parallelization benchmark on bohr cluster.
+"""Test script: VASP parallelization benchmark.
 
 This script tests the vasp_parallelization module by running short benchmark
-calculations on the bohr cluster with VASP 6.4.3.
+calculations. Set the code label and scheduler options for your computer.
 
 Usage:
     1. Activate AiiDA environment and ensure daemon is running:
-       source ~/envs/aiida/bin/activate
        verdi daemon restart
 
     2. Run this script:
-       python test_benchmark_bohr.py
+       python test_benchmark.py
 
     3. Monitor progress:
        verdi process show <PK>
@@ -39,25 +38,24 @@ from psteros.core.vasp_parallelization import (
 )
 
 # =============================================================================
-# Configuration for bohr cluster
+# Configuration: edit for your computer
 # =============================================================================
 
-# VASP code on bohr (40 cores per node)
-CODE_LABEL = "VASP-6.4.3@bohr"
+# AiiDA label of your VASP code
+CODE_LABEL = "vasp@my-cluster"
 POTENTIAL_FAMILY = "PBE"
 
 # Number of MPI processes to test
-# bohr has 40 cores per node, we'll test with a subset
+# Cores of one node of your computer
 NUM_PROCS = 40
 
-# Scheduler options for PBS on bohr
+# Scheduler options of your computer
 OPTIONS = {
     "resources": {
         "num_machines": 1,
         "num_cores_per_machine": NUM_PROCS,
     },
-    # PBS options for bohr
-    "queue_name": "par40",
+    "queue_name": "my-queue",
 }
 
 # Benchmark settings
@@ -111,7 +109,7 @@ def create_si_diamond() -> orm.StructureData:
 def main():
     """Run the parallelization benchmark test."""
     print("=" * 70)
-    print("VASP Parallelization Benchmark Test - bohr cluster")
+    print("VASP Parallelization Benchmark Test")
     print("=" * 70)
 
     # Create structure

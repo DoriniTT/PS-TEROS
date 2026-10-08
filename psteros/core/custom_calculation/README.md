@@ -55,7 +55,7 @@ builder_inputs = {
 # Build and submit
 wg = build_custom_calculation_workgraph(
     structure=structure,
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
     name='my_calculation',
 )
@@ -69,7 +69,7 @@ structures = [structure1, structure2, structure3]
 
 wg = build_custom_calculation_workgraph(
     structure=structures,
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,  # Same params for all
     max_concurrent_jobs=2,          # Limit parallelism
 )
@@ -80,7 +80,7 @@ wg = build_custom_calculation_workgraph(
 ```python
 wg = build_custom_calculation_workgraph(
     structure=slab_structure,
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
     fix_type='bottom',        # Fix bottom atoms
     fix_thickness=3.0,        # 3 Angstroms from bottom
@@ -115,7 +115,7 @@ Main builder function for custom VASP calculations.
 
 **Parameters:**
 - `structure`: Single `StructureData` or list of structures
-- `code_label`: VASP code label (e.g., `'VASP-6.4.1@cluster'`)
+- `code_label`: VASP code label (e.g., `'vasp@my-cluster'`)
 - `builder_inputs`: Dict with VASP parameters (see example above)
 - `name`: WorkGraph name (default: `'custom_calc'`)
 - `max_concurrent_jobs`: Limit concurrent calculations (optional)

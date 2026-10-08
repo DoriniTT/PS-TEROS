@@ -11,7 +11,7 @@ Example:
     ... )
     >>> wg = build_parallelization_benchmark_workgraph(
     ...     structure=my_structure,
-    ...     code_label='VASP-6.5.1@localwork',
+    ...     code_label='vasp@my-cluster',
     ...     potential_family='PBE',
     ...     potential_mapping={'Si': 'Si'},
     ...     num_procs=8,
@@ -101,7 +101,7 @@ def build_parallelization_benchmark_workgraph(
 
     Args:
         structure: Structure to benchmark with.
-        code_label: AiiDA code label for VASP (e.g., 'VASP-6.5.1@localwork').
+        code_label: AiiDA code label for VASP (e.g., 'vasp@my-cluster').
         potential_family: POTCAR family name (e.g., 'PBE', 'PBE.54').
         potential_mapping: Element to POTCAR mapping (e.g., {'Si': 'Si'}).
         num_procs: Total number of MPI processes available.
@@ -142,7 +142,7 @@ def build_parallelization_benchmark_workgraph(
     Example:
         >>> wg = build_parallelization_benchmark_workgraph(
         ...     structure=structure,
-        ...     code_label='VASP-6.5.1@localwork',
+        ...     code_label='vasp@my-cluster',
         ...     potential_family='PBE',
         ...     potential_mapping={'Ag': 'Ag', 'O': 'O'},
         ...     num_procs=8,

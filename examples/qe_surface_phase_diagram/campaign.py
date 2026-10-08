@@ -1,8 +1,8 @@
 """SnO2(110) surface phase diagram with Quantum ESPRESSO: the calculations.
 
 A small, end-to-end campaign built only on the public psteros API.  It is
-sized as a smoke test for a short debug queue (Bohr ``teste``: <= 5 cores,
-<= 5 GB, <= 20 min per job, one queued job per user): 3 triple-layer slabs,
+sized as a smoke test for a short debug queue (<= 5 cores, <= 5 GB,
+<= 20 min per job, one queued job per user): 3 triple-layer slabs,
 10 A vacuum, 40/320 Ry and coarse k-points.  Converge these before drawing
 physical conclusions.
 
@@ -14,8 +14,8 @@ Phase ``slabs``  the o / sno / sn2o terminations of SnO2(110) built on the
 
 Usage
 -----
-    python campaign.py refs  --profile P --code QE@bohr --pseudo-family SSSP/1.3/PBE/efficiency --submit
-    python campaign.py slabs --profile P --code QE@bohr --pseudo-family SSSP/1.3/PBE/efficiency \\
+    python campaign.py refs  --profile P --code pw@my-cluster --pseudo-family SSSP/1.3/PBE/efficiency --submit
+    python campaign.py slabs --profile P --code pw@my-cluster --pseudo-family SSSP/1.3/PBE/efficiency \\
         --refs-pk <PK of the finished refs graph> --submit
 
 Then run ``phase_diagram.py`` on the two graph PKs.
@@ -63,7 +63,7 @@ def execution(args) -> psteros.ExecutionPolicy:
         computer=args.computer,
         queue=args.queue,
         resources={"num_machines": 1, "num_mpiprocs_per_machine": 4, "num_cores_per_machine": 4},
-        max_wallclock_seconds=1140,  # the teste queue stops jobs at 00:20:00
+        max_wallclock_seconds=args.walltime,
         with_mpi=True,
         max_concurrent_jobs=1,
     )
@@ -147,8 +147,9 @@ def main(argv=None):
     parser.add_argument("--profile", required=True)
     parser.add_argument("--code", required=True, help="AiiDA label of a quantumespresso.pw code")
     parser.add_argument("--pseudo-family", required=True)
-    parser.add_argument("--computer", default="bohr")
-    parser.add_argument("--queue", default="teste")
+    parser.add_argument("--computer", help="name of your AiiDA computer (for the record)")
+    parser.add_argument("--queue", help="queue or partition; the scheduler's default when left out")
+    parser.add_argument("--walltime", type=int, default=1140, help="seconds per job (a 20-minute queue by default)")
     parser.add_argument("--refs-pk", type=int, help="slabs phase: PK of the finished refs graph")
     parser.add_argument("--a", type=float, default=4.737, help="bulk a when --refs-pk is not given")
     parser.add_argument("--c", type=float, default=3.186, help="bulk c when --refs-pk is not given")

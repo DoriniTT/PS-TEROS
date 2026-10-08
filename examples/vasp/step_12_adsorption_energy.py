@@ -29,7 +29,7 @@ try:
     from config import AIIDA_PROFILE, VASP_CODE, POTENTIAL_FAMILY, COMMON_OPTIONS
 except ImportError:
     AIIDA_PROFILE = 'presto'
-    VASP_CODE = 'VASP-6.4.1@cluster'
+    VASP_CODE = 'vasp@my-cluster'
     POTENTIAL_FAMILY = 'PBE'
     COMMON_OPTIONS = {
         'resources': {'num_machines': 1, 'num_cores_per_machine': 24},

@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 Test DOS calculation module - Single or multiple structures.
 
@@ -117,7 +117,7 @@ def main():
     }
 
     # VASP code and potentials
-    code_label = 'VASP-6.4.1@cluster02'  # MODIFY THIS
+    code_label = 'vasp@my-cluster'  # MODIFY THIS
     potential_family = 'PBE.54'
     potential_mapping = {'Ag': 'Ag', 'O': 'O', 'P': 'P'}  # MODIFY for your structure
 

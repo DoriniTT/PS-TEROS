@@ -31,8 +31,8 @@ The experimental serial surface thermodynamics preset has been successfully impl
 **Configuration:**
 - Material: Ag2O
 - Miller indices: (1,0,0)
-- Code: VASP-6.5.0@bohr-new
-- Queue: par40 (40 cores, 1 node)
+- Code: vasp@my-cluster
+- Queue: my-queue (40 cores, 1 node)
 - Parameters: NSW=200, ENCUT=300, kpoints=1.0
 - Concurrency: max_number_jobs=2
 

@@ -30,9 +30,8 @@ the numerical settings for your material before submitting a calculation.
 Choose one execution policy
 ---------------------------
 
-Both stages must use the same execution policy. Pass it explicitly: omitting the
-policy activates legacy deployment-specific defaults retained for compatibility.
-The builder turns its queue, resource, wall-time, and MPI choices into AiiDA task
+Both stages must use the same execution policy, with the settings of your own
+computer and scheduler. The builder turns its queue, resource, wall-time, and MPI choices into AiiDA task
 metadata. The registered code in each recipe selects the actual AiiDA computer.
 ``ExecutionPolicy`` also has a descriptive ``computer`` field; keep it consistent
 with ``code_label`` because the builder does not cross-check them.
@@ -42,19 +41,17 @@ with ``code_label`` because the builder does not cross-check them.
    import psteros
 
    execution = psteros.ExecutionPolicy(
-       computer="your-computer",
-       queue="your-scheduler-queue",
-       resources={
-           "num_machines": 1,
-           "num_mpiprocs_per_machine": 1,
-       },
+       computer="my-cluster",
+       queue="my-queue",
+       resources={"num_machines": 1, "num_mpiprocs_per_machine": 32},
        max_wallclock_seconds=86_400,
-       with_mpi=True,
        max_concurrent_jobs=1,
    )
 
-A graph currently permits one active calculation, so ``max_concurrent_jobs`` must remain ``1``. This is a graph-local
-constraint, not a recommendation about how many jobs your cluster can run.
+``max_concurrent_jobs`` limits how many calculations of the graph run at once;
+1 runs them one after the other, ``None`` removes the limit. Options you leave
+out, such as ``queue`` or ``max_wallclock_seconds``, are not sent to the
+scheduler.
 
 .. note::
 
@@ -62,8 +59,9 @@ constraint, not a recommendation about how many jobs your cluster can run.
    of your AiiDA computer writes it in its own syntax (``#PBS -q``,
    ``#SBATCH --partition``). The accepted ``resources`` keys still depend on
    that plugin; PBS Pro, for instance, turns ``num_cores_per_machine`` into
-   ``ncpus``. The one-job limit applies within one graph: two graphs submitted
-   together can run two jobs, which matters on queues with a per-user limit.
+   ``ncpus``. The job limit applies within one graph: two graphs submitted
+   together can run twice as many jobs, which matters on queues with a
+   per-user limit.
 
 Define the two recipes
 ----------------------
@@ -101,8 +99,8 @@ Ry/bohr, and ``kpoints_distance`` uses Å⁻¹.
        return psteros.SurfaceWorkflowConfig(
            backend="qe",
            calculation=psteros.QeCalculationConfig(
-               code_label="your-qe-code@your-computer",
-               pseudo_family="your-pseudo-family",
+               code_label="pw@my-cluster",
+               pseudo_family="SSSP/1.3/PBE/efficiency",
                parameters=parameters,
                kpoints_distance=0.20,
            ),
@@ -146,7 +144,7 @@ You should see:
    1
 
 The name confirms that the builder connected the relaxation and static stages;
-the second line confirms the graph-local concurrency limit. This remains an
+the second line is the graph's concurrency limit. This remains an
 unsubmitted graph because ``submit`` was not set to ``True``. Check the code
 label, pseudopotential family, input parameters, and scheduler metadata before
 you request compute time.

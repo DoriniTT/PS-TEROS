@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 Intermetallic Surface Energy Calculation for PdIn (B2 structure)
 
@@ -44,8 +44,8 @@ def main():
     print(f"\n2. Structure:")
     print(f"   Bulk:   {bulk_structure_path}")
 
-    # Code configuration - using localwork
-    code_label = 'VASP-6.5.1@localwork'
+    # AiiDA label of your VASP code
+    code_label = 'vasp@my-cluster'
     potential_family = 'PBE'
 
     # VASP parameters for intermetallics
@@ -120,7 +120,7 @@ def main():
         slab_options=common_options,
         slab_kpoints_spacing=0.08,
 
-        # Concurrency control - cluster02 can only run one calculation at a time
+        # Concurrency control: one calculation at a time
         max_concurrent_jobs=1,
 
         name='PdIn_surface_energy',

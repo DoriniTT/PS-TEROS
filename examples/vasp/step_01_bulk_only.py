@@ -36,7 +36,7 @@ try:
 except ImportError:
     # Option 2: Define locally if config.py not available
     AIIDA_PROFILE = 'presto'
-    VASP_CODE = 'VASP-6.4.1@cluster'
+    VASP_CODE = 'vasp@my-cluster'
     POTENTIAL_FAMILY = 'PBE'
     BULK_PARAMS = {
         'PREC': 'Accurate',

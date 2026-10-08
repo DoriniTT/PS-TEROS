@@ -9,6 +9,29 @@ engine and Quantum ESPRESSO as the second one: typed recipes
 and surface phase diagrams. The former builders remain in `psteros.core`.
 `psteros.__version__` is `2.0.0`.
 
+### No machine-specific defaults
+
+PS-TEROS is public code: nothing assumes a particular computer.
+
+- `ExecutionPolicy()` sets no computer, queue, account or wall time and adds
+  no scheduler directive; options that are not given are not sent, so the
+  AiiDA computer and the scheduler apply their own defaults. `account` and
+  `custom_scheduler_commands` are new fields. `max_concurrent_jobs` accepts
+  any positive number or `None` (no limit); the default is still 1.
+- `SurfaceWorkflowConfig` requires an `execution` policy.
+- The `psteros.core` builders (`build_core_workgraph`,
+  `build_metal_surface_energy_workgraph`,
+  `build_surface_hydroxylation_workgraph`,
+  `build_thickness_convergence_workgraph`) require `code_label` instead of
+  defaulting to one code. `get_ag3po4_defaults` and `get_ag2o_defaults` take
+  the scheduler `options` of the caller instead of a fixed queue.
+- Examples, docs and docstrings use placeholders (`vasp@my-cluster`,
+  `my-queue`) or command-line arguments; campaign scripts no longer default
+  to particular computers or queues.
+- Personal working files (local backups, editor history and settings,
+  dry-run job folders, helper scripts) were removed from the repository and
+  are ignored.
+
 ### VASP as the central engine
 
 - `aiida-vasp` is a core dependency; Quantum ESPRESSO support is the optional
@@ -146,7 +169,7 @@ from psteros.core.metal_surface_energy import build_metal_surface_energy_workgra
 
 wg = build_metal_surface_energy_workgraph(
     bulk_structure_path='/path/to/au.cif',
-    code_label='VASP-6.5.1@cluster',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     potential_mapping={'Au': 'Au'},
 
@@ -339,7 +362,7 @@ wg = build_aimd_workgraph(
         {'temperature': 300, 'steps': 100},   # Equilibration
         {'temperature': 300, 'steps': 500},   # Production
     ],
-    code_label='VASP-6.5.1@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs=base_inputs,
 
     # Override system
@@ -559,7 +582,7 @@ surface_params = {
 wg = build_surface_hydroxylation_workgraph(
     structure_pk=1234,               # Input slab PK
     surface_params=surface_params,
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,   # VASP configuration
     max_concurrent_jobs=3,           # Concurrency control
     fix_type='bottom',               # Optional: fix bottom atoms
@@ -734,7 +757,7 @@ from psteros.core.aimd import build_aimd_workgraph
 wg = build_aimd_workgraph(
     structures={'slab': structure},
     aimd_stages=[{'temperature': 300, 'steps': 500}],
-    code_label='VASP-6.5.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=inputs,
 )
 ```

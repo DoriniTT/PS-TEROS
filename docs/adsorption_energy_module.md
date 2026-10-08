@@ -88,7 +88,7 @@ wg = build_core_workgraph(
     adsorption_potential_mapping={'Ag': 'Ag', 'O': 'O', 'H': 'H'},
 
     # Code
-    code_label='VASP@cluster',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
 
     # Simplified API: Direct INCAR parameters
@@ -192,7 +192,7 @@ wg = build_core_workgraph(
         'lanio3_oh': 'OH',
         'lacoo3_oh': 'OH',
     },
-    code_label='VASP@cluster',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     adsorption_potential_mapping={'La': 'La', 'Ni': 'Ni', 'Co': 'Co', 'O': 'O', 'H': 'H'},
 

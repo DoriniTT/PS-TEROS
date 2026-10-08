@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-PdIn Intermetallic Surface Energy Calculation on Obelix Cluster
+PdIn Intermetallic Surface Energy Calculation
 
 This example demonstrates:
 1. Pre-flight feasibility analysis for stoichiometric+symmetric surfaces
@@ -8,8 +8,7 @@ This example demonstrates:
 3. Wulff shape construction from calculated surface energies
 
 Material: PdIn (B2 CsCl-type intermetallic)
-Cluster: Obelix (Skylake nodes, hybrid MPI+OpenMP)
-Code: VASP 6.5.1
+Code: VASP (set CODE_LABEL and SCHEDULER_OPTIONS for your computer)
 
 The B2 structure has Pd at corners and In at body center, making it an
 ideal test case for the stoichiometric finder since different Miller
@@ -20,7 +19,7 @@ surfaces. For non-stoichiometric surfaces, use psteros.core.thermodynamics.
 
 Usage:
     source ~/envs/aiida/bin/activate
-    python pdin_surface_energy_obelix.py
+    python pdin_surface_energy.py
 
 After completion:
     verdi process show <PK>
@@ -47,20 +46,17 @@ from psteros.core.surface_energy import (
 # AiiDA profile
 AIIDA_PROFILE = 'presto'
 
-# Obelix cluster configuration
-CODE_LABEL = 'VASP-6.5.1-idefix@obelix'
+# Code and scheduler options: edit for your computer
+CODE_LABEL = 'vasp@my-cluster'
 POTENTIAL_FAMILY = 'PBE'
 
-# Obelix uses hybrid MPI+OpenMP: 4 MPI processes, rest OpenMP threads
-OBELIX_OPTIONS = {
+# Here 4 MPI processes (for example with OpenMP threads in addition)
+SCHEDULER_OPTIONS = {
     'resources': {
         'num_machines': 1,
         'num_mpiprocs_per_machine': 4,  # PROCESS_MPI=4
     },
-    'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N PdIn_surf''',
+    # 'queue_name': 'my-queue',  # your queue or partition
 }
 
 # VASP parameters optimized for metals
@@ -192,7 +188,7 @@ def build_and_submit_workflow(aiida_structure):
 
         # Bulk calculation
         bulk_parameters=BULK_PARAMETERS,
-        bulk_options=OBELIX_OPTIONS,
+        bulk_options=SCHEDULER_OPTIONS,
 
         # Slab generation
         miller_indices=MILLER_INDICES,
@@ -209,7 +205,7 @@ def build_and_submit_workflow(aiida_structure):
 
         # Slab relaxation
         slab_parameters=SLAB_PARAMETERS,
-        slab_options=OBELIX_OPTIONS,
+        slab_options=SCHEDULER_OPTIONS,
         slab_kpoints_spacing=0.04,  # Slightly coarser for slabs
 
         # Concurrency
@@ -296,7 +292,6 @@ def main():
 
     print("\n" + "=" * 70)
     print("PdIn INTERMETALLIC SURFACE ENERGY CALCULATION")
-    print("Cluster: Obelix (Skylake, hybrid MPI+OpenMP)")
     print("=" * 70)
 
     # 1. Load AiiDA profile

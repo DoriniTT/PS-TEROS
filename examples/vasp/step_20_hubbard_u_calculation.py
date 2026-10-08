@@ -35,7 +35,7 @@ from psteros.core.u_calculation import build_u_calculation_workgraph, get_u_calc
 # CONFIGURATION - Adjust for your setup
 # ==============================================================================
 
-VASP_CODE = 'VASP-6.5.1@localwork'
+VASP_CODE = 'vasp@my-cluster'
 POTENTIAL_FAMILY = 'PBE'
 POTENTIAL_MAPPING = {'Ni': 'Ni', 'O': 'O'}
 

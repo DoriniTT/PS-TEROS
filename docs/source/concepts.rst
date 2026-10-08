@@ -32,12 +32,13 @@ Four pieces, one calculation story
    AiiDA computer. The policy's ``computer`` field is descriptive in the current
    API and should match that code, but the builder does not cross-check them.
    Set these values for the computer and scheduler registered in your own AiiDA
-   profile. Do not rely on the legacy deployment-specific defaults.
+   profile; psteros assumes no queue, account or wall time.
 
 **WorkGraph**
    A WorkGraph connects structures and recipes into an ordered set of AiiDA
-   tasks. In psteros, a graph is currently limited to one active calculation at
-   a time. Building a graph is separate from submitting it, which gives you a
+   tasks. ``ExecutionPolicy.max_concurrent_jobs`` limits how many of them run
+   at once (one by default). Building a graph is separate from submitting it,
+   which gives you a
    chance to inspect the plan before it uses compute time.
 
 What AiiDA records

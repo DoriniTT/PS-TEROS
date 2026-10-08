@@ -79,9 +79,9 @@ daemon after installing or upgrading it:
 
 .. important::
 
-   Construct and pass an ``ExecutionPolicy`` explicitly in new calculations.
-   Omitting it activates legacy deployment-specific defaults retained for
-   compatibility; they are not portable recommendations.
+   psteros assumes nothing about your computer. Every recipe needs your code
+   label and POTCAR family, and an ``ExecutionPolicy`` with the queue and
+   resources of your scheduler.
 
 .. _guide to configuring and running external codes:
    https://aiida.readthedocs.io/projects/aiida-core/en/latest/howto/run_codes.html

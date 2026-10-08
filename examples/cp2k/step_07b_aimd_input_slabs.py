@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/psteros/bin/python
+#!/usr/bin/env python
 """
 STEP 7B: AIMD with CP2K - Input Slabs Directly (with Fixed Atoms)
 
@@ -121,7 +121,7 @@ def main():
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'queue_name': 'par40',
+        'queue_name': 'my-queue',
     }
 
     # Fixed atoms configuration
@@ -133,7 +133,7 @@ def main():
 
     print("\n6. Building workgraph...")
     print(f"  Workflow: AIMD only (no bulk, no slab generation)")
-    print(f"  AIMD code: CP2K-NEWCPU-2023@bohr")
+    print(f"  AIMD code: cp2k@my-cluster")
     print(f"  Fixed atoms: bottom 7Å")
 
     # Build workgraph
@@ -145,7 +145,7 @@ def main():
         input_slabs=input_slabs,
 
         # AIMD (CP2K)
-        aimd_code_label='CP2K-NEWCPU-2023@bohr',
+        aimd_code_label='cp2k@my-cluster',
         aimd_sequence=aimd_sequence,
         aimd_parameters=aimd_params,
         aimd_options=aimd_options,

@@ -37,7 +37,7 @@ try:
     )
 except ImportError:
     AIIDA_PROFILE = 'presto'
-    VASP_CODE = 'VASP-6.5.1-idefix-4@obelix'
+    VASP_CODE = 'vasp@my-cluster'
     POTENTIAL_FAMILY = 'PBE'
 
     BULK_PARAMS = {
@@ -58,16 +58,13 @@ except ImportError:
     SLAB_PARAMS = BULK_PARAMS.copy()
     SLAB_PARAMS['ISIF'] = 2  # Fix cell, relax ions
 
-    # Obelix cluster: hybrid MPI+OpenMP (4 MPI processes, 22 threads each)
+    # Scheduler options of your computer (here 4 MPI processes)
     COMMON_OPTIONS = {
         'resources': {
             'num_machines': 1,
             'num_mpiprocs_per_machine': 4,
         },
-        'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N SnO2_SurfThermo''',
+        # 'queue_name': 'my-queue',  # your queue or partition
     }
 
     # Use Sn_d for better d-electron treatment (14 valence electrons)

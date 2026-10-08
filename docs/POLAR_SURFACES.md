@@ -124,14 +124,14 @@ study = psteros.PolarSurfaceStudy(
 config = psteros.SurfaceWorkflowConfig(
     backend="vasp",
     calculation=psteros.VaspCalculationConfig(
-        code_label="vasp@cluster",
+        code_label="vasp@my-cluster",
         incar={"ENCUT": 400, "PREC": "Accurate", "EDIFF": 1e-6,
                "IBRION": 2, "NSW": 200, "EDIFFG": -0.005},
         potential_family="PBE",
         potential_mapping=study.potential_mapping({"Ga": "Ga_d", "As": "As"}),
         kpoints_spacing=0.2,
     ),
-    execution=psteros.ExecutionPolicy(computer="cluster", queue="normal", max_concurrent_jobs=1),
+    execution=psteros.ExecutionPolicy(computer="my-cluster", queue="my-queue", max_concurrent_jobs=1),
     role_overrides=study.vasp_overrides(),
 )
 graph = psteros.build_surface_workgraph(study.structures, config, submit=True)

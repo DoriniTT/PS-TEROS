@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 r"""
 Unified surface modifier for ASE slabs: vacancies, H decoration, and combined modes.
 

@@ -407,7 +407,7 @@ def add_adsorption_energy_stage(
         >>> wg = WorkGraph('my_workflow')
         >>> add_adsorption_energy_stage(
         ...     wg=wg,
-        ...     code_label='VASP-6.5.1@cluster',
+        ...     code_label='vasp@my-cluster',
         ...     adsorption_structures={'sys1': struct1, 'sys2': struct2},
         ...     adsorption_formulas={'sys1': 'OH', 'sys2': 'OOH'},
         ...     potential_family='PBE',

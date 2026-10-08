@@ -41,10 +41,7 @@ def submit_convergence_test():
                 'num_machines': 1,
                 'num_mpiprocs_per_machine': 4,  # PROCESS_MPI=4 (hybrid MPI+OpenMP)
             },
-            'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N Si_conv''',
+            # 'queue_name': 'my-queue',  # your queue or partition
         },
         'kpoints_spacing': 0.1,  # Coarse starting value
         'potential_family': 'PBE',
@@ -66,7 +63,7 @@ def submit_convergence_test():
 
     wg = build_convergence_workgraph(
         structure=structure,
-        code_label='VASP-6.5.1-idefix@obelix',
+        code_label='vasp@my-cluster',
         builder_inputs=builder_inputs,
         conv_settings=conv_settings,
         convergence_threshold=0.002,  # 2 meV/atom (relaxed for testing)

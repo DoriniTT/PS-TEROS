@@ -25,27 +25,53 @@ def test_public_api_is_vasp_first_and_versioned() -> None:
     assert psteros.QeCalculationConfig is not None
 
 
-def test_execution_policy_enforces_single_bohr_job() -> None:
+def test_execution_policy_assumes_no_computer() -> None:
     policy = psteros.ExecutionPolicy()
-    assert policy.computer == "bohr"
-    assert policy.queue == "gpu_a100"
+    assert policy.computer is None and policy.queue is None
     assert policy.max_concurrent_jobs == 1
-    assert policy.scheduler_options()["resources"]["num_machines"] == 1
-    assert policy.scheduler_options()["queue_name"] == "gpu_a100"
-    assert policy.scheduler_options()["custom_scheduler_commands"] == "#PBS -j oe"
-    assert "prepend_text" not in policy.scheduler_options()
-    with pytest.raises(ValueError, match="max_concurrent_jobs=1"):
-        psteros.ExecutionPolicy(max_concurrent_jobs=2)
+    # Only what was asked for reaches AiiDA: no queue, wall time or scheduler directive.
+    assert policy.scheduler_options() == {"resources": {"num_machines": 1}, "withmpi": True}
 
 
-def test_execution_policy_carries_job_script_prepend_text() -> None:
-    policy = psteros.ExecutionPolicy(computer="obelix", queue="MONARIS", prepend_text="export QE_MPI_RANKS=88")
-    assert policy.scheduler_options()["prepend_text"] == "export QE_MPI_RANKS=88"
+def test_execution_policy_passes_the_users_scheduler_settings() -> None:
+    policy = psteros.ExecutionPolicy(
+        computer="my-cluster", queue="my-queue", account="my-project",
+        resources={"num_machines": 2, "num_mpiprocs_per_machine": 32},
+        max_wallclock_seconds=3600, max_concurrent_jobs=4,
+        custom_scheduler_commands="#SBATCH --constraint=cpu", prepend_text="module load vasp",
+    )
+    assert policy.scheduler_options() == {
+        "resources": {"num_machines": 2, "num_mpiprocs_per_machine": 32},
+        "withmpi": True,
+        "max_wallclock_seconds": 3600,
+        "queue_name": "my-queue",
+        "account": "my-project",
+        "custom_scheduler_commands": "#SBATCH --constraint=cpu",
+        "prepend_text": "module load vasp",
+    }
+    assert psteros.ExecutionPolicy(max_concurrent_jobs=None).max_concurrent_jobs is None
+
+
+def test_execution_policy_rejects_invalid_values() -> None:
+    with pytest.raises(ValueError, match="max_concurrent_jobs"):
+        psteros.ExecutionPolicy(max_concurrent_jobs=0)
+    with pytest.raises(ValueError, match="max_wallclock_seconds"):
+        psteros.ExecutionPolicy(max_wallclock_seconds=0)
+    with pytest.raises(ValueError, match="queue must not be empty"):
+        psteros.ExecutionPolicy(queue="")
+    with pytest.raises(ValueError, match="resources"):
+        psteros.ExecutionPolicy(resources={})
+
+
+def test_recipe_requires_an_execution_policy() -> None:
+    qe = psteros.QeCalculationConfig("pw@my-cluster", "sssp", qe_parameters())
+    with pytest.raises(TypeError):
+        psteros.SurfaceWorkflowConfig(backend="qe", calculation=qe)
 
 
 def test_qe_config_requires_complete_namelists() -> None:
     config = psteros.QeCalculationConfig(
-        code_label="QE-7.6-PW-GPU-A100@bohr",
+        code_label="pw@my-cluster",
         pseudo_family="SSSP/1.3/PBE/precision",
         parameters=qe_parameters(),
     )
@@ -53,7 +79,7 @@ def test_qe_config_requires_complete_namelists() -> None:
     assert config.max_iterations == 1
     with pytest.raises(ValueError, match="missing namelists"):
         psteros.QeCalculationConfig(
-            code_label="qe@bohr",
+            code_label="pw@my-cluster",
             pseudo_family="sssp",
             parameters={"CONTROL": {}, "SYSTEM": {}},
         )
@@ -63,15 +89,16 @@ def test_qe_relaxation_controls_must_use_control_namelist() -> None:
     parameters = qe_parameters()
     parameters["IONS"] = {"ion_dynamics": "bfgs", "forc_conv_thr": 1.0e-3}
     with pytest.raises(ValueError, match="must be in CONTROL"):
-        psteros.QeCalculationConfig("qe@bohr", "sssp", parameters)
+        psteros.QeCalculationConfig("pw@my-cluster", "sssp", parameters)
 
 
 def test_backend_type_must_match_recipe() -> None:
-    qe = psteros.QeCalculationConfig("qe@bohr", "sssp", qe_parameters())
+    qe = psteros.QeCalculationConfig("pw@my-cluster", "sssp", qe_parameters())
+    execution = psteros.ExecutionPolicy()
     with pytest.raises(TypeError, match="requires VaspCalculationConfig"):
-        psteros.SurfaceWorkflowConfig(backend="vasp", calculation=qe)
+        psteros.SurfaceWorkflowConfig(backend="vasp", calculation=qe, execution=execution)
     with pytest.raises(ValueError, match="backend must be 'qe' or 'vasp'"):
-        psteros.SurfaceWorkflowConfig(backend="Qe", calculation=qe)
+        psteros.SurfaceWorkflowConfig(backend="Qe", calculation=qe, execution=execution)
 
 
 def test_sno2_slab_rejects_unknown_termination_and_layer_count() -> None:

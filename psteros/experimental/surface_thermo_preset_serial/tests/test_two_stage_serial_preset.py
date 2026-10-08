@@ -26,11 +26,11 @@ from psteros.experimental.surface_thermo_preset_serial import (
 )
 
 # Configuration
-structures_dir = '/home/thiagotd/git/PS-TEROS/examples/vasp/structures'
-code_label = 'VASP-6.4.1@cluster06'
+structures_dir = str(Path(__file__).resolve().parents[4] / 'examples' / 'vasp' / 'structures')
+code_label = 'vasp@my-cluster'
 potential_family = 'PBE'
 
-# VASP options for cluster02
+# Scheduler options of your computer
 options = {
     'resources': {
         'num_machines': 1,

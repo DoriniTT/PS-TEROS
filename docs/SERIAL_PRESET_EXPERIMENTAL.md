@@ -120,7 +120,7 @@ wg = surface_thermodynamics_serial_workgraph(
     oxygen_name='O2.cif',
 
     # Code and parameters
-    code_label='VASP-6.5.0@bohr-new',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     kpoints_spacing=0.4,
 

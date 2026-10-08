@@ -84,7 +84,7 @@ def main():
         '--code-label',
         type=str,
         default=None,
-        help='AiiDA code label (e.g., VASP-6.5.1@localwork)',
+        help='AiiDA code label (e.g., vasp@my-cluster)',
     )
     parser.add_argument(
         '--show-incar',
@@ -171,7 +171,7 @@ def main():
     if not args.code_label:
         print("\nNo --code-label specified.")
         print("To run dry-run, provide a code label:")
-        print("  python dry_run_example.py --dry-run --code-label VASP-6.5.1@localwork")
+        print("  python dry_run_example.py --dry-run --code-label vasp@my-cluster")
         print("\nSkipping Level 2...")
 
         if not args.full_check:

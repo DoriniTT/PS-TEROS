@@ -163,7 +163,7 @@ wg = build_core_workgraph(
 All presets have been validated:
 
 ```bash
-cd /home/thiagotd/git/PS-TEROS/.worktree/feature-reorganize
+cd PS-TEROS
 source ~/envs/psteros/bin/activate
 python -c "from psteros.core.workflow_presets import list_workflow_presets; list_workflow_presets()"
 ```

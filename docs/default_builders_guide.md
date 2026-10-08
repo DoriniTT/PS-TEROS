@@ -40,7 +40,7 @@ load_profile(profile='psteros')
 # Get all default parameters for Ag3PO4
 defaults = get_ag3po4_defaults(
     structures_dir="/path/to/structures",
-    code_label="VASP-VTST-6.4.3@bohr",
+    code_label="vasp@my-cluster",
     potential_family="PBE"
 )
 
@@ -60,7 +60,7 @@ from psteros.default_builders import get_ag3po4_defaults
 # Get defaults with custom overrides
 defaults = get_ag3po4_defaults(
     structures_dir="/path/to/structures",
-    code_label="VASP-VTST-6.4.3@bohr",
+    code_label="vasp@my-cluster",
     potential_family="PBE",
     # Override specific VASP parameters
     bulk_parameters={'ENCUT': 600, 'EDIFF': 1e-7},
@@ -89,7 +89,7 @@ from psteros.default_builders import get_ag3po4_defaults, update_builder_params
 # Get base defaults
 defaults = get_ag3po4_defaults(
     structures_dir="/path/to/structures",
-    code_label="VASP-VTST-6.4.3@bohr",
+    code_label="vasp@my-cluster",
     potential_family="PBE"
 )
 
@@ -117,7 +117,7 @@ Get default builder parameters for Ag₃PO₄ material system.
 
 **Arguments:**
 - `structures_dir` (str, optional): Path to directory containing structure files
-- `code_label` (str, optional): VASP code label (e.g., "VASP-VTST-6.4.3@bohr")
+- `code_label` (str, optional): VASP code label (e.g., "vasp@my-cluster")
 - `potential_family` (str, optional): Potential family name (e.g., "PBE")
 - `**overrides`: Any parameter to override (deep merged with defaults)
 
@@ -362,7 +362,7 @@ defaults = update_builder_params(defaults, {
 ```python
 defaults = get_ag3po4_defaults(
     structures_dir="/path/to/structures",  # Required
-    code_label="VASP-VTST-6.4.3@bohr",     # Required
+    code_label="vasp@my-cluster",     # Required
     potential_family="PBE"                  # Required
 )
 ```

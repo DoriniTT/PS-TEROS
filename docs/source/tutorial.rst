@@ -49,9 +49,9 @@ The INCAR is a flat mapping of VASP tags in VASP's units (``ENCUT`` in eV,
    }
 
    calculation = psteros.VaspCalculationConfig(
-       code_label="your-vasp-code@your-computer",
+       code_label="vasp@my-cluster",
        incar=incar,
-       potential_family="your-potcar-family",
+       potential_family="PBE",
        potential_mapping={"Sn": "Sn_d"},
        kpoints_spacing=0.20,
    )
@@ -65,21 +65,17 @@ Choose the execution settings
 -----------------------------
 
 An execution policy supplies the scheduler queue, resource request, wall time,
-and MPI choice. Set every field for your own AiiDA environment. The current API
-retains legacy deployment-specific defaults for compatibility; do not rely on
-them for new calculations.
+and MPI choice. Set every field for your own AiiDA environment; psteros assumes
+no queue, account or wall time, and options you leave out are not sent to the
+scheduler.
 
 .. code-block:: python
 
    execution = psteros.ExecutionPolicy(
-       computer="your-computer",
-       queue="your-scheduler-queue",
-       resources={
-           "num_machines": 1,
-           "num_mpiprocs_per_machine": 1,
-       },
+       computer="my-cluster",
+       queue="my-queue",
+       resources={"num_machines": 1, "num_mpiprocs_per_machine": 32},
        max_wallclock_seconds=86_400,
-       with_mpi=True,
        max_concurrent_jobs=1,
    )
 
@@ -119,9 +115,9 @@ You should see:
    1
 
 The first line confirms the graph name from the recipe. The second is the
-number of calculations the graph may run at once. PS-TEROS currently keeps one
-active calculation in each graph; this graph-local limit does not restrict how
-many unrelated jobs your cluster can run.
+number of calculations the graph may run at once, ``max_concurrent_jobs`` of
+the execution policy; it does not restrict how many unrelated jobs your
+cluster can run.
 
 The call leaves ``submit`` at its default value, ``False``. It creates the graph
 in your local AiiDA environment but does not request scheduler resources or

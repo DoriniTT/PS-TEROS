@@ -36,7 +36,7 @@ def main():
         bulk_name="bulk.cif",
 
         # Code and potentials
-        code_label="VASP-6.4.1@cluster02",
+        code_label="vasp@my-cluster",
         potential_family="PBE.54",
         bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
 

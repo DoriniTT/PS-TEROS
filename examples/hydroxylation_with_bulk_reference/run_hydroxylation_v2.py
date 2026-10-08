@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 Surface Hydroxylation v2 - Ag3PO4 with Bulk and Pristine Reference Calculations
 

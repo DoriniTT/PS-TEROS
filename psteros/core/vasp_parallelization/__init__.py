@@ -25,7 +25,7 @@ Example:
     >>>
     >>> wg = build_parallelization_benchmark_workgraph(
     ...     structure=my_structure,
-    ...     code_label='VASP-6.5.1@localwork',
+    ...     code_label='vasp@my-cluster',
     ...     potential_family='PBE',
     ...     potential_mapping={'Si': 'Si'},
     ...     num_procs=8,

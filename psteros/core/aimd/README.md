@@ -61,7 +61,7 @@ builder_inputs = {
 wg = build_aimd_workgraph(
     structures={'struct1': structure1, 'struct2': structure2},
     aimd_stages=aimd_stages,
-    code_label='VASP6.5.0@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
 
     # Optional: create supercell for struct1
@@ -114,7 +114,7 @@ def build_aimd_workgraph(
 **code_label** : `str`
 - VASP code label from AiiDA
 - Format: `'CodeName@ComputerName'`
-- Example: `'VASP6.5.0@cluster02'`
+- Example: `'vasp@my-cluster'`
 
 **builder_inputs** : `dict`
 - Default VASP builder configuration used for all (structure, stage) combinations
@@ -221,7 +221,7 @@ wg = build_aimd_workgraph(
         {'TEBEG': 300, 'NSW': 100},
         {'TEBEG': 300, 'NSW': 500},
     ],
-    code_label='VASP6.5.0@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs={
         'parameters': {'incar': {'ENCUT': 400, 'PREC': 'Normal'}},  # Base
         # ... other parameters
@@ -280,7 +280,7 @@ wg = build_aimd_workgraph(
         {'TEBEG': 300, 'NSW': 100},
         {'TEBEG': 300, 'NSW': 500},
     ],
-    code_label='VASP6.5.0@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs=base_config,
 )
 ```
@@ -291,7 +291,7 @@ wg = build_aimd_workgraph(
 wg = build_aimd_workgraph(
     structures={'small_slab': structure},
     aimd_stages=[{'TEBEG': 300, 'NSW': 200}],
-    code_label='VASP6.5.0@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs=base_config,
     supercell_specs={'small_slab': [3, 3, 1]},  # Create 3x3x1 supercell
 )
@@ -308,7 +308,7 @@ wg = build_aimd_workgraph(
         'slab4': structure4,
     },
     aimd_stages=[{'TEBEG': 400, 'NSW': 300}],
-    code_label='VASP6.5.0@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs=base_config,
     max_concurrent_jobs=2,  # Only 2 VASP jobs run at once
 )

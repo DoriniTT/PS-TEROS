@@ -128,28 +128,28 @@ wg = build_core_workgraph_with_map(
 
 1. **Bulk Relaxation**
    - VASP INCAR: ENCUT=520, EDIFF=1e-6, ISMEAR=0, ISIF=3, etc.
-   - Scheduler: 1 machine, 40 cores, par40 queue
+   - Scheduler: from the `options` argument (one machine by default)
    - Structure: ag3po4.cif
    - Potentials: Ag→Ag, P→P, O→O
 
 2. **Metal Reference (Ag)**
    - VASP INCAR: ISMEAR=1, SIGMA=0.2, etc.
-   - Scheduler: 1 machine, 40 cores
+   - Scheduler: from the `options` argument
    - Structure: Ag.cif
 
 3. **Nonmetal Reference (P)**
    - VASP INCAR: ISMEAR=0, SIGMA=0.05, etc.
-   - Scheduler: 1 machine, 40 cores
+   - Scheduler: from the `options` argument
    - Structure: P.cif
 
 4. **Oxygen Reference (O₂)**
    - VASP INCAR: ISMEAR=0, SIGMA=0.01, ISIF=2, LREAL=False, etc.
-   - Scheduler: 1 machine, 40 cores
+   - Scheduler: from the `options` argument
    - Structure: O2.cif
 
 5. **Slab Relaxation**
    - VASP INCAR: EDIFFG=-0.02, IDIPOL=3, LDIPOL=True, LVHAR=True, etc.
-   - Scheduler: 1 machine, 40 cores
+   - Scheduler: from the `options` argument
    - Potentials: Ag→Ag, P→P, O→O
 
 6. **Other Settings**
@@ -204,7 +204,7 @@ Total: 5/5 tests passed
 
 ### Complete Workflow
 ```python
-#!/home/thiagotd/envs/psteros/bin/python
+#!/usr/bin/env python
 from aiida import load_profile, orm
 from ase.io import read
 from psteros.core.workgraph import build_core_workgraph_with_map
@@ -222,7 +222,7 @@ for i in range(3):
 # Get defaults (with optional overrides)
 defaults = get_ag3po4_defaults(
     structures_dir="/path/to/structures",
-    code_label="VASP-VTST-6.4.3@bohr",
+    code_label="vasp@my-cluster",
     potential_family="PBE",
     bulk_parameters={'ENCUT': 600},  # Optional override
 )
@@ -268,7 +268,7 @@ print(f"WorkGraph PK: {wg.pk}")
 
 2. **Run Tests**
    ```bash
-   cd /home/thiagotd/git/worktree/PS-TEROS/default-builders
+   cd PS-TEROS
    source ~/envs/psteros/bin/activate
    python examples/default_builders/test_default_builders.py
    ```
@@ -316,7 +316,7 @@ def get_<material>_defaults(
 ## Files Structure
 
 ```
-/home/thiagotd/git/worktree/PS-TEROS/default-builders/
+PS-TEROS
 ├── psteros/
 │   └── default_builders.py (NEW)              # Core module
 ├── docs/

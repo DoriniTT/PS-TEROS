@@ -14,7 +14,7 @@ Example usage:
     >>> # Get defaults with required parameters
     >>> defaults = get_ag2o_defaults(
     ...     structures_dir="/path/to/structures",
-    ...     code_label="VASP-VTST-6.4.3@bohr",
+    ...     code_label="vasp@my-cluster",
     ...     potential_family="PBE"
     ... )
     >>> 
@@ -26,6 +26,11 @@ Example usage:
 """
 
 from copy import deepcopy
+
+
+def _scheduler_options(options):
+    """Scheduler options for one calculation: the caller's, or one machine with the computer's defaults."""
+    return deepcopy(options) if options else {"resources": {"num_machines": 1}}
 
 
 def update_builder_params(defaults, overrides):
@@ -66,6 +71,7 @@ def get_ag2o_defaults(
     structures_dir=None,
     code_label=None,
     potential_family=None,
+    options=None,
     **overrides
 ):
     """
@@ -88,10 +94,15 @@ def get_ag2o_defaults(
     Args:
         structures_dir (str, optional): Path to directory containing structure files.
             If not provided, must be set before using with build_core_workgraph.
-        code_label (str, optional): VASP code label (e.g., "VASP-VTST-6.4.3@bohr").
+        code_label (str, optional): VASP code label (e.g., "vasp@my-cluster").
             If not provided, must be set before using with build_core_workgraph.
         potential_family (str, optional): Potential family name (e.g., "PBE").
             If not provided, must be set before using with build_core_workgraph.
+        options (dict, optional): AiiDA scheduler options of your computer,
+            used for every calculation, e.g.
+            ``{"resources": {"num_machines": 1, "num_mpiprocs_per_machine": 32},
+            "queue_name": "my-queue"}``. Default: one machine and the
+            computer's own defaults (no queue).
         **overrides: Any parameter to override. Will be deep-merged with defaults.
             Example: bulk_parameters={'ENCUT': 600}, miller_indices=[1,1,0]
             
@@ -106,7 +117,7 @@ def get_ag2o_defaults(
         >>> # Get defaults
         >>> defaults = get_ag2o_defaults(
         ...     structures_dir="/home/user/structures",
-        ...     code_label="VASP-VTST-6.4.3@bohr",
+        ...     code_label="vasp@my-cluster",
         ...     potential_family="PBE",
         ...     # Override specific parameters
         ...     bulk_parameters={'ENCUT': 600},
@@ -136,13 +147,7 @@ def get_ag2o_defaults(
         "LCHARG": False,
     }
 
-    bulk_options = {
-        "resources": {
-            "num_machines": 1,
-            "num_cores_per_machine": 40,
-        },
-        "queue_name": "par40",
-    }
+    bulk_options = _scheduler_options(options)
 
     # ===== METAL (Ag) REFERENCE PARAMETERS =====
     metal_parameters = {
@@ -161,13 +166,7 @@ def get_ag2o_defaults(
         "LCHARG": False,
     }
 
-    metal_options = {
-        "resources": {
-            "num_machines": 1,
-            "num_cores_per_machine": 40,
-        },
-        "queue_name": "par40",
-    }
+    metal_options = _scheduler_options(options)
 
     # ===== NONMETAL REFERENCE (DUMMY FOR BINARY OXIDE) =====
     # For binary oxide Ag2O, nonmetal is not physically meaningful but required by framework
@@ -192,13 +191,7 @@ def get_ag2o_defaults(
         "LCHARG": False,
     }
 
-    oxygen_options = {
-        "resources": {
-            "num_machines": 1,
-            "num_cores_per_machine": 40,
-        },
-        "queue_name": "par40",
-    }
+    oxygen_options = _scheduler_options(options)
 
     # ===== SLAB RELAXATION PARAMETERS =====
     slab_parameters = {
@@ -217,13 +210,7 @@ def get_ag2o_defaults(
         "LCHARG": False,
     }
 
-    slab_options = {
-        "resources": {
-            "num_machines": 1,
-            "num_cores_per_machine": 40,
-        },
-        "queue_name": "par40",
-    }
+    slab_options = _scheduler_options(options)
 
     # ===== POTENTIAL MAPPINGS =====
     # For binary oxide Ag2O: nonmetal reference is same as metal (Ag)

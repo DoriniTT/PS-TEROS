@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 STEP 17: Test max_concurrent_jobs Parameter
 
@@ -56,9 +56,9 @@ def main():
     print(f"   Oxygen: {structures_dir}/O2.cif")
 
     # Code configuration
-    #code_label = 'VASP-6.5.0@bohr-new'
-    code_label = 'VASP-6.5.1@cluster03'
-    #code_label = 'VASP-6.5.1@cluster02'
+    #code_label = 'vasp@my-cluster'
+    code_label = 'vasp@my-cluster'
+    #code_label = 'vasp@my-cluster'
     potential_family = 'PBE'
 
     # Minimal VASP parameters for fast testing

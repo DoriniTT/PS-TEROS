@@ -601,7 +601,7 @@ workflow = build_pythonic_workgraph(
     miller_indices=(1, 0, 0),
     min_slab_thickness=10.0,
     min_vacuum_thickness=15.0,
-    code_label='VASP-VTST-6.4.3@bohr',
+    code_label='vasp@my-cluster',
     # ... other parameters
 )
 
@@ -1207,7 +1207,7 @@ python slabs_relax.py
 bulk_path = structures_dir / 'ag3po4.cif'
 
 # Compute resources
-code_label = 'VASP-VTST-6.4.3@bohr'
+code_label = 'vasp@my-cluster'
 potential_family = 'PBE'
 potential_mapping = {'Ag': 'Ag', 'P': 'P', 'O': 'O'}
 
@@ -1231,7 +1231,7 @@ slab_options = {
         'num_machines': 1,
         'num_cores_per_machine': 40,
     },
-    'queue_name': 'par40',
+    'queue_name': 'my-queue',
 }
 
 # Surface generation

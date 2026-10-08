@@ -58,7 +58,7 @@ Usage Example
     ctx = StageContext(
         resolved_flags={'relax_slabs': True, ...},
         resolved_preset_name='surface_thermodynamics',
-        code_label='VASP-6.5.1@cluster',
+        code_label='vasp@my-cluster',
         potential_family='PBE',
         ...
     )
@@ -228,7 +228,7 @@ class StageContext:
         >>> ctx = StageContext(
         ...     resolved_flags={'relax_slabs': True, 'compute_thermodynamics': True},
         ...     resolved_preset_name='surface_thermodynamics',
-        ...     code_label='VASP-6.5.1@cluster',
+        ...     code_label='vasp@my-cluster',
         ...     potential_family='PBE',
         ...     bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
         ...     bulk_parameters={'incar': {'ENCUT': 520}},
@@ -248,7 +248,7 @@ class StageContext:
     resolved_preset_name: str = "surface_thermodynamics"
 
     # Code configuration
-    code_label: str = "VASP-6.5.1@cluster"
+    code_label: Optional[str] = None
     bulk_code_label: Optional[str] = None
     slab_code_label: Optional[str] = None
     metal_code_label: Optional[str] = None

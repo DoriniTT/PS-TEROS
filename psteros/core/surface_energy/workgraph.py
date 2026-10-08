@@ -273,7 +273,7 @@ def build_metal_surface_energy_workgraph(
     bulk_structure: orm.StructureData = None,
     
     # VASP configuration
-    code_label: str = 'VASP-VTST-6.4.3@bohr',
+    code_label: str = None,
     potential_family: str = 'PBE',
     potential_mapping: dict = None,
     kpoints_spacing: float = 0.4,
@@ -368,6 +368,10 @@ def build_metal_surface_energy_workgraph(
         - relaxed_slabs_hkl_XXX: Per-orientation slab structures
         - slab_energies_hkl_XXX: Per-orientation slab energies
     """
+    if not code_label:
+        raise ValueError(
+            "code_label is required: the AiiDA label of your VASP code, e.g. 'vasp@my-cluster'"
+        )
     # Validate inputs
     if bulk_structure_path is None and bulk_structure is None:
         raise ValueError("Either bulk_structure_path or bulk_structure must be provided")

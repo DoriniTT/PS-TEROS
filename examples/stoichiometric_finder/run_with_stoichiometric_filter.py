@@ -81,7 +81,7 @@ def main():
         print("   Use psteros.core.thermodynamics for those orientations instead.")
 
     # Code configuration (update for your cluster)
-    code_label = 'VASP-6.5.1-idefix@obelix'
+    code_label = 'vasp@my-cluster'
     potential_family = 'PBE'
 
     # VASP parameters for metals
@@ -104,16 +104,13 @@ def main():
     slab_parameters = bulk_parameters.copy()
     slab_parameters['isif'] = 2  # Fix cell, relax ions
 
-    # Scheduler options for obelix
+    # Scheduler options of your computer
     common_options = {
         'resources': {
             'num_machines': 1,
             'num_mpiprocs_per_machine': 4,
         },
-        'custom_scheduler_commands': '''#PBS -l cput=90000:00:00
-#PBS -l nodes=1:ppn=88:skylake
-#PBS -j oe
-#PBS -N PdIn_surf''',
+        # 'queue_name': 'my-queue',  # your queue or partition
     }
 
     print("\n4. Building workgraph...")

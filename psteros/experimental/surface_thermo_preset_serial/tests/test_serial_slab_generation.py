@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 Test Script: Serial Preset - Slab Generation and Relaxation
 
@@ -187,7 +187,7 @@ def main():
     print(f"   {bulk_filepath}")
 
     # Code configuration
-    code_label = 'VASP-6.5.0@bohr-new'
+    code_label = 'vasp@my-cluster'
     code = orm.load_code(code_label)
     potential_family = 'PBE'
 
@@ -201,7 +201,7 @@ def main():
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'queue_name': 'par40',
+        'queue_name': 'my-queue',
     }
 
     # Miller indices for slab generation

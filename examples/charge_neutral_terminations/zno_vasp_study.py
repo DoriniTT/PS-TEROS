@@ -20,11 +20,11 @@ from pymatgen.core import Lattice, Structure
 
 import psteros
 
-CODE = "vasp@cluster"
+CODE = "vasp@my-cluster"
 POTCAR_FAMILY = "PBE"
 POTCARS = {"Zn": "Zn", "O": "O"}
-COMPUTER = "cluster"
-QUEUE = "normal"
+COMPUTER = "my-cluster"
+QUEUE = "my-queue"
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUTPUT = os.path.join(HERE, "output", "zno_study")
 

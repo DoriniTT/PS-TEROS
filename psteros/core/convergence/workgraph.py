@@ -290,7 +290,7 @@ def build_convergence_workgraph(
 
     Args:
         structure: StructureData to test convergence on
-        code_label: str, VASP code label (e.g., 'VASP-6.5.1@cluster02')
+        code_label: str, VASP code label (e.g., 'vasp@my-cluster')
         builder_inputs: dict with base VASP builder parameters:
             - parameters: Dict with nested 'incar' dict
             - options: Dict with resources, queue, etc.
@@ -322,7 +322,7 @@ def build_convergence_workgraph(
         >>>
         >>> wg = build_convergence_workgraph(
         ...     structure=my_structure,
-        ...     code_label='VASP-6.5.1@cluster02',
+        ...     code_label='vasp@my-cluster',
         ...     builder_inputs={
         ...         'parameters': {'incar': {'PREC': 'Accurate', 'ISMEAR': 0}},
         ...         'options': {'resources': {'num_machines': 1, 'num_cores_per_machine': 24}},
@@ -816,7 +816,7 @@ def build_thickness_convergence_workgraph(
     bulk_structure: orm.StructureData = None,
 
     # VASP configuration
-    code_label: str = 'VASP-6.5.1@cluster',
+    code_label: str = None,
     potential_family: str = 'PBE',
     potential_mapping: dict = None,
     kpoints_spacing: float = 0.03,
@@ -896,7 +896,7 @@ def build_thickness_convergence_workgraph(
         >>>
         >>> wg = build_thickness_convergence_workgraph(
         ...     bulk_structure_path='/path/to/bulk.cif',
-        ...     code_label='VASP-6.5.1@cluster',
+        ...     code_label='vasp@my-cluster',
         ...     potential_family='PBE.54',
         ...     potential_mapping={'Au': 'Au'},
         ...     miller_indices=[1, 1, 1],
@@ -908,6 +908,10 @@ def build_thickness_convergence_workgraph(
         ... )
         >>> wg.submit()
     """
+    if not code_label:
+        raise ValueError(
+            "code_label is required: the AiiDA label of your VASP code, e.g. 'vasp@my-cluster'"
+        )
     logger.info(f"Building thickness convergence WorkGraph: {name}")
 
     # Validate inputs

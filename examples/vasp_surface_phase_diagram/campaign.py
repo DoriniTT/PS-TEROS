@@ -12,8 +12,8 @@ Phase ``slabs``  the o / sno / sn2o terminations of SnO2(110) built on the
 
 Usage
 -----
-    python campaign.py refs  --profile P --code vasp@cluster --potential-family PBE --submit
-    python campaign.py slabs --profile P --code vasp@cluster --potential-family PBE \\
+    python campaign.py refs  --profile P --code vasp@my-cluster --potential-family PBE --submit
+    python campaign.py slabs --profile P --code vasp@my-cluster --potential-family PBE \\
         --refs-pk <PK of the finished refs graph> --submit
 
 Then run ``phase_diagram.py`` on the two graph PKs.
@@ -132,8 +132,8 @@ def main(argv=None):
     parser.add_argument("--profile", required=True)
     parser.add_argument("--code", required=True, help="AiiDA label of a vasp.vasp code")
     parser.add_argument("--potential-family", required=True, help="uploaded POTCAR family")
-    parser.add_argument("--computer", default="cluster")
-    parser.add_argument("--queue", default="debug")
+    parser.add_argument("--computer", help="name of your AiiDA computer (for the record)")
+    parser.add_argument("--queue", help="queue or partition; the scheduler's default when left out")
     parser.add_argument("--ranks", type=int, default=4, help="MPI ranks per job")
     parser.add_argument("--walltime", type=int, default=3600, help="seconds per job")
     parser.add_argument("--refs-pk", type=int, help="slabs phase: PK of the finished refs graph")

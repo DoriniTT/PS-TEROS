@@ -29,7 +29,7 @@ from psteros.core.workgraph import build_core_workgraph_with_map
 # Run 1: Generate (100) surface
 defaults_100 = get_ag3po4_defaults(
     structures_dir="/path/to/structures",
-    code_label="VASP-VTST-6.4.3@bohr",
+    code_label="vasp@my-cluster",
     potential_family="PBE",
     miller_indices=[1, 0, 0]  # (100) surface
 )
@@ -38,7 +38,7 @@ wg_100 = build_core_workgraph_with_map(**defaults_100, name="Ag3PO4_100")
 # Run 2: Generate (110) surface
 defaults_110 = get_ag3po4_defaults(
     structures_dir="/path/to/structures",
-    code_label="VASP-VTST-6.4.3@bohr",
+    code_label="vasp@my-cluster",
     potential_family="PBE",
     miller_indices=[1, 1, 0]  # (110) surface
 )
@@ -47,7 +47,7 @@ wg_110 = build_core_workgraph_with_map(**defaults_110, name="Ag3PO4_110")
 # Run 3: Generate (111) surface
 defaults_111 = get_ag3po4_defaults(
     structures_dir="/path/to/structures",
-    code_label="VASP-VTST-6.4.3@bohr",
+    code_label="vasp@my-cluster",
     potential_family="PBE",
     miller_indices=[1, 1, 1]  # (111) surface
 )
@@ -61,7 +61,7 @@ The default is the **(100) surface**:
 ```python
 defaults = get_ag3po4_defaults(
     structures_dir="/path",
-    code_label="VASP-VTST-6.4.3@bohr",
+    code_label="vasp@my-cluster",
     potential_family="PBE"
 )
 
@@ -76,7 +76,7 @@ To generate a different surface, override the `miller_indices` parameter:
 ```python
 defaults = get_ag3po4_defaults(
     structures_dir="/path",
-    code_label="VASP-VTST-6.4.3@bohr",
+    code_label="vasp@my-cluster",
     potential_family="PBE",
     miller_indices=[1, 1, 0]  # (110) surface
 )
@@ -86,7 +86,7 @@ defaults = get_ag3po4_defaults(
 ```python
 defaults = get_ag3po4_defaults(
     structures_dir="/path",
-    code_label="VASP-VTST-6.4.3@bohr",
+    code_label="vasp@my-cluster",
     potential_family="PBE"
 )
 defaults['miller_indices'] = [1, 1, 1]  # Change to (111) surface
@@ -123,8 +123,8 @@ load_profile(profile='psteros')
 
 # Get defaults for (100) surface
 defaults = get_ag3po4_defaults(
-    structures_dir="/home/thiagotd/git/PS-TEROS/examples/structures",
-    code_label="VASP-VTST-6.4.3@bohr",
+    structures_dir="examples/structures",
+    code_label="vasp@my-cluster",
     potential_family="PBE",
     miller_indices=[1, 0, 0]  # (100) surface
 )
@@ -161,7 +161,7 @@ All files have been updated with the correct format:
 Run tests to verify the format is correct:
 
 ```bash
-cd /home/thiagotd/git/worktree/PS-TEROS/default-builders
+cd PS-TEROS
 source ~/envs/psteros/bin/activate
 python examples/default_builders/test_default_builders.py
 ```

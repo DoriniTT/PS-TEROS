@@ -28,7 +28,7 @@ from psteros.core import build_core_workgraph
 # Get all defaults for Ag2O
 defaults = get_ag2o_defaults(
     structures_dir='/path/to/structures',
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     potential_family='PBE.54',
 )
 

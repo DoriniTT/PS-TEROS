@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 STEP 19: AIMD with Per-Structure Overrides
 
@@ -54,7 +54,7 @@ def main():
     print(f"     - Structure 2: {len(ag_structure2.sites)} atoms")
 
     # Code configuration
-    code_label = 'VASP-6.5.1@cluster02'
+    code_label = 'vasp@my-cluster'
     potential_family = 'PBE'
 
     print(f"\n3. VASP configuration:")

@@ -301,7 +301,7 @@ def build_surface_hydroxylation_workgraph(
     structure: orm.StructureData = None,
     structure_pk: int = None,
     surface_params: dict = None,
-    code_label: str = 'VASP-VTST-6.4.3@bohr',
+    code_label: str = None,
     builder_inputs: dict = None,
     bulk_structure: orm.StructureData = None,
     bulk_structure_pk: int = None,
@@ -344,7 +344,7 @@ def build_surface_hydroxylation_workgraph(
             - supercell: list[int] or None
             - deduplicate_by_coverage: bool (default True)
             - coverage_bins: int or None
-        code_label: Label of VASP code (e.g., 'VASP-VTST-6.4.3@bohr')
+        code_label: Label of VASP code (e.g., 'vasp@my-cluster')
         builder_inputs: Complete builder configuration (dict) for vasp.v2.vasp WorkChain.
             Provide ALL builder parameters you want to control:
 
@@ -456,6 +456,10 @@ def build_surface_hydroxylation_workgraph(
         ... )
         >>> wg.submit()
     """
+    if not code_label:
+        raise ValueError(
+            "code_label is required: the AiiDA label of your VASP code, e.g. 'vasp@my-cluster'"
+        )
     # ========================================================================
     # INPUT VALIDATION
     # ========================================================================

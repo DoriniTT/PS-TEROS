@@ -32,7 +32,7 @@ from aiida.engine import submit
 
 # Common parameters
 STRUCTURES_DIR = '/path/to/structures'
-CODE_LABEL = 'VASP-VTST-6.4.3@bohr'
+CODE_LABEL = 'vasp@my-cluster'
 POTENTIAL_FAMILY = 'PBE'
 
 # Common VASP parameters

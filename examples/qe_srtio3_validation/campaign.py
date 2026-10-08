@@ -11,11 +11,12 @@ Validates the psteros ternary phase diagram against experiment and literature
 
 Usage
 -----
-    python campaign.py refs      --profile P --submit
-    python campaign.py slabs     --profile P --refs-pk <REFS_PK> --submit
-    python campaign.py unrelaxed --profile P --refs-pk <REFS_PK> --submit
+    python campaign.py refs      --profile P --code pw@my-cluster --queue my-queue --submit
+    python campaign.py slabs     --profile P --code pw@my-cluster --refs-pk <REFS_PK> --submit
+    python campaign.py unrelaxed --profile P --code pw@my-cluster --refs-pk <REFS_PK> --submit
 
-Defaults target Obelix (queue MONARIS, one whole node with 44 physical cores, wrapper-managed MPI).
+Set the MPI ranks, wall time and queue for your computer. For a QE wrapper that
+launches MPI itself, pass ``--no-mpi`` and the lines it needs with ``--prepend``.
 """
 
 from __future__ import annotations
@@ -103,12 +104,10 @@ def execution(args) -> psteros.ExecutionPolicy:
     return psteros.ExecutionPolicy(
         computer=args.computer,
         queue=args.queue,
-        # Obelix's scheduler books whole nodes (88 hardware threads, 44 physical cores); the wrapper
-        # starts QE_MPI_RANKS ranks and OpenMPI binds one per physical core, so at most 44.
         resources={"num_machines": 1, "num_mpiprocs_per_machine": args.ranks},
         max_wallclock_seconds=args.walltime,
-        with_mpi=False,
-        prepend_text=f"export QE_MPI_RANKS={args.ranks}",
+        with_mpi=not args.no_mpi,
+        prepend_text=args.prepend,
         max_concurrent_jobs=1,
     )
 
@@ -202,12 +201,14 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("phase", choices=("refs", "slabs", "unrelaxed"))
     parser.add_argument("--profile", required=True)
-    parser.add_argument("--code", default="QE-7.6@obelix")
+    parser.add_argument("--code", required=True, help="AiiDA label of your quantumespresso.pw code")
     parser.add_argument("--pseudo-family", default="SSSP/1.3/PBE/efficiency")
-    parser.add_argument("--computer", default="obelix")
-    parser.add_argument("--queue", default="MONARIS")
-    parser.add_argument("--ranks", type=int, default=44, help="MPI ranks; must be divisible by the pools (4, 2)")
-    parser.add_argument("--walltime", type=int, default=4 * 3600)
+    parser.add_argument("--computer", help="name of your AiiDA computer (for the record)")
+    parser.add_argument("--queue", help="queue or partition; the scheduler's default when left out")
+    parser.add_argument("--ranks", type=int, default=4, help="MPI ranks; must be divisible by the pools (4, 2)")
+    parser.add_argument("--walltime", type=int, default=4 * 3600, help="seconds per job")
+    parser.add_argument("--no-mpi", action="store_true", help="the code (a wrapper) launches MPI itself")
+    parser.add_argument("--prepend", default="", help="shell lines before the executable, e.g. module loads")
     parser.add_argument("--refs-pk", type=int, help="slabs/unrelaxed: PK of the finished refs graph")
     parser.add_argument("--a", type=float, default=3.94, help="lattice constant when --refs-pk is not given")
     parser.add_argument("--submit", action="store_true")

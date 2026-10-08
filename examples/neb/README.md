@@ -63,7 +63,7 @@ builder_inputs = {
     'potential_mapping': {'Ag': 'Ag', 'O': 'O'},
     'options': {
         'resources': {'num_machines': 3, 'num_cores_per_machine': 40},
-        'queue_name': 'par120',
+        'queue_name': 'my-queue',
     },
 }
 
@@ -72,7 +72,7 @@ wg = build_neb_workgraph(
     initial_structure=initial,
     final_structure=final,
     n_images=5,
-    code_label='VASP-6.4.3@bohr',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
     relax_endpoints=True,
     climb=True,  # Two-stage NEB → CI-NEB

@@ -48,58 +48,66 @@ def qe_fixed_coordinate_flags(
 
 @dataclass(frozen=True)
 class ExecutionPolicy:
-    """Scheduler contract for one psteros WorkGraph.
+    """Scheduler settings for the calculations of one psteros WorkGraph.
 
-    The defaults encode the Bohr A100 policy used by the maintained SnO2
-    campaign: one machine, one MPI rank, the ``gpu_a100`` queue, and no more
-    than one active calculation in a graph.
+    Every field describes *your* computer, so nothing is assumed: options
+    that are not given are left out of the job and the AiiDA computer or the
+    scheduler uses its own default.
 
-    ``prepend_text`` holds shell lines placed in the job script before the
-    executable, such as module loads or ``export QE_MPI_RANKS=88`` for a code
-    whose wrapper launches MPI itself.
+    ``computer``
+        Name of the AiiDA computer, for the record; the code label of the
+        calculation recipe selects the computer that runs the job.
+    ``queue``
+        Queue or partition (AiiDA ``queue_name``), written by the scheduler
+        plugin in its own syntax (``#PBS -q``, ``#SBATCH --partition``, ...).
+    ``max_concurrent_jobs``
+        Largest number of calculations of the graph running at once
+        (``None``: no limit). The default of 1 runs them one after the other.
+    ``resources``
+        AiiDA resources, e.g. ``{"num_machines": 1, "num_mpiprocs_per_machine": 32}``.
+    ``max_wallclock_seconds``, ``account``, ``custom_scheduler_commands``
+        Passed to AiiDA when given.
+    ``prepend_text``
+        Shell lines placed in the job script before the executable, such as
+        module loads.
     """
 
-    computer: str = "bohr"
-    queue: str = "gpu_a100"
-    max_concurrent_jobs: int = 1
-    resources: Mapping[str, int] = field(
-        default_factory=lambda: {
-            "num_machines": 1,
-            "num_mpiprocs_per_machine": 1,
-        }
-    )
-    max_wallclock_seconds: int = 86_400
+    computer: str | None = None
+    queue: str | None = None
+    max_concurrent_jobs: int | None = 1
+    resources: Mapping[str, int] = field(default_factory=lambda: {"num_machines": 1})
+    max_wallclock_seconds: int | None = None
     with_mpi: bool = True
     prepend_text: str = ""
+    account: str | None = None
+    custom_scheduler_commands: str = ""
 
     def __post_init__(self) -> None:
-        if self.max_concurrent_jobs != 1:
-            raise ValueError(
-                "psteros surface workflows currently require "
-                "max_concurrent_jobs=1"
-            )
-        _require_positive("max_wallclock_seconds", self.max_wallclock_seconds)
-        if not self.computer:
-            raise ValueError("computer must not be empty")
-        if not self.queue:
-            raise ValueError("queue must not be empty")
+        if self.max_concurrent_jobs is not None:
+            _require_positive("max_concurrent_jobs", self.max_concurrent_jobs)
+        if self.max_wallclock_seconds is not None:
+            _require_positive("max_wallclock_seconds", self.max_wallclock_seconds)
+        for name in ("computer", "queue", "account"):
+            value = getattr(self, name)
+            if value is not None and not str(value).strip():
+                raise ValueError(f"{name} must not be empty; leave it out instead")
+        if not self.resources:
+            raise ValueError("resources must not be empty")
         for key, value in self.resources.items():
             _require_positive(f"resources[{key!r}]", value)
 
     def scheduler_options(self) -> dict[str, Any]:
         """Return AiiDA metadata options without mutating the source recipe."""
 
-        options = {
-            "resources": dict(self.resources),
-            "max_wallclock_seconds": self.max_wallclock_seconds,
-            "withmpi": self.with_mpi,
-            # Bohr's ``gpu_a100`` queue is a fixed one-A100 resource. Queue
-            # selection is consequently the GPU request itself.  AiiDA writes
-            # the scheduler's own directive (``#PBS -q``, ``#SBATCH
-            # --partition``, ...); ``-j oe`` is a comment to non-PBS schedulers.
-            "queue_name": self.queue,
-            "custom_scheduler_commands": "#PBS -j oe",
-        }
+        options: dict[str, Any] = {"resources": dict(self.resources), "withmpi": self.with_mpi}
+        if self.max_wallclock_seconds is not None:
+            options["max_wallclock_seconds"] = self.max_wallclock_seconds
+        if self.queue is not None:
+            options["queue_name"] = self.queue
+        if self.account is not None:
+            options["account"] = self.account
+        if self.custom_scheduler_commands:
+            options["custom_scheduler_commands"] = self.custom_scheduler_commands
         if self.prepend_text:
             options["prepend_text"] = self.prepend_text
         return options
@@ -207,14 +215,16 @@ class CalculationOverride:
 class SurfaceWorkflowConfig:
     """Backend-neutral recipe accepted by :func:`psteros.build_surface_workgraph`.
 
-    ``role_overrides`` is keyed by the structure label passed to the builder.
+    ``execution`` describes the computer and scheduler (see
+    :class:`ExecutionPolicy`). ``role_overrides`` is keyed by the structure
+    label passed to the builder.
     It is especially useful for references such as spin-polarised O2 while
     retaining one auditable base recipe for bulk and slab calculations.
     """
 
     backend: BackendName
     calculation: QeCalculationConfig | VaspCalculationConfig
-    execution: ExecutionPolicy = field(default_factory=ExecutionPolicy)
+    execution: ExecutionPolicy
     name: str = "psteros_surface"
     role_overrides: Mapping[str, CalculationOverride] = field(default_factory=dict)
 

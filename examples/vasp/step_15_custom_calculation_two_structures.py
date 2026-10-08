@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 Custom VASP Calculation - Two Structures with Different Settings
 
@@ -132,7 +132,7 @@ def main():
     print("\n4. Defining VASP builder inputs for each structure...")
 
     # Code configuration (same for both)
-    code_label = 'VASP-6.5.0@bohr-new'
+    code_label = 'vasp@my-cluster'
     potential_family = 'PBE'
 
     # Structure 1: Fast relaxation (Ag2O)
@@ -161,7 +161,7 @@ def main():
                 'num_machines': 1,
                 'num_cores_per_machine': 40,
             },
-            'queue_name': 'par40',
+            'queue_name': 'my-queue',
         },
         'kpoints_spacing': 1,
         'potential_family': potential_family,
@@ -194,7 +194,7 @@ def main():
                 'num_machines': 1,
                 'num_cores_per_machine': 40,
             },
-            'queue_name': 'par40'
+            'queue_name': 'my-queue'
         },
         'kpoints_spacing': 1,        # Denser k-points
         'potential_family': potential_family,

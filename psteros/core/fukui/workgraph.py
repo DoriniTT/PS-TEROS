@@ -359,7 +359,7 @@ def build_fukui_workgraph(
                        Default: [0.0, 0.05, 0.10, 0.15]
                        NELECT = nelect_neutral - delta_n for Fukui+
                        NELECT = nelect_neutral + delta_n for Fukui-
-        code_label: VASP code label (e.g., 'VASP-6.5.1@localwork')
+        code_label: VASP code label (e.g., 'vasp@my-cluster')
         builder_inputs: VASP builder configuration dict.
                        NSW and IBRION are overridden for static calculations.
                        Format: {'parameters': {'incar': {...}}, 'options': {...}, ...}
@@ -434,7 +434,7 @@ def build_fukui_workgraph(
         >>> wg = build_fukui_workgraph(
         ...     structure=my_structure,
         ...     nelect_neutral=192,
-        ...     code_label='VASP-6.5.1@localwork',
+        ...     code_label='vasp@my-cluster',
         ...     builder_inputs={
         ...         'parameters': {'incar': {'encut': 400, 'ediff': 1e-5}},
         ...         'options': {'resources': {'num_machines': 1, 'num_mpiprocs_per_machine': 8}},

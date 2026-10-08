@@ -30,7 +30,7 @@ def build_aimd_workgraph(
                      Required: TEBEG (initial temperature), NSW (MD steps)
                      Optional: TEEND (final temperature, defaults to TEBEG), POTIM (timestep fs),
                               MDALGO (thermostat algorithm), SMASS (Nosé mass parameter)
-        code_label: VASP code label (e.g., 'VASP6.5.0@cluster02')
+        code_label: VASP code label (e.g., 'vasp@my-cluster')
         builder_inputs: Default builder config for all (structure, stage) combinations
         supercell_specs: {structure_name: [nx, ny, nz]} - optional supercell per structure
         structure_overrides: Per-structure builder overrides.
@@ -61,7 +61,7 @@ def build_aimd_workgraph(
                 {'TEBEG': 300, 'NSW': 100, 'POTIM': 2.0},
                 {'TEBEG': 300, 'NSW': 500, 'POTIM': 1.5},
             ],
-            code_label='VASP6.5.0@cluster02',
+            code_label='vasp@my-cluster',
             builder_inputs={
                 'parameters': {'incar': {'PREC': 'Normal', 'ENCUT': 400}},
                 'kpoints_spacing': 0.5,

@@ -31,7 +31,7 @@ Example (Phase 1 only):
     >>> wg = build_fukui_workgraph(
     ...     structure=my_structure,
     ...     nelect_neutral=192,
-    ...     code_label='VASP-6.5.1@localwork',
+    ...     code_label='vasp@my-cluster',
     ...     builder_inputs={...},
     ...     fukui_type='plus',
     ...     compute_fukui=True,
@@ -42,7 +42,7 @@ Example (Phase 1 + Planar Average):
     >>> wg = build_fukui_workgraph(
     ...     structure=my_structure,
     ...     nelect_neutral=192,
-    ...     code_label='VASP-6.5.1@localwork',
+    ...     code_label='vasp@my-cluster',
     ...     builder_inputs={...},
     ...     fukui_type='plus',
     ...     compute_fukui=True,
@@ -54,7 +54,7 @@ Example (Phase 1 + Phase 2):
     >>> wg = build_fukui_workgraph(
     ...     structure=slab_structure,
     ...     nelect_neutral=192,
-    ...     code_label='VASP-6.5.1@localwork',
+    ...     code_label='vasp@my-cluster',
     ...     builder_inputs={...},
     ...     fukui_type='plus',
     ...     compute_fukui=True,
@@ -66,7 +66,7 @@ Example (Full workflow with Phase 4):
     >>> wg = build_fukui_workgraph(
     ...     structure=slab_structure,
     ...     nelect_neutral=192,
-    ...     code_label='VASP-6.5.1@localwork',
+    ...     code_label='vasp@my-cluster',
     ...     builder_inputs={...},
     ...     fukui_type='plus',
     ...     compute_fukui=True,

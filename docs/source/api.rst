@@ -12,12 +12,12 @@ The signatures below emphasize the arguments portable calculations should
 supply. Deployment values appear as placeholders instead of copying settings
 from one computing environment.
 
-.. warning::
+.. note::
 
-   ``ExecutionPolicy`` retains legacy deployment-specific defaults for
-   compatibility, and omitting ``SurfaceWorkflowConfig.execution`` constructs
-   that default policy. Always pass an explicit policy for new calculations;
-   the retained defaults are not portable recommendations.
+   psteros assumes nothing about your computer: code labels, POTCAR or
+   pseudopotential families, queues and resources are always yours to give.
+   Scheduler options you leave out are not sent, so the AiiDA computer and the
+   scheduler apply their own defaults.
 
 Structures
 ----------
@@ -146,22 +146,24 @@ Calculation configuration
 
 .. index:: ExecutionPolicy
 
-``ExecutionPolicy(computer=..., queue=..., resources=..., max_concurrent_jobs=1, max_wallclock_seconds=86400, with_mpi=True, prepend_text="")``
-   Supply scheduler queue, resource, wall-time, and MPI choices. The registered
-   code in ``VaspCalculationConfig`` or ``QeCalculationConfig`` selects the
-   actual AiiDA computer. The policy's ``computer`` field is descriptive in the
-   current API; keep it consistent with the computer in ``code_label`` because
-   the builder does not cross-check them. ``resources`` is a scheduler resource
-   mapping accepted by AiiDA, and the wall time is in seconds. ``prepend_text``
-   adds shell lines to the job script before the executable, for example
-   module loads or ``export QE_MPI_RANKS=88`` for a code whose wrapper launches
-   MPI itself (then also pass ``with_mpi=False``).
+``ExecutionPolicy(computer=None, queue=None, max_concurrent_jobs=1, resources={"num_machines": 1}, max_wallclock_seconds=None, with_mpi=True, prepend_text="", account=None, custom_scheduler_commands="")``
+   Scheduler settings of your computer. The registered code in
+   ``VaspCalculationConfig`` or ``QeCalculationConfig`` selects the AiiDA
+   computer that runs the job; ``computer`` only records its name. ``queue``
+   is passed as AiiDA's ``queue_name``, which the scheduler plugin writes in
+   its own syntax (``#PBS -q``, ``#SBATCH --partition``, ...). ``resources`` is
+   an AiiDA resource mapping, e.g. ``{"num_machines": 1,
+   "num_mpiprocs_per_machine": 32}``. ``max_wallclock_seconds`` (seconds),
+   ``account`` and ``custom_scheduler_commands`` are passed when given.
+   ``prepend_text`` adds shell lines to the job script before the executable,
+   such as module loads (pass ``with_mpi=False`` for a code whose wrapper
+   launches MPI itself).
 
-   The graph builder currently requires ``max_concurrent_jobs=1``.
-   ``scheduler_options()`` passes ``queue`` as AiiDA's ``queue_name`` option,
-   which the AiiDA scheduler plugin renders in its own syntax (``#PBS -q`` for
-   PBS Pro, ``#SBATCH --partition`` for SLURM). It also adds ``#PBS -j oe``,
-   a comment to other schedulers.
+   ``max_concurrent_jobs`` is the largest number of calculations of one graph
+   running at once (``None``: no limit); the default of 1 runs them one after
+   the other. ``scheduler_options()`` returns the AiiDA metadata options; an
+   option that was not given is left out, and the computer's or scheduler's
+   default applies.
 
 .. _api-calculation-override:
 

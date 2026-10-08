@@ -58,7 +58,7 @@ def my_function(..., max_number_jobs: int = None):
 
 ### Test Example Created
 
-Created `step_17_test_max_concurrent_jobs.py` in `/home/thiagotd/git/PS-TEROS/examples/vasp/`
+Created `step_17_test_max_concurrent_jobs.py` in `examples/vasp/`
 
 **Test Parameters**:
 - Material: Ag2O
@@ -146,7 +146,7 @@ wg = build_core_workgraph(
     bulk_name='ag2o.cif',
     metal_name='Ag.cif',
     oxygen_name='O2.cif',
-    code_label='VASP-6.4.1@cluster02',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
     metal_potential_mapping={'Ag': 'Ag'},
@@ -215,7 +215,7 @@ wg = build_core_workgraph(
 
 ## Technical Documentation
 
-**Investigation Folder**: `/home/thiagotd/git/PS-TEROS/psteros/experimental/max_jobs_investigation/`
+**Investigation Folder**: `psteros/experimental/max_jobs_investigation/`
 
 **Key Documents**:
 - `SUCCESS.md` - Discovery of the solution

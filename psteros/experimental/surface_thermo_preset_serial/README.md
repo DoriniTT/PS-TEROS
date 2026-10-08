@@ -42,7 +42,7 @@ wg = surface_thermodynamics_serial_workgraph(
     bulk_name='ag2o.cif',
     metal_name='Ag.cif',
     oxygen_name='O2.cif',
-    code_label='VASP-6.5.0@bohr-new',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     input_slabs=slabs_dict,  # Pre-generated slabs (required)
     # ... other parameters

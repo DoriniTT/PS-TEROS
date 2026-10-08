@@ -12,7 +12,7 @@ This directory contains a **production-ready** implementation of the scatter-gat
 
 ```bash
 # Navigate to directory
-cd /home/thiagotd/git/PS-TEROS/psteros/test_modules/pythonic
+cd psteros/test_modules/pythonic
 
 # Activate environment
 source ~/envs/psteros/bin/activate
@@ -227,13 +227,13 @@ t.Annotated[dict[str, orm.StructureData], dynamic(orm.StructureData)]
 ## Related Implementations
 
 ### Zone Approach (Alternative)
-- **Location**: `/home/thiagotd/git/PS-TEROS/psteros/test_modules/zone_approach/`
+- **Location**: `psteros/test_modules/zone_approach/`
 - **Pattern**: Uses `with Map(...)` context manager instead of `@task.graph`
 - **Comparison**: See **README.md** → "Comparison with Zone Approach"
 - **Use case**: Simpler iterations, explicit Map zone in provenance
 
 ### Legacy Implementation
-- **Location**: `/home/thiagotd/git/PS-TEROS/legacy/v2/`
+- **Location**: `legacy/v2/`
 - **Note**: Older WorkGraph version, reference only
 
 ---

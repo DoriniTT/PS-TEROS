@@ -52,7 +52,7 @@ bulk_structure=orm.load_node(5678)
 
 ```bash
 source ~/envs/aiida/bin/activate
-cd /home/thiagotd/git/PS-TEROS/examples/hydroxylation_with_bulk_reference
+cd examples/hydroxylation_with_bulk_reference
 python run_hydroxylation_v2.py
 ```
 
@@ -134,6 +134,5 @@ The reference data enables surface free energy calculations per Section S2:
 
 ## Related Documentation
 
-- Design document: `/home/thiagotd/git/fosfato/calculos/hydroxylation/docs/plans/2025-10-27-bulk-pristine-reference-calculations-design.md`
 - Section S2: `surface_energy_calc_procedure.tex`
 - Main module: `psteros/core/surface_hydroxylation/workgraph.py`

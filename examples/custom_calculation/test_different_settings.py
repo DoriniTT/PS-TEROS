@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 Test custom calculation module - Multiple structures with different settings.
 
@@ -149,7 +149,7 @@ def main():
     print("\n4. Building WorkGraph...")
     wg = build_custom_calculation_workgraph(
         structure=structures,
-        code_label='VASP-6.4.1@cluster02',
+        code_label='vasp@my-cluster',
         builder_inputs=builder_inputs_list,  # List of dicts
         name='test_different_settings'
     )

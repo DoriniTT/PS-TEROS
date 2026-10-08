@@ -17,7 +17,7 @@ def create_test_structure_and_code():
     from ase import Atoms
     ase_struct = Atoms('H2', positions=[[0, 0, 0], [0, 0, 0.74]])
     structure = orm.StructureData(ase=ase_struct)
-    code = orm.load_code('VASP-VTST-6.4.3@bohr')
+    code = orm.load_code('vasp@my-cluster')
     return structure, code
 
 

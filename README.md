@@ -65,7 +65,7 @@ def recipe(ionic, overrides):
     return psteros.SurfaceWorkflowConfig(
         backend="vasp",
         calculation=psteros.VaspCalculationConfig(
-            code_label="vasp-6.4@cluster",
+            code_label="vasp@my-cluster",
             incar={**INCAR, **ionic},
             potential_family="PBE",                  # uploaded with `aiida-vasp potcar uploadfamily`
             potential_mapping={"Sn": "Sn_d"},        # other elements use the POTCAR of the same name
@@ -73,7 +73,7 @@ def recipe(ionic, overrides):
             max_iterations=3,                        # allow restarts, e.g. after the walltime
         ),
         execution=psteros.ExecutionPolicy(
-            computer="cluster", queue="standard", max_concurrent_jobs=1,
+            computer="my-cluster", queue="my-queue", max_concurrent_jobs=1,
             resources={"num_machines": 1, "num_mpiprocs_per_machine": 32},
         ),
         role_overrides=overrides,

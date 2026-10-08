@@ -122,7 +122,7 @@ builder_inputs = {
 wg = build_aimd_workgraph(
     structures={'my_slab': structure},
     aimd_stages=aimd_stages,
-    code_label='VASP-6.5.1@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
     name='MyAIMD',
 )
@@ -170,7 +170,7 @@ wg = build_aimd_workgraph(
         {'TEBEG': 300, 'NSW': 100},   # Stage 0
         {'TEBEG': 300, 'NSW': 500},   # Stage 1
     ],
-    code_label='VASP-6.5.1@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs={
         'parameters': {'incar': {'ENCUT': 400, 'PREC': 'Normal'}},
         # ... other parameters
@@ -228,7 +228,7 @@ for temp in [300, 400, 500, 600]:
     wg = build_aimd_workgraph(
         structures={'slab': structure},
         aimd_stages=[{'temperature': temp, 'steps': 200}],
-        code_label='VASP-6.5.1@cluster02',
+        code_label='vasp@my-cluster',
         builder_inputs=base_inputs,
         name=f'AIMD_{temp}K',
     )
@@ -243,7 +243,7 @@ wg = build_aimd_workgraph(
         {'temperature': 500, 'steps': 200},
         {'temperature': 600, 'steps': 200},
     ],
-    code_label='VASP-6.5.1@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs=base_inputs,
 )
 ```
@@ -261,7 +261,7 @@ wg = build_aimd_workgraph(
         {'temperature': 300, 'steps': 50},    # Equilibration
         {'temperature': 300, 'steps': 200},   # Production
     ],
-    code_label='VASP-6.5.1@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs={
         'parameters': {'incar': {'ENCUT': 400, 'EDIFF': 1e-5}},
         # ... other parameters
@@ -285,7 +285,7 @@ wg = build_aimd_workgraph(
         {'temperature': 300, 'steps': 100},   # Equilibration
         {'temperature': 300, 'steps': 500},   # Production
     ],
-    code_label='VASP-6.5.1@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs={
         'parameters': {'incar': {'ENCUT': 400, 'PREC': 'Normal'}},
         # ... other parameters
@@ -304,7 +304,7 @@ wg = build_aimd_workgraph(
 wg = build_aimd_workgraph(
     structures={'small_slab': structure},
     aimd_stages=[{'temperature': 300, 'steps': 200}],
-    code_label='VASP-6.5.1@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs=base_inputs,
 
     # Create 3x3x1 supercell before AIMD
@@ -348,7 +348,7 @@ def build_aimd_workgraph(
 **code_label** : `str`
 - VASP code label from AiiDA
 - Format: `'CodeName@ComputerName'`
-- Example: `'VASP-6.5.1@cluster02'`
+- Example: `'vasp@my-cluster'`
 
 **builder_inputs** : `dict`
 - Default VASP builder configuration
@@ -513,7 +513,7 @@ verdi calcjob inputcat 124523 INCAR | grep -E 'ENCUT|PREC|ALGO'
 wg = build_aimd_workgraph(
     structures={f'struct_{i}': struct for i in range(20)},
     aimd_stages=[{'temperature': 300, 'steps': 200}],
-    code_label='VASP-6.5.1@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs=base_inputs,
     max_concurrent_jobs=5,  # Only 5 VASP jobs at once
 )
@@ -531,7 +531,7 @@ wg = build_aimd_workgraph(
         {'temperature': 300, 'steps': 500},
         {'temperature': 300, 'steps': 500},
     ],
-    code_label='VASP-6.5.1@cluster02',
+    code_label='vasp@my-cluster',
     builder_inputs=base_inputs,
 )
 ```
@@ -574,7 +574,7 @@ structure_overrides={
 ### Issue: Calculations not starting
 
 **Check**:
-1. Code exists: `verdi code show VASP-6.5.1@cluster02`
+1. Code exists: `verdi code show vasp@my-cluster`
 2. Daemon running: `verdi daemon status`
 3. Structures valid: `verdi data core.structure show <PK>`
 4. No errors: `verdi process report <PK>`

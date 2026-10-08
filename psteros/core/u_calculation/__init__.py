@@ -20,7 +20,7 @@ Example:
     ... )
     >>> wg = build_u_calculation_workgraph(
     ...     structure=nio_structure,
-    ...     code_label='VASP-6.5.1@cluster',
+    ...     code_label='vasp@my-cluster',
     ...     potential_family='PBE',
     ...     potential_mapping={'Ni': 'Ni', 'O': 'O'},
     ...     target_species='Ni',

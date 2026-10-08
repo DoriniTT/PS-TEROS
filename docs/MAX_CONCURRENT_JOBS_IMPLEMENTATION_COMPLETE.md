@@ -186,7 +186,7 @@ wg = build_core_workgraph(
     oxygen_name='O2.cif',
 
     # VASP configuration
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     bulk_potential_mapping={'Ag': 'Ag', 'O': 'O'},
     metal_potential_mapping={'Ag': 'Ag'},
@@ -252,7 +252,7 @@ All 14 example scripts in `examples/vasp/` now include `max_concurrent_jobs` par
 
 ## Investigation Files
 
-**Location**: `/home/thiagotd/git/PS-TEROS/psteros/experimental/max_jobs_investigation/`
+**Location**: `psteros/experimental/max_jobs_investigation/`
 
 Contains detailed investigation process, test functions, and implementation notes:
 

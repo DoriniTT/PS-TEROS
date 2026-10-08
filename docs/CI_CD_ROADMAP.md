@@ -107,7 +107,7 @@ flake8 psteros/ --max-line-length=120 --ignore=E501,W503
 ### What It Will Test
 
 1. **Real VASP Calculations**
-   - Bulk relaxation on cluster02
+   - Bulk relaxation on a test computer
    - Slab generation and relaxation
    - Formation enthalpy calculation
 
@@ -124,7 +124,7 @@ flake8 psteros/ --max-line-length=120 --ignore=E501,W503
 ### Implementation Notes
 
 - Requires self-hosted GitHub Actions runner
-- Runner must have access to cluster02
+- Runner must have access to a computer with VASP
 - AiiDA daemon must be running
 - Reference outputs stored in `tests/references/`
 

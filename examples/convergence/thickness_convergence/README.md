@@ -18,11 +18,10 @@ The workflow tests Au(111) slabs at different thicknesses (3, 5, 7, 9, 11 layers
    verdi profile set-default presto
    ```
 
-2. **Cluster configuration:** This example is configured for the **obelix** cluster with:
-   - Code: `VASP-6.5.1-idefix@obelix`
+2. **Cluster configuration:** set these for your computer in the script:
+   - Code: `vasp@my-cluster`
    - Potential family: `PBE`
-   - PBS scheduler with Skylake nodes
-   - Hybrid MPI+OpenMP parallelization (4 MPI processes)
+   - Scheduler options (resources and queue)
 
 ## Setup
 
@@ -196,7 +195,7 @@ ERROR: Structure file not found!
 
 ### Code not found
 ```
-NotExistent: Code 'VASP-6.5.1-idefix@obelix' does not exist
+NotExistent: Code 'vasp@my-cluster' does not exist
 ```
 **Solution:** Check available codes with `verdi code list` and update `code_label`.
 
@@ -215,7 +214,7 @@ ValueError: Potential family 'PBE' not found
 - Check VASP output: `verdi calcjob outputcat <CALC_PK>`
 - Common issues:
   - POTCAR mismatch: Verify `potential_mapping={'Au': 'Au'}`
-  - Resource limits: Check PBS queue limits on obelix
+  - Resource limits: check the limits of your queue
 
 ## Files
 

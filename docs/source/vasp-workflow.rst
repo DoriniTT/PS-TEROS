@@ -31,9 +31,8 @@ submitting a calculation.
 Choose one execution policy
 ---------------------------
 
-Both stages must use the same execution policy. Pass it explicitly: omitting the
-policy activates legacy deployment-specific defaults retained for compatibility.
-The builder turns its queue, resource, wall-time, and MPI choices into AiiDA task
+Both stages must use the same execution policy, with the settings of your own
+computer and scheduler. The builder turns its queue, resource, wall-time, and MPI choices into AiiDA task
 metadata. The registered code in each recipe selects the actual AiiDA computer.
 
 .. code-block:: python
@@ -41,16 +40,17 @@ metadata. The registered code in each recipe selects the actual AiiDA computer.
    import psteros
 
    execution = psteros.ExecutionPolicy(
-       computer="your-computer",
-       queue="your-scheduler-queue",
+       computer="my-cluster",
+       queue="my-queue",
        resources={"num_machines": 1, "num_mpiprocs_per_machine": 32},
        max_wallclock_seconds=86_400,
-       with_mpi=True,
        max_concurrent_jobs=1,
    )
 
-A graph runs one calculation at a time, so ``max_concurrent_jobs`` must remain
-``1``. The ``queue`` is passed to AiiDA as ``queue_name``, so the scheduler
+``max_concurrent_jobs`` limits how many calculations of the graph run at once;
+1 runs them one after the other, ``None`` removes the limit. Options you leave
+out, such as ``queue`` or ``max_wallclock_seconds``, are not sent to the
+scheduler. The ``queue`` is passed to AiiDA as ``queue_name``, so the scheduler
 plugin of your computer writes it in its own syntax (``#PBS -q``,
 ``#SBATCH --partition``).
 
@@ -71,9 +71,9 @@ spacing; only the ionic settings differ. ``ENCUT`` and ``EDIFF`` are in eV,
        return psteros.SurfaceWorkflowConfig(
            backend="vasp",
            calculation=psteros.VaspCalculationConfig(
-               code_label="your-vasp-code@your-computer",
+               code_label="vasp@my-cluster",
                incar={**ELECTRONIC, **ionic},
-               potential_family="your-potcar-family",
+               potential_family="PBE",
                potential_mapping={"Sn": "Sn_d"},
                kpoints_spacing=0.20,
                max_iterations=3,      # restarts, e.g. after the walltime

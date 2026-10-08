@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 STEP 13: Surface Hydroxylation and Vacancy Generation
 
@@ -116,7 +116,7 @@ def main():
     print("   Using LIGHTWEIGHT parameters for demonstration")
     print("   For production, use converged ENCUT, k-points, and tight forces")
 
-    code_label = 'VASP-6.4.1@cluster02'  # Update to your VASP code
+    code_label = 'vasp@my-cluster'  # Update to your VASP code
     print(f"   VASP code: {code_label}")
 
     # Builder inputs (new API)

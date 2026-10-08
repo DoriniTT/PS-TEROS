@@ -24,7 +24,7 @@ load_profile('myprofile')
 
 wg = build_metal_surface_energy_workgraph(
     bulk_structure_path='/path/to/au.cif',
-    code_label='VASP-6.5.1@cluster',
+    code_label='vasp@my-cluster',
     potential_family='PBE',
     potential_mapping={'Au': 'Au'},
 

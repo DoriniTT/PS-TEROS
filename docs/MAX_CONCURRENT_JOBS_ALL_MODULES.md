@@ -198,7 +198,7 @@ builder_inputs_list = [inputs1, inputs2, inputs3]
 
 wg = build_custom_calculation_workgraph(
     structure=structures,
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs_list,
     max_concurrent_jobs=2,  # Only 2 calculations at once
 )
@@ -212,7 +212,7 @@ from psteros.core.surface_hydroxylation.workgraph import build_surface_hydroxyla
 # Hydroxylation with both batch and concurrency control
 wg = build_surface_hydroxylation_workgraph(
     input_structure=slab,
-    code_label='VASP-6.4.1@cluster',
+    code_label='vasp@my-cluster',
     builder_inputs=builder_inputs,
     max_parallel=10,         # Process first 10 structures (batch limit)
     max_concurrent_jobs=3,   # Run 3 at a time (concurrency limit)

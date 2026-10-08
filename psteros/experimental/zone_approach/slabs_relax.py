@@ -91,7 +91,7 @@ def main(argv: list[str] | None = None) -> None:
 
     bulk_structure = load_bulk_structure(bulk_path)
 
-    code_label = 'VASP-VTST-6.4.3@bohr'
+    code_label = 'vasp@my-cluster'
     potential_family = 'PBE'
     potential_mapping = {'Ag': 'Ag', 'P': 'P', 'O': 'O'}
 
@@ -116,7 +116,7 @@ def main(argv: list[str] | None = None) -> None:
             'num_machines': 1,
             'num_cores_per_machine': 40,
         },
-        'queue_name': 'par40',
+        'queue_name': 'my-queue',
     }
 
     workflow = build_zone_workgraph(

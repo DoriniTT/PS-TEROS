@@ -1,4 +1,4 @@
-#!/home/thiagotd/envs/aiida/bin/python
+#!/usr/bin/env python
 """
 Test custom calculation module - Single structure.
 
@@ -93,7 +93,7 @@ def main():
 
     # Build WorkGraph
     print("\n4. Building WorkGraph...")
-    code_label = 'VASP-6.4.1@cluster02'
+    code_label = 'vasp@my-cluster'
 
     wg = build_custom_calculation_workgraph(
         structure=structure,

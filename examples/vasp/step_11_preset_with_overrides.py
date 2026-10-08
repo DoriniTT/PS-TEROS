@@ -30,7 +30,7 @@ try:
     )
 except ImportError:
     AIIDA_PROFILE = 'presto'
-    VASP_CODE = 'VASP-6.4.1@cluster'
+    VASP_CODE = 'vasp@my-cluster'
     POTENTIAL_FAMILY = 'PBE'
     BULK_PARAMS = {
         'PREC': 'Accurate', 'ENCUT': 520, 'EDIFF': 1e-6, 'ISMEAR': 0,

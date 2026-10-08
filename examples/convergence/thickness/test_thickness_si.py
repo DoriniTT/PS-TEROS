@@ -44,7 +44,7 @@ def submit_test():
     slab_parameters['ISIF'] = 2   # Fix cell, relax ions
     slab_parameters['NSW'] = 15   # Fewer ionic steps for slabs
 
-    # Options for localwork (8 processors)
+    # Scheduler options of your computer (here 8 processes)
     common_options = {
         'resources': {
             'num_machines': 1,
@@ -59,7 +59,7 @@ def submit_test():
         bulk_structure=bulk_structure,
 
         # VASP configuration
-        code_label='VASP-6.5.1@localwork',
+        code_label='vasp@my-cluster',
         potential_family='PBE',
         potential_mapping={'Si': 'Si'},
         kpoints_spacing=0.08,        # Coarse k-points for speed
@@ -86,7 +86,7 @@ def submit_test():
         # Convergence settings
         convergence_threshold=0.05,   # Relaxed threshold for testing
 
-        # Concurrency - localwork runs 1 job at a time
+        # Concurrency: one job at a time
         max_concurrent_jobs=1,
 
         # Workflow name
