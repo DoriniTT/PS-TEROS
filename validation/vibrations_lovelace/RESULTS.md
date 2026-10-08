@@ -93,6 +93,6 @@ could not be parsed (exit 1002, handler `misc` not found, work chain exit 500). 
 `VaspCalculationConfig.kpoints_spacing` is "in 1/A, with 2 pi, as in aiida-vasp", and `VaspWorkChain` calls
 `set_kpoints_mesh_from_density(spacing * 2 pi)`, so `0.3` means 1.88 1/A between k-points. The meshes actually written are
 alpha-Sn (6.489 A cube) 1x1x1, O2 box 1x1x1 (intended), rutile (4.737, 4.737, 3.186) 1x1x2 and, for the slabs (3.19 x 6.70 x 20.1 A),
-about 1x1x1. The default of the dataclass (0.20) is also Gamma-only for these cells. The alpha-Sn result above is the
+2x1x1 (ceil of 2 pi/(L * 0.3 * 2 pi)). The default of the dataclass (0.20) is also Gamma-only for these cells. The alpha-Sn result above is the
 consequence. `examples/vasp_surface_phase_diagram/campaign.py`, which sets 0.3 and calls it "coarse k-points", has the
 same problem, and so has the plan. A value of 0.03 to 0.05 gives meshes of roughly 4 to 7 points per direction.
