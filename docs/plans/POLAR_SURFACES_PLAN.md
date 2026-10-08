@@ -58,7 +58,7 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
   (minus the oxidation state of its partner over 4), VASP POTCAR names
   (H.5, H.75, H1.25, H1.5, ...), AiiDA kind names via the `kind_name` site
   property.
-- [ ] 5. **Polar slab builder.** `find_polar_terminations` for zinc blende
+- [x] 5. **Polar slab builder.** `find_polar_terminations` for zinc blende
   (111)/(-1-1-1) and wurtzite (0001)/(000-1): N bilayers, one shared bottom
   passivated with pseudo-H, the ideal top plus electron-counting variants
   (e.g. 2x2 vacancy), all in one common cell; bottom fingerprint; summary

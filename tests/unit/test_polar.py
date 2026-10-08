@@ -92,3 +92,124 @@ def test_kind_name_reaches_aiida_structures():
     node = orm.StructureData(pymatgen=structure)
     assert sorted(node.get_kind_names()) == ["As", "H0p75"]
     assert {kind.name: kind.symbol for kind in node.kinds}["H0p75"] == "H"
+
+
+# ---------------------------------------------------------------------------
+# Step 5: polar slabs on one passivated bottom
+# ---------------------------------------------------------------------------
+
+def _check_slab(termination, states):
+    """Geometry and bookkeeping every slab must satisfy."""
+    import numpy as np
+
+    structure = termination.structure
+    normal = structure.lattice.matrix[2] / structure.lattice.c
+    heights = structure.cart_coords @ normal
+    pseudo = structure.site_properties["pseudo_hydrogen"]
+    hydrogen = [i for i, p in enumerate(pseudo) if p]
+    atoms = [i for i, p in enumerate(pseudo) if not p]
+    assert hydrogen, "bottom is not passivated"
+    assert max(heights[hydrogen]) < min(heights[atoms]), "pseudo-H must sit below the slab"
+    distances = structure.distance_matrix
+    for i in hydrogen:
+        nearest = sorted(distances[i][atoms])
+        assert nearest[0] < 1.7 and nearest[1] > 2.0, "each pseudo-H bonds to one atom"
+        assert structure[int(np.array(atoms)[np.argmin(distances[i][atoms])])].specie.symbol == pseudo[i]
+    assert min(distances[i][j] for i in atoms for j in atoms if i < j) > 1.8
+    assert set(hydrogen) <= set(termination.bottom_indices)
+    assert 0.1 < min(structure.frac_coords[:, 2]) and max(structure.frac_coords[:, 2]) < 0.9
+
+
+@pytest.mark.parametrize("bulk, miller, top, bottom, hydrogen", [
+    (gaas, (1, 1, 1), "Ga", "As", "H0p75"),
+    (gaas, (-1, -1, -1), "As", "Ga", "H1p25"),
+    (zno, (0, 0, 1), "Zn", "O", "H0p5"),
+    (zno, (0, 0, -1), "O", "Zn", "H1p5"),
+    (gan, (0, 0, 1), "Ga", "N", "H0p75"),
+])
+def test_polar_faces_and_their_passivated_bottoms(bulk, miller, top, bottom, hydrogen):
+    """(hkl) is the top face; (-h-k-l) puts the other species on top."""
+    structure = bulk()
+    slabs = polar.find_polar_terminations(structure, miller)
+    assert slabs.polar
+    assert [t.label for t in slabs] == ["term_0", "term_1"]
+    ideal, counted = slabs
+    assert (ideal.top_element, ideal.bottom_element) == (top, bottom)
+    assert set(ideal.structure.site_properties["kind_name"]) == {top, bottom, hydrogen}
+    assert slabs.supercell == (2, 2)  # one vacancy per 2x2 cell satisfies electron counting
+    assert ideal.composition == {top: 36, bottom: 36}  # 9 bilayers x 4 cells
+    assert ideal.pseudo_hydrogen_counts == {bottom: 4}
+    assert not ideal.electron_counting and counted.electron_counting
+    assert counted.removed_per_cell == (top,)
+    assert counted.composition[top] == 35
+    assert ideal.bottom_fingerprint == counted.bottom_fingerprint == slabs.bottom_fingerprint
+    states = slabs.oxidation_states
+    for termination in slabs:
+        _check_slab(termination, states)
+        charge = sum(states[e] * n for e, n in termination.composition.items()) + sum(
+            slabs.hydrogens[e].formal_charge * n for e, n in termination.pseudo_hydrogen_counts.items()
+        )
+        assert (abs(charge) < 1e-9) == termination.electron_counting
+
+
+def test_the_bottom_is_identical_in_every_slab():
+    import numpy as np
+
+    slabs = polar.find_polar_terminations(gaas(), (1, 1, 1))
+    first, second = slabs
+    assert first.structure.lattice == second.structure.lattice
+    bottom_first = [(first.structure[i].specie.symbol, tuple(first.structure[i].coords)) for i in first.bottom_indices]
+    bottom_second = [(second.structure[i].specie.symbol, tuple(second.structure[i].coords)) for i in second.bottom_indices]
+    assert len(bottom_first) == len(bottom_second) > 4
+    for (a, x), (b, y) in zip(sorted(bottom_first), sorted(bottom_second)):
+        assert a == b and np.allclose(x, y)
+
+
+def test_nonpolar_validation_slab():
+    """GaAs(110) passivated on one side: both species on the bottom, no repair needed."""
+    slabs = polar.find_polar_terminations(gaas(), (1, 1, 0))
+    assert not slabs.polar and slabs.supercell == (1, 1) and len(slabs) == 1
+    termination = slabs[0]
+    assert termination.electron_counting and termination.is_stoichiometric
+    assert termination.pseudo_hydrogen_counts == {"Ga": 1, "As": 1}
+    assert termination.composition == {"Ga": 12, "As": 12}
+    _check_slab(termination, slabs.oxidation_states)
+
+
+def test_thickness_and_options():
+    thin = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=4, electron_counting=False)
+    assert len(thin) == 1 and thin.supercell == (1, 1)
+    assert thin[0].composition == {"Ga": 4, "As": 4}
+    with pytest.raises(ValueError, match="whole bilayers"):
+        polar.find_polar_terminations(gaas(), (1, 1, 1), layers=7, electron_counting=False)
+    fixed = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3, supercell=(2, 2), include_ideal=False)
+    assert [t.removed_per_cell for t in fixed] == [("Ga",)]
+
+
+def test_summary_and_files(tmp_path):
+    import json
+
+    slabs = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3)
+    text = slabs.summary()
+    assert text.splitlines()[0] == (
+        "GaAs(111) | polar | 2x2 surface cell | top Ga, bottom As + H0.75(As) (shared)"
+    )
+    assert "Ga-terminated minus Ga per 2x2 cell" in text and "4 H0.75(As)" in text
+    assert "<table>" in slabs._repr_html_()
+    paths = slabs.write(str(tmp_path))
+    summary = json.loads((tmp_path / "terminations.json").read_text())
+    assert summary["potcar_order"]["term_0"] == ["Ga", "As", "H.75"]
+    poscar = (tmp_path / "term_0_Ga12As12.vasp").read_text().splitlines()
+    assert poscar[5].split() == ["Ga", "As", "H"] and poscar[6].split() == ["12", "12", "4"]
+    assert len(paths) == 3
+    figure = slabs.plot(str(tmp_path / "slabs.png"))
+    assert (tmp_path / "slabs.png").stat().st_size > 5000 and figure is not None
+
+
+def test_polar_slabs_become_aiida_structures_with_pseudo_hydrogen_kinds():
+    pytest.importorskip("aiida")
+    from aiida import orm
+
+    slab = polar.find_polar_terminations(zno(), (0, 0, 1), bilayers=2, electron_counting=False)[0]
+    node = orm.StructureData(pymatgen=slab.structure)
+    assert sorted(node.get_kind_names()) == ["H0p5", "O", "Zn"]

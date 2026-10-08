@@ -34,6 +34,14 @@ from .phase_diagram_ternary import (
     TernarySurfacePhaseDiagram,
     ternary_surface_phase_diagram,
 )
+from .polar import (
+    PolarTermination,
+    PolarTerminationSet,
+    PseudoHydrogen,
+    find_polar_terminations,
+    pseudo_hydrogen_charge,
+    pseudo_hydrogens,
+)
 from .thermodynamics import (
     EV_PER_ANGSTROM2_TO_J_PER_M2,
     SurfaceEnergyPoint,
@@ -69,6 +77,12 @@ __all__ = [
     "TernaryReferences",
     "TernarySurfacePhaseDiagram",
     "ternary_surface_phase_diagram",
+    "PolarTermination",
+    "PolarTerminationSet",
+    "PseudoHydrogen",
+    "find_polar_terminations",
+    "pseudo_hydrogen_charge",
+    "pseudo_hydrogens",
     "EV_PER_ANGSTROM2_TO_J_PER_M2",
     "SurfaceEnergyPoint",
     "stable_termination",
