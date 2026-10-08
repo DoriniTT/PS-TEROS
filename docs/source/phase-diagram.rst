@@ -186,8 +186,8 @@ references, then three SnO\ :sub:`2`\ (110) terminations built on the relaxed
 bulk lattice — and its ``phase_diagram.py`` reads the static energies and
 relaxed structures from the finished graphs before calling the functions above.
 
-Ternary oxides
---------------
+Ternary compounds
+-----------------
 
 A ternary oxide A\ :sub:`x`\ B\ :sub:`y`\ O\ :sub:`z` has two independent
 chemical potentials. Bulk equilibrium,
@@ -235,10 +235,29 @@ equilibrium), ``gamma_<label>_Jm2`` for every termination,
 γ in either representation. ``diagram.planes`` gives each plane's coefficients
 and ``diagram.regions`` the region polygons.
 
+Other ternary compounds use ``TernaryReferences`` with the reference energy per
+atom of all three elements. The vertical axis is the most electronegative
+element unless ``vertical`` says otherwise, and the CSV column becomes
+``delta_mu_<C>_eV``:
+
+.. code-block:: python
+
+   references = psteros.TernaryReferences(
+       bulk_energy_ev=e_bulk,
+       bulk_composition={"Cu": 4, "In": 4, "S": 8},
+       reference_energies_per_atom_ev={"Cu": e_cu, "In": e_in, "S": e_s},
+       competing_phases=(psteros.CompetingPhase("CuS", e_cus, {"Cu": 2, "S": 2}),),
+       reservoir_labels={"S": "S8"},   # names the S-rich edge in the figure
+   )   # axes: Delta mu_Cu (horizontal), Delta mu_S (vertical); In is eliminated
+
+For an oxide with an O\ :sub:`2` reference, ``TernaryReferences`` and
+``TernaryOxideReferences`` give the same diagram.
+
 What the model leaves out
 -------------------------
 
 The energies are 0 K total energies: vibrational and configurational
 contributions are not included, and Δμ is not converted to a temperature and
-pressure. Binary and ternary oxides are supported; slabs must be symmetric so
-that both faces are the same termination.
+pressure. Binary and ternary compounds are supported; slabs must be symmetric
+so that both faces are the same termination, unless they are polar slabs with
+a passivated bottom described below.

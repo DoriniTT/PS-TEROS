@@ -52,7 +52,7 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
   chosen element (default: the anion). `surface_phase_diagram` accepts it;
   `BinaryOxideReferences` stays as the oxide special case with identical
   results, CSV columns and figure. Labels become element-generic.
-- [ ] 3. **Any ternary compound.** Same generalisation for
+- [x] 3. **Any ternary compound.** Same generalisation for
   `TernaryOxideReferences` (any third element), oxide results unchanged.
 - [ ] 4. **Pseudo-hydrogen model.** Charge 2 - Z/4, formal charge of a pseudo-H
   (minus the oxidation state of its partner over 4), VASP POTCAR names

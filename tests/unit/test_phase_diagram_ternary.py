@@ -180,3 +180,93 @@ def test_plot_writes_a_figure_file(tmp_path) -> None:
     diagram = psteros.ternary_surface_phase_diagram(terminations(refs), refs)
     for suffix in ("png", "pdf"):
         assert diagram.plot(tmp_path / f"srtio3.{suffix}", title="SrTiO3(001)").stat().st_size > 1000
+
+
+# ---------------------------------------------------------------------------
+# Any ternary compound
+# ---------------------------------------------------------------------------
+
+def general_references(**overrides) -> psteros.TernaryReferences:
+    values = dict(
+        bulk_energy_ev=-64.0,
+        bulk_composition={"Sr": 2, "Ti": 2, "O": 6},
+        reference_energies_per_atom_ev={**ELEMENTS, "O": E_O2 / 2},
+        competing_phases=(SRO, TIO2),
+    )
+    values.update(overrides)
+    return psteros.TernaryReferences(**values)
+
+
+def test_general_ternary_references_reproduce_the_oxide_diagram(tmp_path) -> None:
+    oxide, general = references(), general_references()
+    assert general.vertical == "O"
+    assert (general.independent, general.eliminated) == (oxide.independent, oxide.eliminated)
+    assert general.formation_enthalpy_ev == pytest.approx(oxide.formation_enthalpy_ev)
+    assert same_polygon(general.stability_region, oxide.stability_region)
+
+    first = psteros.ternary_surface_phase_diagram(terminations(oxide), oxide, points=7)
+    second = psteros.ternary_surface_phase_diagram(terminations(general), general, points=7)
+    for label in first.planes:
+        assert first.planes[label] == pytest.approx(second.planes[label])
+        assert same_polygon(second.regions[label], first.regions[label])
+    head_oxide = first.to_csv(tmp_path / "oxide.csv").read_text().splitlines()[0]
+    head_general = second.to_csv(tmp_path / "general.csv").read_text().splitlines()[0]
+    assert head_oxide.split(",")[:3] == head_general.split(",")[:3] == [
+        "delta_mu_Sr_eV", "delta_mu_O_eV", "delta_mu_Ti_eV",
+    ]
+    assert second.delta_mu_vertical_ev == second.delta_mu_oxygen_ev
+
+
+def cuins2_references() -> psteros.TernaryReferences:
+    # Delta H_f = -2.6 eV per CuInS2 with E(Cu) = -4.1, E(In) = -2.7, E(S) = -4.1 eV/atom.
+    elements = {"Cu": -4.1, "In": -2.7, "S": -4.1}
+    bulk = sum(elements.values()) + elements["S"] - 2.6
+    return psteros.TernaryReferences(
+        bulk_energy_ev=4 * bulk,
+        bulk_composition={"Cu": 4, "In": 4, "S": 8},
+        reference_energies_per_atom_ev=elements,
+        competing_phases=(psteros.CompetingPhase("CuS", -8.2 - 0.5, {"Cu": 1, "S": 1}),),
+        reservoir_labels={"S": "S8"},
+    )
+
+
+def test_non_oxide_ternary_uses_the_most_electronegative_element(tmp_path) -> None:
+    refs = cuins2_references()
+    assert (refs.independent, refs.eliminated, refs.vertical) == ("Cu", "In", "S")
+    assert refs.formula == "CuInS2"
+    assert refs.formation_enthalpy_ev == pytest.approx(-2.6)
+    mu = refs.chemical_potentials_ev(-0.2, -0.5)
+    assert mu["Cu"] + mu["In"] + 2 * mu["S"] == pytest.approx(refs.bulk_energy_per_formula_unit_ev)
+    assert "S8" in refs.stability_boundaries
+    assert refs.in_stability_region(-0.3, -0.4)
+    assert not refs.in_stability_region(-0.1, -0.1)  # CuS would form
+
+    stoich = {"Cu": 4, "In": 4, "S": 8}
+    slabs = [
+        psteros.SlabTermination("stoich", 4 * refs.bulk_energy_per_formula_unit_ev + 2 * A * 0.04, stoich, A),
+        psteros.SlabTermination(
+            "S-rich", 4 * refs.bulk_energy_per_formula_unit_ev - 2 * 4.1 + 2 * A * 0.05,
+            {"Cu": 4, "In": 4, "S": 10}, A,
+        ),
+    ]
+    diagram = psteros.ternary_surface_phase_diagram(slabs, refs, points=5)
+    assert diagram.planes["stoich"][1:] == pytest.approx((0.0, 0.0))
+    assert diagram.planes["S-rich"][2] < 0  # extra S gets cheaper as Delta mu_S rises
+    header = diagram.to_csv(tmp_path / "cuins2.csv").read_text().splitlines()[0]
+    assert header.startswith("delta_mu_Cu_eV,delta_mu_S_eV,delta_mu_In_eV,")
+    pytest.importorskip("matplotlib")
+    figure = diagram.figure()
+    assert "mathrm{S}" in figure.axes[0].get_ylabel()
+
+
+def test_invalid_ternary_references_are_rejected() -> None:
+    with pytest.raises(ValueError, match="ternary compound"):
+        psteros.TernaryReferences(-10.0, {"Ga": 1, "As": 1}, {"Ga": -3.0, "As": -4.7})
+    with pytest.raises(ValueError, match="lacks"):
+        psteros.TernaryReferences(-10.0, {"Cu": 1, "In": 1, "S": 2}, {"Cu": -4.1, "S": -4.1})
+    with pytest.raises(ValueError, match="vertical must be one of"):
+        general_references(vertical="N")
+    with pytest.raises(ValueError, match="independent must be one of"):
+        general_references(independent="O")
+    with pytest.raises(ValueError, match="unstable"):
+        general_references(bulk_energy_ev=0.0)

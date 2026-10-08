@@ -365,6 +365,19 @@ See :doc:`phase-diagram` for a worked introduction.
    each edge) and ``in_stability_region(dmu_A, dmu_O)``. It raises an error
    when the oxide is unstable against its elements or the competing phases.
 
+.. _api-ternary-references:
+
+.. index:: TernaryReferences
+
+``TernaryReferences(bulk_energy_ev, bulk_composition, reference_energies_per_atom_ev, competing_phases=(), independent=None, vertical=None, reservoir_labels={})``
+   References of any ternary compound A\ :sub:`x`\ B\ :sub:`y`\ C\ :sub:`z`,
+   with the same interface as ``TernaryOxideReferences``.
+   ``reference_energies_per_atom_ev`` maps all three elements to their
+   reference energy per atom. ``vertical`` (C, default: the most
+   electronegative element) is on the vertical axis and ``independent``
+   (default: the alphabetically first of the other two) on the horizontal one.
+   ``reservoir_labels`` names a reference in the figure.
+
 .. _api-ternary-surface-phase-diagram:
 
 .. index:: ternary_surface_phase_diagram, TernarySurfacePhaseDiagram
@@ -379,7 +392,8 @@ See :doc:`phase-diagram` for a worked introduction.
    *, title=None, dpi=200)`` saves the region map (``figure()`` returns the
    matplotlib ``Figure``), and ``to_csv(path, *, units="J/m2")`` writes one row
    per point of the ``points`` × ``points`` grid with ``delta_mu_<A>_eV``,
-   ``delta_mu_O_eV``, ``delta_mu_<B>_eV``, ``gamma_<label>_Jm2`` columns,
+   ``delta_mu_<C>_eV`` (``delta_mu_O_eV`` for an oxide), ``delta_mu_<B>_eV``,
+   ``gamma_<label>_Jm2`` columns,
    ``stable_termination`` and ``in_stability_region``.
 
 .. _api-ev-per-angstrom2-to-j-per-m2:

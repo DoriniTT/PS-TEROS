@@ -1,13 +1,17 @@
-"""Surface phase diagrams of ternary oxides A_xB_yO_z over (Delta mu_A, Delta mu_O).
+"""Surface phase diagrams of ternary compounds A_xB_yC_z over (Delta mu_A, Delta mu_C).
 
-Bulk equilibrium, ``x dmu_A + y dmu_B + z dmu_O = Delta H_f``, eliminates the
+For an oxide C is oxygen (:class:`TernaryOxideReferences`); any other ternary
+compound uses :class:`TernaryReferences`, with C the most electronegative
+element by default.
+
+Bulk equilibrium, ``x dmu_A + y dmu_B + z dmu_C = Delta H_f``, eliminates the
 chemical potential of B, so every termination has a surface energy that is a
 plane over the two remaining chemical potentials.  The bulk is stable inside a
 convex polygon: no element precipitates (every ``dmu <= 0``) and no competing
 phase forms.  Both that polygon and the region where each termination is the
 most stable are computed exactly.
 
-As for binary oxides, the diagram is written directly as a figure
+As for binary compounds, the diagram is written directly as a figure
 (:meth:`TernarySurfacePhaseDiagram.plot`) or exported as a CSV table
 (:meth:`TernarySurfacePhaseDiagram.to_csv`).
 """
@@ -60,50 +64,16 @@ class CompetingPhase:
         object.__setattr__(self, "composition", _integer_composition(self.composition, "composition"))
 
 
-@dataclass(frozen=True)
-class TernaryOxideReferences:
-    """Bulk, elemental and competing-phase references of a ternary oxide A_xB_yO_z.
+class _TernaryEquilibrium:
+    """Bulk equilibrium shared by the ternary reference classes.
 
-    ``element_energies_per_atom_ev`` gives the energy per atom of the two
-    non-oxygen elements in their reference phases, where ``Delta mu = 0``.
-    ``independent`` is the element on the horizontal axis of the diagram (the
-    alphabetically first by default); the other one is eliminated through bulk
-    equilibrium.
+    Subclasses provide ``bulk_energy_ev``, ``bulk_composition``,
+    ``competing_phases``, ``independent``, ``eliminated``, ``vertical`` (the
+    element on the vertical axis), ``formula_unit`` (in that order of
+    elements), ``_reference_energy(element)`` and ``vertical_reservoir``.
     """
 
-    bulk_energy_ev: float
-    bulk_composition: Mapping[str, int]
-    oxygen_molecule_energy_ev: float
-    element_energies_per_atom_ev: Mapping[str, float]
-    competing_phases: tuple[CompetingPhase, ...] = ()
-    independent: str | None = None
-    eliminated: str = field(init=False)
-    formula_unit: tuple[int, int, int] = field(init=False)
-    stability_region: tuple[Point, ...] = field(init=False)
-    stability_boundaries: tuple[str, ...] = field(init=False)
-
-    def __post_init__(self) -> None:
-        composition = _integer_composition(self.bulk_composition, "bulk_composition")
-        cations = sorted(element for element in composition if element != "O")
-        if "O" not in composition or len(cations) != 2:
-            raise ValueError(f"bulk_composition must describe a ternary oxide A_xB_yO_z, got {composition}")
-        independent = self.independent or cations[0]
-        if independent not in cations:
-            raise ValueError(f"independent must be one of {cations}, got {independent!r}")
-        eliminated = next(element for element in cations if element != independent)
-        missing = sorted(set(cations).difference(self.element_energies_per_atom_ev))
-        if missing:
-            raise ValueError(f"element_energies_per_atom_ev lacks {missing}")
-        divisor = reduce(gcd, (composition[independent], composition[eliminated], composition["O"]))
-        for name, value in (
-            ("bulk_composition", composition),
-            ("independent", independent),
-            ("eliminated", eliminated),
-            ("formula_unit", tuple(composition[e] // divisor for e in (independent, eliminated, "O"))),
-            ("competing_phases", tuple(self.competing_phases)),
-            ("element_energies_per_atom_ev", {e: float(self.element_energies_per_atom_ev[e]) for e in cations}),
-        ):
-            object.__setattr__(self, name, value)
+    def _finish(self, composition: Mapping[str, int]) -> None:
         for phase in self.competing_phases:
             foreign = sorted(set(phase.composition).difference(composition))
             if foreign:
@@ -111,7 +81,7 @@ class TernaryOxideReferences:
         if self.formation_enthalpy_ev >= 0:
             raise ValueError(
                 f"formation enthalpy {self.formation_enthalpy_ev:.4f} eV is not negative: "
-                "the oxide is unstable against its elements"
+                f"{self.formula} is unstable against its elements"
             )
         region, boundaries = self._stability_region()
         object.__setattr__(self, "stability_region", region)
@@ -119,31 +89,30 @@ class TernaryOxideReferences:
 
     @property
     def formula(self) -> str:
-        counts = zip((self.independent, self.eliminated, "O"), self.formula_unit)
+        counts = zip((self.independent, self.eliminated, self.vertical), self.formula_unit)
         return "".join(f"{element}{count if count > 1 else ''}" for element, count in counts)
 
     @property
     def bulk_energy_per_formula_unit_ev(self) -> float:
         return self.bulk_energy_ev * self.formula_unit[0] / self.bulk_composition[self.independent]
 
-    def _reference_energy(self, element: str) -> float:
-        if element == "O":
-            return self.oxygen_molecule_energy_ev / 2.0
-        return self.element_energies_per_atom_ev[element]
-
     def _formation_energy(self, energy_ev: float, composition: Mapping[str, int]) -> float:
         return energy_ev - sum(count * self._reference_energy(e) for e, count in composition.items())
 
     @property
     def formation_enthalpy_ev(self) -> float:
-        """Delta H_f per A_xB_yO_z formula unit relative to the elements, at 0 K."""
+        """Delta H_f per A_xB_yC_z formula unit relative to the elements, at 0 K."""
 
         x, y, z = self.formula_unit
-        composition = {self.independent: x, self.eliminated: y, "O": z}
+        composition = {self.independent: x, self.eliminated: y, self.vertical: z}
         return self._formation_energy(self.bulk_energy_per_formula_unit_ev, composition)
 
     def delta_mu_eliminated_ev(self, delta_mu_independent_ev: float, delta_mu_oxygen_ev: float) -> float:
-        """Delta mu of the eliminated element that keeps the bulk in equilibrium."""
+        """Delta mu of the eliminated element that keeps the bulk in equilibrium.
+
+        ``delta_mu_oxygen_ev`` is Delta mu of the vertical-axis element (oxygen
+        for an oxide).
+        """
 
         x, y, z = self.formula_unit
         return (self.formation_enthalpy_ev - x * delta_mu_independent_ev - z * delta_mu_oxygen_ev) / y
@@ -155,7 +124,7 @@ class TernaryOxideReferences:
             self.independent: self._reference_energy(self.independent) + delta_mu_independent_ev,
             self.eliminated: self._reference_energy(self.eliminated)
             + self.delta_mu_eliminated_ev(delta_mu_independent_ev, delta_mu_oxygen_ev),
-            "O": self._reference_energy("O") + delta_mu_oxygen_ev,
+            self.vertical: self._reference_energy(self.vertical) + delta_mu_oxygen_ev,
         }
 
     def in_stability_region(self, delta_mu_independent_ev: float, delta_mu_oxygen_ev: float) -> bool:
@@ -165,22 +134,22 @@ class TernaryOxideReferences:
         )
 
     def _constraints(self) -> list[tuple[float, float, float, str]]:
-        """Half-planes ``a dmu_A + b dmu_O <= c`` of the bulk stability region."""
+        """Half-planes ``a dmu_A + b dmu_C <= c`` of the bulk stability region."""
 
         x, y, z = self.formula_unit
         enthalpy = self.formation_enthalpy_ev
         constraints = [
             (1.0, 0.0, 0.0, self.independent),
-            (0.0, 1.0, 0.0, "O2"),
+            (0.0, 1.0, 0.0, self.vertical_reservoir),
             # dmu_B <= 0 with dmu_B from bulk equilibrium
             (-x / y, -z / y, -enthalpy / y, self.eliminated),
         ]
         for phase in self.competing_phases:
             counts = phase.composition
-            n_a, n_b, n_o = (counts.get(e, 0) for e in (self.independent, self.eliminated, "O"))
+            n_a, n_b, n_c = (counts.get(e, 0) for e in (self.independent, self.eliminated, self.vertical))
             constraints.append((
                 n_a - n_b * x / y,
-                n_o - n_b * z / y,
+                n_c - n_b * z / y,
                 self._formation_energy(phase.energy_ev, counts) - n_b * enthalpy / y,
                 phase.label,
             ))
@@ -209,21 +178,152 @@ class TernaryOxideReferences:
 
 
 @dataclass(frozen=True)
-class TernarySurfacePhaseDiagram:
-    """Surface energies over (Delta mu_A, Delta mu_O) and the stable termination regions.
+class TernaryOxideReferences(_TernaryEquilibrium):
+    """Bulk, elemental and competing-phase references of a ternary oxide A_xB_yO_z.
 
-    ``planes`` maps each label to ``(gamma_0, d gamma / d dmu_A, d gamma / d dmu_O)``
-    in eV/A^2, the exact plane ``gamma = gamma_0 + s_A dmu_A + s_O dmu_O``.
+    ``element_energies_per_atom_ev`` gives the energy per atom of the two
+    non-oxygen elements in their reference phases, where ``Delta mu = 0``.
+    ``independent`` is the element on the horizontal axis of the diagram (the
+    alphabetically first by default); the other one is eliminated through bulk
+    equilibrium.
+    """
+
+    bulk_energy_ev: float
+    bulk_composition: Mapping[str, int]
+    oxygen_molecule_energy_ev: float
+    element_energies_per_atom_ev: Mapping[str, float]
+    competing_phases: tuple[CompetingPhase, ...] = ()
+    independent: str | None = None
+    eliminated: str = field(init=False)
+    formula_unit: tuple[int, int, int] = field(init=False)
+    stability_region: tuple[Point, ...] = field(init=False)
+    stability_boundaries: tuple[str, ...] = field(init=False)
+
+    vertical = "O"
+    vertical_reservoir = "O2"
+
+    def __post_init__(self) -> None:
+        composition = _integer_composition(self.bulk_composition, "bulk_composition")
+        cations = sorted(element for element in composition if element != "O")
+        if "O" not in composition or len(cations) != 2:
+            raise ValueError(f"bulk_composition must describe a ternary oxide A_xB_yO_z, got {composition}")
+        independent = self.independent or cations[0]
+        if independent not in cations:
+            raise ValueError(f"independent must be one of {cations}, got {independent!r}")
+        eliminated = next(element for element in cations if element != independent)
+        missing = sorted(set(cations).difference(self.element_energies_per_atom_ev))
+        if missing:
+            raise ValueError(f"element_energies_per_atom_ev lacks {missing}")
+        divisor = reduce(gcd, (composition[independent], composition[eliminated], composition["O"]))
+        for name, value in (
+            ("bulk_composition", composition),
+            ("independent", independent),
+            ("eliminated", eliminated),
+            ("formula_unit", tuple(composition[e] // divisor for e in (independent, eliminated, "O"))),
+            ("competing_phases", tuple(self.competing_phases)),
+            ("element_energies_per_atom_ev", {e: float(self.element_energies_per_atom_ev[e]) for e in cations}),
+        ):
+            object.__setattr__(self, name, value)
+        self._finish(composition)
+
+    def _reference_energy(self, element: str) -> float:
+        if element == "O":
+            return self.oxygen_molecule_energy_ev / 2.0
+        return self.element_energies_per_atom_ev[element]
+
+
+@dataclass(frozen=True)
+class TernaryReferences(_TernaryEquilibrium):
+    """Bulk, elemental and competing-phase references of any ternary compound.
+
+    ``reference_energies_per_atom_ev`` gives the reference energy per atom of
+    all three elements (elemental solid, or half a molecule such as O2 or
+    N2), where ``Delta mu = 0``. ``vertical`` is the element on the vertical
+    axis (default: the most electronegative); ``independent`` is on the
+    horizontal axis (default: the alphabetically first of the other two) and
+    the remaining element is eliminated through bulk equilibrium.
+    ``reservoir_labels`` names a reference in the figure, e.g.
+    ``{"S": "S8"}``. For oxides, :class:`TernaryOxideReferences` gives the
+    same diagram.
+    """
+
+    bulk_energy_ev: float
+    bulk_composition: Mapping[str, int]
+    reference_energies_per_atom_ev: Mapping[str, float]
+    competing_phases: tuple[CompetingPhase, ...] = ()
+    independent: str | None = None
+    vertical: str | None = None
+    reservoir_labels: Mapping[str, str] = field(default_factory=dict)
+    eliminated: str = field(init=False)
+    formula_unit: tuple[int, int, int] = field(init=False)
+    stability_region: tuple[Point, ...] = field(init=False)
+    stability_boundaries: tuple[str, ...] = field(init=False)
+
+    def __post_init__(self) -> None:
+        composition = _integer_composition(self.bulk_composition, "bulk_composition")
+        if len(composition) != 3:
+            raise ValueError(f"bulk_composition must describe a ternary compound A_xB_yC_z, got {composition}")
+        references = {str(e): float(v) for e, v in dict(self.reference_energies_per_atom_ev).items()}
+        missing = sorted(set(composition).difference(references))
+        if missing:
+            raise ValueError(f"reference_energies_per_atom_ev lacks {missing}")
+        vertical = self.vertical
+        if vertical is None:
+            from pymatgen.core import Element
+
+            vertical = max(composition, key=lambda element: Element(element).X)
+        if vertical not in composition:
+            raise ValueError(f"vertical must be one of {sorted(composition)}, got {vertical!r}")
+        others = sorted(element for element in composition if element != vertical)
+        independent = self.independent or others[0]
+        if independent not in others:
+            raise ValueError(f"independent must be one of {others}, got {independent!r}")
+        eliminated = next(element for element in others if element != independent)
+        divisor = reduce(gcd, (composition[independent], composition[eliminated], composition[vertical]))
+        for name, value in (
+            ("bulk_composition", composition),
+            ("reference_energies_per_atom_ev", {e: references[e] for e in composition}),
+            ("reservoir_labels", dict(self.reservoir_labels)),
+            ("vertical", vertical),
+            ("independent", independent),
+            ("eliminated", eliminated),
+            ("formula_unit", tuple(composition[e] // divisor for e in (independent, eliminated, vertical))),
+            ("competing_phases", tuple(self.competing_phases)),
+        ):
+            object.__setattr__(self, name, value)
+        self._finish(composition)
+
+    @property
+    def vertical_reservoir(self) -> str:
+        return self.reservoir_labels.get(self.vertical, self.vertical)
+
+    def _reference_energy(self, element: str) -> float:
+        return self.reference_energies_per_atom_ev[element]
+
+
+@dataclass(frozen=True)
+class TernarySurfacePhaseDiagram:
+    """Surface energies over (Delta mu_A, Delta mu_C) and the stable termination regions.
+
+    C is ``references.vertical`` (O for an oxide); ``delta_mu_oxygen_ev``
+    holds its grid under the historical name, also available as
+    ``delta_mu_vertical_ev``.
+    ``planes`` maps each label to ``(gamma_0, d gamma / d dmu_A, d gamma / d dmu_C)``
+    in eV/A^2, the exact plane ``gamma = gamma_0 + s_A dmu_A + s_C dmu_C``.
     ``regions`` maps each label to the polygon, inside the stability region,
     where it is the most stable termination (empty if it never is).
     """
 
-    references: TernaryOxideReferences
+    references: TernaryOxideReferences | TernaryReferences
     terminations: tuple[SlabTermination, ...]
     delta_mu_independent_ev: tuple[float, ...]
     delta_mu_oxygen_ev: tuple[float, ...]
     planes: Mapping[str, tuple[float, float, float]]
     regions: Mapping[str, tuple[Point, ...]]
+
+    @property
+    def delta_mu_vertical_ev(self) -> tuple[float, ...]:
+        return self.delta_mu_oxygen_ev
 
     def gamma_ev_per_angstrom2(self, label: str, delta_mu_independent_ev: float, delta_mu_oxygen_ev: float) -> float:
         gamma0, slope_a, slope_o = self.planes[label]
@@ -238,7 +338,8 @@ class TernarySurfacePhaseDiagram:
     def to_csv(self, path: str | Path, *, units: Units = "J/m2") -> Path:
         """Write one CSV row per grid point and return the path.
 
-        Columns: ``delta_mu_<A>_eV``, ``delta_mu_O_eV``, ``delta_mu_<B>_eV`` (from
+        Columns: ``delta_mu_<A>_eV``, ``delta_mu_<C>_eV`` (``delta_mu_O_eV`` for
+        an oxide), ``delta_mu_<B>_eV`` (from
         bulk equilibrium), one ``gamma_<label>_Jm2`` (or ``_eVA2``) column per
         termination, ``stable_termination`` and ``in_stability_region``.
         """
@@ -249,7 +350,11 @@ class TernarySurfacePhaseDiagram:
         with path.open("w", newline="") as handle:
             writer = csv.writer(handle)
             writer.writerow(
-                [f"delta_mu_{references.independent}_eV", "delta_mu_O_eV", f"delta_mu_{references.eliminated}_eV"]
+                [
+                    f"delta_mu_{references.independent}_eV",
+                    f"delta_mu_{references.vertical}_eV",
+                    f"delta_mu_{references.eliminated}_eV",
+                ]
                 + [f"gamma_{label}_{suffix}" for label in self.planes]
                 + ["stable_termination", "in_stability_region"]
             )
@@ -330,7 +435,7 @@ class TernarySurfacePhaseDiagram:
                 frameon=False, fontsize=9, labelcolor=_INK_SECONDARY, borderaxespad=0.2,
             )
         ax.set_xlabel(rf"$\Delta\mu_\mathrm{{{references.independent}}}$  (eV)", color=_INK_SECONDARY)
-        ax.set_ylabel(r"$\Delta\mu_\mathrm{O}$  (eV)", color=_INK_SECONDARY)
+        ax.set_ylabel(rf"$\Delta\mu_\mathrm{{{references.vertical}}}$  (eV)", color=_INK_SECONDARY)
         if title:
             ax.set_title(title, loc="left", fontsize=11.5, color=_INK, pad=30 if len(present) > 1 else 10)
         for side in ("top", "right"):
@@ -350,11 +455,11 @@ class TernarySurfacePhaseDiagram:
 
 def ternary_surface_phase_diagram(
     terminations: Iterable[SlabTermination],
-    references: TernaryOxideReferences,
+    references: TernaryOxideReferences | TernaryReferences,
     *,
     points: int = 101,
 ) -> TernarySurfacePhaseDiagram:
-    """Evaluate every termination over the stability region of a ternary oxide.
+    """Evaluate every termination over the stability region of a ternary compound.
 
     ``points`` is the number of grid values per axis used by the CSV export;
     the regions and planes are exact.
@@ -367,7 +472,7 @@ def ternary_surface_phase_diagram(
     duplicates = sorted({label for label in labels if labels.count(label) > 1})
     if duplicates:
         raise ValueError(f"termination labels must be unique: {duplicates}")
-    allowed = {references.independent, references.eliminated, "O"}
+    allowed = {references.independent, references.eliminated, references.vertical}
     for termination in terminations:
         foreign = sorted(set(termination.composition).difference(allowed))
         if foreign:

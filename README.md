@@ -29,7 +29,7 @@ The complete, tested version of these three steps is
 
 ### 1. Prepare the structures (pymatgen or ASE)
 
-Any binary metal oxide (MO, MO₂, M₂O₃, …) works; other binary compounds (GaAs, ZnS, GaN, …) use `BinaryReferences`, and ternary oxides use `TernaryOxideReferences` and `ternary_surface_phase_diagram` (see the [phase-diagram guide](docs/source/phase-diagram.rst)). Cut symmetric slabs from the **relaxed** bulk, so that both
+Any binary metal oxide (MO, MO₂, M₂O₃, …) works; other binary compounds (GaAs, ZnS, GaN, …) use `BinaryReferences`, and ternary compounds use `TernaryOxideReferences` or `TernaryReferences` with `ternary_surface_phase_diagram` (see the [phase-diagram guide](docs/source/phase-diagram.rst)). Cut symmetric slabs from the **relaxed** bulk, so that both
 faces are the same termination; different cuts expose different amounts of oxygen:
 
 ```python

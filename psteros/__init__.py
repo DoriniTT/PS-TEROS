@@ -30,6 +30,7 @@ from .phase_diagram import (
 from .phase_diagram_ternary import (
     CompetingPhase,
     TernaryOxideReferences,
+    TernaryReferences,
     TernarySurfacePhaseDiagram,
     ternary_surface_phase_diagram,
 )
@@ -65,6 +66,7 @@ __all__ = [
     "surface_phase_diagram",
     "CompetingPhase",
     "TernaryOxideReferences",
+    "TernaryReferences",
     "TernarySurfacePhaseDiagram",
     "ternary_surface_phase_diagram",
     "EV_PER_ANGSTROM2_TO_J_PER_M2",
