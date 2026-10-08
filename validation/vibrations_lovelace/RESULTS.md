@@ -20,7 +20,7 @@ Status: **in progress** (see the log at the end of each section).
 | `import_sys_environment` | `False`, through `CalculationOverride(metadata=...)` for every label |
 | Walltime | 7200 s for `refs` and `slabs` (relax and static share one `ExecutionPolicy`), 3600 s for `vibrations` |
 | INCAR | `ENCUT=400, PREC=Accurate, EDIFF=1e-6, ISMEAR=0, SIGMA=0.05, LREAL=False, LWAVE=LCHARG=False, NCORE=16`; relax `IBRION=2, NSW=100, EDIFFG=-0.01`, `ISIF=3` for bulk and alpha-Sn, `ISIF=2` otherwise; static `IBRION=-1, NSW=0`; displaced `EDIFF=1e-7`; O2 `ISPIN=2, MAGMOM=[1,1]`, Gamma only |
-| k-points | `kpoints_spacing=0.3` (1/A, with 2 pi); O2 `kpoints_distance=10` |
+| k-points | `kpoints_spacing=0.04` (aiida-vasp units, x 2 pi; the plan's 0.3 is Gamma-only, section 5.3): alpha-Sn 4x4x4, rutile 6x6x8, slabs 8x4x2 (unrelaxed cells); O2 `kpoints_distance=10` (Gamma). Graph 862 used 0.3 |
 | Restarts | `max_iterations=3` |
 | Vibrations | `VibrationsConfig(displacement_angstrom=0.01, supercells={"sno2_bulk": (1, 1, 2)}, molecules=("o2",))` |
 
@@ -36,6 +36,7 @@ Job script produced for the first job (`_aiidasubmit.sh`, PK 805): `#PBS -q par1
 | refs, attempt 2 (workgraph 0.9.0, psteros as on the branch) | 751 | Finished [302] after 25 s: the same error (5.1) |
 | refs, attempt 3 (with `PsterosVaspWorkChain`) | 797 | Killed by me after its first job (calc 805, alpha-Sn relax) failed with exit 1002: the job ran on **1 MPI rank** (5.2); calc 815 (queued second job) cancelled with 810/815 |
 | refs, attempt 4 (computer `mpirun` fixed) | 862 | **Finished [0]**, all 6 children exit 0 (PBS jobs 1028184, 1028197, 1028211, 1028247, 1028256, 1028257; calcs 870, 882, 893, 905, 916, 928) |
+| refs, attempt 5 (`kpoints_spacing=0.04`) | 977 | running; this is the `refs` graph used by the rest of the test (862 stays as the 0.3 record, section 5.3) |
 | slabs | | |
 | vibrations | | |
 | ibrion5 | | |
