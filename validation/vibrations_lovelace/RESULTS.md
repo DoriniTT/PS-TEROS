@@ -36,8 +36,8 @@ Job script produced for the first job (`_aiidasubmit.sh`, PK 805): `#PBS -q par1
 | refs, attempt 2 (workgraph 0.9.0, psteros as on the branch) | 751 | Finished [302] after 25 s: the same error (5.1) |
 | refs, attempt 3 (with `PsterosVaspWorkChain`) | 797 | Killed by me after its first job (calc 805, alpha-Sn relax) failed with exit 1002: the job ran on **1 MPI rank** (5.2); calc 815 (queued second job) cancelled with 810/815 |
 | refs, attempt 4 (computer `mpirun` fixed) | 862 | **Finished [0]**, all 6 children exit 0 (PBS jobs 1028184, 1028197, 1028211, 1028247, 1028256, 1028257; calcs 870, 882, 893, 905, 916, 928) |
-| refs, attempt 5 (`kpoints_spacing=0.04`) | 977 | running; this is the `refs` graph used by the rest of the test (862 stays as the 0.3 record, section 5.3) |
-| slabs | | |
+| refs, attempt 5 (`kpoints_spacing=0.04`) | 977 | **Finished [0]** in 18 min (queue nearly empty), all 6 children exit 0 (calcs 985, 997, 1008, 1020, 1031, 1043). This is the `refs` graph used by the rest of the test; 862 stays as the 0.3 record (5.3) |
+| slabs (on the lattice of 977: a = 4.7652, c = 3.2219 A) | 1077 | running |
 | vibrations | | |
 | ibrion5 | | |
 
@@ -68,6 +68,17 @@ queue and VASP time there is about 3.5 min per job of AiiDA overhead (upload, su
 
 The alpha-Sn lattice is 7% above the PBE value and the formation energy is too negative (Delta H_f about -5.1 eV per SnO2,
 PBE with Sn_d about -4.6 eV): see 5.3.
+
+### Graph 977 (`kpoints_spacing=0.04`), the references used from here on
+
+| Quantity | Result | Plan / reference |
+|---|---|---|
+| rutile a, c | 4.7652 A, 3.2219 A (V = 73.16 A^3) | a = 4.8, c = 3.2 (PBE): pass |
+| alpha-Sn a | 6.647 A | PBE about 6.65 A |
+| O2 magnetisation, O-O | 1.9999987 muB, 1.2343 A | 2 muB: pass |
+| E(SnO2), E(alpha-Sn, 8 atoms), E(O2) | -37.3318, -30.7417, -9.8568 eV | |
+| Delta H_f per SnO2 | -4.97 eV | PBE with Sn_d about -4.6 to -5.0 eV (experiment -6.0) |
+| k-meshes written | alpha-Sn 4x4x4, O2 1x1x1, rutile 6x6x8 | |
 
 ## 5. Checks
 
