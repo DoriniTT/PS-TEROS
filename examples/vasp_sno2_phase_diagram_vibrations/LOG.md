@@ -72,3 +72,12 @@ Every `verdi` call uses `-p psteros_sno2_vibrations`: the default profile of thi
   - `reference_thermochemistry(880)` returns an `IdealGasMolecule`; ZPE = 0.0972 eV, S(298.15 K, 1 bar) =
     205.4 J/(mol K); `delta_mu_oxygen_ev(o2, 298.15, 1.0, include_zero_point=False)` = -0.272 eV
     (with ZPE -0.224 eV); p(O2) at 600 K for Delta mu_O = -1 eV is 4.6e-8 bar.
+- References, attempt 1: graph PK 995 (all three references, psteros `169e291`). The O2 blocks came from the cache.
+  alpha-Sn relax (calc 1050): a = 6.6516 A, E = -30.7648 eV for 8 atoms, static E from calc 1071 (energy parsed).
+  alpha-Sn vibrations (calc 1081, 64 atoms, IBRION 6, NCORE 1, 128 ranks, 4 k-points, 640 bands): VASP finds 1
+  degree of freedom (cubic diamond), so 2 displacements; about 40 min each (3-4 min per SCF step).
+  Planning the SnO2 vibrations from that timing: 72 atoms, ~12 displacements of lower symmetry on a 4x4x4 mesh would
+  need roughly a day or more, beyond the 12 h of the graph. Used the escape hatch of PLAN.md: a 2x2x2 mesh
+  (`kpoints_distance=0.06`) and 24 h of walltime for the SnO2 vibrations block only (SnO2 is a wide-gap insulator and
+  the cell is 9.7 A wide); relax and static keep the fine mesh. `campaign.py` updated. Graph 995 is stopped after
+  the alpha-Sn vibrations and resubmitted; finished calculations come from the cache.

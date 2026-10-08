@@ -61,6 +61,12 @@ REFERENCE_EDIFFG = -0.005  # eV/A, tight: the frequencies are computed at this m
 SLAB_EDIFFG = -0.02
 
 CELL_RELAX = psteros.CalculationOverride(parameters={"INCAR": {"isif": 3}})
+# SnO2 is a wide-gap insulator and the supercell is 9.7 A wide, so a 2x2x2 mesh is enough for the forces
+# of the displaced cells; the fine mesh of the shared recipe would make the ~12 displacements of the
+# 72-atom cell need days.  The relaxation and the static energy keep the fine mesh.
+SNO2_VIBRATIONS = psteros.CalculationOverride(
+    kpoints_distance=0.06, metadata={"max_wallclock_seconds": 24 * 3600}
+)
 TRIPLET_O2 = psteros.CalculationOverride(
     parameters={"INCAR": {"ispin": 2, "nupdown": 2}},
     kpoints_distance=5.0,  # Gamma only in the 12 A box
@@ -102,7 +108,8 @@ def reference_systems(labels) -> dict[str, psteros.ReferenceSystem]:
             psteros.triplet_o2_cell(cell_length=12.0), "gas", override=TRIPLET_O2, symmetry_number=2, spin=1.0
         ),
         "sno2": psteros.ReferenceSystem(
-            psteros.rutile_sno2_bulk(), "solid", block_overrides={"relax": CELL_RELAX}, supercell=(2, 2, 3)
+            psteros.rutile_sno2_bulk(), "solid",
+            block_overrides={"relax": CELL_RELAX, "vibrations": SNO2_VIBRATIONS}, supercell=(2, 2, 3),
         ),
         "sn": psteros.ReferenceSystem(
             psteros.alpha_sn_bulk(), "solid", block_overrides={"relax": CELL_RELAX}, supercell=(2, 2, 2)
