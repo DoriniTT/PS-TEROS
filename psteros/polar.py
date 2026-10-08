@@ -721,6 +721,10 @@ def _ideal_slab(bulk, miller, layers, cell, vacuum, states, hydrogens, repeat, h
         # the passivated side ends at the bottom.
         coords = coords @ rotation.T
         in_plane = in_plane @ rotation.T
+    if float(np.cross(in_plane[0], in_plane[1]) @ normal) < 0.0:
+        # a x b points against c: a left-handed cell, which VASP refuses
+        # ("the triple product of the basis vectors is negative"). Swap a and b.
+        in_plane = in_plane[::-1].copy()
     heights = coords @ normal
     slab_thickness = float(heights.max() - heights.min())
     length = slab_thickness + vacuum

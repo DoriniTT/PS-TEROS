@@ -520,3 +520,17 @@ def test_nonpolar_check_compares_both_slab_types():
     worse = psteros.SlabTermination.from_polar(one_sided, energy + 0.02 * area)
     assert polar.nonpolar_check(symmetric, worse, references, hydrogen).difference_mev_per_angstrom2 == \
         pytest.approx(20.0)
+
+
+@pytest.mark.parametrize("bulk, miller", [
+    (gaas, (1, 1, 1)), (gaas, (-1, -1, -1)), (zno, (0, 0, 1)), (zno, (0, 0, -1)),
+])
+def test_every_slab_cell_is_right_handed(bulk, miller):
+    """VASP refuses a cell whose basis vectors have a negative triple product."""
+    import numpy as np
+
+    slabs = polar.find_polar_terminations(bulk(), miller, bilayers=3)
+    structures = [termination.structure for termination in slabs]
+    structures.append(polar.doubly_passivated_slab(bulk(), miller, bilayers=3))
+    for structure in structures:
+        assert np.linalg.det(structure.lattice.matrix) > 0.0
