@@ -145,7 +145,15 @@ class QeCalculationConfig:
 
 @dataclass(frozen=True)
 class VaspCalculationConfig:
-    """Inputs shared by an aiida-vasp ``VaspWorkChain`` calculation."""
+    """Inputs shared by aiida-vasp ``VaspWorkChain`` calculations.
+
+    ``incar`` is a flat INCAR mapping (``{"ENCUT": 520, ...}``).
+    ``potential_mapping`` maps an element or kind name to its POTCAR
+    (``{"Sn": "Sn_d"}``); elements that are not listed use the POTCAR of the
+    same name. ``kpoints_spacing`` is in 1/Å (with 2π, as in aiida-vasp).
+    ``max_iterations`` limits the restarts of the work chain (aiida-vasp's
+    default when ``None``).
+    """
 
     code_label: str
     incar: Mapping[str, Any]
@@ -153,6 +161,7 @@ class VaspCalculationConfig:
     potential_mapping: Mapping[str, str] = field(default_factory=dict)
     kpoints_spacing: float = 0.20
     clean_workdir: bool = False
+    max_iterations: int | None = None
 
     def __post_init__(self) -> None:
         if not self.code_label:
@@ -162,20 +171,36 @@ class VaspCalculationConfig:
         if not self.potential_family:
             raise ValueError("VASP potential_family must not be empty")
         _require_positive("kpoints_spacing", self.kpoints_spacing)
+        if self.max_iterations is not None:
+            _require_positive("max_iterations", self.max_iterations)
+        nested = sorted(str(key) for key, value in self.incar.items() if isinstance(value, Mapping))
+        if nested:
+            raise ValueError(f"VASP incar must be a flat INCAR mapping; {nested} hold nested mappings")
 
 
 @dataclass(frozen=True)
 class CalculationOverride:
-    """Per-structure changes to a shared calculation recipe."""
+    """Per-structure changes to a shared calculation recipe.
+
+    ``parameters`` updates the recipe: ``{"INCAR": {...}}`` for VASP, namelists
+    such as ``{"SYSTEM": {...}}`` for QE. ``fixed_sites`` holds the indices of
+    the sites kept fixed during a relaxation (VASP selective dynamics, QE
+    ``FIXED_COORDS``), e.g. the central layers of a slab.
+    """
 
     parameters: Mapping[str, Mapping[str, Any]] | None = None
     kpoints_distance: float | None = None
     settings: Mapping[str, Any] = field(default_factory=dict)
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    fixed_sites: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if self.kpoints_distance is not None:
             _require_positive("kpoints_distance", self.kpoints_distance)
+        fixed = tuple(self.fixed_sites)
+        if any(not isinstance(index, int) or isinstance(index, bool) or index < 0 for index in fixed):
+            raise ValueError("fixed_sites must contain non-negative integer site indices")
+        object.__setattr__(self, "fixed_sites", tuple(sorted(set(fixed))))
 
 
 @dataclass(frozen=True)

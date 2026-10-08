@@ -1,7 +1,7 @@
 """psteros: reproducible surface thermodynamics with AiiDA.
 
-Quantum ESPRESSO through ``aiida-quantumespresso`` is the primary backend.
-The VASP adapter remains available for established VASP workflows.
+VASP through ``aiida-vasp`` is the central backend; Quantum ESPRESSO through
+``aiida-quantumespresso`` is supported with the same recipes and analysis.
 """
 
 from .config import (
@@ -15,6 +15,7 @@ from .config import (
 from .structures import (
     SlabIdentity,
     alpha_sn_bulk,
+    central_sites,
     litharge_sno_bulk,
     rutile_sno2_bulk,
     sno2_110_slab,
@@ -62,7 +63,7 @@ from .thermodynamics import (
     surface_energy_elemental,
     surface_energy_oxide_equilibrium,
 )
-from .workflow import build_qe_relax_static_workgraph, build_surface_workgraph
+from .workflow import build_qe_relax_static_workgraph, build_relax_static_workgraph, build_surface_workgraph
 
 __version__ = "2.0.0"
 
@@ -75,6 +76,7 @@ __all__ = [
     "qe_fixed_coordinate_flags",
     "SlabIdentity",
     "alpha_sn_bulk",
+    "central_sites",
     "litharge_sno_bulk",
     "rutile_sno2_bulk",
     "sno2_110_slab",
@@ -120,5 +122,6 @@ __all__ = [
     "surface_energy_elemental",
     "surface_energy_oxide_equilibrium",
     "build_qe_relax_static_workgraph",
+    "build_relax_static_workgraph",
     "build_surface_workgraph",
 ]

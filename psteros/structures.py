@@ -170,3 +170,24 @@ def _remove_outer_oxygen_pairs(slab: Slab, *, pairs: int) -> Slab:
     high = sorted(oxygen, key=lambda index: projections[index], reverse=True)[:pairs]
     result.remove_sites(sorted(set(low + high), reverse=True))
     return result
+
+
+def central_sites(structure: Structure, half_width: float = 1.5) -> tuple[int, ...]:
+    """Indices of the sites within ``half_width`` Å of the slab mid-plane.
+
+    The surface normal is taken normal to the first two lattice vectors (the
+    psteros and pymatgen slab convention). Pass the result as
+    ``CalculationOverride(fixed_sites=...)`` to keep the centre of a slab at
+    its bulk positions during the relaxation.
+    """
+
+    import numpy as np
+
+    if half_width <= 0:
+        raise ValueError("half_width must be positive")
+    a, b = structure.lattice.matrix[0], structure.lattice.matrix[1]
+    normal = np.cross(a, b)
+    normal /= np.linalg.norm(normal)
+    heights = [float(np.dot(site.coords, normal)) for site in structure]
+    middle = (max(heights) + min(heights)) / 2.0
+    return tuple(index for index, height in enumerate(heights) if abs(height - middle) < half_width)

@@ -178,6 +178,7 @@ class PolarSurfaceStudy:
 
     def vasp_overrides(
         self,
+        stage: str = "relax",
         *,
         gamma_only_spacing: float = GAMMA_ONLY_SPACING,
         extra: Mapping[str, CalculationOverride] | None = None,
@@ -192,8 +193,13 @@ class PolarSurfaceStudy:
           O2 is spin-polarised (triplet).
 
         ``extra`` overrides by label are applied on top.
+
+        ``stage="static"`` gives the overrides of the static calculations of
+        :func:`psteros.build_relax_static_workgraph`: the same without ``ISIF``.
         """
 
+        if stage not in ("relax", "static"):
+            raise ValueError("stage must be 'relax' or 'static'")
         overrides: dict[str, CalculationOverride] = {}
         for label, role in self.roles.items():
             incar: dict[str, Any] = {}
@@ -215,6 +221,8 @@ class PolarSurfaceStudy:
             elif role in ("pseudo_molecule", "cluster"):
                 incar["ISIF"] = 2
                 kpoints = gamma_only_spacing
+            if stage == "static":
+                incar.pop("ISIF", None)
             overrides[label] = CalculationOverride(parameters={"INCAR": incar}, kpoints_distance=kpoints)
         return merge_overrides(overrides, extra)
 
@@ -347,16 +355,23 @@ class PolarStudyResult:
 
 
 def read_vasp_results(graph: Any, labels: Sequence[str]) -> tuple[dict[str, float], dict[str, Any]]:
-    """Energies (eV) and relaxed structures of a finished :func:`psteros.build_surface_workgraph` VASP graph.
+    """Energies (eV) and relaxed structures of a finished VASP psteros graph.
 
+    Works for :func:`psteros.build_relax_static_workgraph` (energy of the
+    static calculation, structure of the relaxation) and for
+    :func:`psteros.build_surface_workgraph` (one calculation per label).
     ``graph`` is the WorkGraph process node (``orm.load_node(pk)``); the
-    energy is ``energy_extrapolated`` of each task's ``misc`` output.
+    energy is ``energy_extrapolated`` of each calculation's ``misc`` output.
     """
+
+    from psteros.surface_study import _graph_output
 
     energies, structures = {}, {}
     outputs = graph.outputs
     for label in labels:
-        misc = outputs[f"{label}_misc"]
+        misc = _graph_output(outputs, (f"{label}_static_misc", f"{label}_misc"))
+        if misc is None:
+            raise ValueError(f"no misc output for {label}")
         values = misc.get_dict() if hasattr(misc, "get_dict") else dict(misc)
         values = values.get("total_energies", values)
         for key in ("energy_extrapolated", "energy_no_entropy", "energy"):
@@ -365,5 +380,7 @@ def read_vasp_results(graph: Any, labels: Sequence[str]) -> tuple[dict[str, floa
                 break
         else:
             raise ValueError(f"no total energy in the misc output of {label}")
-        structures[label] = outputs[f"{label}_structure"]
+        structure = _graph_output(outputs, (f"{label}_relaxed_structure", f"{label}_structure"))
+        if structure is not None:
+            structures[label] = structure
     return energies, structures

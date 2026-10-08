@@ -100,11 +100,16 @@ def add_qe_task(
         "pseudos": group.get_pseudos(structure=pseudo_structure),
         "metadata": {"options": metadata},
     }
-    if override and override.settings:
+    settings = dict(override.settings) if override else {}
+    if override and override.fixed_sites:
+        from psteros.config import qe_fixed_coordinate_flags
+
+        settings["FIXED_COORDS"] = qe_fixed_coordinate_flags(len(pseudo_structure.sites), list(override.fixed_sites))
+    if settings:
         # aiida-quantumespresso's ``FIXED_COORDS`` setting is needed for
         # symmetric slabs with frozen central trilayers.  Keep settings
         # per-structure so a bulk/reference calculation cannot inherit them.
-        pw_inputs["settings"] = orm.Dict(dict=dict(override.settings))
+        pw_inputs["settings"] = orm.Dict(dict=settings)
     inputs = {
         "name": f"{label}_qe",
         "pw": pw_inputs,

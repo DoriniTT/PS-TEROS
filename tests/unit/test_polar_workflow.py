@@ -207,8 +207,8 @@ def test_vasp_workgraph_carries_pseudo_hydrogen_kinds_and_settings(tmp_path):
     graph = psteros.build_surface_workgraph(study.structures, config, submit=False)
     slab = graph.tasks["GaAs_111_term_0_vasp"].inputs
     assert sorted(slab.structure.value.get_kind_names()) == ["As", "Ga", "H0p75"]
-    assert slab.parameters.value.get_dict()["LDIPOL"] is True
-    assert slab.parameters.value.get_dict()["ENCUT"] == 400
+    incar = slab.parameters.value.get_dict()["incar"]  # aiida-vasp reads the INCAR namespace
+    assert incar["LDIPOL"] is True and incar["ENCUT"] == 400
     assert slab.potential_mapping.value.get_dict()["H0p75"] == "H.75"
     molecule = graph.tasks["pseudo_molecule_As_vasp"].inputs
     assert molecule.kpoints_spacing.value.value == pytest.approx(10.0)

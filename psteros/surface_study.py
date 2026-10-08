@@ -4,18 +4,18 @@
 terminations of one or more orientations with
 :func:`psteros.find_charge_neutral_terminations`, collects them with the bulk,
 the elemental references and (for a ternary compound) the competing phases,
-gives the QE or VASP settings of each calculation, and turns the finished
+gives the VASP (or QE) settings of each calculation, and turns the finished
 energies into a surface phase diagram:
 
     study = ChargeNeutralSurfaceStudy(bulk, [(1, 0, 0), (1, 1, 0)],
                                       references={"Ag": ag, "P": p, "O": o2},
                                       competing_phases={"Ag2O": ag2o, "P2O5": p2o5},
                                       unit_bonds={("P", "O"): 1.9})
-    relax = SurfaceWorkflowConfig(backend="qe", ..., role_overrides=study.qe_overrides("relax"))
-    static = SurfaceWorkflowConfig(backend="qe", ..., role_overrides=study.qe_overrides("static"))
-    graph = build_qe_relax_static_workgraph(study.structures, relax, static, submit=True)
+    relax = SurfaceWorkflowConfig(backend="vasp", ..., role_overrides=study.vasp_overrides("relax"))
+    static = SurfaceWorkflowConfig(backend="vasp", ..., role_overrides=study.vasp_overrides("static"))
+    graph = build_relax_static_workgraph(study.structures, relax, static, submit=True)
     ...
-    result = study.analyse(*read_qe_results(graph, study.structures))
+    result = study.analyse(*read_vasp_results(graph, study.structures))
     result.diagram.plot("ag3po4_surfaces.png")
 
 The slabs are cut from ``bulk`` at its cell, so ``bulk`` should be relaxed
@@ -67,6 +67,7 @@ def merge_overrides(
             kpoints_distance=override.kpoints_distance or base.kpoints_distance,
             settings=override.settings or base.settings,
             metadata=override.metadata or base.metadata,
+            fixed_sites=override.fixed_sites or base.fixed_sites,
         )
     return merged
 
@@ -237,6 +238,7 @@ class ChargeNeutralSurfaceStudy:
 
     def vasp_overrides(
         self,
+        stage: str = "relax",
         *,
         gamma_only_spacing: float = GAMMA_ONLY_SPACING,
         extra: Mapping[str, CalculationOverride] | None = None,
@@ -247,8 +249,13 @@ class ChargeNeutralSurfaceStudy:
         references and competing phases relax their cell (``ISIF=3``); gas
         references are Gamma only, and O2 is spin-polarised (triplet).
         ``extra`` overrides by label are applied on top.
+
+        ``stage="static"`` gives the overrides of the static calculations of
+        :func:`psteros.build_relax_static_workgraph`: the same without ``ISIF``.
         """
 
+        if stage not in ("relax", "static"):
+            raise ValueError("stage must be 'relax' or 'static'")
         overrides: dict[str, CalculationOverride] = {}
         for label, role in self.roles.items():
             incar: dict[str, Any] = {"ISIF": 2}
@@ -260,6 +267,8 @@ class ChargeNeutralSurfaceStudy:
                     incar.update({"ISPIN": 2, "MAGMOM": [1.0] * len(self.structures[label])})
             elif role in ("reference", "competing_phase"):
                 incar["ISIF"] = 3
+            if stage == "static":
+                incar.pop("ISIF", None)
             overrides[label] = CalculationOverride(parameters={"INCAR": incar}, kpoints_distance=kpoints)
         return merge_overrides(overrides, extra)
 

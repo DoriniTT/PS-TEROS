@@ -15,12 +15,14 @@ def qe_parameters() -> dict:
     }
 
 
-def test_public_api_is_qe_first_and_versioned() -> None:
+def test_public_api_is_vasp_first_and_versioned() -> None:
     assert psteros.__version__ == "2.0.0"
+    assert "VASP" in psteros.__doc__.splitlines()[2]
     assert callable(psteros.build_surface_workgraph)
+    assert callable(psteros.build_relax_static_workgraph)
     assert callable(psteros.build_qe_relax_static_workgraph)
-    assert psteros.QeCalculationConfig is not None
     assert psteros.VaspCalculationConfig is not None
+    assert psteros.QeCalculationConfig is not None
 
 
 def test_execution_policy_enforces_single_bohr_job() -> None:
