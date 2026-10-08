@@ -39,6 +39,14 @@ from .thermodynamics import (
     surface_energy_elemental,
     surface_energy_oxide_equilibrium,
 )
+from .thermochemistry import (
+    FreeEnergy,
+    HarmonicSolid,
+    IdealGasMolecule,
+    delta_mu_oxygen_ev,
+    oxygen_pressure_bar,
+    parse_vasp_frequencies_cm1,
+)
 from .workflow import build_qe_relax_static_workgraph, build_surface_workgraph
 
 __version__ = "1.0.0"
@@ -69,6 +77,12 @@ __all__ = [
     "stable_termination",
     "surface_energy_elemental",
     "surface_energy_oxide_equilibrium",
+    "FreeEnergy",
+    "HarmonicSolid",
+    "IdealGasMolecule",
+    "delta_mu_oxygen_ev",
+    "oxygen_pressure_bar",
+    "parse_vasp_frequencies_cm1",
     "build_qe_relax_static_workgraph",
     "build_surface_workgraph",
 ]
