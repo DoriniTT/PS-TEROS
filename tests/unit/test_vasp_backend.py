@@ -20,7 +20,8 @@ def test_parameters_use_the_aiida_vasp_incar_namespace() -> None:
     config = vasp_config()
     override = psteros.CalculationOverride(parameters={"INCAR": {"ISIF": 3}})
     assert vasp_incar(config, override) == {"ENCUT": 520, "IBRION": 2, "NSW": 100, "ISIF": 3}
-    assert vasp_parameters(config, override) == {"incar": {"ENCUT": 520, "IBRION": 2, "NSW": 100, "ISIF": 3}}
+    # aiida-vasp refuses upper-case INCAR tags in a stored Dict.
+    assert vasp_parameters(config, override) == {"incar": {"encut": 520, "ibrion": 2, "nsw": 100, "isif": 3}}
     assert config.incar["ISIF"] == 2
     with pytest.raises(ValueError, match="'INCAR' namespace"):
         vasp_incar(config, psteros.CalculationOverride(parameters={"SYSTEM": {"ecutwfc": 40}}))
@@ -167,13 +168,13 @@ def test_vasp_relax_static_workgraph(tmp_path) -> None:
     names = {task.name for task in graph.tasks}
     assert {"bulk_relax_vasp", "bulk_static_vasp", "slab_relax_vasp", "slab_static_vasp"} <= names
     bulk = graph.tasks["bulk_relax_vasp"].inputs
-    assert bulk.parameters.value.get_dict() == {"incar": {"ENCUT": 520, "IBRION": 2, "NSW": 100, "ISIF": 3}}
+    assert bulk.parameters.value.get_dict() == {"incar": {"encut": 520, "ibrion": 2, "nsw": 100, "isif": 3}}
     assert bulk.potential_mapping.value.get_dict() == {"Sn": "Sn_d", "O": "O"}
     assert bulk.max_iterations.value.value == 2
     dynamics = graph.tasks["slab_relax_vasp"].inputs.parameters.value.get_dict()["dynamics"]["positions_dof"]
     assert dynamics[:3] == [[False] * 3, [False] * 3, [True] * 3] and len(dynamics) == len(slab)
     assert graph.tasks["slab_static_vasp"].inputs.parameters.value.get_dict() == {
-        "incar": {"ENCUT": 520, "NSW": 0, "IBRION": -1}}
+        "incar": {"encut": 520, "nsw": 0, "ibrion": -1}}
     links = {(link.from_task.name, link.to_task.name) for link in graph.links}
     assert ("slab_relax_vasp", "slab_static_vasp") in links
     outputs = set(graph.outputs._get_keys()) if hasattr(graph.outputs, "_get_keys") else set(graph.outputs)

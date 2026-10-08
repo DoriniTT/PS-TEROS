@@ -80,7 +80,7 @@ def test_vasp_examples_build_their_graphs(tmp_path) -> None:
     refs = campaign.build_refs(args)
     assert {"sno2_bulk_relax_vasp", "sno2_bulk_static_vasp", "o2_static_vasp"} <= {t.name for t in refs.tasks}
     o2 = refs.tasks["o2_static_vasp"].inputs.parameters.value.get_dict()["incar"]
-    assert o2["ISPIN"] == 2 and o2["NSW"] == 0
+    assert o2["ispin"] == 2 and o2["nsw"] == 0
     slabs = campaign.build_slabs(args)
     dynamics = slabs.tasks["slab_o_relax_vasp"].inputs.parameters.value.get_dict()["dynamics"]["positions_dof"]
     assert [False, False, False] in dynamics and [True, True, True] in dynamics
@@ -90,5 +90,5 @@ def test_vasp_examples_build_their_graphs(tmp_path) -> None:
     study = zno.study()
     relax, static = zno.recipes(study)
     graph = psteros.build_relax_static_workgraph(study.structures, relax, static)
-    assert graph.tasks["ref_Zn_relax_vasp"].inputs.parameters.value.get_dict()["incar"]["ISIF"] == 3
-    assert "ISIF" not in graph.tasks["ref_Zn_static_vasp"].inputs.parameters.value.get_dict()["incar"]
+    assert graph.tasks["ref_Zn_relax_vasp"].inputs.parameters.value.get_dict()["incar"]["isif"] == 3
+    assert "isif" not in graph.tasks["ref_Zn_static_vasp"].inputs.parameters.value.get_dict()["incar"]

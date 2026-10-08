@@ -26,11 +26,12 @@ def vasp_parameters(
 ) -> dict[str, Any]:
     """The ``parameters`` input of an aiida-vasp ``VaspWorkChain``.
 
-    aiida-vasp expects the INCAR in an ``incar`` namespace; fixed sites
+    aiida-vasp expects the INCAR in an ``incar`` namespace with lower-case tags
+    (it refuses a stored ``Dict`` with ``ENCUT``); fixed sites
     (``override.fixed_sites``) become selective dynamics in ``dynamics``.
     """
 
-    parameters: dict[str, Any] = {"incar": vasp_incar(config, override)}
+    parameters: dict[str, Any] = {"incar": {str(tag).lower(): value for tag, value in vasp_incar(config, override).items()}}
     if override and override.fixed_sites:
         if number_of_sites is None:
             raise ValueError("fixed_sites needs the number of sites of the structure")
