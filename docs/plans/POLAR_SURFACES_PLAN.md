@@ -54,7 +54,7 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
   results, CSV columns and figure. Labels become element-generic.
 - [x] 3. **Any ternary compound.** Same generalisation for
   `TernaryOxideReferences` (any third element), oxide results unchanged.
-- [ ] 4. **Pseudo-hydrogen model.** Charge 2 - Z/4, formal charge of a pseudo-H
+- [x] 4. **Pseudo-hydrogen model.** Charge 2 - Z/4, formal charge of a pseudo-H
   (minus the oxidation state of its partner over 4), VASP POTCAR names
   (H.5, H.75, H1.25, H1.5, ...), AiiDA kind names via the `kind_name` site
   property.
