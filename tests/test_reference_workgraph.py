@@ -206,6 +206,13 @@ def test_surface_builder_applies_vasp_overrides(code_label) -> None:
     assert task.inputs.options.value.get_dict()["max_wallclock_seconds"] == 600
 
 
+def test_surface_builder_accepts_psteros_slabs(code_label) -> None:
+    slab, _ = psteros.sno2_110_slab(termination="sno", triple_layers=3, vacuum_angstrom=15.0)
+    workgraph = psteros.build_surface_workgraph({"slab_sno": slab}, recipe(code_label))
+    structure = workgraph.tasks["slab_sno_vasp"].inputs.structure.value
+    assert structure.get_pymatgen_structure().composition == slab.composition
+
+
 def test_surface_builder_defaults_without_override(code_label) -> None:
     task = surface_task(code_label)
     assert task.inputs.kpoints_spacing.value.value == 0.25

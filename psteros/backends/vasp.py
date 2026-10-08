@@ -41,7 +41,8 @@ def add_vasp_task(workgraph: Any, *, label: str, structure: Any,
 
     Changed after 1.0.0: version 1.0.0 passed a flat INCAR, which aiida-vasp 5
     rejects, put override tags beside it, ignored ``kpoints_distance`` and
-    ``settings``, and did not keep OUTCAR or vasprun.xml (see CHANGE.md).
+    ``settings``, did not keep OUTCAR or vasprun.xml, and failed on a
+    pymatgen ``Slab`` such as :func:`psteros.sno2_110_slab` returns (see CHANGE.md).
     """
 
     from aiida import orm
@@ -50,10 +51,10 @@ def add_vasp_task(workgraph: Any, *, label: str, structure: Any,
 
     from psteros.backends.vasp_tasks import RETRIEVE
 
-    if isinstance(structure, int):
-        structure = orm.load_node(structure)
-    elif not isinstance(structure, orm.StructureData):
-        structure = orm.StructureData(pymatgen=structure)
+    from psteros.backends.qe import as_aiida_structure
+
+    # Also converts a pymatgen Slab, which StructureData(pymatgen=...) rejects.
+    structure = as_aiida_structure(structure)
     metadata = execution.scheduler_options()
     incar, namespaces = split_recipe_incar(config.incar)
     spacing = config.kpoints_spacing
