@@ -61,3 +61,14 @@ Every `verdi` call uses `-p psteros_sno2_vibrations`: the default profile of thi
   change, recipe NCORE kept), for a solid `NCORE = 1` (supercell with hundreds of bands, symmetry-reduced
   displacements kept). Tests, CHANGE.md and docs updated (the tests of `a709819` were mine and for unreleased
   behaviour; no earlier test was edited). 331 passed, 7 skipped.
+- O2 smoke test, attempt 5: **graph PK 880 finished OK** (exit 0), on psteros `169e291`. Relax 884/889 and static
+  899/904 came from the cache (identical inputs to attempt 3, which ran for real as PK 747: calcs 756 and 771);
+  vibrations ran for real (work chain 913, calc 918) and `vasp_frequencies` (925) parsed the OUTCAR.
+  Checks (all within the ranges of PLAN.md step 2):
+  - `reference_results(747)` worked while the graph was running (relax finished, static waiting).
+  - 6 modes parsed: 1567.41, 0.0019, 0.0013, -0.00004, -21.23, -21.23 cm^-1; 1 vibration kept, 5 dropped
+    (translations, rotations; the two -21 cm^-1 are the box rotations, not imaginary vibrations).
+  - O-O bond 1.233 A; E_relax = -9.88472377 eV, E_static = -9.88472388 eV (sigma -> 0).
+  - `reference_thermochemistry(880)` returns an `IdealGasMolecule`; ZPE = 0.0972 eV, S(298.15 K, 1 bar) =
+    205.4 J/(mol K); `delta_mu_oxygen_ev(o2, 298.15, 1.0, include_zero_point=False)` = -0.272 eV
+    (with ZPE -0.224 eV); p(O2) at 600 K for Delta mu_O = -1 eV is 4.6e-8 bar.

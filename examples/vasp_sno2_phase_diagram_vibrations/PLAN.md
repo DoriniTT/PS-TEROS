@@ -122,14 +122,14 @@ the same quantity `vasp_energy` uses for the references.
 ### 2. Smoke test: O2 alone
 O2 is cheap and runs every code path (relax, static, vibrations, frequency
 parsing, readers).
-- [ ] Submit `campaign.py o2` (references `{"o2": ...}` only).
-- [ ] While it runs: `psteros.reference_results(pk)` works and shows states.
-- [ ] After it ends: all three blocks finished; `reference_thermochemistry(pk)`
+- [x] Submit `campaign.py o2` (references `{"o2": ...}` only).
+- [x] While it runs: `psteros.reference_results(pk)` works and shows states.
+- [x] After it ends: all three blocks finished; `reference_thermochemistry(pk)`
       returns an `IdealGasMolecule`; 6 modes parsed, 5 near zero dropped.
-- [ ] Sanity: O2 bond about 1.23 A (PBE), frequency about 1550-1600 cm^-1,
+- [x] Sanity: O2 bond about 1.23 A (PBE), frequency about 1550-1600 cm^-1,
       S(298.15 K, 1 bar) about 205 J/(mol K),
       `delta_mu_oxygen_ev(o2, 298.15, 1.0, include_zero_point=False)` about -0.27 eV.
-- [ ] Fix any bug found (see "When something fails"), then go on.
+- [x] Fix any bug found (see "When something fails"), then go on.
 
 ### 3. All references
 - [ ] Submit `campaign.py refs` (o2, sno2, sn; the O2 results may be reused or rerun).
