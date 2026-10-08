@@ -12,7 +12,7 @@ Status: **in progress** (see the log at the end of each section).
 | aiida-workgraph | 0.8.1 installed in the shared env; **0.9.0 used for every run** through a `PYTHONPATH` overlay (see 4.1) |
 | psteros | `__version__` 2.0.0, taken from this worktree via `PYTHONPATH`; the shared env has it editable from another checkout and was not modified |
 | AiiDA profile | `psteros_vibrations_lovelace`, **new**, created for this test (sqlite_dos, RabbitMQ); default profile unchanged |
-| Computer | `lovelace`, a copy of the registration in profile `presto` (`core.ssh` through the cenapad ControlMaster, scheduler `tessera.pbspro_gpu`, work dir `/work/dorinitt/.aiida`) |
+| Computer | `lovelace`, a copy of the registration in profile `presto` (`core.ssh` through the cenapad ControlMaster, scheduler `tessera.pbspro_gpu`, work dir `/work/dorinitt/.aiida`), **with `mpirun -np {tot_num_mpiprocs}` instead of the OpenMPI 5.0.6 path of `presto`** (see 4.2) |
 | Code | `VASP-6.5.1@lovelace` (`vasp_std`, copy of the `presto` registration; intel/2023.2.1 module, OpenMPI 5.0.6 mpirun) |
 | POTCARs | family `PBE` (329 POTCARs copied from `presto`), mapping `Sn -> Sn_d`, `O -> O` |
 | Daemon | started with `PYTHONPATH=<overlay>:<worktree>`; one worker |
@@ -34,7 +34,8 @@ Job script produced for the first job (`_aiidasubmit.sh`, PK 805): `#PBS -q par1
 |---|---:|---|
 | refs, attempt 1 (workgraph 0.8.1, psteros as on the branch) | 705 | Finished [302] after 26 s: INCAR case error (4.1) |
 | refs, attempt 2 (workgraph 0.9.0, psteros as on the branch) | 751 | Finished [302] after 25 s: the same error (4.1) |
-| refs, attempt 3 (with `PsterosVaspWorkChain`) | 797 | running |
+| refs, attempt 3 (with `PsterosVaspWorkChain`) | 797 | Killed by me after its first job (calc 805, alpha-Sn relax) failed with exit 1002: the job ran on **1 MPI rank** (4.2); calc 815 (queued second job) cancelled with 810/815 |
+| refs, attempt 4 (computer `mpirun` fixed) | 862 | running |
 | slabs | | |
 | vibrations | | |
 | ibrion5 | | |
@@ -48,3 +49,13 @@ Job script produced for the first job (`_aiidasubmit.sh`, PK 805): `#PBS -q par1
 ### 4.1 psteros VASP graphs cannot start with aiida-vasp 5.0.0 (INCAR keys in upper case)
 
 (to be filled in)
+
+### 4.2 Wrong `mpirun` in the copied computer registration (not a psteros bug)
+
+I copied the `lovelace` computer of profile `presto`, whose `mpirun` is `/opt/pub/openmpi/5.0.6/gcc/12.2.0/bin/mpirun`.
+`VASP-6.5.1@lovelace` is an Intel build (`LinuxIFC`, run after `module load intel/2023.2.1`), so OpenMPI's `mpirun -np 128`
+started 128 independent single-rank copies in the same folder: VASP printed `running 1 mpi-ranks` (and a warning that
+`NCORE=16` was overwritten by `NCORE=1`), the run took 551 s of wall time for 64 s CPU, and the retrieved `vasprun.xml`/`OUTCAR`
+could not be parsed (exit 1002, handler `misc` not found, work chain exit 500). Jobs of the same code in profile
+`tessera_photocatalysis_industry_metallicity`, whose computer uses the plain `mpirun -np`, finished with exit 0 and
+`running 128 mpi-ranks`. Fix: `mpirun -np {tot_num_mpiprocs}` on my computer. Cost: one 9 min job on a par128 node.
