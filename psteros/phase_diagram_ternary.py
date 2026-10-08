@@ -472,6 +472,11 @@ def ternary_surface_phase_diagram(
     duplicates = sorted({label for label in labels if labels.count(label) > 1})
     if duplicates:
         raise ValueError(f"termination labels must be unique: {duplicates}")
+    passivated = [termination.label for termination in terminations if termination.is_passivated]
+    if passivated:
+        raise ValueError(
+            "passivated (polar) slabs are supported for binary compounds only; got " + ", ".join(passivated)
+        )
     allowed = {references.independent, references.eliminated, references.vertical}
     for termination in terminations:
         foreign = sorted(set(termination.composition).difference(allowed))

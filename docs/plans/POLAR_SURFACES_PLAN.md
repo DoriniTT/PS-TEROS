@@ -66,7 +66,7 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
 - [x] 6. **Pseudo chemical potentials.** Pseudo-molecule builder; optional
   tetrahedral-cluster builder and solver; `PseudoHydrogenReferences` holding
   muhat(Delta mu); both-faces-passivated check slab (Eq. 7).
-- [ ] 7. **Polar thermodynamics.** One-face terminations with pseudo-H counts
+- [x] 7. **Polar thermodynamics.** One-face terminations with pseudo-H counts
   in `surface_phase_diagram`, absolute gamma on the same grid as symmetric
   slabs; refuses terminations of one face with different bottoms.
 - [ ] 8. **Post-relaxation bottom check.** Compare the relaxed bottom region of

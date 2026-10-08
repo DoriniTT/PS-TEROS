@@ -313,3 +313,110 @@ def test_doubly_passivated_slab_for_the_eq_7_check():
     top_h = [i for i, k in enumerate(kinds) if k == "H1p25"]
     assert heights[top_h[0]] > max(heights[atoms])
     assert np.isclose(structure.distance_matrix[top_h[0]][atoms].min(), polar.default_hydrogen_bond_length("Ga"))
+
+
+# ---------------------------------------------------------------------------
+# Step 7: absolute gamma of polar faces in the phase diagram
+# ---------------------------------------------------------------------------
+
+import psteros  # noqa: E402
+
+E_GAAS, E_GA, E_AS = -8.5, -3.0, -4.7          # per formula unit / atom
+E_MOLECULE = {"As": -16.0, "Ga": -12.0}         # pseudo-molecules As(H.75)4, Ga(H1.25)4
+
+
+def gaas_references():
+    return psteros.BinaryReferences(
+        bulk_energy_ev=2 * E_GAAS, bulk_composition={"Ga": 2, "As": 2},
+        reference_energies_per_atom_ev={"Ga": E_GA, "As": E_AS},
+    )
+
+
+def test_polar_gamma_follows_sci_rep_eq_5():
+    slabs = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3)
+    ideal, vacancy = slabs
+    energy = -60.0
+    termination = psteros.SlabTermination.from_polar(ideal, energy)
+    assert termination.surfaces == 1 and termination.face == "GaAs(111)"
+    assert termination.pseudo_hydrogen == {"As": 4} and termination.composition == {"Ga": 12, "As": 12}
+    hydrogen = psteros.PseudoHydrogenReferences.from_pseudo_molecules(E_MOLECULE)
+    references = gaas_references()
+    diagram = psteros.surface_phase_diagram([termination], references, pseudo_hydrogen=hydrogen, points=5)
+    for point in diagram.curves[termination.label]:
+        mu = references.chemical_potentials_ev(point.delta_mu_ev)
+        muhat = (E_MOLECULE["As"] - mu["As"]) / 4
+        expected = (energy - 12 * mu["Ga"] - 12 * mu["As"] - 4 * muhat) / ideal.area
+        assert point.gamma_ev_per_angstrom2 == pytest.approx(expected)
+    # A stoichiometric Ga-terminated face still depends on Delta mu through the pseudo-H: slope n_H / (4 A).
+    curve = diagram.curves[termination.label]
+    slope = (curve[-1].gamma_ev_per_angstrom2 - curve[0].gamma_ev_per_angstrom2) / (
+        curve[-1].delta_mu_ev - curve[0].delta_mu_ev)
+    assert slope == pytest.approx(4 / (4 * ideal.area))
+
+
+def test_polar_and_symmetric_slabs_share_one_absolute_scale():
+    ideal, vacancy = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3)
+    hydrogen = psteros.PseudoHydrogenReferences.from_pseudo_molecules(E_MOLECULE)
+    symmetric = psteros.SlabTermination("GaAs(110)", 12 * E_GAAS + 2 * 30.0 * 0.05, {"Ga": 12, "As": 12}, 30.0)
+    terminations = [
+        psteros.SlabTermination.from_polar(ideal, -60.0),
+        psteros.SlabTermination.from_polar(vacancy, -56.5, label="V_Ga 2x2"),
+        symmetric,
+    ]
+    diagram = psteros.surface_phase_diagram(terminations, gaas_references(), pseudo_hydrogen=hydrogen, points=9)
+    assert set(diagram.curves) == {"term_0", "V_Ga 2x2", "GaAs(110)"}
+    flat = [p.gamma_ev_per_angstrom2 for p in diagram.curves["GaAs(110)"]]
+    assert flat == pytest.approx([0.05] * 9)
+
+
+def test_slabs_of_one_face_must_share_one_bottom():
+    hydrogen = psteros.PseudoHydrogenReferences.from_pseudo_molecules(E_MOLECULE)
+    thick = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3)[0]
+    thin = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=2)[0]
+    # The same bottom under a thinner slab is the same bottom.
+    assert thick.bottom_fingerprint == thin.bottom_fingerprint
+    moved = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3, hydrogen_bond_lengths={"As": 1.3})[0]
+    small = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3, electron_counting=False)[0]
+    assert len({thick.bottom_fingerprint, moved.bottom_fingerprint, small.bottom_fingerprint}) == 3
+    mixed = [psteros.SlabTermination.from_polar(thick, -60.0, label="a"),
+             psteros.SlabTermination.from_polar(moved, -60.1, label="b")]
+    with pytest.raises(ValueError, match="must share one bottom"):
+        psteros.surface_phase_diagram(mixed, gaas_references(), pseudo_hydrogen=hydrogen)
+    mixed_cells = [psteros.SlabTermination.from_polar(thick, -60.0, label="2x2"),
+                   psteros.SlabTermination.from_polar(small, -15.0, label="1x1")]
+    with pytest.raises(ValueError, match="must share one bottom"):
+        psteros.surface_phase_diagram(mixed_cells, gaas_references(), pseudo_hydrogen=hydrogen)
+    other_face = polar.find_polar_terminations(gaas(), (-1, -1, -1), bilayers=3)[0]
+    both_faces = [psteros.SlabTermination.from_polar(thick, -60.0, label="A"),
+                  psteros.SlabTermination.from_polar(other_face, -61.0, label="B")]
+    diagram = psteros.surface_phase_diagram(both_faces, gaas_references(), pseudo_hydrogen=hydrogen)
+    assert set(diagram.curves) == {"A", "B"}
+
+
+def test_passivated_slabs_need_references_and_a_fingerprint():
+    ideal = polar.find_polar_terminations(gaas(), (1, 1, 1), bilayers=3)[0]
+    termination = psteros.SlabTermination.from_polar(ideal, -60.0)
+    with pytest.raises(ValueError, match="need pseudo_hydrogen"):
+        psteros.surface_phase_diagram([termination], gaas_references())
+    hydrogen = psteros.PseudoHydrogenReferences.from_pseudo_molecules(E_MOLECULE)
+    manual = psteros.SlabTermination("x", -60.0, {"Ga": 12, "As": 12}, 20.0, surfaces=1, pseudo_hydrogen={"As": 4})
+    with pytest.raises(ValueError, match="no bottom_fingerprint"):
+        psteros.surface_phase_diagram([manual], gaas_references(), pseudo_hydrogen=hydrogen)
+    with pytest.raises(ValueError, match="surfaces=1"):
+        psteros.SlabTermination("y", -60.0, {"Ga": 12, "As": 12}, 20.0, pseudo_hydrogen={"As": 4})
+    with pytest.raises(ValueError, match="binary compounds only"):
+        refs = psteros.TernaryReferences(-64.0, {"Sr": 2, "Ti": 2, "O": 6}, {"Sr": -1.0, "Ti": -2.0, "O": -4.0})
+        psteros.ternary_surface_phase_diagram([manual], refs)
+
+
+def test_polar_oxide_face_with_oxygen_reference():
+    slabs = polar.find_polar_terminations(zno(), (0, 0, 1), bilayers=3)
+    hydrogen = psteros.PseudoHydrogenReferences.from_pseudo_molecules({"O": -12.0})
+    oxide = psteros.BinaryOxideReferences(-18.0, {"Zn": 2, "O": 2}, -9.8, -1.3)
+    diagram = psteros.surface_phase_diagram(
+        [psteros.SlabTermination.from_polar(t, -50.0 - i) for i, t in enumerate(slabs)], oxide,
+        pseudo_hydrogen=hydrogen, points=5,
+    )
+    assert diagram.references.variable == "O" and len(diagram.curves) == 2
+    mu = oxide.chemical_potentials_ev(-1.0)
+    assert mu["Zn"] + mu["O"] == pytest.approx(-9.0)

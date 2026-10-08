@@ -57,10 +57,17 @@ def _integer_composition(composition: Any, name: str) -> dict[str, int]:
 
 @dataclass(frozen=True)
 class SlabTermination:
-    """One symmetric slab termination entering a surface phase diagram.
+    """One slab termination entering a surface phase diagram.
 
     ``surface_area_angstrom2`` is the area of one exposed face and
-    ``surfaces`` the number of equivalent faces the slab represents.
+    ``surfaces`` the number of equivalent faces the slab represents (2 for a
+    symmetric slab).
+
+    A polar slab with a pseudo-hydrogen passivated bottom exposes one face
+    (``surfaces=1``); ``pseudo_hydrogen`` counts its pseudo-hydrogen by the
+    element they passivate, ``composition`` excludes them, and
+    ``bottom_fingerprint`` and ``face`` identify its bottom and its face. Use
+    :meth:`from_polar` to fill these from :func:`psteros.find_polar_terminations`.
     """
 
     label: str
@@ -68,6 +75,9 @@ class SlabTermination:
     composition: Mapping[str, int]
     surface_area_angstrom2: float
     surfaces: int = 2
+    pseudo_hydrogen: Mapping[str, int] = field(default_factory=dict)
+    bottom_fingerprint: str | None = None
+    face: str | None = None
 
     def __post_init__(self) -> None:
         if not self.label or not str(self.label).strip():
@@ -77,6 +87,40 @@ class SlabTermination:
         if self.surfaces <= 0:
             raise ValueError("surfaces must be positive")
         object.__setattr__(self, "composition", _integer_composition(self.composition, "composition"))
+        hydrogen = {str(k): int(v) for k, v in dict(self.pseudo_hydrogen).items() if int(v)}
+        if any(v < 0 for v in hydrogen.values()):
+            raise ValueError("pseudo_hydrogen counts must be non-negative")
+        object.__setattr__(self, "pseudo_hydrogen", hydrogen)
+        if hydrogen and self.surfaces != 1:
+            raise ValueError("a slab with a passivated bottom exposes one face: use surfaces=1")
+
+    @property
+    def is_passivated(self) -> bool:
+        return bool(self.pseudo_hydrogen)
+
+    @classmethod
+    def from_polar(
+        cls, termination: Any, slab_energy_ev: float, *, label: str | None = None
+    ) -> "SlabTermination":
+        """From a :class:`psteros.PolarTermination` and the energy of its relaxed slab.
+
+        The counts, area, bottom fingerprint and face come from the built
+        slab; a relaxation at fixed cell does not change them.
+        """
+
+        from psteros.core.terminations import hkl_label
+
+        face = f"{termination.bulk_formula}{hkl_label(termination.miller_index)}"
+        return cls(
+            label=label or termination.label,
+            slab_energy_ev=slab_energy_ev,
+            composition=termination.composition,
+            surface_area_angstrom2=termination.area,
+            surfaces=1,
+            pseudo_hydrogen=termination.pseudo_hydrogen_counts,
+            bottom_fingerprint=termination.bottom_fingerprint,
+            face=face,
+        )
 
     @classmethod
     def from_structure(
@@ -191,6 +235,13 @@ class BinaryOxideReferences:
     @property
     def poor_limit_ev(self) -> float | None:
         return self.oxygen_poor_limit_ev
+
+    def chemical_potentials_ev(self, delta_mu_ev: float) -> dict[str, float]:
+        """mu_M and mu_O at ``Delta mu_O``, with x mu_M + y mu_O = E_bulk."""
+
+        x, y = self.formula_unit
+        mu_oxygen = self.variable_reference_energy_ev + delta_mu_ev
+        return {"O": mu_oxygen, self.metal: (self.bulk_energy_per_formula_unit_ev - y * mu_oxygen) / x}
 
     @property
     def poor_limit_label(self) -> str:
@@ -506,6 +557,7 @@ def surface_phase_diagram(
     *,
     delta_mu_range: tuple[float, float] | None = None,
     points: int = 201,
+    pseudo_hydrogen: Any = None,
 ) -> SurfacePhaseDiagram:
     """Evaluate gamma(Delta mu) for every termination on a common grid.
 
@@ -514,6 +566,14 @@ def surface_phase_diagram(
     (requires the reference of the other element) to ``Delta mu = 0``. A
     wider ``delta_mu_range`` is allowed; the window limits are then added to
     the grid so that they appear exactly in the CSV export.
+
+    Polar slabs with a passivated bottom (``surfaces=1`` and pseudo-hydrogen
+    counts) need ``pseudo_hydrogen``, a
+    :class:`psteros.PseudoHydrogenReferences`; their gamma is the absolute
+    energy of the top face,
+    ``[E_slab - sum_i n_i mu_i - sum_k n_k muhat_k] / A``, on the same scale
+    as symmetric slabs. Passivated slabs of one face must share one bottom
+    (equal ``bottom_fingerprint``).
     """
 
     terminations = tuple(terminations)
@@ -524,6 +584,7 @@ def surface_phase_diagram(
     if duplicates:
         raise ValueError(f"termination labels must be unique: {duplicates}")
     other, variable = references.other, references.variable
+    _check_passivated(terminations, pseudo_hydrogen, {other, variable})
     allowed = {other, variable}
     for termination in terminations:
         foreign = sorted(set(termination.composition).difference(allowed))
@@ -554,6 +615,11 @@ def surface_phase_diagram(
     bulk_energy = references.bulk_energy_per_formula_unit_ev
 
     def gamma(termination: SlabTermination, delta_mu: float) -> SurfaceEnergyPoint:
+        correction = 0.0
+        if termination.is_passivated:
+            correction = pseudo_hydrogen.reservoir_energy_ev(
+                termination.pseudo_hydrogen, references.chemical_potentials_ev(delta_mu)
+            )
         return surface_energy_binary_equilibrium(
             slab_energy_ev=termination.slab_energy_ev,
             n_other=termination.composition[other],
@@ -564,6 +630,7 @@ def surface_phase_diagram(
             surface_area_angstrom2=termination.surface_area_angstrom2,
             surfaces=termination.surfaces,
             formula_unit=references.formula_unit,
+            reservoir_correction_ev=correction,
         )
 
     curves = {
@@ -588,6 +655,38 @@ def surface_phase_diagram(
         stable=stable,
         transitions=tuple(_lower_envelope_transitions(lines, low, high)),
     )
+
+
+def _check_passivated(terminations, pseudo_hydrogen, elements: set[str]) -> None:
+    """Passivated slabs need pseudo-H references, known elements and, per face, one shared bottom."""
+
+    passivated = [termination for termination in terminations if termination.is_passivated]
+    if not passivated:
+        return
+    if pseudo_hydrogen is None:
+        raise ValueError(
+            "terminations with pseudo-hydrogen need pseudo_hydrogen=PseudoHydrogenReferences(...): "
+            + ", ".join(t.label for t in passivated)
+        )
+    faces: dict[str, dict[str, list[str]]] = {}
+    for termination in passivated:
+        foreign = sorted(set(termination.pseudo_hydrogen).difference(elements))
+        if foreign:
+            raise ValueError(f"termination {termination.label!r} passivates {foreign}, not in the compound")
+        if not termination.bottom_fingerprint:
+            raise ValueError(
+                f"termination {termination.label!r} has pseudo-hydrogen but no bottom_fingerprint; build it "
+                "with psteros.find_polar_terminations and SlabTermination.from_polar"
+            )
+        key = termination.face or "?"
+        faces.setdefault(key, {}).setdefault(termination.bottom_fingerprint, []).append(termination.label)
+    for face, bottoms in faces.items():
+        if len(bottoms) > 1:
+            listing = "; ".join(f"{fingerprint}: {', '.join(labels)}" for fingerprint, labels in bottoms.items())
+            raise ValueError(
+                f"passivated slabs of {face} must share one bottom, but they have {len(bottoms)} ({listing}). "
+                "Build all of them in one find_polar_terminations call."
+            )
 
 
 def _lower_envelope_transitions(

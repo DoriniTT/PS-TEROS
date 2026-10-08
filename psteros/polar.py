@@ -221,6 +221,7 @@ class PolarTermination:
     bottom_fingerprint: str
     removed_sites: tuple = ()
     bulk_reduced_composition: Mapping[str, float] | None = None
+    bulk_formula: str = ""
 
     @property
     def composition(self) -> dict[str, int]:
@@ -562,6 +563,9 @@ class _IdealSlab:
         self.charges, self.miller, self.cell = charges, miller, cell
         self.top_element, self.bottom_element, self.thickness = top_element, bottom_element, thickness
         self.bulk_reduced = bulk_reduced
+        from pymatgen.core import Composition
+
+        self.bulk_formula = Composition(bulk_reduced).reduced_formula
         self.charge = float(sum(charges))
         self.fingerprint = _bottom_fingerprint(lattice, species, coords, kinds, bottom)
 
@@ -594,6 +598,7 @@ class _IdealSlab:
             electron_counting=electron_counting, removed_per_cell=removed_formulas,
             thickness=float(heights.max() - heights.min()), bottom_fingerprint=self.fingerprint,
             removed_sites=ghosts, bulk_reduced_composition=self.bulk_reduced,
+            bulk_formula=self.bulk_formula,
         )
 
 
@@ -606,13 +611,17 @@ def _bottom_fingerprint(lattice, species, coords, kinds, bottom) -> str:
 
     normal = np.asarray(lattice.matrix[2]) / np.linalg.norm(lattice.matrix[2])
     indices = [i for i, flag in enumerate(bottom) if flag]
-    points = np.array([coords[i] for i in indices])
-    base = points[np.argmin(points @ normal)]
-    frac = lattice.get_fractional_coords(points - base + lattice.matrix[2] * 0.5)
-    frac[:, :2] -= np.floor(frac[:, :2] + 1e-6)
-    cart = lattice.get_cartesian_coords(frac)
+    relative = np.array([coords[i] for i in indices])
+    relative = relative - relative[np.argmin(relative @ normal)]
+    # In-plane position wrapped into the cell, and height above the lowest
+    # bottom site: independent of the slab thickness and of the vacuum.
+    frac = lattice.get_fractional_coords(relative)[:, :2]
+    frac -= np.floor(frac + 1e-6)
+    in_plane = frac @ np.asarray(lattice.matrix[:2])
+    heights = relative @ normal
     rows = sorted(
-        (kinds[i], *(round(float(v), 3) + 0.0 for v in point)) for i, point in zip(indices, cart)
+        (kinds[i], *(round(float(v), 3) + 0.0 for v in (*xy, height)))
+        for i, xy, height in zip(indices, in_plane, heights)
     )
     cell = [round(float(v), 4) + 0.0 for v in np.asarray(lattice.matrix[:2]).ravel()]
     return hashlib.sha256(repr((cell, rows)).encode()).hexdigest()[:16]
