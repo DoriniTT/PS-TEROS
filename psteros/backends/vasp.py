@@ -10,7 +10,12 @@ from psteros.config import CalculationOverride, ExecutionPolicy, VaspCalculation
 def add_vasp_task(workgraph: Any, *, label: str, structure: Any,
                   config: VaspCalculationConfig, execution: ExecutionPolicy,
                   override: CalculationOverride | None = None) -> Any:
-    """Add one standard aiida-vasp workchain task and return it."""
+    """Add one standard aiida-vasp workchain task and return it.
+
+    ``override.parameters["INCAR"]`` updates the INCAR of this structure and
+    ``override.kpoints_distance`` replaces the k-point spacing (a large value
+    gives a Gamma-only mesh for molecules).
+    """
 
     from aiida import orm
     from aiida.plugins import WorkflowFactory
@@ -35,7 +40,9 @@ def add_vasp_task(workgraph: Any, *, label: str, structure: Any,
         structure=structure,
         code=orm.load_code(config.code_label),
         parameters=orm.Dict(dict=parameters),
-        kpoints_spacing=orm.Float(config.kpoints_spacing),
+        kpoints_spacing=orm.Float(
+            override.kpoints_distance if override and override.kpoints_distance else config.kpoints_spacing
+        ),
         potential_family=orm.Str(config.potential_family),
         potential_mapping=orm.Dict(dict=dict(config.potential_mapping)),
         options=orm.Dict(dict=metadata),

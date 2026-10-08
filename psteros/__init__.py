@@ -49,6 +49,7 @@ from .polar import (
     pseudo_molecule,
     tetrahedral_cluster,
 )
+from .polar_workflow import PolarSurfaceStudy, PolarStudyResult, read_vasp_results
 from .thermodynamics import (
     EV_PER_ANGSTROM2_TO_J_PER_M2,
     SurfaceEnergyPoint,
@@ -97,6 +98,9 @@ __all__ = [
     "pseudo_hydrogens",
     "pseudo_molecule",
     "tetrahedral_cluster",
+    "PolarSurfaceStudy",
+    "PolarStudyResult",
+    "read_vasp_results",
     "EV_PER_ANGSTROM2_TO_J_PER_M2",
     "SurfaceEnergyPoint",
     "stable_termination",

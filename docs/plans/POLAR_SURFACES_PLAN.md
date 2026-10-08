@@ -72,7 +72,7 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
 - [x] 8. **Post-relaxation bottom check.** Compare the relaxed bottom region of
   every slab with the shared reference (RMSD after removing a rigid shift);
   failing slabs are flagged and left out of comparisons.
-- [ ] 9. **VASP workflow.** Structures, potential mapping and INCAR overrides
+- [x] 9. **VASP workflow.** Structures, potential mapping and INCAR overrides
   (dipole correction for asymmetric slabs, Gamma-only molecules and clusters)
   for `build_surface_workgraph`; a collector from finished energies to the
   phase diagram.
