@@ -94,3 +94,17 @@ Every `verdi` call uses `-p psteros_sno2_vibrations`: the default profile of thi
   psteros bug in `make_supercell`. Fix: group the atoms by element in order of first appearance; regression
   test `test_supercell_groups_atoms_by_element_so_that_vasp_keeps_the_symmetry` (also checks P4_2/mnm with
   16 x 12 operations); `CHANGE.md`. 332 passed, 7 skipped. The daemon was restarted (it runs the calcfunction).
+- References, attempt 3: **graph PK 1372 finished OK** (psteros `f0c0eb1`, 2x2x2 k-mesh and 24 h walltime for the SnO2
+  vibrations). O2 (relax 1376, static 1391, vibrations 1405) and alpha-Sn (relax 1422, static 1437, vibrations 1453) came
+  from the cache of earlier graphs (747/815/880 and 995); SnO2 ran for real: relax 1470, static 1485 and
+  vibrations 1501 (frequencies 1513). VASP now found 16 space-group operations (D_2h), `DOF = 4`, 8 displacements,
+  6 k-points. Sanity (PLAN step 3):
+  - relaxed SnO2: a = 4.8301 A, c = 3.2434 A (plan: about 4.83 / 3.24); alpha-Sn: a = 6.6516 A (about 6.65).
+  - Delta E_f(SnO2) from the static energies = -4.925 eV per formula unit (about -5; experiment -6.0).
+    E(SnO2 cell) = -37.31192 eV, E(Sn cell of 8) = -30.77105 eV, E(O2) = -9.88472 eV.
+  - Imaginary modes: none. SnO2: 216 modes, the 3 lowest are -0.14, -0.14, -0.01 cm^-1 (acoustic, dropped); the
+    first optical one is 77.95 cm^-1. alpha-Sn: 192 modes, the 3 lowest are 0 cm^-1; the first is 34.8 cm^-1.
+  - Highest modes: SnO2 706.5 cm^-1 (plan 700-800), alpha-Sn 173.3 cm^-1 (plan: about 200; PBE underestimates
+    the experimental 200-ish, within the expected 10-15 %).
+  - ZPE: SnO2 0.1985 eV per formula unit (0.15-0.25), alpha-Sn 0.0211 eV per atom (about 0.02), O2 0.0972 eV.
+    ZPE per atom of the SnO2 cell 0.0662 eV, so the supercell modes scale to the static cell correctly.

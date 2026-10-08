@@ -132,8 +132,8 @@ parsing, readers).
 - [x] Fix any bug found (see "When something fails"), then go on.
 
 ### 3. All references
-- [ ] Submit `campaign.py refs` (o2, sno2, sn; the O2 results may be reused or rerun).
-- [ ] Sanity, recorded in LOG.md:
+- [x] Submit `campaign.py refs` (o2, sno2, sn; the O2 results may be reused or rerun).
+- [x] Sanity, recorded in LOG.md:
   - relaxed SnO2 a about 4.83, c about 3.24 A; alpha-Sn a about 6.65 A (PBE);
   - formation energy of SnO2 from the static energies about -5 eV per formula
     unit (PBE underbinds it against the experimental -6.0 eV);
