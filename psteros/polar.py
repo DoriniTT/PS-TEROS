@@ -156,6 +156,14 @@ def pseudo_hydrogens(
     }
 
 
+def default_hydrogen_bond_length(element: str) -> float:
+    """Initial X-H distance (A): sum of the atomic radii of X and H; relaxed afterwards."""
+
+    from pymatgen.core import Element
+
+    return float(Element(element).atomic_radius or 1.0) + float(Element("H").atomic_radius or 0.25)
+
+
 def tetrahedral_coordination(bulk: Any, tolerance: float = 0.15) -> dict[str, int]:
     """Number of nearest neighbours of each element (within ``tolerance`` of the shortest bond)."""
 
@@ -689,7 +697,7 @@ def _ideal_slab(bulk, miller, layers, cell, vacuum, states, hydrogens, repeat, h
         # outward: from the surface atom towards its missing neighbour
         symbol = parent[inside].specie.symbol
         hydrogen = hydrogens[symbol]
-        length = lengths.get(symbol, (Element(symbol).atomic_radius or 1.0) + (Element("H").atomic_radius or 0.25))
+        length = float(lengths.get(symbol, default_hydrogen_bond_length(symbol)))
         species.append("H")
         coords.append(parent[inside].coords + outward / np.linalg.norm(outward) * length)
         kinds.append(hydrogen.kind_name)
@@ -818,3 +826,290 @@ def _top_removals(ideal: _IdealSlab, repeat: float, max_variants: int, symprec: 
         if len(result) >= max_variants:
             break
     return result
+
+
+# =============================================================================
+# PSEUDO CHEMICAL POTENTIALS OF PSEUDO-HYDROGEN
+# =============================================================================
+
+@dataclass(frozen=True)
+class PseudoHydrogenReference:
+    """Pseudo chemical potential of the pseudo-hydrogen bonded to one element.
+
+    ``muhat = constant_ev - mu_X / 4`` for any chemical potential ``mu_X`` of
+    the passivated element X (Sci. Rep. Eqs. 8 and 9 both give
+    d muhat / d mu_X = -1/4). ``constant_ev`` is E(molecule)/4 for the
+    pseudo-molecule method.
+    """
+
+    bonded_to: str
+    constant_ev: float
+    method: str = "pseudo-molecule"
+
+    def value_ev(self, mu_bonded_ev: float) -> float:
+        """muhat at the chemical potential ``mu_bonded_ev`` of the passivated element."""
+
+        return self.constant_ev - mu_bonded_ev / TETRAHEDRAL_COORDINATION
+
+
+class PseudoHydrogenReferences(dict):
+    """``{element: PseudoHydrogenReference}`` for the pseudo-hydrogen of one compound."""
+
+    @classmethod
+    def from_pseudo_molecules(cls, energies_ev: Mapping[str, float]) -> "PseudoHydrogenReferences":
+        """From the total energies of the relaxed pseudo-molecules X(H_X)4, by element X."""
+
+        return cls({
+            element: PseudoHydrogenReference(element, float(energy) / TETRAHEDRAL_COORDINATION)
+            for element, energy in energies_ev.items()
+        })
+
+    def reservoir_energy_ev(self, counts: Mapping[str, int], chemical_potentials_ev: Mapping[str, float]) -> float:
+        """sum_k n_k muhat_k for pseudo-hydrogen counts by passivated element."""
+
+        missing = sorted(set(counts).difference(self))
+        if missing:
+            raise ValueError(f"no pseudo chemical potential for pseudo-hydrogen on {missing}")
+        return sum(
+            count * self[element].value_ev(chemical_potentials_ev[element]) for element, count in counts.items()
+        )
+
+
+def pseudo_molecule(
+    bulk: Any,
+    element: str,
+    *,
+    oxidation_states: Mapping[str, float] | None = None,
+    bond_length: float | None = None,
+    box: float | None = None,
+) -> Any:
+    """The CH4-like pseudo-molecule X(H_X)4 used for the pseudo chemical potential of H_X.
+
+    The four pseudo-hydrogen sit at the tetrahedral directions; the
+    molecule has eight valence electrons and is relaxed at Gamma in a cubic
+    box with at least 15 A between images (``box`` sets the edge).
+    """
+
+    import numpy as np
+    from pymatgen.core import Element, Lattice, Structure
+
+    hydrogen = pseudo_hydrogens(bulk, oxidation_states)[element]
+    if bond_length is None:
+        bond_length = default_hydrogen_bond_length(element)
+    edge = box or (2 * bond_length + 15.0)
+    directions = np.array([[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]]) / np.sqrt(3.0)
+    centre = np.full(3, edge / 2)
+    coords = [centre] + [centre + bond_length * direction for direction in directions]
+    return Structure(
+        Lattice.cubic(edge), [element] + ["H"] * 4, coords, coords_are_cartesian=True,
+        site_properties={
+            "kind_name": [element] + [hydrogen.kind_name] * 4,
+            "pseudo_hydrogen": [None] + [element] * 4,
+            "bottom": [False] * 5,
+        },
+    )
+
+
+def cluster_counts(size: int) -> dict[str, int]:
+    """Atoms and pseudo-hydrogen of the tetrahedral cluster with ``size`` outer atoms per edge (Eq. 9)."""
+
+    if size < 2:
+        raise ValueError("cluster size must be at least 2")
+    n = size
+    return {
+        "outer": n * (n + 1) * (n + 2) // 6,
+        "inner": (n - 1) * n * (n + 1) // 6,
+        "face": 2 * (n - 2) * (n - 3),
+        "edge": 12 * (n - 2),
+        "corner": 12,
+    }
+
+
+def zinc_blende_analogue(bulk: Any) -> Any:
+    """Zinc-blende structure of the same compound with the same nearest-neighbour distance.
+
+    The cluster method uses zinc-blende clusters for wurtzite compounds as
+    well (arXiv:1510.08961).
+    """
+
+    import numpy as np
+    from pymatgen.core import Lattice, Structure
+
+    symbols = [site.specie.symbol for site in bulk]
+    elements = sorted(set(symbols), key=symbols.index)
+    if len(elements) != 2:
+        raise ValueError("the cluster method needs a binary compound")
+    neighbours = bulk.get_all_neighbors(4.0)
+    bond = min(neighbour.nn_distance for found in neighbours for neighbour in found)
+    a = 4.0 * bond / np.sqrt(3.0)
+    return Structure.from_spacegroup("F-43m", Lattice.cubic(a), elements, [[0, 0, 0], [0.25, 0.25, 0.25]])
+
+
+def tetrahedral_cluster(
+    bulk: Any,
+    outer: str,
+    size: int,
+    *,
+    oxidation_states: Mapping[str, float] | None = None,
+    bond_length: float | None = None,
+    vacuum: float = 15.0,
+) -> Any:
+    """Zinc-blende tetrahedral cluster with four (111) facets of ``outer`` atoms, all passivated.
+
+    ``size`` is the number of outer atoms on an edge. Corner atoms carry
+    three pseudo-hydrogen, edge atoms two and face atoms one (like a (111)
+    surface atom); the counts are those of :func:`cluster_counts`. For a
+    wurtzite bulk the zinc-blende analogue is used.
+    """
+
+    import numpy as np
+    from pymatgen.core import Element, Lattice, Structure
+
+    counts = cluster_counts(size)
+    zinc_blende = zinc_blende_analogue(bulk)
+    elements = sorted({site.specie.symbol for site in zinc_blende})
+    if outer not in elements:
+        raise ValueError(f"outer must be one of {elements}, got {outer!r}")
+    inner = next(element for element in elements if element != outer)
+    hydrogen = pseudo_hydrogens(bulk, oxidation_states)[outer]
+    a = zinc_blende.lattice.a
+    if bond_length is None:
+        bond_length = default_hydrogen_bond_length(outer)
+    steps = np.array([[0, 1, 1], [1, 0, 1], [1, 1, 0]]) * a / 2
+    bonds = np.array([[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]]) * a / 4
+    outer_sites = {}
+    for i in range(size):
+        for j in range(size - i):
+            for k in range(size - i - j):
+                outer_sites[(i, j, k)] = i * steps[0] + j * steps[1] + k * steps[2]
+    inner_sites = {key: position + bonds[0] for key, position in outer_sites.items() if sum(key) <= size - 2}
+    species, coords, kinds, passivates = [], [], [], []
+    for key, position in outer_sites.items():
+        species.append(outer)
+        coords.append(position)
+        kinds.append(outer)
+        passivates.append(None)
+    for position in inner_sites.values():
+        species.append(inner)
+        coords.append(position)
+        kinds.append(inner)
+        passivates.append(None)
+    inner_positions = np.array(list(inner_sites.values()))
+    for position in outer_sites.values():
+        for bond in bonds:
+            target = position + bond
+            if len(inner_positions) and np.min(np.linalg.norm(inner_positions - target, axis=1)) < 1e-6:
+                continue
+            species.append("H")
+            coords.append(position + bond / np.linalg.norm(bond) * bond_length)
+            kinds.append(hydrogen.kind_name)
+            passivates.append(outer)
+    coords = np.array(coords)
+    n_hydrogen = sum(1 for p in passivates if p)
+    expected = counts["face"] + counts["edge"] + counts["corner"]
+    if (len(outer_sites), len(inner_sites), n_hydrogen) != (counts["outer"], counts["inner"], expected):
+        raise RuntimeError("cluster construction does not match the counts of Eq. 9")
+    span = coords.max(axis=0) - coords.min(axis=0)
+    edge = float(span.max() + vacuum)
+    coords = coords - coords.mean(axis=0) + edge / 2
+    return Structure(
+        Lattice.cubic(edge), species, coords, coords_are_cartesian=True,
+        site_properties={"kind_name": kinds, "pseudo_hydrogen": passivates, "bottom": [False] * len(species)},
+    )
+
+
+@dataclass(frozen=True)
+class ClusterFit:
+    """Result of fitting Eq. 9 to tetrahedral-cluster energies.
+
+    ``face_ev``, ``edge_ev`` and ``corner_ev`` are the pseudo chemical
+    potentials of face, edge and corner pseudo-hydrogen at ``mu_outer_ev``;
+    the face value is the one for (111) surfaces. ``bulk_energy_ev`` is the
+    fitted energy per formula unit and ``residual_ev`` the largest misfit.
+    """
+
+    outer: str
+    mu_outer_ev: float
+    bulk_energy_ev: float
+    face_ev: float
+    edge_ev: float
+    corner_ev: float
+    residual_ev: float
+    sizes: tuple[int, ...]
+
+    @property
+    def reference(self) -> PseudoHydrogenReference:
+        return PseudoHydrogenReference(
+            self.outer, self.face_ev + self.mu_outer_ev / TETRAHEDRAL_COORDINATION, method="cluster",
+        )
+
+
+def fit_cluster_pseudo_chemical_potentials(
+    outer: str, energies_ev: Mapping[int, float], mu_outer_ev: float,
+) -> ClusterFit:
+    """Solve Eq. 9 of the Sci. Rep. paper for E_AB and the face, edge and corner muhat.
+
+    Args:
+        outer: Element at the cluster surface (the passivated one).
+        energies_ev: Total energy of each cluster, by size (at least four
+            sizes, e.g. 2, 3, 8, 9 as in the paper).
+        mu_outer_ev: Chemical potential of ``outer`` used in Eq. 9 (any
+            value: the returned reference holds for every mu).
+    """
+
+    import numpy as np
+
+    sizes = tuple(sorted(int(size) for size in energies_ev))
+    if len(sizes) < 4:
+        raise ValueError("at least four cluster sizes are needed for the four unknowns of Eq. 9")
+    rows, right = [], []
+    for size in sizes:
+        counts = cluster_counts(size)
+        rows.append([counts["inner"], counts["face"], counts["edge"], counts["corner"]])
+        right.append(energies_ev[size] - (counts["outer"] - counts["inner"]) * mu_outer_ev)
+    matrix, right = np.array(rows, dtype=float), np.array(right)
+    solution, *_ = np.linalg.lstsq(matrix, right, rcond=None)
+    if np.linalg.matrix_rank(matrix) < 4:
+        raise ValueError(f"cluster sizes {sizes} do not determine the four unknowns; add larger clusters")
+    residual = float(np.max(np.abs(matrix @ solution - right)))
+    bulk, face, edge, corner = (float(value) for value in solution)
+    return ClusterFit(outer, float(mu_outer_ev), bulk, face, edge, corner, residual, sizes)
+
+
+def doubly_passivated_slab(bulk: Any, miller_index, *, bilayers: int | None = None, **kwargs) -> Any:
+    """The ideal slab with both faces passivated, for the Eq. 7 self-consistency check.
+
+    Its energy gives n_A muhat_A + n_B muhat_B = E - n_A mu_A - n_B mu_B
+    directly (Sci. Rep. Eq. 7); compare with the values from the
+    pseudo-molecules or clusters.
+    """
+
+    import numpy as np
+    from pymatgen.core import Element, Structure
+
+    slabs = find_polar_terminations(bulk, miller_index, bilayers=bilayers, electron_counting=False, **kwargs)
+    ideal = slabs[0]
+    structure = ideal.structure
+    neighbours = bulk.get_all_neighbors(4.0)
+    bond = min(neighbour.nn_distance for found in neighbours for neighbour in found)
+    normal = structure.lattice.matrix[2] / structure.lattice.c
+    heights = structure.cart_coords @ normal
+    atoms = [i for i, p in enumerate(structure.site_properties["pseudo_hydrogen"]) if p is None]
+    top = max(heights[i] for i in atoms)
+    hydrogens = pseudo_hydrogens(bulk, slabs.oxidation_states)
+    species, coords = [site.specie.symbol for site in structure], [site.coords for site in structure]
+    properties = {key: list(values) for key, values in structure.site_properties.items()}
+    for i in atoms:
+        if top - heights[i] > 0.3:
+            continue
+        found = [n for n in structure.get_neighbors(structure[i], bond * 1.15)]
+        missing = TETRAHEDRAL_COORDINATION - len(found)
+        if missing != 1:
+            raise ValueError("double passivation supports tops with one broken bond per atom")
+        symbol = structure[i].specie.symbol
+        species.append("H")
+        coords.append(structure[i].coords + normal * default_hydrogen_bond_length(symbol))
+        properties["kind_name"].append(hydrogens[symbol].kind_name)
+        properties["pseudo_hydrogen"].append(symbol)
+        properties["bottom"].append(False)
+    return Structure(structure.lattice, species, coords, coords_are_cartesian=True, site_properties=properties)

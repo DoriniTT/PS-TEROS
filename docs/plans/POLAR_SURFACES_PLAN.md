@@ -63,7 +63,7 @@ ends with tests passing and a commit. Status: `[ ]` to do, `[~]` in progress,
   passivated with pseudo-H, the ideal top plus electron-counting variants
   (e.g. 2x2 vacancy), all in one common cell; bottom fingerprint; summary
   table and plots.
-- [ ] 6. **Pseudo chemical potentials.** Pseudo-molecule builder; optional
+- [x] 6. **Pseudo chemical potentials.** Pseudo-molecule builder; optional
   tetrahedral-cluster builder and solver; `PseudoHydrogenReferences` holding
   muhat(Delta mu); both-faces-passivated check slab (Eq. 7).
 - [ ] 7. **Polar thermodynamics.** One-face terminations with pseudo-H counts

@@ -213,3 +213,103 @@ def test_polar_slabs_become_aiida_structures_with_pseudo_hydrogen_kinds():
     slab = polar.find_polar_terminations(zno(), (0, 0, 1), bilayers=2, electron_counting=False)[0]
     node = orm.StructureData(pymatgen=slab.structure)
     assert sorted(node.get_kind_names()) == ["H0p5", "O", "Zn"]
+
+
+# ---------------------------------------------------------------------------
+# Step 6: pseudo chemical potentials
+# ---------------------------------------------------------------------------
+
+def test_pseudo_molecule_is_tetrahedral_with_eight_electrons():
+    import numpy as np
+
+    molecule = polar.pseudo_molecule(gaas(), "As")
+    assert molecule.composition.formula == "As1 H4"
+    assert molecule.site_properties["kind_name"] == ["As"] + ["H0p75"] * 4
+    distances = molecule.distance_matrix[0][1:]
+    assert np.allclose(distances, polar.default_hydrogen_bond_length("As"))
+    centre = molecule[0].coords
+    vectors = [site.coords - centre for site in molecule[1:]]
+    for i in range(4):
+        for j in range(i + 1, 4):
+            cosine = vectors[i] @ vectors[j] / (np.linalg.norm(vectors[i]) * np.linalg.norm(vectors[j]))
+            assert cosine == pytest.approx(-1 / 3)
+    assert molecule.lattice.a - 2 * distances[0] >= 15.0 - 1e-9
+    # 5 valence electrons of As + 4 x 0.75 from the pseudo-H = 8
+    assert 5 + 4 * polar.pseudo_hydrogen_charge("As") == 8
+    assert 3 + 4 * polar.pseudo_hydrogen_charge("Ga") == 8
+
+
+def test_pseudo_molecule_references_follow_eq_8():
+    references = polar.PseudoHydrogenReferences.from_pseudo_molecules({"As": -20.0, "Ga": -14.0})
+    assert references["As"].value_ev(-4.7) == pytest.approx((-20.0 + 4.7) / 4)
+    assert references["Ga"].value_ev(-3.1) == pytest.approx((-14.0 + 3.1) / 4)
+    reservoir = references.reservoir_energy_ev({"As": 4}, {"As": -4.7, "Ga": -3.8})
+    assert reservoir == pytest.approx(4 * (-20.0 + 4.7) / 4)
+    with pytest.raises(ValueError, match="no pseudo chemical potential"):
+        references.reservoir_energy_ev({"N": 1}, {"N": -8.0})
+
+
+@pytest.mark.parametrize("size", [2, 3, 4, 6])
+@pytest.mark.parametrize("outer", ["Ga", "As"])
+def test_tetrahedral_clusters_match_eq_9_counts(size, outer):
+    structure = polar.tetrahedral_cluster(gaas(), outer, size)
+    counts = polar.cluster_counts(size)
+    inner = "As" if outer == "Ga" else "Ga"
+    composition = structure.composition.get_el_amt_dict()
+    assert composition[outer] == counts["outer"] and composition.get(inner, 0) == counts["inner"]
+    assert composition["H"] == counts["face"] + counts["edge"] + counts["corner"]
+    distances = structure.distance_matrix
+    for i, site in enumerate(structure):
+        if site.specie.symbol != "H":
+            assert sum(1 for j in range(len(structure)) if j != i and distances[i][j] < 2.6) == 4
+    hydrogen = [i for i, site in enumerate(structure) if site.specie.symbol == "H"]
+    if len(hydrogen) > 1:
+        assert min(distances[i][j] for i in hydrogen for j in hydrogen if i < j) > 1.5
+
+
+def test_wurtzite_clusters_use_the_zinc_blende_analogue():
+    import numpy as np
+
+    analogue = polar.zinc_blende_analogue(zno())
+    bond = min(n.nn_distance for found in zno().get_all_neighbors(4.0) for n in found)
+    assert analogue.lattice.a == pytest.approx(4 * bond / np.sqrt(3))
+    cluster = polar.tetrahedral_cluster(zno(), "O", 4)
+    assert cluster.composition.get_el_amt_dict() == {"O": 20.0, "Zn": 10.0, "H": 40.0}
+    assert set(cluster.site_properties["kind_name"]) == {"O", "Zn", "H0p5"}
+
+
+def test_cluster_fit_recovers_the_parameters_and_is_independent_of_mu():
+    face, edge, corner, bulk = -1.2, -1.0, -0.8, -8.5
+
+    def energy(size, mu):
+        c = polar.cluster_counts(size)
+        return (c["outer"] * mu + c["inner"] * (bulk - mu)
+                + c["face"] * face + c["edge"] * edge + c["corner"] * corner)
+
+    for mu in (-3.0, -3.6):
+        # muhat shifts by -1/4 per unit of mu: energies built at the shifted values
+        shift = -(mu + 3.0) / 4
+        energies = {n: energy(n, mu) + shift * sum(polar.cluster_counts(n)[k] for k in ("face", "edge", "corner"))
+                    for n in (2, 3, 8, 9)}
+        fit = polar.fit_cluster_pseudo_chemical_potentials("Ga", energies, mu)
+        assert fit.bulk_energy_ev == pytest.approx(bulk)
+        assert (fit.face_ev, fit.edge_ev, fit.corner_ev) == pytest.approx((face + shift, edge + shift, corner + shift))
+        assert fit.residual_ev == pytest.approx(0.0, abs=1e-9)
+        assert fit.reference.method == "cluster"
+        assert fit.reference.value_ev(-3.0) == pytest.approx(face)
+    with pytest.raises(ValueError, match="at least four"):
+        polar.fit_cluster_pseudo_chemical_potentials("Ga", {2: -1.0, 3: -2.0, 4: -3.0}, -3.0)
+
+
+def test_doubly_passivated_slab_for_the_eq_7_check():
+    import numpy as np
+
+    structure = polar.doubly_passivated_slab(gaas(), (1, 1, 1), bilayers=4)
+    kinds = structure.site_properties["kind_name"]
+    assert kinds.count("H0p75") == 1 and kinds.count("H1p25") == 1
+    normal = structure.lattice.matrix[2] / structure.lattice.c
+    heights = structure.cart_coords @ normal
+    atoms = [i for i, p in enumerate(structure.site_properties["pseudo_hydrogen"]) if p is None]
+    top_h = [i for i, k in enumerate(kinds) if k == "H1p25"]
+    assert heights[top_h[0]] > max(heights[atoms])
+    assert np.isclose(structure.distance_matrix[top_h[0]][atoms].min(), polar.default_hydrogen_bond_length("Ga"))
