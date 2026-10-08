@@ -190,9 +190,6 @@ git-commit.sh
 # External dependencies (cloned repos)
 psteros/external/FukuiGrid/
 
-# Local agent instructions (not versioned)
-AGENTS.md
-
 # Output of examples/charge_neutral_terminations/preview_terminations.py
 examples/charge_neutral_terminations/output/
 
