@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from math import cos, radians, sin
+from math import cos, log, radians, sin
 
 import pytest
 
@@ -186,7 +186,7 @@ def test_harmonic_solid_high_temperature_limit() -> None:
     solid = HarmonicSolid(0.0, 2, modes, 2)
     temperature = 5000.0
     kt = BOLTZMANN_EV_PER_K * temperature
-    expected = 3 * kt * __import__("math").log(50.0 * CM1_TO_EV / kt)
+    expected = 3 * kt * log(50.0 * CM1_TO_EV / kt)
     assert solid.free_energy(temperature).vibrational_free_energy_ev == pytest.approx(expected, rel=1e-3)
 
 
@@ -269,3 +269,10 @@ def test_parse_vasp_frequencies_uses_the_last_dynamical_matrix() -> None:
     assert parse_vasp_frequencies_cm1(OUTCAR_SNIPPET) == pytest.approx((3302.293,))
     with pytest.raises(ValueError, match="IBRION"):
         parse_vasp_frequencies_cm1("no modes here")
+
+
+def test_free_energies_evaluates_gases_at_the_pressure_and_solids_without_it() -> None:
+    solid = HarmonicSolid(-12.0, 2, (0.0, 0.0, 0.0, 300.0, 300.0, 300.0), 2)
+    terms = psteros.free_energies({"o2": oxygen(), "bulk": solid}, 500.0, 0.01)
+    assert terms["o2"] == oxygen().free_energy(500.0, 0.01)
+    assert terms["bulk"] == solid.free_energy(500.0)

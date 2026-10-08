@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from math import exp, log, pi, sqrt
-from typing import Any, Literal, Sequence
+from typing import Any, Literal, Mapping, Sequence
 
 # CODATA 2018.
 BOLTZMANN_EV_PER_K = 8.617_333_262e-5
@@ -432,6 +432,24 @@ class HarmonicSolid:
             entropy * scale,
             self.correction_ev,
         )
+
+
+def free_energies(
+    systems: Mapping[str, "IdealGasMolecule | HarmonicSolid"],
+    temperature_k: float,
+    pressure_bar: float = STANDARD_PRESSURE_BAR,
+) -> dict[str, FreeEnergy]:
+    """Free energy terms of labelled references at one temperature (and gas pressure).
+
+    ``pressure_bar`` applies to every gas; solids do not depend on it.
+    """
+
+    return {
+        label: system.free_energy(temperature_k, pressure_bar)
+        if isinstance(system, IdealGasMolecule)
+        else system.free_energy(temperature_k)
+        for label, system in systems.items()
+    }
 
 
 def delta_mu_oxygen_ev(

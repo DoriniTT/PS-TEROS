@@ -39,11 +39,19 @@ from .thermodynamics import (
     surface_energy_elemental,
     surface_energy_oxide_equilibrium,
 )
+from .blocks import Relax, Static, Vibrations
+from .references import (
+    ReferenceSystem,
+    build_vasp_reference_workgraph,
+    reference_results,
+    reference_thermochemistry,
+)
 from .thermochemistry import (
     FreeEnergy,
     HarmonicSolid,
     IdealGasMolecule,
     delta_mu_oxygen_ev,
+    free_energies,
     oxygen_pressure_bar,
     parse_vasp_frequencies_cm1,
 )
@@ -81,8 +89,16 @@ __all__ = [
     "HarmonicSolid",
     "IdealGasMolecule",
     "delta_mu_oxygen_ev",
+    "free_energies",
     "oxygen_pressure_bar",
     "parse_vasp_frequencies_cm1",
     "build_qe_relax_static_workgraph",
     "build_surface_workgraph",
+    "Relax",
+    "Static",
+    "Vibrations",
+    "ReferenceSystem",
+    "build_vasp_reference_workgraph",
+    "reference_results",
+    "reference_thermochemistry",
 ]

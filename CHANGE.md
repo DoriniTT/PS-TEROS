@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased] - Free energies of the reference systems
+
+All additions; no existing function, class, default or graph changes.
+
+- **Reference thermochemistry** (`psteros.thermochemistry`, pure Python):
+  `IdealGasMolecule` (ideal gas, rigid rotor, harmonic oscillator, spin and
+  symmetry number), `HarmonicSolid` (supercell modes scaled to the reference
+  cell), `FreeEnergy` with every term reported (DFT energy, zero-point energy,
+  thermal enthalpy, -TS, explicit correction), `free_energies`,
+  `delta_mu_oxygen_ev` / `oxygen_pressure_bar` (O2 at T, p on the
+  `mu_O = E(O2)/2 + Delta mu_O` axis) and `parse_vasp_frequencies_cm1`.
+  Checked against NIST entropies, the Reuter-Scheffler Delta mu_O table and ASE.
+- **Calculation blocks** (`psteros.blocks`): `Relax`, `Static`, `Vibrations`,
+  linked by name with `structure_from`.
+- **VASP reference graphs** (`psteros.references`): `ReferenceSystem` and
+  `build_vasp_reference_workgraph` run the blocks (default relax -> static ->
+  vibrations by finite differences) for bulks and molecules with one recipe;
+  `reference_results` and `reference_thermochemistry` read them back by PK.
+- Guide: `docs/source/reference-thermochemistry.rst`; example:
+  `examples/vasp_reference_thermochemistry/references.py`.
+- `AGENTS.md` is versioned: the rules for adding features without breaking
+  the public API.
+
 ## [v0.3.0] - 2026-01-05 - Metal Surface Energy Module
 
 ### Overview

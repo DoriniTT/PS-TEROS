@@ -209,5 +209,7 @@ What the model leaves out
 
 The energies are 0 K total energies: vibrational and configurational
 contributions are not included, and Δμ is not converted to a temperature and
-pressure. Binary and ternary oxides are supported; slabs must be symmetric so
+pressure. The free energies of the reference systems, and the conversion of
+Δμ\ :sub:`O` to an O\ :sub:`2` temperature and pressure, are in
+:doc:`reference-thermochemistry`. Binary and ternary oxides are supported; slabs must be symmetric so
 that both faces are the same termination.
