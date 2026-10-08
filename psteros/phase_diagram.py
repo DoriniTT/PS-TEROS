@@ -1,4 +1,8 @@
-"""Surface phase diagrams of binary oxides as a function of Delta mu_O.
+"""Surface phase diagrams of binary compounds as a function of Delta mu.
+
+For an oxide the axis is Delta mu_O (:class:`BinaryOxideReferences`); any
+other binary compound A_xB_y uses :class:`BinaryReferences` with the axis on
+Delta mu_B (for example Delta mu_As for GaAs).
 
 Energies in, a :class:`SurfacePhaseDiagram` out.  The diagram can be written
 directly as a figure (:meth:`SurfacePhaseDiagram.plot`) or exported as a CSV
@@ -19,7 +23,7 @@ from psteros.thermodynamics import (
     EV_PER_ANGSTROM2_TO_J_PER_M2,
     SurfaceEnergyPoint,
     stable_termination,
-    surface_energy_oxide_equilibrium,
+    surface_energy_binary_equilibrium,
 )
 
 Units = Literal["J/m2", "eV/A2"]
@@ -169,42 +173,202 @@ class BinaryOxideReferences:
 
     oxygen_rich_limit_ev = 0.0
 
+    # Element-neutral interface shared with BinaryReferences.
+    variable = "O"
+    rich_limit_ev = 0.0
+    axis_label = (
+        r"Oxygen chemical potential  $\Delta\mu_\mathrm{O} = \mu_\mathrm{O} - \frac{1}{2}E(\mathrm{O_2})$  (eV)"
+    )
+
+    @property
+    def other(self) -> str:
+        return self.metal
+
+    @property
+    def variable_reference_energy_ev(self) -> float:
+        return self.oxygen_molecule_energy_ev / 2.0
+
+    @property
+    def poor_limit_ev(self) -> float | None:
+        return self.oxygen_poor_limit_ev
+
+    @property
+    def poor_limit_label(self) -> str:
+        return f" O-poor limit\n ({self.metal} metal)"
+
+    @property
+    def rich_limit_label(self) -> str:
+        return "O-rich limit \n(O$_2$ gas) "
+
+
+@dataclass(frozen=True)
+class BinaryReferences:
+    """Bulk and elemental references of any binary compound A_xB_y.
+
+    ``reference_energies_per_atom_ev`` gives the reference energy per atom
+    of each element, which fixes ``mu = reference + Delta mu``: the energy
+    per atom of the elemental solid (Ga, As, Zn, ...) or half the energy of
+    the molecule (O2, N2).  The axis element ``variable`` (B) must have a
+    reference; with a reference for the other element too, the B-poor limit
+    ``Delta mu_B = Delta H_f / y`` is known.  By default ``variable`` is the
+    more electronegative element (As in GaAs, N in GaN, O in ZnO).
+
+    ``reservoir_labels`` names the references in the figure, for example
+    ``{"As": "As bulk", "Ga": "Ga bulk"}``.
+
+    For oxides with an O2 reference, :class:`BinaryOxideReferences` gives the
+    same diagram with the oxide-specific labels.
+    """
+
+    bulk_energy_ev: float
+    bulk_composition: Mapping[str, int]
+    reference_energies_per_atom_ev: Mapping[str, float]
+    variable: str | None = None
+    reservoir_labels: Mapping[str, str] = field(default_factory=dict)
+    other: str = field(init=False)
+    formula_unit: tuple[int, int] = field(init=False)
+
+    def __post_init__(self) -> None:
+        composition = _integer_composition(self.bulk_composition, "bulk_composition")
+        if len(composition) != 2:
+            raise ValueError(f"bulk_composition must describe a binary compound A_xB_y, got {composition}")
+        references = {str(element): float(value) for element, value in dict(self.reference_energies_per_atom_ev).items()}
+        foreign = sorted(set(references).difference(composition))
+        if foreign:
+            raise ValueError(f"reference energies given for elements not in the compound: {foreign}")
+        variable = self.variable
+        if variable is None:
+            from pymatgen.core import Element
+
+            variable = max(composition, key=lambda element: Element(element).X)
+        if variable not in composition:
+            raise ValueError(f"variable element {variable!r} is not in {sorted(composition)}")
+        if variable not in references:
+            raise ValueError(
+                f"reference_energies_per_atom_ev must include the axis element {variable!r}; "
+                "it defines Delta mu = 0"
+            )
+        other = next(element for element in composition if element != variable)
+        divisor = gcd(composition[other], composition[variable])
+        object.__setattr__(self, "bulk_composition", composition)
+        object.__setattr__(self, "reference_energies_per_atom_ev", references)
+        object.__setattr__(self, "reservoir_labels", dict(self.reservoir_labels))
+        object.__setattr__(self, "variable", variable)
+        object.__setattr__(self, "other", other)
+        object.__setattr__(
+            self, "formula_unit", (composition[other] // divisor, composition[variable] // divisor)
+        )
+        enthalpy = self.formation_enthalpy_ev
+        if enthalpy is not None and enthalpy >= 0:
+            raise ValueError(
+                f"formation enthalpy {enthalpy:.4f} eV is not negative: {self.formula} is "
+                f"unstable against its elements and no Delta mu_{variable} window exists"
+            )
+
+    @property
+    def formula(self) -> str:
+        x, y = self.formula_unit
+        return f"{self.other}{x if x > 1 else ''}{self.variable}{y if y > 1 else ''}"
+
+    @property
+    def bulk_energy_per_formula_unit_ev(self) -> float:
+        return self.bulk_energy_ev * self.formula_unit[0] / self.bulk_composition[self.other]
+
+    @property
+    def variable_reference_energy_ev(self) -> float:
+        return self.reference_energies_per_atom_ev[self.variable]
+
+    @property
+    def formation_enthalpy_ev(self) -> float | None:
+        """Delta H_f per A_xB_y formula unit, or ``None`` without a reference for A."""
+
+        if self.other not in self.reference_energies_per_atom_ev:
+            return None
+        x, y = self.formula_unit
+        return (
+            self.bulk_energy_per_formula_unit_ev
+            - x * self.reference_energies_per_atom_ev[self.other]
+            - y * self.variable_reference_energy_ev
+        )
+
+    @property
+    def poor_limit_ev(self) -> float | None:
+        """Delta mu_B below which the compound decomposes into A."""
+
+        enthalpy = self.formation_enthalpy_ev
+        return None if enthalpy is None else enthalpy / self.formula_unit[1]
+
+    rich_limit_ev = 0.0
+
+    def chemical_potentials_ev(self, delta_mu_ev: float) -> dict[str, float]:
+        """mu_A and mu_B at ``Delta mu_B``, with x mu_A + y mu_B = E_bulk."""
+
+        x, y = self.formula_unit
+        mu_variable = self.variable_reference_energy_ev + delta_mu_ev
+        return {
+            self.variable: mu_variable,
+            self.other: (self.bulk_energy_per_formula_unit_ev - y * mu_variable) / x,
+        }
+
+    @property
+    def axis_label(self) -> str:
+        b = self.variable
+        return (
+            rf"Chemical potential  $\Delta\mu_\mathrm{{{b}}} = \mu_\mathrm{{{b}}}"
+            rf" - \mu_\mathrm{{{b}}}^\mathrm{{ref}}$  (eV)"
+        )
+
+    @property
+    def poor_limit_label(self) -> str:
+        reservoir = self.reservoir_labels.get(self.other, f"{self.other} reference")
+        return f" {self.variable}-poor limit\n ({reservoir})"
+
+    @property
+    def rich_limit_label(self) -> str:
+        reservoir = self.reservoir_labels.get(self.variable, f"{self.variable} reference")
+        return f"{self.variable}-rich limit \n({reservoir}) "
+
 
 @dataclass(frozen=True)
 class SurfacePhaseDiagram:
-    """gamma(Delta mu_O) of every termination and the stable one at each point.
+    """gamma(Delta mu) of every termination and the stable one at each point.
 
-    ``transitions`` holds the exact Delta mu_O values, inside the sampled
+    Delta mu is that of ``references.variable`` (O for an oxide).
+    ``transitions`` holds the exact Delta mu values, inside the sampled
     range, where the lowest-energy termination changes, as
-    ``(delta_mu_oxygen_ev, stable_below, stable_above)``.
+    ``(delta_mu_ev, stable_below, stable_above)``.
     """
 
-    references: BinaryOxideReferences
+    references: BinaryOxideReferences | BinaryReferences
     terminations: tuple[SlabTermination, ...]
     curves: Mapping[str, tuple[SurfaceEnergyPoint, ...]]
     stable: tuple[str, ...]
     transitions: tuple[tuple[float, str, str], ...]
 
     @property
+    def delta_mu_ev(self) -> tuple[float, ...]:
+        return tuple(point.delta_mu_ev for point in next(iter(self.curves.values())))
+
+    @property
     def delta_mu_oxygen_ev(self) -> tuple[float, ...]:
-        return tuple(point.delta_mu_oxygen_ev for point in next(iter(self.curves.values())))
+        """Historical name of :attr:`delta_mu_ev`."""
 
-    def in_stability_window(self, delta_mu_oxygen_ev: float) -> bool:
-        """Whether the bulk oxide is stable at this Delta mu_O."""
+        return self.delta_mu_ev
 
-        lower = self.references.oxygen_poor_limit_ev
-        upper = self.references.oxygen_rich_limit_ev
-        return delta_mu_oxygen_ev <= upper + 1e-12 and (
-            lower is None or delta_mu_oxygen_ev >= lower - 1e-12
-        )
+    def in_stability_window(self, delta_mu_ev: float) -> bool:
+        """Whether the bulk compound is stable at this Delta mu."""
+
+        lower = self.references.poor_limit_ev
+        upper = self.references.rich_limit_ev
+        return delta_mu_ev <= upper + 1e-12 and (lower is None or delta_mu_ev >= lower - 1e-12)
 
     def to_csv(self, path: str | Path, *, units: Units = "J/m2") -> Path:
         """Write the diagram as one CSV row per Delta mu_O point and return the path.
 
-        Columns: ``delta_mu_O_eV``, one ``gamma_<label>_Jm2`` (or ``_eVA2``)
-        column per termination, ``stable_termination`` and
-        ``in_stability_window`` (False where the bulk oxide would decompose
-        into the metal or where Delta mu_O > 0).
+        Columns: ``delta_mu_<B>_eV`` (``delta_mu_O_eV`` for an oxide), one
+        ``gamma_<label>_Jm2`` (or ``_eVA2``) column per termination,
+        ``stable_termination`` and ``in_stability_window`` (False where the
+        bulk compound would decompose or where Delta mu > 0).
         """
 
         factor, suffix = _unit_conversion(units)
@@ -212,11 +376,11 @@ class SurfacePhaseDiagram:
         with path.open("w", newline="") as handle:
             writer = csv.writer(handle)
             writer.writerow(
-                ["delta_mu_O_eV"]
+                [f"delta_mu_{self.references.variable}_eV"]
                 + [f"gamma_{label}_{suffix}" for label in self.curves]
                 + ["stable_termination", "in_stability_window"]
             )
-            for index, delta_mu in enumerate(self.delta_mu_oxygen_ev):
+            for index, delta_mu in enumerate(self.delta_mu_ev):
                 writer.writerow(
                     [repr(delta_mu)]
                     + [repr(points[index].gamma_ev_per_angstrom2 * factor) for points in self.curves.values()]
@@ -225,15 +389,15 @@ class SurfacePhaseDiagram:
         return path
 
     def figure(self, *, units: Units = "J/m2", title: str | None = None) -> Any:
-        """Return a matplotlib ``Figure`` of gamma(Delta mu_O) with a stability strip."""
+        """Return a matplotlib ``Figure`` of gamma(Delta mu) with a stability strip."""
 
         from matplotlib.figure import Figure
 
         factor, _ = _unit_conversion(units)
-        grid = self.delta_mu_oxygen_ev
+        grid = self.delta_mu_ev
         low, high = grid[0], grid[-1]
-        poor = self.references.oxygen_poor_limit_ev
-        rich = self.references.oxygen_rich_limit_ev
+        poor = self.references.poor_limit_ev
+        rich = self.references.rich_limit_ev
 
         fig = Figure(figsize=(7.6, 5.6), facecolor=_SURFACE)
         ax, strip = fig.subplots(
@@ -259,8 +423,8 @@ class SurfacePhaseDiagram:
         ymin, ymax = ax.get_ylim()
         ymax += 0.14 * (ymax - ymin)
         for limit, text, align in (
-            (poor, f" O-poor limit\n ({self.references.metal} metal)", "left"),
-            (rich, "O-rich limit \n(O$_2$ gas) ", "right"),
+            (poor, self.references.poor_limit_label, "left"),
+            (rich, self.references.rich_limit_label, "right"),
         ):
             if limit is not None and low <= limit <= high:
                 if low < limit < high:
@@ -313,10 +477,7 @@ class SurfacePhaseDiagram:
         ax.set_axisbelow(True)
         strip.set_yticks([])
         strip.set_ylabel("stable", rotation=0, ha="right", va="center", color=_MUTED, fontsize=9)
-        strip.set_xlabel(
-            r"Oxygen chemical potential  $\Delta\mu_\mathrm{O} = \mu_\mathrm{O} - \frac{1}{2}E(\mathrm{O_2})$  (eV)",
-            color=_INK_SECONDARY,
-        )
+        strip.set_xlabel(self.references.axis_label, color=_INK_SECONDARY)
         strip.set_xlim(low, high)
         for axis in (ax, strip):
             for side in ("top", "right"):
@@ -341,16 +502,17 @@ class SurfacePhaseDiagram:
 
 def surface_phase_diagram(
     terminations: Iterable[SlabTermination],
-    references: BinaryOxideReferences,
+    references: BinaryOxideReferences | BinaryReferences,
     *,
     delta_mu_range: tuple[float, float] | None = None,
     points: int = 201,
 ) -> SurfacePhaseDiagram:
-    """Evaluate gamma(Delta mu_O) for every termination on a common grid.
+    """Evaluate gamma(Delta mu) for every termination on a common grid.
 
-    The default range is the stability window of the bulk oxide, from the
-    O-poor limit (requires ``metal_energy_per_atom_ev``) to ``Delta mu_O = 0``.
-    A wider ``delta_mu_range`` is allowed; the window limits are then added to
+    Delta mu is that of ``references.variable`` (O for an oxide). The default
+    range is the stability window of the bulk compound, from the poor limit
+    (requires the reference of the other element) to ``Delta mu = 0``. A
+    wider ``delta_mu_range`` is allowed; the window limits are then added to
     the grid so that they appear exactly in the CSV export.
     """
 
@@ -361,29 +523,30 @@ def surface_phase_diagram(
     duplicates = sorted({label for label in labels if labels.count(label) > 1})
     if duplicates:
         raise ValueError(f"termination labels must be unique: {duplicates}")
-    allowed = {references.metal, "O"}
+    other, variable = references.other, references.variable
+    allowed = {other, variable}
     for termination in terminations:
         foreign = sorted(set(termination.composition).difference(allowed))
-        if foreign or references.metal not in termination.composition or "O" not in termination.composition:
+        if foreign or other not in termination.composition or variable not in termination.composition:
             raise ValueError(
                 f"termination {termination.label!r} has composition {termination.composition}; "
-                f"expected only {references.metal} and O with both present"
+                f"expected only {other} and {variable} with both present"
             )
     if points < 2:
         raise ValueError("points must be at least 2")
     if delta_mu_range is None:
-        if references.oxygen_poor_limit_ev is None:
+        if references.poor_limit_ev is None:
             raise ValueError(
-                "delta_mu_range is required when metal_energy_per_atom_ev is not given"
+                f"delta_mu_range is required when no reference energy of {other} is given"
             )
-        delta_mu_range = (references.oxygen_poor_limit_ev, references.oxygen_rich_limit_ev)
+        delta_mu_range = (references.poor_limit_ev, references.rich_limit_ev)
     low, high = (float(value) for value in delta_mu_range)
     if not low < high:
         raise ValueError(f"delta_mu_range must be increasing, got {delta_mu_range!r}")
 
     step = (high - low) / (points - 1)
     grid = [low + index * step for index in range(points - 1)] + [high]
-    for limit in (references.oxygen_poor_limit_ev, references.oxygen_rich_limit_ev):
+    for limit in (references.poor_limit_ev, references.rich_limit_ev):
         if limit is not None and low < limit < high and not any(isclose(limit, x, abs_tol=1e-12) for x in grid):
             grid.append(limit)
     grid.sort()
@@ -391,13 +554,13 @@ def surface_phase_diagram(
     bulk_energy = references.bulk_energy_per_formula_unit_ev
 
     def gamma(termination: SlabTermination, delta_mu: float) -> SurfaceEnergyPoint:
-        return surface_energy_oxide_equilibrium(
+        return surface_energy_binary_equilibrium(
             slab_energy_ev=termination.slab_energy_ev,
-            n_metal=termination.composition[references.metal],
-            n_oxygen=termination.composition["O"],
+            n_other=termination.composition[other],
+            n_variable=termination.composition[variable],
             bulk_formula_energy_ev=bulk_energy,
-            oxygen_reference_energy_ev=references.oxygen_molecule_energy_ev,
-            delta_mu_oxygen_ev=delta_mu,
+            variable_reference_energy_ev=references.variable_reference_energy_ev,
+            delta_mu_ev=delta_mu,
             surface_area_angstrom2=termination.surface_area_angstrom2,
             surfaces=termination.surfaces,
             formula_unit=references.formula_unit,
@@ -408,7 +571,7 @@ def surface_phase_diagram(
         for termination in terminations
     }
     stable = tuple(label for _, label, _ in stable_termination(curves))
-    # gamma is linear in Delta mu_O: intercept at 0 and slope from the endpoints.
+    # gamma is linear in Delta mu: intercept at 0 and slope from the endpoints.
     lines = [
         (
             termination.label,

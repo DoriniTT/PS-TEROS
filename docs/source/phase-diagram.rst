@@ -5,8 +5,10 @@ Build a surface phase diagram
 ==============================
 
 A surface phase diagram shows, for every candidate termination, the surface
-free energy γ as a function of the oxygen chemical potential Δμ\ :sub:`O`, and
-which termination is the most stable at each value. This guide turns
+free energy γ as a function of a chemical potential (Δμ\ :sub:`O` for an
+oxide, Δμ\ :sub:`As` for GaAs, ...), and which termination is the most stable
+at each value. The oxide case is described first; :ref:`other binary
+compounds <phase-diagram-binary>` follow the same steps. This guide turns
 calculated energies into that diagram and writes it in two forms:
 
 * a **figure** drawn by psteros, ready to inspect or publish; and
@@ -143,6 +145,35 @@ It reads directly into a spreadsheet, gnuplot, or pandas:
 
    table = pd.read_csv("sno2_110_phase_diagram.csv")
    window = table[table.in_stability_window]
+
+.. _phase-diagram-binary:
+
+Other binary compounds
+----------------------
+
+Any binary compound A\ :sub:`x`\ B\ :sub:`y` works the same way with
+``BinaryReferences``. Give the reference energy per atom of each element,
+which fixes μ = reference + Δμ: the elemental solid (Ga, As, Zn, ...) or half
+the molecule (O\ :sub:`2`, N\ :sub:`2`). The axis is Δμ of the more
+electronegative element unless ``variable`` says otherwise:
+
+.. code-block:: python
+
+   references = psteros.BinaryReferences(
+       bulk_energy_ev=e_gaas_cell,                  # relaxed GaAs bulk cell
+       bulk_composition={"Ga": 4, "As": 4},
+       reference_energies_per_atom_ev={"Ga": e_ga / n_ga, "As": e_as / n_as},
+       reservoir_labels={"Ga": "Ga bulk", "As": "As bulk"},  # figure labels
+   )
+   diagram = psteros.surface_phase_diagram(terminations, references)
+   print(references.variable, references.poor_limit_ev)  # As, Delta H_f / y
+
+The model is the one above with B in place of O,
+:math:`\mu_\mathrm{B} = \mu_\mathrm{B}^\mathrm{ref} + \Delta\mu_\mathrm{B}`, and
+the window runs from the B-poor limit Δμ\ :sub:`B` = ΔH\ :sub:`f`/y to 0.
+The CSV column is ``delta_mu_<B>_eV`` and the figure names the references.
+For an oxide with an O\ :sub:`2` reference, ``BinaryReferences`` and
+``BinaryOxideReferences`` give the same diagram.
 
 .. _phase-diagram-from-graphs:
 

@@ -217,8 +217,21 @@ Thermodynamic analysis
 .. index:: SurfaceEnergyPoint
 
 ``SurfaceEnergyPoint(delta_mu_oxygen_ev, gamma_ev_per_angstrom2)``
-   Immutable value at one oxygen chemical-potential offset. The
-   ``gamma_j_per_m2`` property converts the stored surface energy to J/m².
+   Immutable value at one chemical-potential offset (of oxygen for an oxide;
+   ``delta_mu_ev`` is the element-neutral name). The ``gamma_j_per_m2``
+   property converts the stored surface energy to J/m².
+
+.. _api-surface-energy-binary-equilibrium:
+
+.. index:: surface_energy_binary_equilibrium
+
+``surface_energy_binary_equilibrium(*, slab_energy_ev, n_other, n_variable, bulk_formula_energy_ev, variable_reference_energy_ev, delta_mu_ev, surface_area_angstrom2, surfaces=2, formula_unit=(1, 1), reservoir_correction_ev=0.0)``
+   Return a ``SurfaceEnergyPoint`` for an A\ :sub:`x`\ B\ :sub:`y` slab in
+   equilibrium with its bulk, with μ\ :sub:`B` = reference + Δμ. B is the
+   axis element and A the other one; ``formula_unit`` is ``(x, y)``.
+   ``reservoir_correction_ev`` is subtracted from the slab energy for any
+   further reservoir terms, such as pseudo-hydrogen on a passivated bottom.
+   ``surface_energy_oxide_equilibrium`` is the oxide special case.
 
 .. _api-surface-energy-oxide-equilibrium:
 
@@ -272,6 +285,21 @@ See :doc:`phase-diagram` for a worked introduction.
    an error because no stability window exists. ``metal``, ``formula`` and
    ``formula_unit`` describe the oxide.
 
+.. _api-binary-references:
+
+.. index:: BinaryReferences
+
+``BinaryReferences(bulk_energy_ev, bulk_composition, reference_energies_per_atom_ev, variable=None, reservoir_labels={})``
+   References of any binary compound A\ :sub:`x`\ B\ :sub:`y`.
+   ``reference_energies_per_atom_ev`` maps each element to its reference
+   energy per atom (elemental solid, or half a molecule); the axis element
+   ``variable`` (default: the more electronegative one) must be present.
+   With the other element's reference too, ``formation_enthalpy_ev`` and
+   ``poor_limit_ev`` (Δμ\ :sub:`B` = ΔH\ :sub:`f`/y) are known.
+   ``chemical_potentials_ev(delta_mu_ev)`` returns μ\ :sub:`A` and
+   μ\ :sub:`B`; ``other``, ``formula`` and ``formula_unit`` describe the
+   compound, and ``reservoir_labels`` names the references in figures.
+
 .. _api-slab-termination:
 
 .. index:: SlabTermination
@@ -288,12 +316,13 @@ See :doc:`phase-diagram` for a worked introduction.
 .. index:: surface_phase_diagram
 
 ``surface_phase_diagram(terminations, references, *, delta_mu_range=None, points=201)``
-   Evaluate γ(Δμ\ :sub:`O`) of every termination on a common grid and return a
-   ``SurfacePhaseDiagram``. The default range is the stability window, from the
-   O-poor limit (requires ``metal_energy_per_atom_ev``) to Δμ\ :sub:`O` = 0. A
-   wider ``delta_mu_range`` is allowed; the window limits are then added to the
-   grid. Terminations must contain only the metal and oxygen, with unique
-   labels.
+   Evaluate γ(Δμ) of every termination on a common grid and return a
+   ``SurfacePhaseDiagram``; ``references`` is a ``BinaryOxideReferences`` or a
+   ``BinaryReferences`` and Δμ is that of its axis element. The default range
+   is the stability window, from the poor limit (requires the reference of
+   the other element) to Δμ = 0. A wider ``delta_mu_range`` is allowed; the
+   window limits are then added to the grid. Terminations must contain only
+   the two elements of the compound, with unique labels.
 
 .. _api-surface-phase-diagram-class:
 
@@ -313,7 +342,8 @@ See :doc:`phase-diagram` for a worked introduction.
       matplotlib ``Figure`` instead, for further editing.
 
    ``to_csv(path, *, units="J/m2")``
-      Write one row per Δμ\ :sub:`O` value with the columns ``delta_mu_O_eV``,
+      Write one row per Δμ value with the columns ``delta_mu_<B>_eV``
+      (``delta_mu_O_eV`` for an oxide),
       ``gamma_<label>_Jm2`` (``_eVA2`` with ``units="eV/A2"``) for every
       termination, ``stable_termination`` and ``in_stability_window``.
 

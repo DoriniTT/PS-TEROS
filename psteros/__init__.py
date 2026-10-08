@@ -22,6 +22,7 @@ from .structures import (
 )
 from .phase_diagram import (
     BinaryOxideReferences,
+    BinaryReferences,
     SlabTermination,
     SurfacePhaseDiagram,
     surface_phase_diagram,
@@ -36,6 +37,7 @@ from .thermodynamics import (
     EV_PER_ANGSTROM2_TO_J_PER_M2,
     SurfaceEnergyPoint,
     stable_termination,
+    surface_energy_binary_equilibrium,
     surface_energy_elemental,
     surface_energy_oxide_equilibrium,
 )
@@ -57,6 +59,7 @@ __all__ = [
     "sno2_110_slab",
     "triplet_o2_cell",
     "BinaryOxideReferences",
+    "BinaryReferences",
     "SlabTermination",
     "SurfacePhaseDiagram",
     "surface_phase_diagram",
@@ -67,6 +70,7 @@ __all__ = [
     "EV_PER_ANGSTROM2_TO_J_PER_M2",
     "SurfaceEnergyPoint",
     "stable_termination",
+    "surface_energy_binary_equilibrium",
     "surface_energy_elemental",
     "surface_energy_oxide_equilibrium",
     "build_qe_relax_static_workgraph",
