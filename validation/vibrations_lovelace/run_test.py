@@ -34,6 +34,9 @@ COMPUTER = "lovelace"
 QUEUE = "par128"
 RANKS = 128
 NCORE = 16  # 128 ranks = 8 band groups x 16 cores per band
+#: aiida-vasp multiplies the spacing by 2 pi, so the 0.3 of the plan and of campaign.py is a Gamma-only mesh
+#: (alpha-Sn relaxed to 7.1 A with it, see RESULTS.md); 0.04 gives 4x4x4 for alpha-Sn and 6x6x8 for rutile.
+KPOINTS_SPACING = 0.04
 
 TERMINATIONS = ("o", "sn2o")
 SLABS = tuple(f"slab_{termination}" for termination in TERMINATIONS)
@@ -106,7 +109,7 @@ def vasp(incar: dict, args) -> psteros.VaspCalculationConfig:
         incar={**ELECTRONIC, **incar},
         potential_family=args.potential_family,
         potential_mapping=POTCARS,
-        kpoints_spacing=0.3,
+        kpoints_spacing=args.kpoints_spacing,
         max_iterations=3,  # restarts continue a relaxation stopped by the walltime
     )
 
@@ -239,6 +242,7 @@ def main(argv=None) -> int:
     parser.add_argument("--profile", default=PROFILE)
     parser.add_argument("--code", default=CODE)
     parser.add_argument("--potential-family", default=POTENTIAL_FAMILY)
+    parser.add_argument("--kpoints-spacing", type=float, default=KPOINTS_SPACING, help="aiida-vasp units (x 2 pi)")
     parser.add_argument("--refs-pk", type=int, help="PK of the finished refs graph (slabs, vibrations, ibrion5)")
     parser.add_argument("--slabs-pk", type=int, help="PK of the finished slabs graph (vibrations)")
     parser.add_argument("--a", type=float, default=4.737, help="bulk a when --refs-pk is not given (build check only)")
