@@ -105,16 +105,16 @@ the same quantity `vasp_energy` uses for the references.
 ## Steps
 
 ### 0. Set up
-- [ ] `git checkout features/references-vibrational-contributions && git pull`.
-- [ ] `pip install -e .` in the daemon's environment, `verdi daemon restart --reset`.
-- [ ] `python -m pytest` passes before anything else (record the count in LOG.md).
-- [ ] Profile, computer, code `VASP-6.5.1@lovelace`, POTCAR family found and recorded.
+- [x] `git checkout features/references-vibrational-contributions && git pull`.
+- [x] `pip install -e .` in the daemon's environment, `verdi daemon restart --reset`.
+- [x] `python -m pytest` passes before anything else (record the count in LOG.md).
+- [x] Profile, computer, code `VASP-6.5.1@lovelace`, POTCAR family found and recorded.
 
 ### 1. Scripts (no submission yet)
-- [ ] `campaign.py` with subcommands `o2`, `refs` and `slabs` (argparse, like the QE
+- [x] `campaign.py` with subcommands `o2`, `refs` and `slabs` (argparse, like the QE
       example; `--submit` to submit, otherwise only build and print).
 - [ ] `analysis.py` (see step 5).
-- [ ] Build every graph with `submit=False` and print, per VASP task: INCAR,
+- [x] Build every graph with `submit=False` and print, per VASP task: INCAR,
       kpoints spacing, options, settings, structure formula and atom count.
       Check against the tables above (IBRION 5/6, NSW=1, POTIM, NFREE,
       supercell sizes, Gamma-only O2, `import_sys_environment=False`).
