@@ -36,6 +36,16 @@ Unreleased Features
   symmetry: 432 instead of 8 displacements for the 72-atom SnO\ :sub:`2` cell). The reference blocks also convert
   ``kpoints_spacing`` to aiida-vasp's unit like the surface builder.
 
+**Campaign WorkGraph: references and slabs in one graph (VASP, additive)**
+
+* New ``SlabSystem`` and ``build_vasp_campaign_workgraph`` run the references (relax → static → vibrations by default)
+  and the slab terminations (relax → static) of a phase diagram in one WorkGraph, with outputs nested as
+  ``references.<label>.<block>.<port>`` and ``slabs.<label>.<block>.<port>``. ``campaign_results`` and
+  ``campaign_terminations`` read it back by PK, and ``reference_results`` and ``reference_thermochemistry`` work on it too.
+  The slabs are finished structures; rebuilding them from the relaxed bulk inside the graph is not supported yet.
+  See :doc:`campaign-workgraph` and ``examples/vasp_campaign/``.
+* Nothing existing changes: the existing builders, their graphs and their output names are as before.
+
 **CP2K Calculator Support for AIMD**
 
 * CP2K integration for ab initio molecular dynamics simulations

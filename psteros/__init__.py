@@ -46,6 +46,12 @@ from .references import (
     reference_results,
     reference_thermochemistry,
 )
+from .campaign import (
+    SlabSystem,
+    build_vasp_campaign_workgraph,
+    campaign_results,
+    campaign_terminations,
+)
 from .thermochemistry import (
     FreeEnergy,
     HarmonicSolid,
@@ -101,4 +107,8 @@ __all__ = [
     "build_vasp_reference_workgraph",
     "reference_results",
     "reference_thermochemistry",
+    "SlabSystem",
+    "build_vasp_campaign_workgraph",
+    "campaign_results",
+    "campaign_terminations",
 ]

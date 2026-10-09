@@ -113,6 +113,20 @@ diagram.plot("phase_diagram.png")           # γ(Δμ_O), stability window and s
 diagram.to_csv("phase_diagram.csv")         # delta_mu_O_eV, gamma_<termination>_Jm2, ..., stable_termination
 ```
 
+### VASP: references and slabs in one graph
+
+`psteros.build_vasp_campaign_workgraph` runs the reference calculations and the slab terminations of a phase
+diagram in one VASP WorkGraph, with one recipe. Its outputs are nested by group, label and block
+(`node.outputs.slabs.slab_o.static.energy`, in eV), and the readers take its PK:
+
+```python
+graph = psteros.build_vasp_campaign_workgraph(references, slabs, recipe, submit=True)
+terminations = psteros.campaign_terminations(graph.pk)   # SlabTermination list for surface_phase_diagram
+```
+
+The slabs are finished structures cut from a relaxed bulk; the graph does not rebuild them yet. See the
+[campaign guide](docs/source/campaign-workgraph.rst) and [`examples/vasp_campaign`](examples/vasp_campaign).
+
 ## Installation
 
 ```bash

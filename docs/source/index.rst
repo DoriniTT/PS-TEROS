@@ -47,6 +47,7 @@ Choose the path that matches what you need now:
    qe-first-workflow
    phase-diagram
    reference-thermochemistry
+   campaign-workgraph
 
 .. toctree::
    :maxdepth: 1

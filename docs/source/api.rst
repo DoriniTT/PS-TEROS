@@ -464,6 +464,60 @@ in K and pressures in bar.
 ``parse_vasp_frequencies_cm1(outcar)``
    Frequencies of the last dynamical matrix in the text of a VASP OUTCAR.
 
+Campaign graphs
+---------------
+
+See :doc:`campaign-workgraph` for a worked example. References and slabs run in one
+WorkGraph, with outputs nested by group, label and block. ``reference_results`` and
+``reference_thermochemistry`` also accept the PK of a campaign graph.
+
+.. _api-slab-system:
+
+.. index:: SlabSystem
+
+``SlabSystem(structure, override=None, block_overrides={})``
+   One slab of a campaign: a finished pymatgen ``Structure`` or ``Slab``, an AiiDA
+   ``StructureData`` or a node PK. ``override`` changes the recipe for every block of
+   the slab, and ``block_overrides`` for the named block; VASP INCAR tags go under
+   ``"INCAR"``. A slab is computed as a solid, in its own cell.
+
+.. _api-build-vasp-campaign-workgraph:
+
+.. index:: build_vasp_campaign_workgraph
+
+``build_vasp_campaign_workgraph(references, slabs, config, *, reference_blocks=(Relax(), Static(), Vibrations()), slab_blocks=(Relax(), Static()), submit=False)``
+   Build one VASP WorkGraph for labelled ``ReferenceSystem`` objects and labelled
+   ``SlabSystem`` objects (a bare structure stands for ``SlabSystem(structure)``), with
+   the recipe ``config`` (backend ``"vasp"``). Every reference runs ``reference_blocks``
+   and every slab ``slab_blocks``. A label starts with a letter and uses letters, digits
+   and single underscores, and it cannot be both a reference and a slab. The outputs are
+   nested as ``references.<label>.<block>.<port>`` and ``slabs.<label>.<block>.<port>``,
+   with the ports ``energy`` (eV) or ``frequencies`` (cm\ :sup:`-1`), ``structure``
+   (relaxations), ``misc``, ``remote`` and ``retrieved``. ``config.role_overrides`` must
+   be empty. The function returns the WorkGraph; with ``submit=True`` it also submits it,
+   and stores the description of the campaign on the node for the readers below. The
+   slabs are finished structures and are not rebuilt from the bulk inside the graph.
+
+.. _api-campaign-results:
+
+.. index:: campaign_results
+
+``campaign_results(pk)``
+   ``{"references": {label: {block: result}}, "slabs": {label: {block: result}}}`` of a
+   campaign graph, while it runs or after it fails. A result has ``kind``, ``state``,
+   ``pk``, ``structure``, ``misc``, ``remote``, ``retrieved`` and ``energy`` (eV) or
+   ``frequencies`` (cm\ :sup:`-1`). Values are ``None`` until the block produces them.
+
+.. _api-campaign-terminations:
+
+.. index:: campaign_terminations
+
+``campaign_terminations(pk, *, energy_block=None, surfaces=2)``
+   One ``SlabTermination`` per slab of a campaign graph. The energy (eV) is that of
+   ``energy_block``, by default the last static slab block (else the last relaxation).
+   The composition and the area come from the structure of that block. A block that has
+   not finished raises ``ValueError``, naming the slab and the state of the block.
+
 Compatibility boundary
 ----------------------
 
