@@ -108,3 +108,72 @@ Every `verdi` call uses `-p psteros_sno2_vibrations`: the default profile of thi
     the experimental 200-ish, within the expected 10-15 %).
   - ZPE: SnO2 0.1985 eV per formula unit (0.15-0.25), alpha-Sn 0.0211 eV per atom (about 0.02), O2 0.0972 eV.
     ZPE per atom of the SnO2 cell 0.0662 eV, so the supercell modes scale to the static cell correctly.
+- Slabs: **graph PK 1539 finished OK** (each relaxation converged in one VASP calculation): `slab_o` (work chain 1543,
+  Sn6O12, E = -109.08139 eV), `slab_sn2o` (1556, Sn6O8, -82.00946 eV), `slab_sno` (1569, Sn6O10, -94.71028 eV), built on
+  the relaxed lattice a = 4.8301 A, c = 3.2434 A, 3 triple layers, 15 A vacuum, cell 3.24 x 6.83 x 27.32 A.
+- Analysis (`analysis.py --refs-pk 1372 --slabs-pk 1539 --out results/sno2_110`): the files of `results/`. gamma(slab_o)
+  = 1.032 J/m^2 (QE example 1.033); window -2.462 <= Delta mu_O <= 0 eV (QE -2.43); slab_sn2o -> slab_o at
+  Delta mu_O = -1.826 eV, i.e. p(O2) = 6.3e-22 bar at 600 K and 1.6e-8 bar at 1000 K; O-poor limit -2.462 eV (0 K, DFT),
+  -2.414 eV (600 K) and -2.521 eV (1000 K) with free energies. Same stable terminations as the QE example at the
+  five points of the comparison (O-rich: slab_o; O-poor end: slab_sn2o; slab_sno never stable in either).
+- `main` had moved on (3 commits, incl. 80d7998 "Fix the VASP k-point spacing unit passed to aiida-vasp") and conflicted
+  with the branch in `AGENTS.md`, `docs/source/api.rst` and `psteros/backends/vasp.py`. Merged `origin/main` into
+  the branch (merge commit 43f69f6, no force push): main's AGENTS.md, `kpoints_spacing` in A^-1 with the 2*pi
+  converted for aiida-vasp in BOTH builders (the reference blocks did not convert before), the campaign passes
+  `2*pi*0.03`, `2*pi*0.06` and `5*2*pi` so that aiida-vasp receives exactly 0.03, 0.06 and 5.0 as in every
+  validated run; docs, example and changelog entries (also in `docs/source/changelog.rst`) updated. Four assertions
+  of `tests/test_reference_workgraph.py` (tests of this branch's own, unreleased feature) were changed to the
+  converted values (value / 2*pi) and a test that both builders agree was added.
+  Check after the merge: graphs 1647 (refs) and 1679 (slabs), same recipe, resubmitted: all 12 VaspCalculations came
+  from the cache (inputs identical), nothing ran on the cluster, and `analysis.py` on them gives CSV files
+  byte-identical to the committed ones. 337 passed, 7 skipped; flake8 clean on the changed files.
+
+## Final report
+
+**What ran** (profile `psteros_sno2_vibrations`, Lovelace `par128`, one job at a time, VASP 6.5.1, 128 ranks):
+
+| Graph | PK | Result |
+|---|---:|---|
+| O2 alone, attempt 1 / 2 / 3 / 4 | 353 / 714 / 747 / 815 | failed: POTCAR file nodes missing / wrong MPI launcher / VASP k-point-set error / ZHEGV failure |
+| O2 alone, attempt 5 | 880 | finished OK |
+| references (O2, SnO2, alpha-Sn), attempt 1 / 2 | 995 / 1168 | stopped by me after alpha-Sn / after a wrong 432-displacement plan |
+| references, attempt 3 | **1372** | finished OK (O2 and alpha-Sn from the cache, SnO2 ran) |
+| slabs (3 terminations) | **1539** | finished OK |
+| references / slabs on the merged code | 1647 / 1679 | finished OK, all from the cache |
+
+The real VASP jobs: O2 relax 756 and static 771 (graph 747), O2 vibrations 918 (graph 880), alpha-Sn relax 1050, static
+1071, vibrations 1081 (graph 995), SnO2 relax 1271, static 1288 (graph 1168), SnO2 vibrations 1506 (graph 1372), slabs
+1548, 1561, 1574 (graph 1539).
+
+**Bugs found and fixed in psteros** (each with a regression test, `CHANGE.md` and docs):
+
+1. `a709819` + `169e291` `Vibrations` block: displaced atoms lower the symmetry, VASP must change its k-point set and
+   refuses with band parallelisation ("requested a change of the k-point set ... remove NPAR", exit 700, restarted by
+   aiida-vasp as an unfinished relaxation). First fix `NCORE = 1`, which failed for the molecule (128 bands for 6 occupied
+   ones, "ZHEGV failed"); final: `ISYM = 0` for a gas, `NCORE = 1` for a solid.
+2. `f0c0eb1` `make_supercell`: `ase` repeats cell by cell, the POSCAR had 24 element blocks, VASP saw 24 ion types and no
+   symmetry (216 degrees of freedom, 432 displacements, about 50 h). Atoms are now grouped by element: 16 operations,
+   4 degrees of freedom, 8 displacements.
+3. `43f69f6` (merge) the reference blocks did not convert `kpoints_spacing` like the surface builder of `main`.
+
+**Not psteros bugs, worked around in my profile only** (not in the repository): the POTCAR family needs the
+`PotcarFileData` nodes as well as the `PotcarData` ones; the computer copied from `presto` used an OpenMPI `mpirun`, but
+this VASP binary is linked with Intel MPI, so 128 serial copies ran (fix: `mpirun -np {tot_num_mpiprocs}` after
+`module load intel/2023.2.1`). The profile `psteros_vibrations_lovelace` of another session was set up from the same
+`presto` registration and may have the same launcher problem.
+
+**Open issues**
+
+- The SnO2 vibrations use a 2x2x2 k-mesh (the PLAN's escape hatch, for walltime); not compared with a finer mesh. alpha-Sn
+  highest mode 173 cm^-1 is below the PLAN's "about 200" (expected for PBE).
+- The slabs are three triple layers thick: a workflow test, not converged surface energies. The diagram uses DFT energies
+  for slabs and bulk, as the docs warn; the free energies enter only the T, p reading and the stability window.
+- AiiDA caching is on in my profile and the daemon of `psteros_sno2_vibrations` is still running (stop it with
+  `verdi -p psteros_sno2_vibrations daemon stop`). The shared environment's editable install of psteros was not touched;
+  the daemon takes psteros from this worktree through `PYTHONPATH`.
+- Pushing needed `gh auth git-credential` as a one-off credential helper (no stored git credentials in this shell).
+
+**Ready to merge into `main`?** Yes, from the code side: the branch (merge commit 43f69f6 and the commits after it)
+merges cleanly into `origin/main` as of the last fetch, 337 tests pass, flake8 is clean, and the end-to-end run reproduces
+itself through the cache after the merge. Not merged and no pull request opened, as instructed. Before merging, glance at
+the four edited assertions in `tests/test_reference_workgraph.py` and at the unit change in the reference blocks.

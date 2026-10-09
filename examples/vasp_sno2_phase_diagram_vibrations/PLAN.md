@@ -113,7 +113,7 @@ the same quantity `vasp_energy` uses for the references.
 ### 1. Scripts (no submission yet)
 - [x] `campaign.py` with subcommands `o2`, `refs` and `slabs` (argparse, like the QE
       example; `--submit` to submit, otherwise only build and print).
-- [ ] `analysis.py` (see step 5).
+- [x] `analysis.py` (see step 5).
 - [x] Build every graph with `submit=False` and print, per VASP task: INCAR,
       kpoints spacing, options, settings, structure formula and atom count.
       Check against the tables above (IBRION 5/6, NSW=1, POTIM, NFREE,
@@ -144,33 +144,33 @@ parsing, readers).
     ZPE about 0.15-0.25 eV per SnO2 formula unit and about 0.02 eV per Sn atom.
 
 ### 4. Slabs
-- [ ] `campaign.py slabs --refs-pk <PK>`: slabs built on the relaxed lattice,
+- [x] `campaign.py slabs --refs-pk <PK>`: slabs built on the relaxed lattice,
       built and inspected first, then submitted.
-- [ ] All three relaxations finished; energies and relaxed structures readable.
+- [x] All three relaxations finished; energies and relaxed structures readable.
 
 ### 5. Analysis (`analysis.py --refs-pk ... --slabs-pk ... --out results/sno2_110`)
-- [ ] `results/reference_free_energies.csv`: `FreeEnergy.as_dict()` of each
+- [x] `results/reference_free_energies.csv`: `FreeEnergy.as_dict()` of each
       reference at 0, 298.15, 600, 1000 K (p = 1 bar).
-- [ ] `results/sno2_110_phase_diagram.png/.csv`: `surface_phase_diagram` with
+- [x] `results/sno2_110_phase_diagram.png/.csv`: `surface_phase_diagram` with
       **DFT energies** for slabs and bulk (see the warning in
       `docs/source/reference-thermochemistry.rst`: no bulk free energy inside gamma
       while slabs have none).
-- [ ] Transitions printed as Delta mu_O and, through `oxygen_pressure_bar`, as
+- [x] Transitions printed as Delta mu_O and, through `oxygen_pressure_bar`, as
       p(O2) at 600 and 1000 K; Delta mu_O of O2 at (T, p) for a few conditions.
-- [ ] O-poor limit at 0 K (DFT) and at 600 / 1000 K (free energies of SnO2 and Sn,
+- [x] O-poor limit at 0 K (DFT) and at 600 / 1000 K (free energies of SnO2 and Sn,
       bare E(O2) on the axis), compared.
-- [ ] Compare the stable terminations with the QE example
+- [x] Compare the stable terminations with the QE example
       (`examples/qe_surface_phase_diagram/results/`): same ordering expected
       (O-terminated at O-rich, reduced terminations toward O-poor); numbers differ.
 
 ### 6. Finish (merge readiness)
-- [ ] `README.md` here (like the QE example): what each script does, how to run
+- [x] `README.md` here (like the QE example): what each script does, how to run
       it, the settings, the results and what they show.
-- [ ] Results (`results/*.csv`, `*.png`) and `LOG.md` committed.
-- [ ] Every bug fixed with a test; `CHANGE.md`, `docs/source/api.rst` and
+- [x] Results (`results/*.csv`, `*.png`) and `LOG.md` committed.
+- [x] Every bug fixed with a test; `CHANGE.md`, `docs/source/api.rst` and
       `docs/source/reference-thermochemistry.rst` match the final behaviour.
-- [ ] Full `python -m pytest` green; flake8 clean on changed files.
-- [ ] Final report in LOG.md: what was run, PKs, bugs and fixes, open issues,
+- [x] Full `python -m pytest` green; flake8 clean on changed files.
+- [x] Final report in LOG.md: what was run, PKs, bugs and fixes, open issues,
       and whether the branch is ready to merge.
 
 ## When something fails
