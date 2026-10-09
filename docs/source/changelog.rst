@@ -31,6 +31,14 @@ Recent Updates
 Earlier Unreleased Features
 ---------------------------
 
+**Relaxed VASP structures keep their kind names**
+
+* ``build_relax_static_workgraph`` failed at the static step of every structure with a custom kind, such as the
+  pseudo-hydrogens ``H0p75`` and ``H1p25`` of polar surfaces (``KeyError: 'H'``): aiida-vasp returns the relaxed
+  structure with element names only, so the static calculation had no POTCAR for ``H``.
+  A ``restore_vasp_kinds`` step now gives each relaxed atom the kind of the starting atom it came from. It is added
+  only for structures with custom kinds; graphs of all other structures are unchanged. No results change.
+
 **VASP k-point spacing now matches its documented unit**
 
 * ``VaspCalculationConfig.kpoints_spacing`` is documented in Å⁻¹ with the 2π of VASP's ``KSPACING``, but was passed

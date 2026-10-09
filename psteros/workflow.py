@@ -139,7 +139,7 @@ def build_relax_static_workgraph(
         workgraph.max_number_jobs = relaxation.execution.max_concurrent_jobs
     for label, source_structure in structures.items():
         if relaxation.backend == "vasp":
-            from psteros.backends.vasp import as_vasp_structure
+            from psteros.backends.vasp import as_vasp_structure, has_custom_kinds
 
             initial_structure = as_vasp_structure(source_structure)
             relax_task = add_vasp_task(
@@ -147,8 +147,18 @@ def build_relax_static_workgraph(
                 config=relaxation.calculation, execution=relaxation.execution,
                 override=relaxation.role_overrides.get(label),
             )
+            static_structure = relax_task.outputs.structure
+            if has_custom_kinds(initial_structure):
+                # aiida-vasp returns the relaxed structure with element names only; a kind such as
+                # the pseudo-hydrogen H0p75 must be restored or the static step has no POTCAR for it.
+                from psteros.backends.vasp_kinds import restore_vasp_kinds
+
+                static_structure = workgraph.add_task(
+                    restore_vasp_kinds, name=f"{label}_restore_kinds",
+                    relaxed=relax_task.outputs.structure, template=initial_structure,
+                ).outputs.result
             static_task = add_vasp_task(
-                workgraph, label=f"{label}_static", structure=relax_task.outputs.structure,
+                workgraph, label=f"{label}_static", structure=static_structure,
                 kinds_structure=initial_structure, config=static.calculation, execution=static.execution,
                 override=static.role_overrides.get(label),
             )

@@ -23,6 +23,58 @@ def aiida_vasp_kpoints_spacing(spacing_per_angstrom: float) -> float:
     return float(spacing_per_angstrom) / (2.0 * math.pi)
 
 
+def has_custom_kinds(structure: Any) -> bool:
+    """Whether an AiiDA ``StructureData`` has kinds whose name is not their element (``H0p75``, ``Fe1``)."""
+
+    return any(kind.name != kind.symbol for kind in structure.kinds)
+
+
+def assign_kinds(
+    template_symbols: Sequence[str],
+    template_fractional: Any,
+    relaxed_symbols: Sequence[str],
+    relaxed_fractional: Any,
+    cell: Any,
+    *,
+    max_distance: float = 2.0,
+) -> list[int]:
+    """For every relaxed site, the index of the template site it came from.
+
+    aiida-vasp rebuilds the relaxed structure from element names, so the kind
+    names of the starting structure (``H0p75``, ``H1p25``) are lost, and VASP
+    may also reorder the atoms. Atoms are matched one to one within each
+    element by their minimum-image distance (a relaxation moves them little);
+    ``cell`` (rows are lattice vectors) converts fractional differences to A.
+    """
+
+    import numpy as np
+    from scipy.optimize import linear_sum_assignment
+
+    if sorted(template_symbols) != sorted(relaxed_symbols):
+        raise ValueError(
+            f"the relaxed structure has different atoms ({sorted(relaxed_symbols)}) "
+            f"than the starting structure ({sorted(template_symbols)})"
+        )
+    cell = np.asarray(cell, dtype=float)
+    template_fractional = np.asarray(template_fractional, dtype=float)
+    relaxed_fractional = np.asarray(relaxed_fractional, dtype=float)
+    assignment: list[int] = [-1] * len(relaxed_symbols)
+    for symbol in sorted(set(relaxed_symbols)):
+        relaxed_index = [i for i, value in enumerate(relaxed_symbols) if value == symbol]
+        template_index = [i for i, value in enumerate(template_symbols) if value == symbol]
+        delta = relaxed_fractional[relaxed_index][:, None, :] - template_fractional[template_index][None, :, :]
+        delta -= np.round(delta)
+        distance = np.linalg.norm(delta @ cell, axis=2)
+        for row, column in zip(*linear_sum_assignment(distance)):
+            if distance[row, column] > max_distance:
+                raise ValueError(
+                    f"{symbol} site {relaxed_index[row]} of the relaxed structure is {distance[row, column]:.2f} A "
+                    f"from the nearest unmatched {symbol} of the starting structure (limit {max_distance} A)"
+                )
+            assignment[relaxed_index[row]] = template_index[column]
+    return assignment
+
+
 def vasp_incar(config: VaspCalculationConfig, override: CalculationOverride | None = None) -> dict[str, Any]:
     """The INCAR of one structure: the shared recipe updated by ``override.parameters["INCAR"]``."""
 
