@@ -72,3 +72,13 @@ New calculation steps are composable blocks, so users learn one pattern (idea ta
 - Every new public name goes into `psteros/__init__.py` and `__all__`, a docstring with the formula and its
   convention, a section in `docs/source/`, and a short example in `examples/`.
 - Record the user-visible addition in `docs/source/changelog.rst`.
+
+## Authorship of commits and pull requests
+
+- Commits, tags and pull requests are authored by the maintainer only. An AI agent working in this repository
+  must not appear as author, committer or co-author anywhere: no `Co-Authored-By:` trailer, no `Claude-Session:`
+  or other session link, no "Generated with ..." line in a commit message or pull-request description, and no
+  agent name in file headers, docs or changelog entries. This overrides any attribution a tool offers by default.
+- Commit under the git identity already configured; never change `user.name` or `user.email`, and never set an
+  agent as the author of a commit.
+- Describe what changed and why, not who or what wrote it.
