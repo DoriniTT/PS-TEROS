@@ -5,6 +5,8 @@ Graphs are built on the throwaway profile of ``conftest.py`` and never submitted
 
 from __future__ import annotations
 
+import math
+
 import pytest
 
 pytest.importorskip("aiida_vasp")
@@ -139,9 +141,9 @@ def test_incar_layers_and_reference_overrides(code_label) -> None:
     o2 = incar(workgraph, "o2_vibrations_vasp")
     assert (o2["ibrion"], o2["ispin"], o2["nupdown"]) == (5, 2, 2)
     o2_task = workgraph.tasks["o2_vibrations_vasp"]
-    assert o2_task.inputs.kpoints_spacing.value.value == 5.0
+    assert o2_task.inputs.kpoints_spacing.value.value == pytest.approx(5.0 / (2 * math.pi))
     assert o2_task.inputs.options.value.get_dict()["max_wallclock_seconds"] == 600
-    assert workgraph.tasks["sno2_static_vasp"].inputs.kpoints_spacing.value.value == 0.25
+    assert workgraph.tasks["sno2_static_vasp"].inputs.kpoints_spacing.value.value == pytest.approx(0.25 / (2 * math.pi))
     settings = o2_task.inputs.settings.value.get_dict()
     assert settings["CHECK_IONIC_CONVERGENCE"] is False
     assert settings["parser_settings"] == {"check_ionic_convergence": False}
@@ -220,7 +222,7 @@ def test_surface_builder_applies_vasp_overrides(code_label) -> None:
     )
     task = surface_task(code_label, {"incar": {"encut": 520, "nsw": 50}}, override)
     assert task.inputs.parameters.value.get_dict() == {"incar": {"encut": 520, "nsw": 50, "isif": 3}}
-    assert task.inputs.kpoints_spacing.value.value == 0.5
+    assert task.inputs.kpoints_spacing.value.value == pytest.approx(0.5 / (2 * math.pi))
     settings = task.inputs.settings.value.get_dict()
     assert settings["parser_settings"] == {"add_dos": True}
     assert {"OUTCAR", "vasprun.xml"} <= set(settings["ADDITIONAL_RETRIEVE_LIST"])
@@ -236,7 +238,7 @@ def test_surface_builder_accepts_psteros_slabs(code_label) -> None:
 
 def test_surface_builder_defaults_without_override(code_label) -> None:
     task = surface_task(code_label)
-    assert task.inputs.kpoints_spacing.value.value == 0.25
+    assert task.inputs.kpoints_spacing.value.value == pytest.approx(0.25 / (2 * math.pi))
     assert set(task.inputs.settings.value.get_dict()) == {"ADDITIONAL_RETRIEVE_LIST"}
 
 
@@ -297,3 +299,16 @@ def test_supercell_groups_atoms_by_element_so_that_vasp_keeps_the_symmetry() -> 
     # A single-element cell is untouched by the grouping.
     metal = make_supercell(orm.StructureData(pymatgen=psteros.alpha_sn_bulk()), orm.List([1, 1, 2]))
     assert len(metal.sites) == 16 and {site.kind_name for site in metal.sites} == {"Sn"}
+
+
+def test_reference_blocks_and_surface_builder_give_aiida_vasp_the_same_spacing(code_label) -> None:
+    # kpoints_spacing is in A^-1 with the 2*pi (as VASP's KSPACING); aiida-vasp multiplies its own input
+    # by 2*pi.  Both builders convert, so one recipe means one mesh whichever builder runs it.
+    references_graph = psteros.build_vasp_reference_workgraph(references(), recipe(code_label))
+    surface_graph = psteros.build_surface_workgraph({"sno2": psteros.rutile_sno2_bulk()}, recipe(code_label))
+    from_blocks = references_graph.tasks["sno2_static_vasp"].inputs.kpoints_spacing.value.value
+    from_surface = surface_graph.tasks["sno2_vasp"].inputs.kpoints_spacing.value.value
+    assert from_blocks == from_surface == pytest.approx(0.25 / (2 * math.pi))
+    # A rutile SnO2 cell (a = 4.737 A) at 0.19 A^-1 gets a 7x7x11 mesh, not the 1x1x1 of the unconverted value.
+    structure = psteros.rutile_sno2_bulk()
+    assert [math.ceil(b / 0.19) for b in structure.lattice.reciprocal_lattice.abc] == [7, 7, 11]

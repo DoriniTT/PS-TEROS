@@ -117,9 +117,11 @@ Calculation configuration
    Describe the VASP configuration retained for established VASP studies.
    ``code_label`` identifies the AiiDA code, ``incar`` stores INCAR settings,
    and the potential fields select the family and optional per-element mapping.
-   ``kpoints_spacing`` is a positive reciprocal-space distance in aiida-vasp's
-   units of 2π Å⁻¹: ``0.03`` is a spacing of about 0.19 Å⁻¹, and the default
-   ``0.20`` (1.26 Å⁻¹) gives a Gamma-only mesh for most cells.
+   ``kpoints_spacing`` is a positive reciprocal-space distance in Å⁻¹ that
+   includes the 2π, as VASP's ``KSPACING`` does: the Γ-centred mesh has
+   ``ceil(|b_i| / kpoints_spacing)`` points along each reciprocal vector
+   (6×6×6 for GaAs, ``a = 5.75`` Å, at 0.2 Å⁻¹). The VASP adapter converts it
+   for aiida-vasp, which multiplies its own spacing input by 2π.
    ``incar`` may be flat (``{"encut": 520, ...}``) or already in aiida-vasp's
    namespaces (``{"incar": {...}, "dynamics": {...}}``); the VASP builders pass
    the tags to aiida-vasp under ``"incar"`` either way.
@@ -400,7 +402,8 @@ in K and pressures in bar.
    One reference: ``phase`` is ``"gas"`` or ``"solid"``. ``override`` changes
    the recipe for all blocks of this reference and ``block_overrides`` for the
    named block; VASP INCAR tags go under ``"INCAR"`` and ``kpoints_distance``
-   is the aiida-vasp ``kpoints_spacing``. A solid vibrates in ``supercell``; a
+   is the k-point spacing in the unit of ``VaspCalculationConfig.kpoints_spacing``
+   (Å⁻¹ with the 2π; 5 Å⁻¹ gives a Γ-only mesh for a molecule in a box). A solid vibrates in ``supercell``; a
    gas needs ``symmetry_number`` and ``spin`` (total electron spin).
 
 .. _api-build-vasp-reference-workgraph:

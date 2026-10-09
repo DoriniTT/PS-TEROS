@@ -13,6 +13,7 @@ from typing import Any, Mapping
 from aiida import orm
 from aiida.engine import calcfunction
 
+from psteros.backends.vasp import aiida_vasp_kpoints_spacing
 from psteros.thermochemistry import parse_vasp_frequencies_cm1
 
 # Files kept in the retrieved folder of every block (aiida-vasp otherwise
@@ -83,7 +84,12 @@ def add_vasp_block_task(
     settings: Mapping[str, Any],
     clean_workdir: bool,
 ) -> Any:
-    """Add one ``vasp.v2.vasp`` task with the INCAR in aiida-vasp's ``incar`` namespace."""
+    """Add one ``vasp.v2.vasp`` task with the INCAR in aiida-vasp's ``incar`` namespace.
+
+    ``kpoints_spacing`` is in psteros units (A^-1 including the 2*pi, as VASP's
+    ``KSPACING``) and is converted for aiida-vasp, exactly as in
+    :func:`psteros.backends.vasp.add_vasp_task`.
+    """
 
     from aiida.plugins import WorkflowFactory
     from aiida_workgraph import task
@@ -95,7 +101,7 @@ def add_vasp_block_task(
         structure=structure,
         code=code,
         parameters=orm.Dict(parameters),
-        kpoints_spacing=orm.Float(kpoints_spacing),
+        kpoints_spacing=orm.Float(aiida_vasp_kpoints_spacing(kpoints_spacing)),
         potential_family=orm.Str(potential_family),
         potential_mapping=orm.Dict(dict(potential_mapping)),
         options=orm.Dict(dict(options)),

@@ -44,7 +44,7 @@ def build(args):
             incar=INCAR,
             potential_family=args.potential_family,
             potential_mapping={"Sn": "Sn_d", "O": "O"},
-            kpoints_spacing=0.03,  # aiida-vasp units of 2*pi/A: about 0.19 1/A
+            kpoints_spacing=0.19,  # A^-1 with the 2*pi, as VASP's KSPACING (a 7x7x11 mesh for rutile SnO2)
         ),
         execution=psteros.ExecutionPolicy(
             computer=args.computer,

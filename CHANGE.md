@@ -42,9 +42,11 @@ function, class, default or graph changes.
 - `ExecutionPolicy(extra_options={...})` (optional, default empty) adds or
   replaces AiiDA scheduler options, e.g. `{"import_sys_environment": False}`
   for Lovelace.
-- Docs: `VaspCalculationConfig.kpoints_spacing` is in aiida-vasp's units of
-  2*pi/A (`0.03` is about 0.19 1/A; the default `0.20` gives Gamma only for
-  most cells). The default is unchanged.
+- `VaspCalculationConfig.kpoints_spacing` and `CalculationOverride.kpoints_distance`
+  are in A^-1 with the 2*pi (as VASP's `KSPACING`), as on `main`: the VASP
+  adapter of `build_surface_workgraph` and the reference blocks of
+  `build_vasp_reference_workgraph` both convert the value for aiida-vasp, so one
+  recipe gives one mesh in either builder.
 - `AGENTS.md` is versioned: the rules for adding features without breaking
   the public API.
 - **Fixed: `Vibrations` block under band parallelisation** (new in this

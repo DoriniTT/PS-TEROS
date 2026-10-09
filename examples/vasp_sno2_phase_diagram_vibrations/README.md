@@ -44,16 +44,17 @@ graph runs one job at a time (`max_concurrent_jobs=1`).
 One INCAR for the references and the slabs: `ENCUT=520`, `PREC=Accurate`,
 `EDIFF=1e-7` (`1e-8` for the vibrations block), `ISMEAR=0`, `SIGMA=0.05`,
 `LREAL=False`, `LASPH=True`, `NCORE=16`, `LWAVE=LCHARG=False`; POTCARs
-`Sn_d` and `O`; `kpoints_spacing=0.03` (aiida-vasp units of 2π/Å, about
-0.19 1/Å). Relaxations: `IBRION=2`, `NSW=100`, `EDIFFG=-0.005` for the
+`Sn_d` and `O`; `kpoints_spacing = 2π·0.03 = 0.1885 Å⁻¹` (with the 2π, as VASP's
+`KSPACING`; meshes: SnO₂ 8×8×11 for the relaxation and 7×7×11 for the static energy
+on the relaxed cell, α-Sn 6×6×6). Relaxations: `IBRION=2`, `NSW=100`, `EDIFFG=-0.005` for the
 references (tight, the frequencies are computed there) and `-0.02` for the
 slabs, `ISIF=3` for the two bulks, `ISIF=2` for the slabs.
 
 | Reference | Cell | Vibrations |
 |---|---|---|
 | triplet O₂ | 12 Å box, `ISPIN=2`, `NUPDOWN=2`, Gamma only | `IBRION=5` (and `ISYM=0`, see below) |
-| rutile SnO₂ | 6 atoms | `IBRION=6`, 2×2×3 supercell (72 atoms), 2×2×2 k-mesh |
-| α-Sn | 8 atoms | `IBRION=6`, 2×2×2 supercell (64 atoms) |
+| rutile SnO₂ | 6 atoms | `IBRION=6`, 2×2×3 supercell (72 atoms), 2×2×2 k-mesh (0.377 Å⁻¹) |
+| α-Sn | 8 atoms | `IBRION=6`, 2×2×2 supercell (64 atoms), 3×3×3 k-mesh |
 
 Slabs: three triple layers, 15 Å vacuum, terminations `o` (Sn₆O₁₂), `sno`
 (Sn₆O₁₀) and `sn2o` (Sn₆O₈), symmetric, all atoms free, one relaxation each.

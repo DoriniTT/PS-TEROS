@@ -1,86 +1,74 @@
-# PS-TEROS: guidelines for contributors and agents
+# PS-TEROS
 
-PS-TEROS builds AiiDA WorkGraphs for oxide surface thermodynamics and analyses
-their energies in pure Python. People run real campaigns with it, so every new
-feature **builds on** the program: it never breaks, renames or silently changes
-what already works.
+Ab initio surface thermodynamics with AiiDA WorkGraphs (Quantum ESPRESSO and VASP backends).
+See README.md for the user workflow (structures -> WorkGraph -> phase diagram).
 
-## The public API is a contract
+- Public API: everything exported in `psteros/__init__.py` (`__all__`). Typed recipes in `psteros/config.py`,
+  WorkGraph builders in `psteros/workflow.py`, engine adapters in `psteros/backends/`, pure-Python analysis in
+  `psteros/thermodynamics.py`, `psteros/phase_diagram.py`, `psteros/phase_diagram_ternary.py`.
+- `psteros/core/` and `psteros/experimental/` are legacy code: do not build new features on them; reuse ideas, not imports.
+- Tests: `python -m pytest tests/unit` (pure Python, no AiiDA profile); WorkGraph tests build graphs with `submit=False`.
 
-The public API is everything exported from `psteros/__init__.py` (`__all__`)
-and the documented signatures in `docs/source/api.rst`.
+## New features only add; nothing that works today changes
 
-- **Add, don't change.** A new feature goes in new modules, new functions and
-  new optional keyword arguments whose defaults reproduce today's behaviour.
-  Never remove or rename a public name, reorder positional arguments, change a
-  default, or change the meaning or units of an existing field, return value
-  or WorkGraph output name.
-- **The same inputs give the same graph and the same numbers.** An existing
-  script must build the same WorkGraph (task names, inputs, outputs) and an
-  existing analysis must return the same values after your change. New physics
-  (corrections, extra terms) is opt-in, never switched on by default.
-- **Bug fixes that change results are not silent.** If existing behaviour is
-  wrong, fix it in its own commit, note it in `CHANGE.md`, and say in the
-  docstring what changed and from which version.
-- **Deprecate before removing.** Keep the old name working, emit a
-  `DeprecationWarning` that names the replacement, and document it.
-- `psteros/core/`, `psteros/compat.py` and `psteros/experimental/` are the
-  legacy (pre-1.0) code. Don't build new features on them and don't change
-  them, except to fix a bug that blocks their users.
+Every new feature (vibrational contributions, new calculation types, new analyses, ...) builds on top of the
+current program. A script, notebook or finished AiiDA graph that works today must give the same result after the
+feature lands.
 
-## How a feature fits in
+- **No breaking changes to the public API.** Do not rename, remove or reorder public functions, classes,
+  arguments, dataclass fields, WorkGraph output names (`{label}_static_parameters`, `{label}_relaxed_structure`, ...),
+  CSV columns or figure defaults. Do not change a default value or a unit. (Fixing a bug is the one exception;
+  see "Fixing bugs" below.)
+- **New behaviour is opt-in.** Add it as a new keyword argument with a default that reproduces today's behaviour
+  exactly (e.g. `temperature=None` means "0 K total energies, as before"), a new optional dataclass field placed
+  after the existing ones, or a new function/class. Leaving the new option out must give bit-identical numbers.
+- **Prove it with a test.** Each feature adds a test showing that the old call path still returns the old result,
+  next to the tests of the new behaviour. Existing tests are not edited to make them pass.
+- **Leave working builders alone.** The existing builders in `psteros/workflow.py` (`build_surface_workgraph`,
+  the relax -> static builders, ...) keep their signature, graph and outputs. A more general builder is a new
+  function next to them, not a rewrite of them.
+- **Mixed inputs are an error, not a guess.** If an option must apply to every structure to be consistent
+  (e.g. vibrations given for some terminations but not others), raise a `ValueError` that names the offending
+  labels, in line with the strict recipe harmony of the rest of psteros.
 
-Follow the shape of the existing modules so that every feature is used the
-same way:
+## Fixing bugs
 
-1. **Typed recipe:** frozen dataclasses with no AiiDA nodes, validated in
-   `__post_init__` with an error that names the bad field and the allowed
-   values (see `psteros/config.py`). A recipe can be built, printed and
-   tested without an AiiDA profile.
-2. **Graph builder:** `build_<something>_workgraph(structures, recipe, *, submit=False)`
-   returns the WorkGraph and only submits it when asked. Import AiiDA,
-   aiida-workgraph and plugins inside the function, never at module level of a
-   pure-Python module, so `import psteros` works without a profile.
-   Name tasks and outputs with stable, documented labels (`<label>_<stage>`)
-   so results can be found by name.
-3. **Blocks for multi-step calculations:** a calculation step (relax, static,
-   vibrations, ...) is a block, like the tiles in kiln: one module that
-   validates its recipe and adds its tasks to the graph, returning its output
-   sockets, the structure for the next block and its remote folder. Blocks are
-   linked by name (`structure_from="relax"`), so a new step is a new block,
-   not a new branch in an existing builder.
-4. **Pure-Python analysis:** functions or frozen dataclasses that take plain
-   numbers (eV, Å, K, bar) and return plain numbers or a result object with
-   `to_csv`/`plot` where useful (see `psteros/phase_diagram.py`). Analysis
-   never needs AiiDA; it also accepts values read from any other source.
-5. **Units in names:** `_ev`, `_angstrom2`, `_k`, `_bar`, `_cm1` suffixes on
-   fields and arguments; state the convention (for example
-   `mu_O = E(O2)/2 + Delta mu_O`) in the docstring.
-6. **Show the parts:** when a quantity is a sum of physical terms (energies,
-   free energies, corrections), return the breakdown as well as the total, so
-   every number is auditable.
+A bug is behaviour that contradicts the documented contract (docs, docstrings, units, examples). Fixing it may
+change numbers. That is allowed, with these rules:
 
-Keep the public entry points few and obvious: export new user-facing objects
-from `psteros/__init__.py` and add them to `__all__`; keep helpers private
-(`_name`) or in their module.
+- **Fix it for everyone, not behind an opt-in flag**, when the old behaviour gives wrong results without an error.
+  Prefer failing loudly over a silent default.
+- **Keep the documented contract** (names, signatures, units as documented). If the documentation is what is
+  wrong, say so in the commit and fix the documentation too.
+- **Add a regression test that fails without the fix**, next to the code, and check that it does fail.
+- **Edit an existing test only if it pins the bug.** Name each such assertion in the commit message and say why it
+  was wrong. Never edit a test just to make it pass.
+- **Add a changelog entry marked "results change"**, saying which earlier calculations should be repeated.
+- One bug, one commit.
 
-## Backends
+## Building blocks (one consistent way to add a calculation)
 
-Quantum ESPRESSO (`aiida-quantumespresso`) is the primary backend and VASP
-(`aiida-vasp`, `vasp.v2.vasp`) the secondary one. A feature may support one
-backend first; it must then reject the other with a clear error, never fall
-back silently. Backend adapters live in `psteros/backends/`.
+New calculation steps are composable blocks, so users learn one pattern (idea taken from kiln's stages/tiles):
 
-## Tests and docs
+- **One block = one step**, a frozen dataclass holding a `SurfaceWorkflowConfig` plus its own typed options
+  (e.g. `Relax`, `Static`, `Vibrations` with a `VibrationsConfig`). Validate everything in `__post_init__` or
+  before the graph is built; error messages name the block and the structure label.
+- **Blocks are linked by name**: a block takes the structure (and, if useful, the restart folder) of an earlier
+  block. A remote folder that a later block restarts from is never cleaned.
+- **Calcfunctions only for run-time values** (displaced structures of a relaxed slab, frequencies from forces);
+  anything known at build time is computed directly. Wire all tasks at build time; no dynamic sub-graphs.
+- **Outputs are namespaced and additive**: a block adds new outputs (`{label}_vibrations`, ...) and never changes
+  existing ones. Provide a reader (like `read_vibrations(pk)`) that turns them into pure-Python objects and works
+  while a graph runs or after it fails.
+- **Physics stays pure Python.** Each feature has an AiiDA-free layer (dataclasses + functions in `psteros/`)
+  that can be tested and used with energies typed by hand; the AiiDA block only produces its inputs.
+- **Backend parity**: write the backend-neutral version first (works with every adapter in `psteros/backends/`);
+  engine-specific shortcuts (VASP `IBRION=5`, QE `ph.x`) come later as options of the same block.
 
-- Every change runs `python -m pytest tests/unit` green; add tests for every
-  new public object, including its validation errors.
-- Pure-Python physics is checked against known values (textbook or literature
-  numbers, or an independent implementation such as ASE) with the source cited
-  in the test.
-- WorkGraph builders get construction tests that build the graph with
-  `submit=False` on the throwaway profile from `tests/conftest.py`; nothing is
-  ever submitted from the tests.
-- Document new public objects in `docs/source/api.rst`, add a how-to or
-  example under `examples/` for a new workflow, and add an entry to
-  `CHANGE.md`.
+## User-facing consistency
+
+- Same style as the existing API: typed frozen dataclasses, keyword-only arguments, explicit units in names
+  (`_ev`, `_angstrom2`, `_cm1`, `temperature` in K), `submit=False` by default.
+- Every new public name goes into `psteros/__init__.py` and `__all__`, a docstring with the formula and its
+  convention, a section in `docs/source/`, and a short example in `examples/`.
+- Record the user-visible addition in `docs/source/changelog.rst`.

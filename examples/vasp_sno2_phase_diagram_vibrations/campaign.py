@@ -28,6 +28,7 @@ Then run ``analysis.py`` on the graph PKs.
 from __future__ import annotations
 
 import argparse
+import math
 
 import psteros
 
@@ -56,7 +57,8 @@ INCAR = {
     "lwave": False,
     "lcharg": False,
 }
-KPOINTS_SPACING = 0.03  # aiida-vasp units of 2*pi/A: about 0.19 1/A
+TWO_PI = 2.0 * math.pi
+KPOINTS_SPACING = 0.03 * TWO_PI  # A^-1 with the 2*pi, as VASP's KSPACING: 0.1885 1/A (7x7x11 for relaxed SnO2, 6x6x6 for alpha-Sn)
 REFERENCE_EDIFFG = -0.005  # eV/A, tight: the frequencies are computed at this minimum
 SLAB_EDIFFG = -0.02
 
@@ -65,11 +67,11 @@ CELL_RELAX = psteros.CalculationOverride(parameters={"INCAR": {"isif": 3}})
 # of the displaced cells; the fine mesh of the shared recipe would make the ~12 displacements of the
 # 72-atom cell need days.  The relaxation and the static energy keep the fine mesh.
 SNO2_VIBRATIONS = psteros.CalculationOverride(
-    kpoints_distance=0.06, metadata={"max_wallclock_seconds": 24 * 3600}
+    kpoints_distance=0.06 * TWO_PI, metadata={"max_wallclock_seconds": 24 * 3600}
 )
 TRIPLET_O2 = psteros.CalculationOverride(
     parameters={"INCAR": {"ispin": 2, "nupdown": 2}},
-    kpoints_distance=5.0,  # Gamma only in the 12 A box
+    kpoints_distance=5.0 * TWO_PI,  # Gamma only in the 12 A box
 )
 
 DEFAULT_WALLTIME_HOURS = {"o2": 4, "refs": 12, "slabs": 12}
