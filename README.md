@@ -124,6 +124,8 @@ graph = psteros.build_vasp_campaign_workgraph(references, slabs, recipe, submit=
 terminations = psteros.campaign_terminations(graph.pk)   # SlabTermination list for surface_phase_diagram
 ```
 
+The same graph and readers work for unary, binary and ternary systems: `psteros.campaign_references(graph.pk, host="sno2")` (or `host="srtio3"`) gives the reference object of a phase diagram, and `psteros.campaign_surface_energies(graph.pk)` the surface energies of a unary slab such as Au. Intermetallics such as PdIn take surface energies at chosen chemical potentials.
+
 The slabs are finished structures cut from a relaxed bulk; the graph does not rebuild them yet. See the
 [campaign guide](docs/source/campaign-workgraph.rst) and [`examples/vasp_campaign`](examples/vasp_campaign).
 

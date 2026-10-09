@@ -158,6 +158,14 @@ def build_vasp_campaign_workgraph(
         raise ValueError(f"slab blocks {vibrations} are vibrations, which are not supported for slabs")
 
     groups = {"references": (references, reference_blocks), "slabs": (slabs, slab_blocks)}
+    prefixes: dict[str, list[str]] = {}
+    for systems, blocks in groups.values():
+        for label in systems:
+            for block in blocks:
+                prefixes.setdefault(f"{label}_{block.name}", []).append(f"{label}/{block.name}")
+    clashes = sorted(" and ".join(pairs) for pairs in prefixes.values() if len(pairs) > 1)
+    if clashes:
+        raise ValueError(f"label/block pairs give the same task names: {clashes}; rename a label or a block")
     calculation = config.calculation
     base_incar, namespaces = split_recipe_incar(calculation.incar)
     planned = {}
@@ -191,10 +199,25 @@ def build_vasp_campaign_workgraph(
     workgraph = WorkGraph(name=f"{config.name}_campaign")
     workgraph.max_number_jobs = config.execution.max_concurrent_jobs
     code = orm.load_code(calculation.code_label)
+    described: dict[str, dict[str, dict[str, Any]]] = {group: {} for group in groups}
     for group, (systems, blocks) in groups.items():
         for label, system in systems.items():
             produced: dict[str, Any] = {}
-            current = as_aiida_structure(system.structure)
+            if not _structure_like(system.structure, orm):
+                raise TypeError(
+                    f"{label}: the structure must be a pymatgen structure, a StructureData or its PK, "
+                    f"got {type(system.structure).__name__}"
+                )
+            try:
+                current = as_aiida_structure(system.structure)
+            except Exception as error:
+                raise type(error)(f"{label}: cannot convert the structure: {error}") from error
+            if not isinstance(current, orm.StructureData):
+                raise TypeError(
+                    f"{label}: the structure must be a pymatgen structure, a StructureData or its PK, "
+                    f"got {type(current).__name__}"
+                )
+            described[group][label] = {"phase": system.phase, "composition": dict(current.get_composition())}
             for block in blocks:
                 source = produced[block.structure_from] if block.structure_from else current
                 incar, spacing, metadata, extra_settings = planned[(label, block.name)]
@@ -255,11 +278,21 @@ def build_vasp_campaign_workgraph(
                     setattr(workgraph.outputs, f"{group}.{label}.{block.name}.{port}", socket)
     if submit:
         workgraph.submit()
-        extras = {EXTRA: _campaign_description(references, reference_blocks, slabs, slab_blocks)}
+        extras = {EXTRA: _campaign_description(references, reference_blocks, slabs, slab_blocks, described)}
         if references:
             extras[REFERENCES_EXTRA] = _description(references, reference_blocks)
         workgraph.process.base.extras.set_many(extras)
     return workgraph
+
+
+def _structure_like(value: Any, orm: Any) -> bool:
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, orm.StructureData)):
+        return True
+    from pymatgen.core import Structure
+
+    return isinstance(value, Structure) or value.__class__.__module__.startswith("aiida_workgraph.sockets")
 
 
 def _campaign_description(
@@ -267,14 +300,17 @@ def _campaign_description(
     reference_blocks: Sequence[Block],
     slabs: Mapping[str, SlabSystem],
     slab_blocks: Sequence[Block],
+    systems: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
     def blocks(sequence: Sequence[Block]) -> list[dict[str, str]]:
         return [{"name": block.name, "kind": block.kind} for block in sequence]
 
     return {
         "version": 1,
-        "references": {"blocks": blocks(reference_blocks), "labels": list(references)},
-        "slabs": {"blocks": blocks(slab_blocks), "labels": list(slabs)},
+        "references": {
+            "blocks": blocks(reference_blocks), "labels": list(references), "systems": dict(systems["references"])
+        },
+        "slabs": {"blocks": blocks(slab_blocks), "labels": list(slabs), "systems": dict(systems["slabs"])},
     }
 
 
@@ -320,6 +356,9 @@ def _block_result(children: Mapping[str, Any], prefix: str, kind: str) -> dict[s
         result[key] = tuple(value.get_list()) if value is not None else None
     else:
         result[key] = value.value if value is not None else None
+    if result[key] is None and result["state"] == "finished":
+        # The VASP work chain finished, but the task that reads its result has not delivered.
+        result["state"] = f"finished, {prefix}_{key} {_state(child)}"
     return result
 
 
@@ -351,6 +390,87 @@ def campaign_results(pk: int) -> dict[str, dict[str, dict[str, dict[str, Any]]]]
     }
 
 
+def _energy_block(blocks: Sequence[Mapping[str, str]], chosen: str | None, group: str) -> str:
+    """``chosen``, else the last static block, else the last relaxation; checked against ``blocks``."""
+
+    kinds = {block["name"]: block["kind"] for block in blocks}
+
+    def last(kind: str) -> str | None:
+        names = [block["name"] for block in blocks if block["kind"] == kind]
+        return names[-1] if names else None
+
+    chosen = chosen or last("static") or last("relax")
+    if chosen not in kinds or kinds[chosen] == "vibrations":
+        raise ValueError(f"energy_block must name a relax or static {group} block, got {chosen!r}")
+    return chosen
+
+
+def _face_area_angstrom2(structure: Any) -> float:
+    import numpy as np
+
+    a, b = np.asarray(structure.cell[0]), np.asarray(structure.cell[1])
+    return float(np.linalg.norm(np.cross(a, b)))
+
+
+def campaign_entries(
+    pk: int, *, reference_energy_block: str | None = None, slab_energy_block: str | None = None
+) -> tuple[Any, ...]:
+    """One :class:`~psteros.campaign_analysis.CampaignEntry` per structure of a campaign graph.
+
+    References come first, then slabs, in the order of the graph.  The energy
+    (eV) of each group comes from its energy block (by default the last
+    static block, else the last relaxation); the composition and, for a slab,
+    the area of one face (A^2) from the structure of that block.  Works while
+    the graph runs: an unfinished block gives ``energy_ev=None``, its state,
+    and the composition of the input structure.
+    """
+
+    from psteros.campaign_analysis import CampaignEntry
+
+    _node, description = _load_campaign(pk)
+    results = campaign_results(pk)
+    entries = []
+    for group, chosen in (("references", reference_energy_block), ("slabs", slab_energy_block)):
+        labels = description[group]["labels"]
+        if not labels and chosen is None:
+            continue
+        block = _energy_block(description[group]["blocks"], chosen, group[:-1])
+        systems = description[group].get("systems", {})
+        for label in labels:
+            result = results[group][label][block]
+            structure = result["structure"]
+            system = systems.get(label)
+            if structure is not None:
+                composition = structure.get_composition()
+            elif system is not None:
+                composition = system["composition"]
+            else:
+                raise ValueError(f"{label}: the graph records no composition and block {block!r} has no structure yet")
+            entries.append(
+                CampaignEntry(
+                    label=label,
+                    group=group,
+                    phase=system["phase"] if system is not None else _phase(_node, group, label),
+                    composition=composition,
+                    energy_ev=result["energy"],
+                    block=block,
+                    state=result["state"],
+                    surface_area_angstrom2=(
+                        _face_area_angstrom2(structure) if group == "slabs" and structure is not None else None
+                    ),
+                )
+            )
+    return tuple(entries)
+
+
+def _phase(node: Any, group: str, label: str) -> str:
+    """Phase of a structure for a description without ``systems``."""
+
+    if group == "slabs":
+        return "solid"
+    return node.base.extras.get(REFERENCES_EXTRA, {})["references"][label]["phase"]
+
+
 def campaign_terminations(pk: int, *, energy_block: str | None = None, surfaces: int = 2) -> list[Any]:
     """One :class:`~psteros.phase_diagram.SlabTermination` per slab of a finished campaign graph.
 
@@ -363,16 +483,7 @@ def campaign_terminations(pk: int, *, energy_block: str | None = None, surfaces:
     from psteros.phase_diagram import SlabTermination
 
     _node, description = _load_campaign(pk)
-    blocks = description["slabs"]["blocks"]
-    kinds = {block["name"]: block["kind"] for block in blocks}
-
-    def last(kind: str) -> str | None:
-        names = [block["name"] for block in blocks if block["kind"] == kind]
-        return names[-1] if names else None
-
-    energy_block = energy_block or last("static") or last("relax")
-    if energy_block not in kinds or kinds[energy_block] == "vibrations":
-        raise ValueError(f"energy_block must name a relax or static slab block, got {energy_block!r}")
+    energy_block = _energy_block(description["slabs"]["blocks"], energy_block, "slab")
     if not description["slabs"]["labels"]:
         raise ValueError(f"campaign graph {pk} has no slabs")
     terminations = []

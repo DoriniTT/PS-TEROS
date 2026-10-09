@@ -50,7 +50,14 @@ from .campaign import (
     SlabSystem,
     build_vasp_campaign_workgraph,
     campaign_results,
+    campaign_entries,
     campaign_terminations,
+)
+from .campaign_analysis import (
+    CampaignEntry,
+    campaign_chemical_potentials,
+    campaign_references,
+    campaign_surface_energies,
 )
 from .thermochemistry import (
     FreeEnergy,
@@ -111,4 +118,9 @@ __all__ = [
     "build_vasp_campaign_workgraph",
     "campaign_results",
     "campaign_terminations",
+    "CampaignEntry",
+    "campaign_entries",
+    "campaign_chemical_potentials",
+    "campaign_references",
+    "campaign_surface_energies",
 ]

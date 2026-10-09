@@ -569,10 +569,22 @@ def test_submit_stores_the_descriptions_the_readers_need(code_label, slab_o, sub
         references(), slab_systems(slab_o), recipe(code_label), submit=True
     )
     node = workgraph.process
+    slab_composition = {element: int(count) for element, count in slab_o.composition.get_el_amt_dict().items()}
     assert node.base.extras.get("psteros_campaign") == {
         "version": 1,
-        "references": {"blocks": REFERENCE_BLOCKS_EXTRA, "labels": ["o2", "sno2"]},
-        "slabs": {"blocks": SLAB_BLOCKS_EXTRA, "labels": ["slab_o"]},
+        "references": {
+            "blocks": REFERENCE_BLOCKS_EXTRA,
+            "labels": ["o2", "sno2"],
+            "systems": {
+                "o2": {"phase": "gas", "composition": {"O": 2}},
+                "sno2": {"phase": "solid", "composition": {"Sn": 2, "O": 4}},
+            },
+        },
+        "slabs": {
+            "blocks": SLAB_BLOCKS_EXTRA,
+            "labels": ["slab_o"],
+            "systems": {"slab_o": {"phase": "solid", "composition": slab_composition}},
+        },
     }
     # The reference description is the one reference_results and reference_thermochemistry read.
     assert node.base.extras.get("psteros_references") == {
@@ -723,3 +735,354 @@ def test_readers_return_the_values_of_a_finished_slab() -> None:
     assert termination == expected
     (from_relax,) = psteros.campaign_terminations(graph.pk, energy_block="relax")
     assert from_relax.slab_energy_ev == -99.0
+
+
+# =============================================================================
+# Campaign entries and the analysis readers: fake finished children, no daemon
+# =============================================================================
+
+SYSTEMS_EXTRA = {
+    "version": 1,
+    "references": {
+        "blocks": REFERENCE_BLOCKS_EXTRA,
+        "labels": ["o2", "sno2"],
+        "systems": {
+            "o2": {"phase": "gas", "composition": {"O": 2}},
+            "sno2": {"phase": "solid", "composition": {"Sn": 2, "O": 4}},
+        },
+    },
+    "slabs": {
+        "blocks": SLAB_BLOCKS_EXTRA,
+        "labels": ["slab_o"],
+        "systems": {"slab_o": {"phase": "solid", "composition": {"Sn": 4, "O": 8}}},
+    },
+}
+ELEMENTAL_EXTRA = {
+    "version": 1,
+    "references": {
+        "blocks": REFERENCE_BLOCKS_EXTRA,
+        "labels": ["o2", "sn_bulk", "sno2"],
+        "systems": {
+            "o2": {"phase": "gas", "composition": {"O": 2}},
+            "sn_bulk": {"phase": "solid", "composition": {"Sn": 8}},
+            "sno2": {"phase": "solid", "composition": {"Sn": 2, "O": 4}},
+        },
+    },
+    "slabs": {
+        "blocks": SLAB_BLOCKS_EXTRA,
+        "labels": ["slab_o"],
+        "systems": {"slab_o": {"phase": "solid", "composition": {"Sn": 4, "O": 8}}},
+    },
+}
+
+
+def campaign_graph(extra: dict):
+    """A stored graph node that carries a campaign description and no child yet."""
+
+    from aiida import orm
+
+    graph = orm.WorkflowNode().store()
+    graph.base.extras.set("psteros_campaign", extra)
+    return graph
+
+
+def as_aiida(structure):
+    from psteros.backends.qe import as_aiida_structure
+
+    return as_aiida_structure(structure)
+
+
+def as_stored(structure):
+    return as_aiida(structure).store()
+
+
+def slab_cell(a_angstrom: float):
+    """Sn4O8 in an orthorhombic box a x 4 x 15 A: its exposed face has |a x b| = 4 a A^2."""
+
+    from pymatgen.core import Lattice, Structure
+
+    coords = [
+        [0.0, 0.0, 0.10], [0.5, 0.5, 0.10], [0.0, 0.5, 0.20], [0.5, 0.0, 0.20],
+        [0.25, 0.25, 0.30], [0.75, 0.75, 0.30], [0.25, 0.75, 0.40], [0.75, 0.25, 0.40],
+        [0.0, 0.0, 0.50], [0.5, 0.5, 0.50], [0.0, 0.5, 0.60], [0.5, 0.0, 0.60],
+    ]
+    return Structure(Lattice.orthorhombic(a_angstrom, 4.0, 15.0), ["Sn"] * 4 + ["O"] * 8, coords)
+
+
+def finished_campaign():
+    """o2 and sno2 with static energies; slab_o relaxed from a = 3.0 to a = 4.0 A, then static."""
+
+    from aiida import orm
+
+    graph = campaign_graph(SYSTEMS_EXTRA)
+    o2 = as_stored(psteros.triplet_o2_cell())
+    _finished_child(graph, "o2_relax_vasp", {"structure": o2}, {"structure": as_aiida(psteros.triplet_o2_cell())})
+    _finished_child(graph, "o2_relax_energy", {}, {"result": orm.Float(-9.1)})
+    _finished_child(graph, "o2_static_vasp", {"structure": o2}, {})
+    _finished_child(graph, "o2_static_energy", {}, {"result": orm.Float(-9.0)})
+    _finished_child(graph, "sno2_static_vasp", {"structure": as_stored(psteros.rutile_sno2_bulk())}, {})
+    _finished_child(graph, "sno2_static_energy", {}, {"result": orm.Float(-38.0)})
+    relaxed = as_aiida(slab_cell(4.0))
+    _finished_child(graph, "slab_o_relax_vasp", {"structure": as_stored(slab_cell(3.0))}, {"structure": relaxed})
+    _finished_child(graph, "slab_o_relax_energy", {}, {"result": orm.Float(-99.0)})
+    _finished_child(graph, "slab_o_static_vasp", {"structure": relaxed}, {})
+    _finished_child(graph, "slab_o_static_energy", {}, {"result": orm.Float(-100.0)})
+    return graph
+
+
+def test_submit_stores_the_phase_and_integer_composition_of_every_system(
+    code_label, slab_o, submit_without_daemon
+) -> None:
+    workgraph = psteros.build_vasp_campaign_workgraph(references(), slab_systems(slab_o), recipe(code_label), submit=True)
+    campaign = workgraph.process.base.extras.get("psteros_campaign")
+    assert campaign["version"] == 1
+    # The composition of each input structure: the 2 x 2 x 3 supercell of sno2 is not counted.
+    assert campaign["references"]["systems"] == {
+        "o2": {"phase": "gas", "composition": {"O": 2}},
+        "sno2": {"phase": "solid", "composition": {"Sn": 2, "O": 4}},
+    }
+    slab_composition = {element: int(count) for element, count in slab_o.composition.get_el_amt_dict().items()}
+    assert slab_composition["O"] == 2 * slab_composition["Sn"]  # the stoichiometric SnO2 slab
+    assert campaign["slabs"]["systems"] == {"slab_o": {"phase": "solid", "composition": slab_composition}}
+    for group in ("references", "slabs"):
+        for label, system in campaign[group]["systems"].items():
+            assert all(type(count) is int for count in system["composition"].values()), label
+
+
+def test_a_slab_only_submission_stores_no_reference_systems(code_label, slab_o, submit_without_daemon) -> None:
+    workgraph = psteros.build_vasp_campaign_workgraph({}, slab_systems(slab_o), recipe(code_label), submit=True)
+    campaign = workgraph.process.base.extras.get("psteros_campaign")
+    assert (campaign["references"]["labels"], campaign["references"]["systems"]) == ([], {})
+    assert list(campaign["slabs"]["systems"]) == ["slab_o"]
+
+
+def test_campaign_entries_read_the_energies_and_compositions_of_each_group() -> None:
+    entries = psteros.campaign_entries(finished_campaign().pk)
+    # References first, in graph order; the default energy block is the last static one.
+    assert [entry.label for entry in entries] == ["o2", "sno2", "slab_o"]
+    o2, sno2, slab_entry = entries
+    assert (o2.group, o2.phase, dict(o2.composition), o2.energy_ev, o2.block, o2.state) == (
+        "references", "gas", {"O": 2}, -9.0, "static", "finished",
+    )
+    assert (sno2.group, sno2.phase, dict(sno2.composition), sno2.energy_ev) == (
+        "references", "solid", {"Sn": 2, "O": 4}, -38.0,
+    )
+    assert (slab_entry.group, slab_entry.phase, dict(slab_entry.composition), slab_entry.energy_ev) == (
+        "slabs", "solid", {"Sn": 4, "O": 8}, -100.0,
+    )
+    assert slab_entry.block == "static"
+    assert o2.surface_area_angstrom2 is None and sno2.surface_area_angstrom2 is None
+    # The static block starts from the relaxed slab, a = 4.0 A and b = 4.0 A: |a x b| = 16.0 A^2.
+    assert slab_entry.surface_area_angstrom2 == pytest.approx(4.0 * 4.0)
+
+
+def test_the_energy_blocks_of_campaign_entries_can_be_chosen_by_name() -> None:
+    entries = {
+        entry.label: entry
+        for entry in psteros.campaign_entries(
+            finished_campaign().pk, reference_energy_block="relax", slab_energy_block="relax"
+        )
+    }
+    assert (entries["o2"].block, entries["o2"].energy_ev, entries["o2"].state) == ("relax", -9.1, "finished")
+    # sno2 has no relaxation yet: no energy, its state, and the composition of its input structure.
+    assert (entries["sno2"].block, entries["sno2"].energy_ev, entries["sno2"].state) == ("relax", None, "not started")
+    assert dict(entries["sno2"].composition) == {"Sn": 2, "O": 4}
+    # The area is that of the relaxed slab (4.0 x 4.0 A^2), not of the initial one (3.0 x 4.0 A^2).
+    assert (entries["slab_o"].block, entries["slab_o"].energy_ev) == ("relax", -99.0)
+    assert entries["slab_o"].surface_area_angstrom2 == pytest.approx(16.0)
+
+
+def test_unfinished_blocks_give_no_energy_and_the_composition_of_the_description() -> None:
+    entries = psteros.campaign_entries(campaign_graph(SYSTEMS_EXTRA).pk)
+    assert [(entry.label, entry.phase, dict(entry.composition), entry.energy_ev, entry.state) for entry in entries] == [
+        ("o2", "gas", {"O": 2}, None, "not started"),
+        ("sno2", "solid", {"Sn": 2, "O": 4}, None, "not started"),
+        ("slab_o", "solid", {"Sn": 4, "O": 8}, None, "not started"),
+    ]
+    assert entries[2].surface_area_angstrom2 is None  # the static block has no structure yet
+
+
+def test_a_running_block_gives_its_composition_and_area_but_no_energy() -> None:
+    from plumpy import ProcessState
+
+    graph = campaign_graph(SYSTEMS_EXTRA)
+    sno2_child = _finished_child(graph, "sno2_static_vasp", {"structure": as_stored(psteros.rutile_sno2_bulk())}, {})
+    sno2_child.set_process_state(ProcessState.RUNNING)
+    slab_child = _finished_child(graph, "slab_o_static_vasp", {"structure": as_stored(slab_cell(4.0))}, {})
+    slab_child.set_process_state(ProcessState.RUNNING)
+    entries = {entry.label: entry for entry in psteros.campaign_entries(graph.pk)}
+    assert (entries["sno2"].energy_ev, entries["sno2"].state) == (None, "running")
+    assert dict(entries["sno2"].composition) == {"Sn": 2, "O": 4}
+    assert (entries["slab_o"].energy_ev, entries["slab_o"].state) == (None, "running")
+    assert entries["slab_o"].surface_area_angstrom2 == pytest.approx(16.0)
+
+
+def test_campaign_entries_reject_a_node_without_the_campaign_extra() -> None:
+    from aiida import orm
+
+    with pytest.raises(ValueError, match="psteros_campaign"):
+        psteros.campaign_entries(orm.Int(1).store().pk)
+
+
+def test_the_analysis_readers_take_the_pk_of_a_campaign_graph() -> None:
+    from aiida import orm
+
+    graph = campaign_graph(ELEMENTAL_EXTRA)
+    _finished_child(graph, "o2_static_vasp", {"structure": as_stored(psteros.triplet_o2_cell())}, {})
+    _finished_child(graph, "o2_static_energy", {}, {"result": orm.Float(-9.0)})
+    _finished_child(graph, "sn_bulk_static_vasp", {"structure": as_stored(psteros.alpha_sn_bulk())}, {})
+    _finished_child(graph, "sn_bulk_static_energy", {}, {"result": orm.Float(-32.0)})
+    _finished_child(graph, "sno2_static_vasp", {"structure": as_stored(psteros.rutile_sno2_bulk())}, {})
+    _finished_child(graph, "sno2_static_energy", {}, {"result": orm.Float(-38.0)})
+    _finished_child(graph, "slab_o_static_vasp", {"structure": as_stored(slab_cell(4.0))}, {})
+    _finished_child(graph, "slab_o_static_energy", {}, {"result": orm.Float(-40.0)})
+
+    # mu_O = -9.0 / 2 = -4.5 and mu_Sn = -32.0 / 8 = -4.0; the SnO2 cell is not an elemental limit.
+    assert psteros.campaign_chemical_potentials(graph.pk) == pytest.approx({"O": -4.5, "Sn": -4.0})
+    assert psteros.campaign_chemical_potentials(graph.pk) == psteros.campaign_chemical_potentials(
+        psteros.campaign_entries(graph.pk)
+    )
+    # A slab of two elements needs its chemical potentials given: the elemental limits are not its equilibrium.
+    with pytest.raises(ValueError, match="chemical_potentials_ev"):
+        psteros.campaign_surface_energies(graph.pk)
+    # gamma = (E - N_Sn mu_Sn - N_O mu_O) / (2 A) = (-40.0 - (4 * -4.0 + 8 * -4.5)) / (2 * 16.0) = 12.0 / 32.0
+    limits = {"O": -9.0 / 2, "Sn": -32.0 / 8}
+    assert psteros.campaign_surface_energies(graph.pk, chemical_potentials_ev=limits) == pytest.approx({"slab_o": 0.375})
+    assert psteros.campaign_references(graph.pk, host="sno2") == psteros.BinaryOxideReferences(
+        -38.0, {"Sn": 2, "O": 4}, -9.0, -4.0
+    )
+
+
+# =============================================================================
+# Readers: a finished VASP task whose energy (or frequencies) task has not delivered
+# =============================================================================
+
+
+def test_a_finished_vasp_task_without_its_energy_task_names_it_in_the_state() -> None:
+    graph = campaign_graph(SYSTEMS_EXTRA)
+    _finished_child(graph, "slab_o_static_vasp", {"structure": as_stored(slab_cell(4.0))}, {})
+    static = psteros.campaign_results(graph.pk)["slabs"]["slab_o"]["static"]
+    assert (static["state"], static["energy"]) == ("finished, slab_o_static_energy not started", None)
+    (slab_entry,) = [entry for entry in psteros.campaign_entries(graph.pk) if entry.group == "slabs"]
+    assert (slab_entry.state, slab_entry.energy_ev) == ("finished, slab_o_static_energy not started", None)
+    assert slab_entry.surface_area_angstrom2 == pytest.approx(4.0 * 4.0)  # |a x b| of the input, 4.0 x 4.0 A
+    with pytest.raises(ValueError, match="slab_o") as info:
+        psteros.campaign_terminations(graph.pk)
+    assert "finished, slab_o_static_energy not started" in str(info.value)
+
+
+def test_an_energy_task_that_is_running_is_named_in_the_state() -> None:
+    from plumpy import ProcessState
+
+    graph = campaign_graph(SYSTEMS_EXTRA)
+    _finished_child(graph, "slab_o_static_vasp", {"structure": as_stored(slab_cell(4.0))}, {})
+    energy = _finished_child(graph, "slab_o_static_energy", {}, {})
+    energy.set_process_state(ProcessState.RUNNING)
+    static = psteros.campaign_results(graph.pk)["slabs"]["slab_o"]["static"]
+    assert (static["state"], static["energy"]) == ("finished, slab_o_static_energy running", None)
+
+
+def test_the_frequencies_task_of_a_vibrations_block_is_named_in_the_state() -> None:
+    graph = campaign_graph(SYSTEMS_EXTRA)
+    _finished_child(graph, "o2_vibrations_vasp", {"structure": as_stored(psteros.triplet_o2_cell())}, {})
+    vibrations = psteros.campaign_results(graph.pk)["references"]["o2"]["vibrations"]
+    assert (vibrations["state"], vibrations["frequencies"]) == ("finished, o2_vibrations_frequencies not started", None)
+
+
+def test_an_unfinished_vasp_task_keeps_its_plain_state() -> None:
+    from plumpy import ProcessState
+
+    graph = campaign_graph(SYSTEMS_EXTRA)
+    vasp = _finished_child(graph, "slab_o_static_vasp", {"structure": as_stored(slab_cell(4.0))}, {})
+    vasp.set_process_state(ProcessState.RUNNING)
+    assert psteros.campaign_results(graph.pk)["slabs"]["slab_o"]["static"]["state"] == "running"
+
+
+def test_campaign_entries_checks_an_explicit_block_even_for_a_group_without_labels() -> None:
+    empty_references = {
+        "version": 1,
+        "references": {"blocks": REFERENCE_BLOCKS_EXTRA, "labels": [], "systems": {}},
+        "slabs": SYSTEMS_EXTRA["slabs"],
+    }
+    empty_slabs = {
+        "version": 1,
+        "references": SYSTEMS_EXTRA["references"],
+        "slabs": {"blocks": SLAB_BLOCKS_EXTRA, "labels": [], "systems": {}},
+    }
+    with pytest.raises(ValueError, match="bogus"):
+        psteros.campaign_entries(campaign_graph(empty_references).pk, reference_energy_block="bogus")
+    with pytest.raises(ValueError, match="bogus"):
+        psteros.campaign_entries(campaign_graph(empty_slabs).pk, slab_energy_block="bogus")
+    # A valid block of an empty group is accepted, and the empty group contributes no entries.
+    entries = psteros.campaign_entries(campaign_graph(empty_references).pk, reference_energy_block="relax")
+    assert [entry.label for entry in entries] == ["slab_o"]
+    entries = psteros.campaign_entries(campaign_graph(empty_slabs).pk, slab_energy_block="relax")
+    assert [entry.label for entry in entries] == ["o2", "sno2"]
+
+
+# =============================================================================
+# Builder: label/block pairs with the same task names, and the structures given
+# =============================================================================
+
+
+def test_label_block_pairs_with_the_same_task_names_are_named(code_label) -> None:
+    bulk = psteros.ReferenceSystem(psteros.alpha_sn_bulk(), "solid")
+    # sn/o_relax and sn_o/relax both give the task sn_o_relax_vasp.
+    with pytest.raises(ValueError) as info:
+        psteros.build_vasp_campaign_workgraph(
+            {"sn": bulk, "sn_o": bulk},
+            {},
+            recipe(code_label),
+            reference_blocks=(psteros.Relax(name="relax"), psteros.Relax(name="o_relax")),
+        )
+    assert "sn/o_relax" in str(info.value) and "sn_o/relax" in str(info.value)
+    # Without the clash the same labels build: sn_relax_vasp and sn_o_relax_vasp.
+    workgraph = psteros.build_vasp_campaign_workgraph(
+        {"sn": bulk, "sn_o": bulk}, {}, recipe(code_label), reference_blocks=(psteros.Relax(name="relax"),)
+    )
+    assert task_names(workgraph) >= {"sn_relax_vasp", "sn_o_relax_vasp"}
+
+
+def test_label_block_pairs_clash_across_the_reference_and_slab_groups(code_label, slab_o) -> None:
+    bulk = psteros.ReferenceSystem(psteros.alpha_sn_bulk(), "solid")
+    with pytest.raises(ValueError) as info:
+        psteros.build_vasp_campaign_workgraph(
+            {"sn": bulk},
+            {"sn_o": slab_o},
+            recipe(code_label),
+            reference_blocks=(psteros.Relax(name="o_relax"),),
+            slab_blocks=(psteros.Relax(name="relax"),),
+        )
+    assert "sn/o_relax" in str(info.value) and "sn_o/relax" in str(info.value)
+
+
+@pytest.mark.parametrize("structure", ["not a structure", 3.5, [1, 2, 3]])
+def test_a_structure_that_is_no_structure_is_a_type_error_naming_its_label(code_label, structure) -> None:
+    with pytest.raises(TypeError, match="slab_o"):
+        psteros.build_vasp_campaign_workgraph({}, {"slab_o": structure}, recipe(code_label))
+    bulk = psteros.ReferenceSystem(structure, "solid")
+    with pytest.raises(TypeError, match="sn_bulk"):
+        psteros.build_vasp_campaign_workgraph({"sn_bulk": bulk}, {}, recipe(code_label))
+
+
+def test_a_pk_of_a_node_that_is_no_structure_is_a_type_error_naming_its_label(code_label) -> None:
+    from aiida import orm
+
+    not_a_structure = orm.Int(3).store().pk
+    with pytest.raises(TypeError, match="slab_o"):
+        psteros.build_vasp_campaign_workgraph({}, {"slab_o": not_a_structure}, recipe(code_label))
+
+
+def test_the_pk_of_a_structure_is_accepted(code_label, slab_o) -> None:
+    pk = as_stored(slab_o).pk
+    workgraph = psteros.build_vasp_campaign_workgraph({}, {"slab_o": pk}, recipe(code_label))
+    assert "slab_o_relax_vasp" in task_names(workgraph)
+
+
+def test_a_structure_aiida_cannot_convert_keeps_its_own_error_and_names_the_label(code_label) -> None:
+    from pymatgen.core import DummySpecies, Lattice, Structure
+
+    dummy = Structure(Lattice.cubic(5.0), [DummySpecies("X")], [[0.0, 0.0, 0.0]])
+    with pytest.raises(Exception, match="slab_x: cannot convert the structure") as info:
+        psteros.build_vasp_campaign_workgraph({}, {"slab_x": dummy}, recipe(code_label))
+    assert info.value.__cause__ is not None

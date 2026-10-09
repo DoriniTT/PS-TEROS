@@ -10,7 +10,8 @@ choices and the execution policy are those of the earlier example.
 | File | What it does |
 |---|---|
 | `campaign.py` | Builds, prints and (with `--submit`) submits the graph. |
-| `analysis.py` | Reads the finished graph by `--pk` and writes the phase diagram (PNG, CSV) and the transitions. |
+| `analysis.py` | Reads the finished graph by `--pk` and writes the phase diagram (PNG, CSV) and the transitions. The SnO₂ references come from `psteros.campaign_references(pk, host="sno2")`. |
+| `any_material.py` | The general readers on hand-typed energies, no AiiDA needed: unary Au (`campaign_surface_energies`), binary SnO₂ and ternary SrTiO₃ (`campaign_references`), intermetallic PdIn (`campaign_surface_energies` at its Pd-rich and In-rich limits, built from `campaign_chemical_potentials`). |
 
 ## Before you start
 

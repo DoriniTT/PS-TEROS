@@ -44,6 +44,12 @@ Unreleased Features
   ``campaign_terminations`` read it back by PK, and ``reference_results`` and ``reference_thermochemistry`` work on it too.
   The slabs are finished structures; rebuilding them from the relaxed bulk inside the graph is not supported yet.
   See :doc:`campaign-workgraph` and ``examples/vasp_campaign/``.
+* New ``CampaignEntry``, ``campaign_entries``, ``campaign_chemical_potentials``, ``campaign_references`` and
+  ``campaign_surface_energies`` read a campaign graph for any material. The graph records the phase and composition
+  of every label. A binary or ternary oxide gives the reference object of its phase diagram, with the O\ :sub:`2`
+  gas as the oxygen reservoir. Surface energies cover the other systems: the default elemental limits for unary
+  slabs, and explicit ``chemical_potentials_ev`` for slabs of several elements, whose elemental limits are not in
+  equilibrium with their bulk. See :doc:`campaign-workgraph`.
 * Nothing existing changes: the existing builders, their graphs and their output names are as before.
 
 **CP2K Calculator Support for AIMD**

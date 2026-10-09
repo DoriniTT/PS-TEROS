@@ -23,32 +23,6 @@ PROFILE = "psteros_sno2_vibrations"
 READING_K = (600.0, 1000.0)
 
 
-def binary_references(results: dict) -> psteros.BinaryOxideReferences:
-    """Stability window of SnO2: static energies, and the relaxed cells for composition and atom count."""
-
-    refs = results["references"]
-
-    def static_energy(label: str) -> float:
-        energy = refs[label]["static"]["energy"]
-        if energy is None:
-            raise SystemExit(f"reference {label!r} has no static energy yet")
-        return energy
-
-    def relaxed_cell(label: str):
-        structure = refs[label]["relax"]["structure"]
-        if structure is None:
-            raise SystemExit(f"reference {label!r} has no relaxed structure yet")
-        return structure.get_pymatgen_structure()
-
-    sno2, sn = relaxed_cell("sno2"), relaxed_cell("sn")
-    return psteros.BinaryOxideReferences(
-        bulk_energy_ev=static_energy("sno2"),
-        bulk_composition=sno2.composition,
-        oxygen_molecule_energy_ev=static_energy("o2"),  # the axis keeps the bare DFT energy of O2
-        metal_energy_per_atom_ev=static_energy("sn") / len(sn),
-    )
-
-
 def write_transitions(diagram, oxygen, path: Path) -> None:
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
@@ -78,7 +52,10 @@ def main(argv=None):
     results = psteros.campaign_results(args.pk)
     if not {"o2", "sno2", "sn"} <= set(results["references"]) or not results["slabs"]:
         raise SystemExit(f"graph {args.pk} is not a full campaign (O2, SnO2, alpha-Sn and the slabs); --smoke has no slabs")
-    references = binary_references(results)
+    for entry in psteros.campaign_entries(args.pk):  # one line per structure, for any material
+        energy = f"{entry.energy_ev:.5f} eV" if entry.energy_ev is not None else "-"
+        print(f"  {entry.group:10s} {entry.label:10s} {entry.block:7s} {entry.state:10s} {energy}  {entry.composition}")
+    references = psteros.campaign_references(args.pk, host="sno2")
     print(f"Delta H_f(SnO2) = {references.formation_enthalpy_ev:.3f} eV per formula unit (DFT, 0 K)")
     print(f"stability window: {references.oxygen_poor_limit_ev:.3f} <= Delta mu_O <= 0 eV")
 

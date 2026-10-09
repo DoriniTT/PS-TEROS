@@ -469,7 +469,8 @@ Campaign graphs
 
 See :doc:`campaign-workgraph` for a worked example. References and slabs run in one
 WorkGraph, with outputs nested by group, label and block. ``reference_results`` and
-``reference_thermochemistry`` also accept the PK of a campaign graph.
+``reference_thermochemistry`` also accept the PK of a campaign graph. The general readers
+below take the same PK for unary, binary and ternary systems; see :ref:`campaign-any-material`.
 
 .. _api-slab-system:
 
@@ -517,6 +518,79 @@ WorkGraph, with outputs nested by group, label and block. ``reference_results`` 
    ``energy_block``, by default the last static slab block (else the last relaxation).
    The composition and the area come from the structure of that block. A block that has
    not finished raises ``ValueError``, naming the slab and the state of the block.
+
+.. _api-campaign-entry:
+
+.. index:: CampaignEntry
+
+``CampaignEntry(label, group, phase, composition, energy_ev, block="static", state="finished", surface_area_angstrom2=None)``
+   One structure of a campaign, with the energy the general readers use. ``group`` is
+   ``"references"`` or ``"slabs"``; ``phase`` is ``"gas"`` or ``"solid"``, and a slab is always
+   a solid. ``composition`` maps each element to its positive count in the cell whose energy is
+   ``energy_ev`` (the total energy of that cell in eV, ``None`` until ``block`` has delivered it).
+   ``state`` is the state of that block, for example ``finished`` or ``not started``.
+   ``surface_area_angstrom2`` is the area of one face of a slab in Å²; references have none.
+   ``energy_ev`` and ``surface_area_angstrom2`` must be finite numbers. The properties ``atoms``
+   (the sum of the counts) and ``energy_per_atom_ev`` (eV per atom) follow from the fields. A gas
+   slab, an empty or non-positive composition, a non-positive area, or an area on a reference
+   raises ``ValueError``.
+
+.. _api-campaign-entries:
+
+.. index:: campaign_entries
+
+``campaign_entries(pk, *, reference_energy_block=None, slab_energy_block=None)``
+   One ``CampaignEntry`` per label of a campaign graph, references first, in graph order. The
+   energy of each group comes from its energy block: by default the last static block, else the
+   last relaxation. An explicit block is checked even when its group has no labels. The
+   composition, and the area of a slab, come from the structure of that block, or from the stored
+   description while the block has no structure yet. Works while the graph runs.
+
+.. _api-campaign-chemical-potentials:
+
+.. index:: campaign_chemical_potentials
+
+``campaign_chemical_potentials(source, *, reservoirs=None, elements=None)``
+   ``{element: eV per atom}`` from the single-element references of a campaign, given as its PK or
+   as a list of ``CampaignEntry``: each reference gives its energy per atom. For oxygen the
+   candidates are the O\ :sub:`2` gas references when there are any, so the O\ :sub:`2` gas gives
+   E(O\ :sub:`2`)/2 and an O atom or another single-element O reference is not a candidate.
+   ``elements`` restricts the result, and its checks (ambiguity, missing energy), to those elements; an
+   element of ``elements`` without a single-element reference raises ``ValueError``. Two candidates for one element raise
+   ``ValueError`` naming both, unless ``reservoirs={"O": "o2"}`` chooses one. Multi-element
+   references are not used.
+
+.. _api-campaign-references:
+
+.. index:: campaign_references
+
+``campaign_references(source, *, host, reservoirs=None, exclude=(), independent=None)``
+   The reference object of the phase diagram of the solid ``host``: ``BinaryOxideReferences`` for
+   one metal and oxygen, ``TernaryOxideReferences`` for two metals and oxygen. The oxygen reservoir
+   is the O\ :sub:`2` gas reference. For a binary oxide, any other solid reference is an error
+   unless it is excluded. For a ternary oxide, the competing phases are every other solid reference
+   made of the host's elements that is not a chosen reservoir: compounds such as SrO and TiO\ :sub:`2`,
+   and unchosen elemental phases. ``exclude`` leaves named labels out; a host or a reservoir named
+   in it is an error. ``independent`` is the element on the horizontal axis of a ternary diagram,
+   and is an error for a binary host. Other hosts, and references that do not fit the model, raise
+   ``ValueError``; an error from the model starts with the host label. See
+   :ref:`campaign-any-material`.
+
+.. _api-campaign-surface-energies:
+
+.. index:: campaign_surface_energies
+
+``campaign_surface_energies(source, *, chemical_potentials_ev=None, reservoirs=None, surfaces=2)``
+   ``{slab label: γ in eV/Å²}``, with γ = (E_slab − Σ N_i μ_i) / (surfaces × A) and A the area of
+   one face. ``chemical_potentials_ev`` (eV per atom) defaults to the elemental limits of
+   ``campaign_chemical_potentials``, which is exact for unary slabs only. A slab of several elements
+   needs explicit ``chemical_potentials_ev``, because the elemental limits are not in equilibrium
+   with a compound's bulk; without it the call raises ``ValueError`` naming the slabs. Only the
+   references of the slab elements are read. ``reservoirs`` cannot be combined with
+   ``chemical_potentials_ev``. An element of a slab without a chemical potential, or a slab without
+   energy or area, raises ``ValueError`` naming it. Multiply by ``EV_PER_ANGSTROM2_TO_J_PER_M2``
+   for J/m².
+
 
 Compatibility boundary
 ----------------------
