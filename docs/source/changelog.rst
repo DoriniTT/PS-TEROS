@@ -38,6 +38,10 @@ Earlier Unreleased Features
   structure with element names only, so the static calculation had no POTCAR for ``H``.
   A ``restore_vasp_kinds`` step now gives each relaxed atom the kind of the starting atom it came from. It is added
   only for structures with custom kinds; graphs of all other structures are unchanged. No results change.
+* aiida-vasp also restarts a work chain (after a walltime or a failed line search) from that kind-less relaxed
+  structure and failed with ``KeyError: 'H'``. The potential mapping now also carries the element name of a custom kind
+  whose POTCAR is unambiguous (one pseudo-hydrogen kind per structure); with ``H0p75`` and ``H1p25`` in one slab a
+  restart still stops with the error. No results change.
 
 **VASP k-point spacing now matches its documented unit**
 

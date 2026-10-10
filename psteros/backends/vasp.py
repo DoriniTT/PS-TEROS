@@ -136,6 +136,29 @@ def vasp_potential_mapping(config: VaspCalculationConfig, kinds: Mapping[str, st
     return mapping
 
 
+def restart_potential_aliases(mapping: Mapping[str, str], kinds: Mapping[str, str]) -> dict[str, str]:
+    """``mapping`` plus the element name of each custom kind whose POTCAR is unambiguous.
+
+    aiida-vasp restarts a work chain (after a walltime, or a failed line search)
+    from the relaxed structure it returned, whose kinds are element names only,
+    and looks the POTCAR of ``H`` up in the mapping: ``KeyError: 'H'`` when the
+    structure had a pseudo-hydrogen ``H0p75``. An element with exactly one
+    custom kind and no plain kind of that name gets that kind's POTCAR under its
+    element name too. With two custom kinds of one element (``H0p75`` and
+    ``H1p25`` in one slab) the element name stays out and a restart fails loudly.
+    """
+
+    custom: dict[str, list[str]] = {}
+    for kind, symbol in kinds.items():
+        if kind != symbol:
+            custom.setdefault(symbol, []).append(kind)
+    result = dict(mapping)
+    for symbol, names in custom.items():
+        if len(names) == 1 and symbol not in kinds and symbol not in result:
+            result[symbol] = mapping[names[0]]
+    return result
+
+
 def as_vasp_structure(structure: Any) -> Any:
     """StructureData from a pymatgen structure or PK; WorkGraph sockets pass through."""
 
@@ -192,7 +215,7 @@ def add_vasp_task(
             override.kpoints_distance if override and override.kpoints_distance else config.kpoints_spacing
         )),
         "potential_family": orm.Str(config.potential_family),
-        "potential_mapping": orm.Dict(dict=vasp_potential_mapping(config, kinds)),
+        "potential_mapping": orm.Dict(dict=restart_potential_aliases(vasp_potential_mapping(config, kinds), kinds)),
         "options": orm.Dict(dict=metadata),
         "clean_workdir": orm.Bool(config.clean_workdir),
     }

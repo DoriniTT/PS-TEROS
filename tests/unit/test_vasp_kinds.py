@@ -94,3 +94,35 @@ def test_the_static_step_gets_restored_kinds_only_when_there_are_custom_kinds(tm
     assert ("pseudo_relax_vasp", "pseudo_restore_kinds") in links
     assert ("pseudo_restore_kinds", "pseudo_static_vasp") in links
     assert ("plain_relax_vasp", "plain_static_vasp") in links
+
+
+def test_a_restart_finds_the_potcar_of_an_unambiguous_custom_kind():
+    from psteros.backends.vasp import restart_potential_aliases
+
+    mapping = {"Ga": "Ga_d", "As": "As", "H1p25": "H1.25"}
+    kinds = {"Ga": "Ga", "As": "As", "H1p25": "H"}
+    assert restart_potential_aliases(mapping, kinds) == {**mapping, "H": "H1.25"}
+    # nothing to alias without custom kinds: the mapping is unchanged
+    assert restart_potential_aliases({"Ga": "Ga_d"}, {"Ga": "Ga"}) == {"Ga": "Ga_d"}
+    # two custom kinds of one element, or a plain kind of that element: ambiguous, no alias
+    two = {**mapping, "H0p75": "H.75"}
+    assert "H" not in restart_potential_aliases(two, {**kinds, "H0p75": "H"})
+    assert restart_potential_aliases({**mapping, "H": "H"}, {**kinds, "H": "H"}) == {**mapping, "H": "H"}
+    # an explicit entry of the user is kept
+    assert restart_potential_aliases({**mapping, "H": "H.5"}, kinds)["H"] == "H.5"
+
+
+@pytest.mark.tier2
+@pytest.mark.requires_aiida
+def test_the_graph_input_carries_the_restart_alias(tmp_path):
+    pytest.importorskip("aiida_vasp")
+    computer = _code(tmp_path)
+    relax, static = _recipes(computer, {"Ga": "Ga_d", "H0p75": "H.75"})
+    graph = psteros.build_relax_static_workgraph(
+        {"pseudo": _structure([("Ga", "Ga", (0, 0, 0)), ("H", "H0p75", (2, 2, 2))]),
+         "plain": _structure([("Ga", "Ga", (0, 0, 0)), ("Ga", "Ga", (3, 3, 3))])}, relax, static)
+    assert graph.tasks["pseudo_relax_vasp"].inputs.potential_mapping.value.get_dict() == {
+        "Ga": "Ga_d", "H0p75": "H.75", "H": "H.75"}
+    # no custom kind in the structure: the mapping is the recipe's, with no alias
+    assert graph.tasks["plain_relax_vasp"].inputs.potential_mapping.value.get_dict() == {
+        "Ga": "Ga_d", "H0p75": "H.75"}
