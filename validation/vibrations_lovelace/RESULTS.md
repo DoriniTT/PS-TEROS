@@ -86,9 +86,45 @@ PBE with Sn_d about -4.6 eV): see 5.3.
 
 ## 6. Problems found
 
-### 5.1 psteros VASP graphs cannot start with aiida-vasp 5.0.0 (INCAR keys in upper case)
+### 5.1 psteros VASP graphs cannot start with aiida-vasp 5.0.0 (INCAR keys in upper case): bug in psteros, fixed
 
-(to be filled in)
+Symptom: every graph failed after 25 s, before any job was submitted (graphs 705 and 751; the same on aiida-workgraph 0.8.1 and
+0.9.0): `InputValidationError: Case inconsistency found in the parameters dictionary please use lower case keys: Key 'ENCUT'
+converted to 'encut'`. Cause: psteros recipes, the examples and the docs write the INCAR in upper case and
+`vasp_parameters` keeps it so; `aiida_vasp.common.parameters_validator` accepts upper-case keys only on an unstored `Dict`
+(it lower-cases it with a warning) and raises on a stored one, and a WorkGraph stores the inputs of its tasks. This is not
+specific to the vibrations: it blocks `build_surface_workgraph` and `build_relax_static_workgraph` as well, with the
+`aiida-vasp>=5,<6` that `setup.py` asks for. The unit tests only build graphs (`submit=False`) and never validate the inputs
+of the work chain, so they could not see it.
+
+Fix (commit `e9be44d`): `psteros.backends.vasp_workchain.PsterosVaspWorkChain`, `VaspWorkChain` with a `parameters` validator
+that applies aiida-vasp's own validator to a lower-cased copy; `add_vasp_task` runs it. The recipes, the stored
+`parameters` (still upper case), the task names, links and graph outputs are unchanged, and no existing test was edited
+(AGENTS.md). Six new tests in `tests/unit/test_vasp_workchain.py`: aiida-vasp refuses a stored upper-case `Dict`, the new
+class accepts it without rewriting the node, bad content is still rejected, the ports, outputs and exit codes equal those of
+`VaspWorkChain`, and a built graph runs the new class with unchanged parameters. Changelog entry added. Consequence: psteros
+must now be installed in the environment of the AiiDA daemon for VASP graphs as well (until now only QE relaxations and the
+vibration calcfunctions needed it).
+
+Alternative that was not taken because it changes what existing tests assert: lower-casing the keys in `vasp_parameters`.
+
+### 5.4 Operations
+
+* **aiida-workgraph 0.8.1 versus 0.9.0.** Both build all graphs of the test, including the 510-task vibrations graph (so
+  `harmonic_modes` accepts the variable `retrieved` inputs on 0.8.1, plan step 0.2); the unit tests pass on both (154).
+  The test was run on 0.9.0 (the version the branch was developed with) through a `PYTHONPATH` overlay, because the shared
+  environment was not to be modified.
+* **Host restarts.** The computer running the daemon was restarted during the vibrations graph (09 Oct about 21:50 and
+  10 Oct 12:57), which killed the daemon. After the first restart the continuation tasks of the two active processes had
+  to be recreated with `verdi process repair` (daemon stopped, then restarted); after the second, RabbitMQ had kept them. Nothing
+  was lost: no job was in flight either time, and the graph continued from its checkpoint. After a restart the worker needs
+  about 30 min of CPU time to load the checkpoint of the 510-task graph before the next job starts.
+* **`max_concurrent_jobs=1` was exceeded once**: right after the first repair two displaced calculations (3917 and 3922) ran at
+  the same time; all others ran alone.
+* **Submitting the 510-task graph takes about 5 min** (all input nodes are stored at submission).
+* **Queue.** After the first day the `par128` queue was quiet (nearly no wait) for the 6 `refs` and 4 `slabs` jobs, but a
+  displaced job waited 5.2, 2.3, 2.2, 1.7 and 1.2 h in the queue overnight; the typical displaced job takes 2.8 min from creation to
+  retrieval. Throughput of the vibrations graph: 5 to 15 min per job depending on the queue.
 
 ### 5.2 Wrong `mpirun` in the copied computer registration (not a psteros bug)
 
