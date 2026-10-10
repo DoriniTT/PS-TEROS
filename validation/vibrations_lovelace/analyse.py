@@ -57,6 +57,30 @@ TEMPERATURE_SHADE = {0.0: "#9fb8d9", 300.0: "#6f95c9", 600.0: "#3d6fb0", 900.0: 
 # ------------------------------------------------------------------------------------------ reading
 
 
+class ModeGraph:
+    """The vibrations graph seen through its ``harmonic_modes`` calls.
+
+    ``outputs[<label>_vibrations]`` is read from the ``harmonic_modes`` call of ``graph`` or, for a label whose
+    task was skipped (RESULTS.md 5.5), of ``reruns``; every other attribute is that of ``graph``. This works for a
+    graph that did not finish cleanly, whose own outputs may be missing.
+    """
+
+    def __init__(self, graph, reruns=()):
+        from aiida.common.links import LinkType
+
+        self._graph, self.outputs, self.source = graph, {}, {}
+        for origin in (graph, *reruns):
+            for link in origin.base.links.get_outgoing(link_type=LinkType.CALL_CALC).all():
+                if link.node.process_label == "harmonic_modes" and link.node.exit_status == 0:
+                    name = link.link_label if link.link_label.endswith("_vibrations") else link.link_label.split("__")[0]
+                    if name not in self.outputs:
+                        self.outputs[name] = link.node.outputs.result
+                        self.source[name] = origin.pk
+
+    def __getattr__(self, name):
+        return getattr(self._graph, name)
+
+
 def read_inputs(refs_graph, slabs_graph, vib_graph):
     """Energies, relaxed structures and the harmonic modes (imaginary modes kept as negative numbers)."""
 
@@ -358,7 +382,7 @@ def check_independent_recomputation(vib_graph, label="slab_sn2o"):
     minus = [forces_of(f"s{site}_{axis}_minus") for site in sites for axis in "xyz"]
     modes = psteros.harmonic_vibrations_from_forces(
         masses_amu=masses, displaced_sites=sites, displacement_angstrom=float(options["displacement_angstrom"]),
-        forces_plus=plus, forces_minus=minus, zero_modes=int(vib_graph.outputs[f"{label}_vibrations"]["zero_modes"]),
+        forces_plus=plus, forces_minus=minus, zero_modes=int(vib_graph.outputs[f"{label}_vibrations"].get_dict()["zero_modes"]),
         imaginary_modes="drop",
     )
     graph_frequencies = np.sort(np.array(vib_graph.outputs[f"{label}_vibrations"].get_dict()["frequencies_cm1"]))
@@ -532,6 +556,8 @@ def main(argv=None) -> int:
     parser.add_argument("--slabs-pk", type=int, required=True)
     parser.add_argument("--vib-pk", type=int, help="omit to analyse the total-energy diagram only")
     parser.add_argument("--ibrion5-pk", type=int)
+    parser.add_argument("--rerun-pk", type=int, nargs="*", default=[],
+                        help="graphs from rerun_alpha_sn_modes.py that supply the skipped mode tasks")
     parser.add_argument("--legacy-src", help="checkout of the commit before the vibrations (check 9)")
     args = parser.parse_args(argv)
 
@@ -539,7 +565,9 @@ def main(argv=None) -> int:
 
     load_profile(args.profile)
     refs, slabs = orm.load_node(args.refs_pk), orm.load_node(args.slabs_pk)
-    vib = orm.load_node(args.vib_pk) if args.vib_pk is not None else None
+    vib = ModeGraph(orm.load_node(args.vib_pk), [orm.load_node(pk) for pk in args.rerun_pk]) if args.vib_pk else None
+    if vib is not None:
+        print("mode results from:", vib.source)
     RESULTS.mkdir(exist_ok=True)
 
     energies, relaxed, modes = read_inputs(refs, slabs, vib)

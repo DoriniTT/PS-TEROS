@@ -39,6 +39,7 @@ Job script produced for the first job (`_aiidasubmit.sh`, PK 805): `#PBS -q par1
 | refs, attempt 5 (`kpoints_spacing=0.04`) | 977 | **Finished [0]** in 18 min (queue nearly empty), all 6 children exit 0 (calcs 985, 997, 1008, 1020, 1031, 1043). This is the `refs` graph used by the rest of the test; 862 stays as the 0.3 record (5.3) |
 | slabs (on the lattice of 977: a = 4.7652, c = 3.2219 A) | 1077 | **Finished [0]** in 32 min, 4 children exit 0 (calcs 1086, 1098, 1110, 1122; PBS 1028288, 1028289, 1028291, 1028296) |
 | vibrations (refs 977, slabs 1077) | 3400 | submitted 18:48 (CEST), 252 jobs, running |
+| alpha-Sn modes, rerun of the skipped task (`rerun_alpha_sn_modes.py`) | 4962 | **Finished [0]** (calcfunction 4963) |
 | ibrion5 | | |
 
 ## 3. Timings of the `refs` graph (PBS `qtime`/`stime`/`resources_used.walltime`)
@@ -144,3 +145,28 @@ alpha-Sn (6.489 A cube) 1x1x1, O2 box 1x1x1 (intended), rutile (4.737, 4.737, 3.
 2x1x1 (ceil of 2 pi/(L * 0.3 * 2 pi)). The default of the dataclass (0.20) is also Gamma-only for these cells. The alpha-Sn result above is the
 consequence. `examples/vasp_surface_phase_diagram/campaign.py`, which sets 0.3 and calls it "coarse k-points", has the
 same problem, and so has the plan. A value of 0.03 to 0.05 gives meshes of roughly 4 to 7 points per direction.
+
+### 5.5 One mode task skipped after a host restart (WorkGraph engine state, not VASP)
+
+After the first host restart the engine marked the task `alpha_sn_vib_s0_x_minus_vasp` FAILED although its work chain (PK 3499)
+and VASP calculation (3917) finished with exit status 0, and therefore skipped `alpha_sn_vibrations`. The work chain had been
+created the evening before and never started when the daemon died; I revived it with `verdi process repair`, and the
+engine also launched the next displacement (3820, calc 3922) which ran at the same time. The 48 alpha-Sn calculations are all
+fine, only the task that turns their forces into modes did not run. `verdi process list` and a watch on the VASP calculations
+do not show this: only the task states of the WorkGraph do (`WorkGraph.load(pk).tasks`), so the watcher now checks them too.
+
+Workaround: `rerun_alpha_sn_modes.py` builds a one-task graph (PK 4962) that runs the same `harmonic_modes` calcfunction with
+the same structure (PK 989), the same settings (PK 2208) and the retrieved folders of the 48 calculations; `analyse.py --rerun-pk 4962`
+reads that result for alpha-Sn. Result: 21 modes (3 x 8 - 3), 38.1 to 173.9 cm-1, none imaginary, ZPE 0.1611 eV per 8-atom cell;
+recomputed from the vasprun.xml files with pymatgen they agree to 0.00001 cm-1.
+
+Whether this is a psteros or an aiida-workgraph matter is open: psteros wires the tasks at build time as AGENTS.md asks and has
+no state of its own. For the merge it means: a restart of the daemon host during a long vibrations graph needs the recovery above.
+
+## 7. Partial results (graph 3400 still running)
+
+* **O2** (12 calculations): one mode at 1563.4 cm-1 (PBE 1550 to 1600), 5 zero modes removed, ZPE 96.9 meV. The 12 inputs have
+  `ISPIN = 2`, `MAGMOM = 1.0 1.0`, `NSW = 0`, `IBRION = -1`, `EDIFF = 1e-07`, a Gamma mesh and no selective dynamics.
+* **alpha-Sn** (48 calculations): see 5.5.
+* Displaced inputs of the first four and of all O2 calculations: `NSW = 0`, `IBRION = -1`, `EDIFF = 1e-07`, no selective dynamics in
+  the POSCAR, `import_sys_environment = False` (option of the calculation).
