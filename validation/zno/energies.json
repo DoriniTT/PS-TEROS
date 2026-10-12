@@ -1,0 +1,12 @@
+{
+  "bulk": -17.85846797,
+  "ref_Zn": -2.21280178,
+  "ref_O": -9.8572655,
+  "ZnO_001_both_passivated": -85.78415235,
+  "ZnO_100_symmetric": -105.28401512,
+  "ZnO_100_passivated": -111.70487372,
+  "pseudo_molecule_O": -17.55496907,
+  "pseudo_molecule_Zn": -13.28259323,
+  "ZnO_001_term_0": -82.13885926,
+  "ZnO_00m1_term_0": -82.05241015
+}

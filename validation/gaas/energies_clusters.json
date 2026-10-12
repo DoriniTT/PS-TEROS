@@ -1,0 +1,22 @@
+{
+  "bulk": -33.09057713,
+  "ref_Ga": -23.23639429,
+  "ref_As": -28.02350735,
+  "GaAs_111_both_passivated": -80.39926316,
+  "GaAs_110_symmetric": -97.61212968,
+  "GaAs_110_passivated": -104.39516517,
+  "pseudo_molecule_As": -15.90864921,
+  "pseudo_molecule_Ga": -16.7581393,
+  "GaAs_111_term_0": -303.99197704,
+  "GaAs_111_term_1": -303.00045852,
+  "GaAs_m1m1m1_term_0": -306.94205801,
+  "GaAs_m1m1m1_term_1": -302.91544645,
+  "cluster_As_n2": -55.81013409,
+  "cluster_As_n3": -127.95596063,
+  "cluster_As_n4": -240.61591677,
+  "cluster_As_n5": -402.06631037,
+  "cluster_Ga_n3": -132.62308026,
+  "cluster_Ga_n4": -248.19373458,
+  "cluster_Ga_n5": -413.21566895,
+  "cluster_Ga_n2": -58.22752501
+}

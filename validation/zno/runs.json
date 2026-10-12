@@ -1,0 +1,55 @@
+{
+  "zno_refs": {
+    "pk": 2236,
+    "labels": [
+      "bulk",
+      "ref_Zn",
+      "ref_O"
+    ]
+  },
+  "zno_checks": {
+    "pk": 2382,
+    "labels": [
+      "ZnO_001_both_passivated",
+      "ZnO_100_symmetric",
+      "ZnO_100_passivated",
+      "pseudo_molecule_O",
+      "pseudo_molecule_Zn"
+    ]
+  },
+  "zno_slabs_001": {
+    "pk": 2677,
+    "labels": [
+      "ZnO_001_term_0"
+    ]
+  },
+  "zno_slabs_00m1": {
+    "pk": 2743,
+    "labels": [
+      "ZnO_00m1_term_0"
+    ]
+  },
+  "zno_cluster_O_n5": {
+    "pk": 2839,
+    "labels": [
+      "cluster_O_n5"
+    ]
+  },
+  "zno_cluster_Zn_n5": {
+    "pk": 2866,
+    "labels": [
+      "cluster_Zn_n5"
+    ]
+  },
+  "zno_clusters_small": {
+    "pk": 2966,
+    "labels": [
+      "cluster_O_n2",
+      "cluster_O_n3",
+      "cluster_O_n4",
+      "cluster_Zn_n2",
+      "cluster_Zn_n3",
+      "cluster_Zn_n4"
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "zno_refs": {
+    "pk": 3292,
+    "labels": [
+      "bulk",
+      "ref_Zn",
+      "ref_O"
+    ]
+  },
+  "zno_checks": {
+    "pk": 3439,
+    "labels": [
+      "ZnO_001_both_passivated",
+      "ZnO_100_symmetric",
+      "ZnO_100_passivated",
+      "pseudo_molecule_O",
+      "pseudo_molecule_Zn"
+    ]
+  },
+  "zno_slabs_001": {
+    "pk": 3455,
+    "labels": [
+      "ZnO_001_term_0"
+    ]
+  },
+  "zno_slabs_00m1": {
+    "pk": 3596,
+    "labels": [
+      "ZnO_00m1_term_0"
+    ]
+  }
+}

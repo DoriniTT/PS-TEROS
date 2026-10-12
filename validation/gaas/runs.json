@@ -1,0 +1,81 @@
+{
+  "gaas_bulk": {
+    "pk": 1082,
+    "labels": [
+      "bulk"
+    ]
+  },
+  "gaas_ref_Ga": {
+    "pk": 1200,
+    "labels": [
+      "ref_Ga"
+    ]
+  },
+  "gaas_ref_As": {
+    "pk": 1117,
+    "labels": [
+      "ref_As"
+    ]
+  },
+  "gaas_checks": {
+    "pk": 1626,
+    "labels": [
+      "GaAs_111_both_passivated",
+      "GaAs_110_symmetric",
+      "GaAs_110_passivated",
+      "pseudo_molecule_As",
+      "pseudo_molecule_Ga"
+    ]
+  },
+  "gaas_slabs_111": {
+    "pk": 1674,
+    "labels": [
+      "GaAs_111_term_0",
+      "GaAs_111_term_1"
+    ]
+  },
+  "gaas_slabs_m1m1m1": {
+    "pk": 1731,
+    "labels": [
+      "GaAs_m1m1m1_term_0",
+      "GaAs_m1m1m1_term_1"
+    ]
+  },
+  "gaas_clusters_As_big": {
+    "pk": 1927,
+    "labels": [
+      "cluster_As_n6"
+    ]
+  },
+  "gaas_clusters_Ga_big": {
+    "pk": 1943,
+    "labels": [
+      "cluster_Ga_n6"
+    ]
+  },
+  "gaas_clusters_small": {
+    "pk": 2075,
+    "labels": [
+      "cluster_As_n2",
+      "cluster_As_n3",
+      "cluster_As_n4",
+      "cluster_As_n5",
+      "cluster_Ga_n2",
+      "cluster_Ga_n3",
+      "cluster_Ga_n4",
+      "cluster_Ga_n5"
+    ]
+  },
+  "gaas_cluster_Ga_n5": {
+    "pk": 2182,
+    "labels": [
+      "cluster_Ga_n5"
+    ]
+  },
+  "gaas_cluster_Ga_n2_qn": {
+    "pk": 2784,
+    "labels": [
+      "cluster_Ga_n2"
+    ]
+  }
+}
