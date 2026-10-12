@@ -8,6 +8,26 @@ from typing import Any, Mapping, Sequence
 from psteros.config import CalculationOverride, ExecutionPolicy, VaspCalculationConfig
 
 
+def lower_keys(mapping: Mapping[str, Any]) -> dict[str, Any]:
+    """Return ``mapping`` with lower-case keys (INCAR tags are case-insensitive)."""
+
+    return {str(key).lower(): value for key, value in mapping.items()}
+
+
+def split_recipe_incar(incar: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Split a recipe INCAR into (INCAR tags, other aiida-vasp parameter namespaces).
+
+    A recipe may give the INCAR flat or, as aiida-vasp 5 expects it, under
+    ``"incar"`` beside other namespaces such as ``"dynamics"``.
+    """
+
+    lowered = lower_keys(incar)
+    if "incar" in lowered:
+        inner = lowered.pop("incar")
+        return lower_keys(inner), lowered
+    return lowered, {}
+
+
 def aiida_vasp_kpoints_spacing(spacing_per_angstrom: float) -> float:
     """Convert a psteros k-point spacing to the value aiida-vasp expects.
 
@@ -75,10 +95,22 @@ def assign_kinds(
     return assignment
 
 
+def recipe_incar(incar: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(INCAR tags, other aiida-vasp namespaces) of a recipe INCAR, which may be flat or namespaced.
+
+    Like :func:`split_recipe_incar`, but the spelling of the tags is kept.
+    """
+
+    for key in incar:
+        if str(key).lower() == "incar":
+            return dict(incar[key]), {k: v for k, v in incar.items() if k != key}
+    return dict(incar), {}
+
+
 def vasp_incar(config: VaspCalculationConfig, override: CalculationOverride | None = None) -> dict[str, Any]:
     """The INCAR of one structure: the shared recipe updated by ``override.parameters["INCAR"]``."""
 
-    incar = dict(config.incar)
+    incar, _ = recipe_incar(config.incar)
     if override and override.parameters:
         for namespace, values in override.parameters.items():
             if str(namespace).upper() != "INCAR":
@@ -99,7 +131,10 @@ def vasp_parameters(
     (``override.fixed_sites``) become selective dynamics in ``dynamics``.
     """
 
-    parameters: dict[str, Any] = {"incar": {str(tag).lower(): value for tag, value in vasp_incar(config, override).items()}}
+    _, namespaces = recipe_incar(config.incar)
+    parameters: dict[str, Any] = {
+        **lower_keys(namespaces), "incar": lower_keys(vasp_incar(config, override)),
+    }
     if override and override.fixed_sites:
         if number_of_sites is None:
             raise ValueError("fixed_sites needs the number of sites of the structure")
@@ -187,40 +222,50 @@ def add_vasp_task(
 ) -> Any:
     """Add one aiida-vasp ``VaspWorkChain`` task and return it.
 
-    ``override.parameters["INCAR"]`` updates the INCAR of this structure,
-    ``override.kpoints_distance`` replaces the k-point spacing (a large value
-    gives a Gamma-only mesh for molecules) and ``override.fixed_sites``
-    fixes atoms with selective dynamics. ``kinds_structure`` gives the kinds
-    and site count when ``structure`` is the output of an earlier task.
+    The INCAR reaches aiida-vasp under its ``incar`` namespace, whether the
+    recipe gives it flat or already namespaced (other namespaces such as
+    ``dynamics`` are kept); ``override.parameters["INCAR"]`` updates it for
+    this structure. ``override.kpoints_distance`` replaces the k-point spacing
+    (a large value gives a Gamma-only mesh for molecules),
+    ``override.fixed_sites`` fixes atoms with selective dynamics and
+    ``override.settings`` is merged into the aiida-vasp ``settings``. OUTCAR,
+    vasprun.xml, CONTCAR and OSZICAR are kept in the ``retrieved`` output.
+    ``kinds_structure`` gives the kinds and site count when ``structure`` is
+    the output of an earlier task.
     """
 
     from aiida import orm
     from aiida.plugins import WorkflowFactory
     from aiida_workgraph import task
 
+    from psteros.backends.vasp_tasks import RETRIEVE
+
     structure = as_vasp_structure(structure)
     reference = as_vasp_structure(kinds_structure if kinds_structure is not None else structure)
     if not isinstance(reference, orm.StructureData):
         raise TypeError("a deferred VASP structure requires kinds_structure to be an AiiDA StructureData node")
     metadata = execution.scheduler_options()
+    spacing = config.kpoints_spacing
+    settings: dict[str, Any] = {"ADDITIONAL_RETRIEVE_LIST": list(RETRIEVE)}
     if override:
         metadata.update(dict(override.metadata))
+        if override.kpoints_distance is not None:
+            spacing = override.kpoints_distance
+        settings.update(dict(override.settings))
     kinds = {kind.name: kind.symbol for kind in reference.kinds}
     inputs = {
         "name": f"{label}_vasp",
         "structure": structure,
         "code": orm.load_code(config.code_label),
         "parameters": orm.Dict(dict=vasp_parameters(config, override, len(reference.sites))),
-        "kpoints_spacing": orm.Float(aiida_vasp_kpoints_spacing(
-            override.kpoints_distance if override and override.kpoints_distance else config.kpoints_spacing
-        )),
+        # ``spacing`` is the recipe's value or the override's, both in psteros units (A^-1 with 2*pi).
+        "kpoints_spacing": orm.Float(aiida_vasp_kpoints_spacing(spacing)),
         "potential_family": orm.Str(config.potential_family),
         "potential_mapping": orm.Dict(dict=restart_potential_aliases(vasp_potential_mapping(config, kinds), kinds)),
         "options": orm.Dict(dict=metadata),
+        "settings": orm.Dict(dict=settings),
         "clean_workdir": orm.Bool(config.clean_workdir),
     }
     if config.max_iterations is not None:
         inputs["max_iterations"] = orm.Int(config.max_iterations)
-    if override and override.settings:
-        inputs["settings"] = orm.Dict(dict=dict(override.settings))
     return workgraph.add_task(task(WorkflowFactory("vasp.v2.vasp")), **inputs)

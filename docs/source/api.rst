@@ -90,9 +90,10 @@ Calculation configuration
       Full AiiDA label of a registered ``vasp.vasp`` code.
 
    ``incar``
-      Flat mapping of INCAR tags (``{"ENCUT": 520, "IBRION": 2, ...}``) in
-      VASP's units. psteros passes it to aiida-vasp in its ``incar``
-      namespace; nested mappings are rejected.
+      INCAR tags in VASP's units, flat (``{"ENCUT": 520, "IBRION": 2, ...}``) or
+      already in aiida-vasp's namespaces (``{"incar": {...}, "dynamics": {...}}``).
+      psteros passes the tags to aiida-vasp under ``"incar"`` either way; a flat
+      mapping that holds nested mappings is rejected.
 
    ``potential_family`` and ``potential_mapping``
       The uploaded POTCAR family and the POTCAR per element or kind
@@ -150,7 +151,7 @@ Calculation configuration
 
 .. index:: ExecutionPolicy
 
-``ExecutionPolicy(computer=None, queue=None, max_concurrent_jobs=1, resources={"num_machines": 1}, max_wallclock_seconds=None, with_mpi=True, prepend_text="", account=None, custom_scheduler_commands="")``
+``ExecutionPolicy(computer=None, queue=None, max_concurrent_jobs=1, resources={"num_machines": 1}, max_wallclock_seconds=None, with_mpi=True, prepend_text="", extra_options={}, account=None, custom_scheduler_commands="")``
    Scheduler settings of your computer. The registered code in
    ``VaspCalculationConfig`` or ``QeCalculationConfig`` selects the AiiDA
    computer that runs the job; ``computer`` only records its name. ``queue``
@@ -161,7 +162,9 @@ Calculation configuration
    ``account`` and ``custom_scheduler_commands`` are passed when given.
    ``prepend_text`` adds shell lines to the job script before the executable,
    such as module loads (pass ``with_mpi=False`` for a code whose wrapper
-   launches MPI itself).
+   launches MPI itself). ``extra_options`` adds or replaces AiiDA scheduler
+   options, for example ``{"import_sys_environment": False}`` on clusters whose
+   login environment breaks the scheduler parser; it is applied last.
 
    ``max_concurrent_jobs`` is the largest number of calculations of one graph
    running at once (``None``: no limit); the default of 1 runs them one after
@@ -177,7 +180,8 @@ Calculation configuration
    Describe a deliberate change for one labelled structure. For VASP,
    ``parameters={"INCAR": {...}}`` updates the INCAR of the shared recipe; for
    QE, ``parameters`` deep-merges namelist values. ``kpoints_distance``
-   replaces the k-point spacing and must be positive. ``fixed_sites`` holds the
+   replaces the recipe's k-point distance (QE ``kpoints_distance``, VASP
+   ``kpoints_spacing``) and must be positive. ``fixed_sites`` holds the
    zero-based indices of sites kept fixed during a relaxation: VASP selective
    dynamics, QE ``FIXED_COORDS``. ``settings`` and ``metadata`` are passed to
    the backend task.
@@ -553,6 +557,97 @@ The method and a worked example are in ``docs/POLAR_SURFACES.md``.
 ``EV_PER_ANGSTROM2_TO_J_PER_M2``
    Conversion factor ``16.02176634`` used by
    ``SurfaceEnergyPoint.gamma_j_per_m2``.
+
+Reference systems and thermochemistry
+-------------------------------------
+
+See :doc:`reference-thermochemistry` for a worked introduction. Frequencies
+are in cm\ :sup:`-1` (imaginary modes negative), energies in eV, temperatures
+in K and pressures in bar.
+
+.. _api-reference-blocks:
+
+.. index:: Relax, Static, Vibrations
+
+``Relax(name="relax", incar={}, structure_from=None)``, ``Static(name="static", incar={}, structure_from=None)``, ``Vibrations(name="vibrations", incar={}, structure_from=None, ibrion=None, potim=0.015, nfree=2)``
+   Calculation blocks, run in order for every reference. ``structure_from``
+   names an earlier block whose structure the block takes (by default the
+   block before it). ``Static`` forces ``NSW = 0``. ``Vibrations`` runs VASP
+   finite differences with ``IBRION`` 5 (gas) or 6 (solid) unless ``ibrion``
+   is given, and sets ``POTIM``, ``NFREE`` and ``NSW = 1`` from its fields. Its INCAR
+   defaults are ``ISIF = 2`` and, because VASP cannot change its k-point set
+   under band parallelisation, ``ISYM = 0`` for a gas and ``NCORE = 1`` for a
+   solid.
+
+.. _api-reference-system:
+
+.. index:: ReferenceSystem
+
+``ReferenceSystem(structure, phase, override=None, block_overrides={}, supercell=(1, 1, 1), symmetry_number=None, spin=None)``
+   One reference: ``phase`` is ``"gas"`` or ``"solid"``. ``override`` changes
+   the recipe for all blocks of this reference and ``block_overrides`` for the
+   named block; VASP INCAR tags go under ``"INCAR"`` and ``kpoints_distance``
+   is the k-point spacing in the unit of ``VaspCalculationConfig.kpoints_spacing``
+   (Å⁻¹ with the 2π; 5 Å⁻¹ gives a Γ-only mesh for a molecule in a box). A solid vibrates in ``supercell``; a
+   gas needs ``symmetry_number`` and ``spin`` (total electron spin).
+
+.. _api-build-vasp-reference-workgraph:
+
+.. index:: build_vasp_reference_workgraph
+
+``build_vasp_reference_workgraph(references, config, *, blocks=(Relax(), Static(), Vibrations()), submit=False)``
+   Build a VASP graph running ``blocks`` for every labelled
+   ``ReferenceSystem`` with the recipe of ``config`` (backend ``"vasp"``).
+   Tasks are ``<label>_<block>_vasp``, ``_energy`` and ``_frequencies``;
+   outputs ``<label>_<block>_energy``, ``_structure``, ``_frequencies``,
+   ``_misc`` and ``_retrieved``. With ``submit=True`` it submits the graph and
+   records the references on its node for the two readers below.
+
+.. _api-reference-results:
+
+.. index:: reference_results, reference_thermochemistry
+
+``reference_results(pk)``, ``reference_thermochemistry(pk, *, energy_block=None, vibrations_block=None, imaginary_tolerance_cm1=0.0, corrections_ev=None)``
+   ``reference_results`` returns ``{label: {block: result}}`` with ``state``,
+   ``pk``, ``energy`` or ``frequencies``, ``structure`` and ``misc``, also for
+   running or failed graphs. ``reference_thermochemistry`` returns
+   ``{label: IdealGasMolecule | HarmonicSolid}`` from a finished graph.
+
+.. _api-ideal-gas-molecule:
+
+.. index:: IdealGasMolecule, HarmonicSolid, FreeEnergy
+
+``IdealGasMolecule(electronic_energy_ev, frequencies_cm1, masses_amu, positions_angstrom, symmetry_number, spin, geometry=None, correction_ev=0.0, imaginary_tolerance_cm1=0.0)``
+   Ideal gas, rigid rotor, harmonic oscillator. ``frequencies_cm1`` is all
+   3N modes (translations and rotations are dropped) or only the vibrational
+   ones. ``IdealGasMolecule.from_structure(structure, *, electronic_energy_ev,
+   frequencies_cm1, symmetry_number, spin, ...)`` reads masses and positions.
+   ``free_energy(temperature_k, pressure_bar=1.0)`` returns a ``FreeEnergy``.
+
+``HarmonicSolid(electronic_energy_ev, atoms_in_cell, frequencies_cm1, atoms_in_supercell, correction_ev=0.0, imaginary_tolerance_cm1=0.0)``
+   Harmonic crystal whose supercell modes are scaled to the cell of
+   ``electronic_energy_ev``. ``free_energy(temperature_k)`` returns a
+   ``FreeEnergy``.
+
+``FreeEnergy``
+   Immutable terms ``electronic_energy_ev``, ``zero_point_energy_ev``,
+   ``thermal_enthalpy_ev``, ``entropy_ev_per_k`` and ``correction_ev``, with
+   ``enthalpy_ev``, ``entropy_term_ev`` (−TS), ``free_energy_ev``,
+   ``vibrational_free_energy_ev`` and ``as_dict()``.
+
+.. _api-delta-mu-oxygen:
+
+.. index:: delta_mu_oxygen_ev, oxygen_pressure_bar, free_energies, parse_vasp_frequencies_cm1
+
+``delta_mu_oxygen_ev(oxygen, temperature_k, pressure_bar=1.0, *, include_zero_point=True)``, ``oxygen_pressure_bar(oxygen, temperature_k, delta_mu_oxygen, *, include_zero_point=True)``
+   Convert between O\ :sub:`2` gas at (T, p) and Δμ\ :sub:`O` on the axis
+   ``mu_O = E(O2)/2 + Delta mu_O`` (``E(O2)`` the bare DFT energy).
+
+``free_energies(systems, temperature_k, pressure_bar=1.0)``
+   ``{label: FreeEnergy}`` of a mapping of molecules and solids.
+
+``parse_vasp_frequencies_cm1(outcar)``
+   Frequencies of the last dynamical matrix in the text of a VASP OUTCAR.
 
 Compatibility boundary
 ----------------------

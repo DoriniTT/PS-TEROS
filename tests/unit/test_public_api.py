@@ -69,6 +69,20 @@ def test_recipe_requires_an_execution_policy() -> None:
         psteros.SurfaceWorkflowConfig(backend="qe", calculation=qe)
 
 
+def test_execution_policy_extra_options_are_applied_last() -> None:
+    policy = psteros.ExecutionPolicy(
+        computer="lovelace",
+        queue="par128",
+        extra_options={"import_sys_environment": False, "custom_scheduler_commands": "#PBS -j oe\n#PBS -V"},
+    )
+    options = policy.scheduler_options()
+    assert options["import_sys_environment"] is False
+    assert options["custom_scheduler_commands"] == "#PBS -j oe\n#PBS -V"
+    assert "import_sys_environment" not in psteros.ExecutionPolicy().scheduler_options()
+    with pytest.raises(ValueError, match="extra_options"):
+        psteros.ExecutionPolicy(extra_options={"": 1})
+
+
 def test_qe_config_requires_complete_namelists() -> None:
     config = psteros.QeCalculationConfig(
         code_label="pw@my-cluster",

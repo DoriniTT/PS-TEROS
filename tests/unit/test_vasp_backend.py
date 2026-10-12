@@ -52,10 +52,21 @@ def test_potential_mapping_defaults_to_the_element() -> None:
 
 def test_config_validates_the_incar() -> None:
     with pytest.raises(ValueError, match="flat INCAR"):
-        vasp_config(incar={"incar": {"ENCUT": 520}})
+        vasp_config(incar={"ENCUT": 520, "dynamics": {"positions_dof": []}})
     with pytest.raises(ValueError, match="max_iterations"):
         vasp_config(max_iterations=0)
     assert vasp_config(max_iterations=3).max_iterations == 3
+
+
+def test_a_recipe_may_give_the_incar_under_its_namespace() -> None:
+    """Flat or already namespaced (as the reference blocks write it): the same aiida-vasp parameters."""
+
+    flat = vasp_config(incar={"ENCUT": 520, "ISIF": 2})
+    namespaced = vasp_config(incar={"incar": {"ENCUT": 520, "ISIF": 2}, "dynamics": {"positions_dof": [[True] * 3]}})
+    assert vasp_incar(namespaced) == vasp_incar(flat) == {"ENCUT": 520, "ISIF": 2}
+    assert vasp_parameters(flat) == {"incar": {"encut": 520, "isif": 2}}
+    assert vasp_parameters(namespaced) == {
+        "incar": {"encut": 520, "isif": 2}, "dynamics": {"positions_dof": [[True, True, True]]}}
 
 
 def test_central_sites_of_a_slab() -> None:

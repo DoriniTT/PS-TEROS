@@ -25,6 +25,8 @@ Choose the path that matches what you need now:
   <vasp-workflow>` after the tutorial (Quantum ESPRESSO: :doc:`qe-workflow`).
 * **Have the energies?** :doc:`Build a surface phase diagram <phase-diagram>`
   as a figure or a CSV table.
+* **Need temperature and pressure?** Add the :doc:`free energies of the
+  reference systems <reference-thermochemistry>` (VASP).
 * **Looking up an input?** Open the :doc:`API reference <api>`.
 
 .. toctree::
@@ -48,6 +50,7 @@ Choose the path that matches what you need now:
    vasp-workflow
    qe-workflow
    phase-diagram
+   reference-thermochemistry
 
 .. toctree::
    :maxdepth: 1

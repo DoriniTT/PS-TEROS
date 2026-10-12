@@ -1,5 +1,73 @@
 # Changelog
 
+## [Unreleased] - Free energies of the reference systems
+
+All additions, except the VASP fix listed separately below; no other existing
+function, class, default or graph changes.
+
+- **Reference thermochemistry** (`psteros.thermochemistry`, pure Python):
+  `IdealGasMolecule` (ideal gas, rigid rotor, harmonic oscillator, spin and
+  symmetry number), `HarmonicSolid` (supercell modes scaled to the reference
+  cell), `FreeEnergy` with every term reported (DFT energy, zero-point energy,
+  thermal enthalpy, -TS, explicit correction), `free_energies`,
+  `delta_mu_oxygen_ev` / `oxygen_pressure_bar` (O2 at T, p on the
+  `mu_O = E(O2)/2 + Delta mu_O` axis) and `parse_vasp_frequencies_cm1`.
+  Checked against NIST entropies, the Reuter-Scheffler Delta mu_O table and ASE.
+- **Calculation blocks** (`psteros.blocks`): `Relax`, `Static`, `Vibrations`,
+  linked by name with `structure_from`.
+- **VASP reference graphs** (`psteros.references`): `ReferenceSystem` and
+  `build_vasp_reference_workgraph` run the blocks (default relax -> static ->
+  vibrations by finite differences) for bulks and molecules with one recipe;
+  `reference_results` and `reference_thermochemistry` read them back by PK.
+- Guide: `docs/source/reference-thermochemistry.rst`; example:
+  `examples/vasp_reference_thermochemistry/references.py`.
+- **Fixed: `build_surface_workgraph` with `backend="vasp"`** (behaviour change,
+  VASP path only; QE is unchanged).
+  - A flat `VaspCalculationConfig.incar` is now passed to aiida-vasp under its
+    `incar` namespace. Before, it was passed flat, which aiida-vasp 5 rejects at
+    run time ("The supplied namespace: encut is not supported"). A recipe
+    already written as `{"incar": {...}, ...}` is passed as before.
+  - Override INCAR tags (`CalculationOverride(parameters={"INCAR": ...})`) are
+    merged into the `incar` namespace instead of the top level.
+  - `CalculationOverride.kpoints_distance` now sets the task's
+    `kpoints_spacing`; before, it was ignored for VASP.
+  - `CalculationOverride.settings` is now passed to aiida-vasp's `settings`;
+    before, it was ignored for VASP.
+  - OUTCAR, vasprun.xml, CONTCAR and OSZICAR are kept in the `<label>_retrieved`
+    output; before, aiida-vasp retrieved them only temporarily for parsing.
+  - INCAR tag names are lower-cased (VASP tags are case-insensitive).
+  - A pymatgen `Slab` (as returned by `sno2_110_slab`) is converted like in the
+    QE path; before, `StructureData(pymatgen=slab)` raised "Converter for
+    'Slab' to AiiDA structure does not exist".
+- `ExecutionPolicy(extra_options={...})` (optional, default empty) adds or
+  replaces AiiDA scheduler options, e.g. `{"import_sys_environment": False}`
+  for Lovelace.
+- `VaspCalculationConfig.kpoints_spacing` and `CalculationOverride.kpoints_distance`
+  are in A^-1 with the 2*pi (as VASP's `KSPACING`), as on `main`: the VASP
+  adapter of `build_surface_workgraph` and the reference blocks of
+  `build_vasp_reference_workgraph` both convert the value for aiida-vasp, so one
+  recipe gives one mesh in either builder.
+- `AGENTS.md` is versioned: the rules for adding features without breaking
+  the public API.
+- **Fixed: `Vibrations` block under band parallelisation** (new in this
+  release, no earlier behaviour changes). Found on Lovelace (128 ranks, recipe
+  `NCORE = 16`): VASP stops an `IBRION = 5/6` run with "VASP internal routines
+  have requested a change of the k-point set ... remove the tag NPAR", because
+  displacing atoms lowers the symmetry; aiida-vasp reports exit 700 and restarts
+  the job as if it were an unfinished relaxation. The block now defaults to
+  `ISIF = 2` and, for a gas `ISYM = 0` (keeps the recipe's `NCORE`; `NCORE = 1`
+  on 128 ranks pads a molecule to 128 bands and VASP fails with "EDDDAV: Call to
+  ZHEGV failed"), for a solid `NCORE = 1`. `Vibrations(incar={...})` still wins;
+  `Relax` and `Static` keep the recipe's `NCORE`.
+- **Fixed: supercells of the `Vibrations` block are grouped by element** (new in
+  this release, no earlier behaviour changes). `ase` repeats cell by cell
+  (`Sn Sn O O O O Sn Sn ...`), and VASP reads every run of equal elements of the
+  POSCAR as an ion type of its own, so the 72-atom SnO2 supercell had no symmetry
+  for VASP ("1 space group operations", C_1, 216 degrees of freedom and 432
+  displacements instead of a handful). Found on Lovelace. The supercell now lists
+  all atoms of an element together, in the order the elements first appear; a
+  one-element cell such as alpha-Sn is unchanged.
+
 ## [v2.0.0] - Unreleased - Any Material, Charge-Neutral and Polar Surfaces
 
 PS-TEROS v2: the public API is `import psteros`, with VASP as the central

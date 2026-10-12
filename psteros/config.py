@@ -70,6 +70,9 @@ class ExecutionPolicy:
     ``prepend_text``
         Shell lines placed in the job script before the executable, such as
         module loads.
+    ``extra_options``
+        Adds or replaces AiiDA scheduler options, for example
+        ``{"import_sys_environment": False}``; it is applied last.
     """
 
     computer: str | None = None
@@ -79,6 +82,7 @@ class ExecutionPolicy:
     max_wallclock_seconds: int | None = None
     with_mpi: bool = True
     prepend_text: str = ""
+    extra_options: Mapping[str, Any] = field(default_factory=dict)
     account: str | None = None
     custom_scheduler_commands: str = ""
 
@@ -95,6 +99,8 @@ class ExecutionPolicy:
             raise ValueError("resources must not be empty")
         for key, value in self.resources.items():
             _require_positive(f"resources[{key!r}]", value)
+        if any(not isinstance(key, str) or not key for key in self.extra_options):
+            raise ValueError("extra_options keys must be AiiDA option names")
 
     def scheduler_options(self) -> dict[str, Any]:
         """Return AiiDA metadata options without mutating the source recipe."""
@@ -110,6 +116,7 @@ class ExecutionPolicy:
             options["custom_scheduler_commands"] = self.custom_scheduler_commands
         if self.prepend_text:
             options["prepend_text"] = self.prepend_text
+        options.update(dict(self.extra_options))
         return options
 
 
@@ -155,12 +162,14 @@ class QeCalculationConfig:
 class VaspCalculationConfig:
     """Inputs shared by aiida-vasp ``VaspWorkChain`` calculations.
 
-    ``incar`` is a flat INCAR mapping (``{"ENCUT": 520, ...}``).
+    ``incar`` is the INCAR, either flat (``{"ENCUT": 520, ...}``) or already
+    under an ``"incar"`` namespace beside other aiida-vasp namespaces
+    (``{"incar": {...}, "dynamics": {...}}``).
     ``potential_mapping`` maps an element or kind name to its POTCAR
     (``{"Sn": "Sn_d"}``); elements that are not listed use the POTCAR of the
-    same name. ``kpoints_spacing`` is in 1/Å with the 2π of VASP's ``KSPACING`` (the Γ-centred
-    mesh has ``ceil(|b_i| / kpoints_spacing)`` points along each reciprocal vector);
-    the VASP adapter converts it for aiida-vasp.
+    same name. ``kpoints_spacing`` is in A^-1 with the 2*pi of VASP's ``KSPACING`` (a
+    Gamma-centred mesh has ``ceil(|b_i| / kpoints_spacing)`` points along each
+    reciprocal vector); the VASP adapter converts it for aiida-vasp.
     ``max_iterations`` limits the restarts of the work chain (aiida-vasp's
     default when ``None``).
     """
@@ -183,9 +192,13 @@ class VaspCalculationConfig:
         _require_positive("kpoints_spacing", self.kpoints_spacing)
         if self.max_iterations is not None:
             _require_positive("max_iterations", self.max_iterations)
-        nested = sorted(str(key) for key, value in self.incar.items() if isinstance(value, Mapping))
-        if nested:
-            raise ValueError(f"VASP incar must be a flat INCAR mapping; {nested} hold nested mappings")
+        if not any(str(key).lower() == "incar" for key in self.incar):
+            nested = sorted(str(key) for key, value in self.incar.items() if isinstance(value, Mapping))
+            if nested:
+                raise ValueError(
+                    f"VASP incar must be a flat INCAR mapping or hold it under an 'incar' key; "
+                    f"{nested} hold nested mappings"
+                )
 
 
 @dataclass(frozen=True)
