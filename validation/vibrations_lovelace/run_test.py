@@ -216,7 +216,8 @@ def build_ibrion5(args):
     from aiida import orm
 
     _, references = psteros.read_vasp_results(orm.load_node(args.refs_pk), ("o2",))
-    incar = {"IBRION": 5, "NFREE": 2, "POTIM": DISPLACEMENT, "NSW": 1, "EDIFF": VIBRATIONS_EDIFF}
+    # ISYM=0: with displaced atoms VASP changes the k-point set, which it refuses to do with NPAR (set by NCORE) in the INCAR
+    incar = {"IBRION": 5, "NFREE": 2, "POTIM": DISPLACEMENT, "NSW": 1, "EDIFF": VIBRATIONS_EDIFF, "ISYM": 0}
     config = recipe("sno2_o2_ibrion5", incar, VIBRATIONS_WALLTIME, args, {"o2": triplet_o2()})
     return psteros.build_surface_workgraph({"o2": references["o2"]}, config, submit=args.submit)
 

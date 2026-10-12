@@ -238,19 +238,17 @@ def figures(diagrams, rows):
     for axis, label in zip(axes, SLABS):
         for stem, diagram in diagrams.items():
             g0, slope = gamma_line(diagram, label)
-            kinds = {"color": TEMPERATURE_SHADE[float(stem[1:-1])]} if stem != "total_energy" else {
+            kinds = {"color": TEMPERATURE_SHADE[float(stem[1:-1])], "linewidth": 1.6} if stem != "total_energy" else {
                 "color": INK, "linestyle": (0, (4, 3)), "linewidth": 1.0}
-            name = "static E" if stem == "total_energy" else f"{stem[1:-1]} K"
-            axis.plot(xs, (g0 + slope * xs) * psteros.EV_PER_ANGSTROM2_TO_J_PER_M2, linewidth=1.6, **kinds)
-            axis.annotate(name, (xs[-1], (g0 + slope * xs[-1]) * psteros.EV_PER_ANGSTROM2_TO_J_PER_M2),
-                          xytext=(4, 0), textcoords="offset points", fontsize=8, color=INK_SECONDARY, va="center")
+            name = "static E" if stem == "total_energy" else f"{stem[1:-1]} K" + (" (ZPE only)" if stem == "T0K" else "")
+            axis.plot(xs, (g0 + slope * xs) * psteros.EV_PER_ANGSTROM2_TO_J_PER_M2, label=name, **kinds)
         axis.set_title(f"{label} ({'Sn6O12' if label == 'slab_o' else 'Sn6O8'})", color=INK, fontsize=10)
         axis.set_xlabel(r"$\Delta\mu_\mathrm{O}$ (eV)")
         axis.grid(color=GRID, linewidth=0.6)
         for side in ("top", "right"):
             axis.spines[side].set_visible(False)
         axis.margins(x=0.0)
-        axis.set_xlim(window[0], 0.55)
+        axis.legend(frameon=False, fontsize=8, loc="lower right" if label == "slab_o" else "upper left")
     axes[0].set_ylabel(r"$\gamma$ (J m$^{-2}$)")
     fig.savefig(RESULTS / "gamma_vs_delta_mu.png", dpi=160)
     plt.close(fig)
@@ -490,6 +488,48 @@ def check_backward_compatibility(refs_graph, slabs_graph, energies, relaxed, leg
     return passed, detail
 
 
+def decomposition(modes, relaxed):
+    """Where the vibrational change of gamma comes from, for each slab: F_vib of the free atoms against the bulk.
+
+    ``gamma_vib = [F_vib(free sites) + r F_vib(bulk cell) - n_fu F_vib(per formula unit)] / (2 A)`` at Delta mu_O = 0 for the
+    stoichiometric slab: free atoms against the same number of bulk atoms. Also written with the soft modes of the slab
+    raised to the lowest mode of the bulk supercell, to show how much the missing low-frequency modes of the Gamma-only
+    bulk matter.  Writes ``gamma_vib_decomposition.csv``.
+    """
+
+    bulk = modes["sno2_bulk"]
+    lowest_bulk = min(value for value in bulk.frequencies_cm1 if value > 0)
+    rows = []
+    for label in SLABS:
+        vib = modes[label]
+        structure = relaxed[label].get_pymatgen_structure()
+        area2 = 2.0 * float(np.linalg.norm(np.cross(*structure.lattice.matrix[:2])))
+        free = dict(vib.composition)
+        for element, count in vib.frozen_composition.items():
+            free[element] -= count
+        # bulk atoms with the composition of the free atoms: per_atom * n_free
+        floored = psteros.HarmonicVibrations(
+            frequencies_cm1=tuple(max(f, lowest_bulk) if f > 0 else f for f in vib.frequencies_cm1),
+            composition=vib.composition, frozen_composition=vib.frozen_composition,
+        )
+        for temperature in TEMPERATURES:
+            n_free_atoms = sum(free.values())
+            bulk_per_atom = bulk.free_energy_ev(temperature) / sum(bulk.composition.values())
+            free_energy = vib.free_energy_ev(temperature)
+            rows.append({
+                "label": label, "temperature_K": temperature, "free_atoms": n_free_atoms,
+                "soft_modes_below_100cm1_slab": sum(1 for f in vib.frequencies_cm1 if 0 < f < 100),
+                "soft_modes_below_100cm1_bulk": sum(1 for f in bulk.frequencies_cm1 if 0 < f < 100),
+                "F_vib_free_atoms_meV_per_atom": 1000 * free_energy / n_free_atoms,
+                "F_vib_bulk_meV_per_atom": 1000 * bulk_per_atom,
+                "gamma_vib_meV_per_A2": 1000 * (free_energy - n_free_atoms * bulk_per_atom) / area2,
+                "gamma_vib_meV_per_A2_slab_modes_floored_at_lowest_bulk_mode": 1000 * (
+                    floored.free_energy_ev(temperature) - n_free_atoms * bulk_per_atom) / area2,
+            })
+    write_csv(RESULTS / "gamma_vib_decomposition.csv", list(rows[0]), [list(row.values()) for row in rows])
+    return rows
+
+
 def check_physical_sanity(rows):
     by_case = {row["case"]: row for row in rows}
     static = by_case["total_energy"]
@@ -585,6 +625,9 @@ def main(argv=None) -> int:
         checks["7_solids"] = check_solids(vib, summary)
         checks["8_independent_recomputation"] = check_independent_recomputation(vib)
         checks["10_physical_sanity"] = check_physical_sanity(rows)
+        for row in decomposition(modes, relaxed):
+            if row["temperature_K"] in (300.0, 900.0):
+                print("decomposition", {k: (round(v, 2) if isinstance(v, float) else v) for k, v in row.items()})
     for name, (passed, detail) in checks.items():
         print(f"{'PASS' if passed else 'FAIL'}  {name}: {json.dumps(detail, default=float)[:600]}")
     (RESULTS / "checks.json").write_text(
