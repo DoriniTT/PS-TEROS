@@ -12,6 +12,7 @@ SrTiO3 builders); everything that is calculated goes through the public ``pstero
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import sys
 import time
 from pathlib import Path
@@ -102,7 +103,8 @@ def recipe(name: str, incar: dict, walltime: int, args, overrides) -> psteros.Su
             code_label=args.code, incar={**sno2.ELECTRONIC, **incar}, potential_family=args.potential_family,
             potential_mapping=POTCARS, kpoints_spacing=args.kpoints_spacing, max_iterations=3,
         ),
-        execution=sno2.execution(walltime), name=name, role_overrides=overrides,
+        execution=dataclasses.replace(sno2.execution(walltime), max_concurrent_jobs=args.max_concurrent),
+        name=name, role_overrides=overrides,
     )
 
 
@@ -174,6 +176,8 @@ def main(argv=None) -> int:
     parser.add_argument("--code", default=sno2.CODE)
     parser.add_argument("--potential-family", default=sno2.POTENTIAL_FAMILY)
     parser.add_argument("--kpoints-spacing", type=float, default=sno2.KPOINTS_SPACING, help="aiida-vasp units (x 2 pi)")
+    parser.add_argument("--max-concurrent", type=int, default=1,
+                        help="calculations of the graph running at once (1: the one-at-a-time limit of the SnO2 test)")
     parser.add_argument("--refs-pk", type=int)
     parser.add_argument("--slabs-pk", type=int)
     parser.add_argument("--a", type=float, default=3.94, help="SrTiO3 a when --refs-pk is not given (build check only)")

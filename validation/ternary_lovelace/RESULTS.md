@@ -11,7 +11,8 @@ through the overlay and the daemon started from this worktree. `kpoints_spacing=
 |---|---:|---|
 | refs (5 solids, 10 jobs) | 6819 | **Finished [0]**, 10 of 10 calculations exit 0 (47 min, mostly queue) |
 | slabs (2 terminations, 4 jobs; lattice of 6819, a = 3.908 A) | 6965 | **Finished [0]**, 4 of 4 exit 0 (about 5 h of queue and run time on 12 Oct) |
-| vibrations (282 jobs) | 9561 | submitted 12 Oct 13:56, running |
+| vibrations, attempt 1 (282 jobs, one at a time) | 9561 | submitted 12 Oct 13:56; 11 calculations finished by 13 Oct 07:23, with queue waits of 22, 70, 114, 173, 184, 23, 4, 4, 3, 61 and 17 min (mean 61 min; `par128` had 118 waiting and 32 running); the host restarted on 13 Oct about 07:25 and the graph then stalled. Cancelled by me on 13 Oct at 10:00 (the kill of a graph that is still loading its checkpoint has to be forced, and it left one work chain, 10253, and its calculation, 10258, which I cancelled too) |
+| vibrations, attempt 2 (282 jobs, `--max-concurrent 8`) | 12807 | submitted 13 Oct 10:14, running; I chose 8 at a time after attempt 1 showed about 12 days for one at a time |
 
 O2 is taken from the SnO2 test: energy of graph 977, vibrations of graph 3400.
 
