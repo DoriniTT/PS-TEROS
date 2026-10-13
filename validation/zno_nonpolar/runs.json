@@ -1,0 +1,37 @@
+{
+  "ZnO_100_L14": {
+    "pk": 3736,
+    "labels": [
+      "ZnO_100_L14_symmetric",
+      "ZnO_100_L14_passivated"
+    ],
+    "face": "100",
+    "layers": 14
+  },
+  "ZnO_100_L16": {
+    "pk": 3774,
+    "labels": [
+      "ZnO_100_L16_symmetric",
+      "ZnO_100_L16_passivated"
+    ],
+    "face": "100",
+    "layers": 16
+  },
+  "ZnO_110_L12": {
+    "pk": 3822,
+    "labels": [
+      "ZnO_110_L12_symmetric",
+      "ZnO_110_L12_passivated"
+    ],
+    "face": "110",
+    "layers": 12
+  },
+  "ZnO_110_L12_passivated": {
+    "pk": 3929,
+    "labels": [
+      "ZnO_110_L12_passivated"
+    ],
+    "face": "110",
+    "layers": 12
+  }
+}

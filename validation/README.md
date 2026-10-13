@@ -160,3 +160,44 @@ there is not evidence that the molecule method is better. It is a different test
 passivated (10-10) slab with a symmetric one and depends on the thickness of those two slabs, 16.7 A and
 the same without the passivated side), and I did not investigate it further.
 Fit: four sizes for the four unknowns of Eq. 9, so there is no residual.
+
+## ZnO non-polar check investigation
+
+**Question.** With the cluster method the ZnO(10-10) consistency check (gamma of a non-polar face from a
+symmetric slab vs from a one-sided slab with a pseudo-hydrogen bottom) is -3.31 meV/A^2, against <= 1 quoted
+in the papers; with pseudo-molecules it is -0.60. Driver: `validation/zno_nonpolar.py`; settings of the main
+ZnO run (500 eV, 0.15 1/A, all atoms relaxed); graph PKs in `validation/zno_nonpolar/runs.json`.
+
+| Face | planes | thickness (A) | H pairs per cell | molecules | clusters (meV/A^2) | clusters per H pair (meV) |
+|---|---|---|---|---|---|---|
+| (10-10) | 12 | 15.2 | 1 | -0.60 | -3.31 | -57.7 |
+| (10-10) | 14 | 18.0 | 1 | -0.63 | -3.35 | -58.3 |
+| (10-10) | 16 | 20.9 | 1 | -0.69 | -3.41 | -59.4 |
+| (11-20) | 12 | 18.1 | 2 | -1.36 | -4.50 | -67.9 |
+
+(a "pair" is one Zn-bonded pseudo-H (charge 1.5) and one O-bonded one (0.5) on the bottom; GaAs(110): -13.5 meV.)
+
+**What it shows.**
+1. It is not a finite-thickness effect: from 12 to 16 planes (15 to 21 A) the check moves by about 0.1 meV/A^2.
+2. It is not specific to (10-10): (11-20) also fails with clusters (-4.50 meV/A^2).
+3. The bookkeeping is exact. The slab energies are the same for both methods, and the whole
+   molecule-to-cluster change equals the shift of the pseudo-H potentials (Zn-H +49.5 meV, O-H -2.2 meV)
+   times the number of pairs: (10-10) -47.3 meV observed, -47.3 predicted; (11-20) -94.7 observed, -94.6
+   predicted. So the cluster Zn-H potential, which is right for the polar faces ((000-1): 62.2 vs 63.1 meV/A^2),
+   is about 50 meV too high for a non-polar bottom that carries both kinds of hydrogen.
+4. Per H pair the cluster-method error is about -58 to -68 meV for ZnO and -13.5 meV for GaAs(110). A scaling
+   with the square of the charge difference of the two hydrogens (1.0 vs 0.5) would give -54 meV from GaAs.
+
+**What it does NOT show.** The mechanism. The agreement in point 4 rests on three data points and a scaling I
+chose; it is a hypothesis (the two adjacent pseudo-hydrogens interact in a way an isolated-H potential cannot
+contain), not a result. Alternatives that these runs cannot exclude:
+- the clusters used (n = 2..5, exactly four unknowns, no residual; the paper used 2, 3, 8, 9) may not have
+  converged the Zn-H face, edge and corner terms; n = 6 was too slow to run;
+- the clusters are zinc-blende, ZnO is wurtzite;
+- Zn 3d states, or the pseudo-H bond length, may matter more for Zn-H than for Ga-H.
+Other materials (ZnS, GaN, CdTe), larger clusters and a pair-corrected potential were not tried.
+
+**Practical reading.** The polar surface energies with clusters agree with the paper to within 1 meV/A^2, and the
+Eq. 7 check closes (-0.93 meV/A^2). The non-polar check is the one that flags a 3-5 meV/A^2 uncertainty for ZnO
+bottoms that carry both a Zn-H and an O-H; treat the non-polar check, not the polar energies, as the figure of
+merit for that effect, and do not expect it to close for ZnO with the present clusters.
