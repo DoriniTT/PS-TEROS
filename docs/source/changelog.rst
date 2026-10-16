@@ -37,6 +37,8 @@ Recent Updates
   WorkGraph, so no VASP graph could start. The recipes, the INCAR written to
   the job and the graph (task names, links, outputs) are unchanged; psteros
   must be installed in the environment of the AiiDA daemon
+* A mode task of ``build_vibrations_workgraph`` that starts with some retrieved folders missing now raises a ``ValueError`` that
+  names them, instead of a bare ``KeyError``
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

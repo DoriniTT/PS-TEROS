@@ -95,6 +95,15 @@ def harmonic_modes(structure: orm.StructureData, settings: orm.Dict, **retrieved
     symbols = [structure.get_kind(site.kind_name).symbol for site in structure.sites]
     masses = [structure.get_kind(site.kind_name).mass for site in structure.sites]
 
+    expected = [displacement_key(site, axis, sign) for site in sites for axis in range(3) for sign in ("plus", "minus")]
+    missing = [key for key in expected if key not in retrieved]
+    if missing:
+        raise ValueError(
+            f"{len(missing)} of the {len(expected)} retrieved folders are missing ({', '.join(missing[:6])}"
+            f"{', ...' if len(missing) > 6 else ''}): the displaced calculations did not all reach this task. "
+            "If they all finished, run this task again on their retrieved folders"
+        )
+
     forces = {"plus": [], "minus": []}
     for site in sites:
         for axis in range(3):

@@ -401,6 +401,31 @@ def test_harmonic_modes_calcfunction(backend) -> None:
     assert len(supercell.sites) == 4 and supercell.cell[2][2] == 20.0
 
 
+@pytest.mark.tier2
+@pytest.mark.requires_aiida
+def test_harmonic_modes_names_the_missing_folders() -> None:
+    """A mode task started with some retrieved folders missing says which, instead of a bare KeyError."""
+
+    from aiida import orm
+
+    from psteros.backends.vibration_tasks import harmonic_modes
+
+    step = 0.01
+    molecule = orm.StructureData(cell=[[10.0, 0, 0], [0, 10.0, 0], [0, 0, 10.0]])
+    molecule.append_atom(position=(5.0, 5.0, 5.0), symbols="O")
+    molecule.append_atom(position=(6.2, 5.0, 5.0), symbols="O")
+    plus, minus = displaced_forces(diatomic_constants(70.0), [0, 1], step)
+    retrieved = {}
+    for index, (site, axis) in enumerate((s, a) for s in (0, 1) for a in range(3)):
+        retrieved[displacement_key(site, axis, "plus")] = _folder("vasprun.xml", vasprun(["O", "O"], plus[index]))
+        retrieved[displacement_key(site, axis, "minus")] = _folder("vasprun.xml", vasprun(["O", "O"], minus[index]))
+    del retrieved[displacement_key(1, 2, "plus")], retrieved[displacement_key(1, 2, "minus")]
+    settings = orm.Dict({"backend": "vasp", "displaced_sites": [0, 1], "displacement_angstrom": step,
+                         "supercell_size": 1, "molecule": True})
+    with pytest.raises(ValueError, match=r"2 of the 12 retrieved folders are missing \(s1_z_plus, s1_z_minus\)"):
+        harmonic_modes._callable(structure=molecule, settings=settings, **retrieved)
+
+
 # ---------------------------------------------------------------- example
 
 
