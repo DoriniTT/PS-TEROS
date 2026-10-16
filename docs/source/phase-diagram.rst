@@ -302,10 +302,11 @@ values.
 What the model leaves out
 -------------------------
 
-The energies are 0 K total energies: vibrational and configurational
-contributions are not included, and Δμ is not converted to a temperature and
-pressure. The free energies of the reference systems, and the conversion of
-Δμ\ :sub:`O` to an O\ :sub:`2` temperature and pressure, are in
-:doc:`reference-thermochemistry`. Binary and ternary compounds are supported; slabs must be symmetric
+By default the energies are 0 K total energies. Vibrational free energies of
+the slabs, bulks and references can be added (see :doc:`vibrations`), and the
+free energies of the reference systems and the conversion of
+Δμ\ :sub:`O` to an O\ :sub:`2` temperature and pressure are in
+:doc:`reference-thermochemistry`. Configurational contributions are not
+included. Binary and ternary compounds are supported; slabs must be symmetric
 so that both faces are the same termination, unless they are polar slabs with
 a passivated bottom, described above.

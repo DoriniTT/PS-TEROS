@@ -26,6 +26,14 @@ Recent Updates
   workflow (``ChargeNeutralSurfaceStudy``)
 * Absolute surface energies of polar surfaces with pseudo-hydrogen
   passivation (``find_polar_terminations``, ``PolarSurfaceStudy``)
+* Opt-in vibrational free energies (harmonic, Γ-point finite differences):
+  ``build_vibrations_workgraph``, ``read_vibrations``, ``HarmonicVibrations``,
+  ``solid_free_energy_ev`` and ``molecule_reference_energy_ev``; slabs with a
+  frozen centre use a partial Hessian, bulks a Γ-only supercell. Without them
+  every result is unchanged (see :doc:`/vibrations`)
+* Notes in :doc:`/vibrations` on imaginary modes, other compounds (ternary oxides) and running a long graph (queue limits, one daemon worker, recovery)
+* A mode task of ``build_vibrations_workgraph`` that starts with some retrieved folders missing now raises a ``ValueError`` that
+  names them, instead of a bare ``KeyError``
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

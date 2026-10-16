@@ -27,6 +27,7 @@ Choose the path that matches what you need now:
   as a figure or a CSV table.
 * **Need temperature and pressure?** Add the :doc:`free energies of the
   reference systems <reference-thermochemistry>` (VASP).
+* **Want vibrational free energies of slabs and bulks?** See :doc:`vibrations`.
 * **Looking up an input?** Open the :doc:`API reference <api>`.
 
 .. toctree::
@@ -51,6 +52,7 @@ Choose the path that matches what you need now:
    qe-workflow
    phase-diagram
    reference-thermochemistry
+   vibrations
 
 .. toctree::
    :maxdepth: 1

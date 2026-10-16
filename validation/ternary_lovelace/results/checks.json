@@ -1,0 +1,161 @@
+{
+  "T7_backward_compatibility": {
+    "passed": true,
+    "detail": {
+      "legacy_src": "/home/thiagotdorini/.cache/psteros_vibrations_lovelace/legacy",
+      "identical_to_pre_feature_code": true,
+      "legacy_equals_analysis_csv": true
+    }
+  },
+  "T2_displacements": {
+    "passed": true,
+    "detail": {
+      "displace_site_calls": 282,
+      "vasp_inputs_checked": 283,
+      "problems": []
+    }
+  },
+  "T3_mode_counts": {
+    "passed": true,
+    "detail": {
+      "modes": {
+        "srtio3_bulk": 27,
+        "sr_metal": 9,
+        "ti_metal": 9,
+        "sro_bulk": 21,
+        "tio2_bulk": 15,
+        "slab_tio2": 24,
+        "slab_sro": 21
+      },
+      "zero_modes": {
+        "srtio3_bulk": 3,
+        "sr_metal": 3,
+        "ti_metal": 3,
+        "sro_bulk": 3,
+        "tio2_bulk": 3,
+        "slab_tio2": 0,
+        "slab_sro": 0
+      },
+      "expected": {
+        "srtio3_bulk": 27,
+        "tio2_bulk": 15,
+        "sro_bulk": 21,
+        "sr_metal": 9,
+        "ti_metal": 9,
+        "slab_tio2": 24,
+        "slab_sro": 21
+      }
+    }
+  },
+  "T4_frozen_centre": {
+    "passed": true,
+    "detail": {
+      "slab_tio2": {
+        "frozen": {
+          "Sr": 1,
+          "O": 3,
+          "Ti": 1
+        },
+        "bulk_cells_counted": 1.0
+      },
+      "slab_sro": {
+        "frozen": {
+          "Ti": 1,
+          "O": 3,
+          "Sr": 1
+        },
+        "bulk_cells_counted": 1.0
+      },
+      "non_stoichiometric_frozen_region": "refused: the frozen region {'Sr': 1, 'Ti': 2, 'O': 3} does not have the bulk st"
+    }
+  },
+  "T5_imaginary_modes": {
+    "passed": true,
+    "detail": {
+      "srtio3_bulk": {
+        "imaginary_modes": 3,
+        "lowest_imaginary_cm1": 61.905411344179,
+        "read_default": "raises ValueError",
+        "modes_after_drop": 24,
+        "small_below_50i_cm1": false
+      },
+      "sr_metal": {
+        "imaginary_modes": 0,
+        "lowest_imaginary_cm1": 0.0,
+        "read_default": "ok",
+        "modes_after_drop": 9,
+        "small_below_50i_cm1": true
+      },
+      "ti_metal": {
+        "imaginary_modes": 0,
+        "lowest_imaginary_cm1": 0.0,
+        "read_default": "ok",
+        "modes_after_drop": 9,
+        "small_below_50i_cm1": true
+      },
+      "sro_bulk": {
+        "imaginary_modes": 0,
+        "lowest_imaginary_cm1": 0.0,
+        "read_default": "ok",
+        "modes_after_drop": 21,
+        "small_below_50i_cm1": true
+      },
+      "tio2_bulk": {
+        "imaginary_modes": 0,
+        "lowest_imaginary_cm1": 0.0,
+        "read_default": "ok",
+        "modes_after_drop": 15,
+        "small_below_50i_cm1": true
+      },
+      "slab_tio2": {
+        "imaginary_modes": 4,
+        "lowest_imaginary_cm1": 206.53124201387,
+        "read_default": "raises ValueError",
+        "modes_after_drop": 20,
+        "small_below_50i_cm1": false
+      },
+      "slab_sro": {
+        "imaginary_modes": 0,
+        "lowest_imaginary_cm1": 0.0,
+        "read_default": "ok",
+        "modes_after_drop": 21,
+        "small_below_50i_cm1": true
+      }
+    }
+  },
+  "T6_independent_recomputation": {
+    "passed": true,
+    "detail": {
+      "label": "slab_tio2",
+      "modes": 24,
+      "max_abs_difference_cm1": 4.092726157978177e-12
+    }
+  },
+  "T8_physical_sanity": {
+    "passed": false,
+    "detail": {
+      "formation_free_energy_eV": {
+        "total_energy": -15.8051,
+        "T0K": -15.7569,
+        "T300K": -15.7782,
+        "T600K": -15.9246,
+        "T900K": -16.1619
+      },
+      "stability_region_area_eV2": {
+        "total_energy": 5.8938,
+        "T0K": 5.9049,
+        "T300K": 5.8362,
+        "T600K": 5.7153,
+        "T900K": 5.5735
+      },
+      "stable_at_centroid": {
+        "total_energy": "slab_sro",
+        "T0K": "slab_sro",
+        "T300K": "slab_sro",
+        "T600K": "slab_sro",
+        "T900K": "slab_sro"
+      },
+      "max_shift_of_formation_energy_eV": 0.3569
+    }
+  }
+}

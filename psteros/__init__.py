@@ -79,6 +79,13 @@ from .thermochemistry import (
     oxygen_pressure_bar,
     parse_vasp_frequencies_cm1,
 )
+from .vibrations import (
+    HarmonicVibrations,
+    harmonic_vibrations_from_forces,
+    molecule_reference_energy_ev,
+    solid_free_energy_ev,
+)
+from .vibrations_workflow import VibrationsConfig, build_vibrations_workgraph, read_vibrations
 from .workflow import build_qe_relax_static_workgraph, build_relax_static_workgraph, build_surface_workgraph
 
 __version__ = "2.0.0"
@@ -154,4 +161,11 @@ __all__ = [
     "build_vasp_reference_workgraph",
     "reference_results",
     "reference_thermochemistry",
+    "HarmonicVibrations",
+    "harmonic_vibrations_from_forces",
+    "molecule_reference_energy_ev",
+    "solid_free_energy_ev",
+    "VibrationsConfig",
+    "build_vibrations_workgraph",
+    "read_vibrations",
 ]

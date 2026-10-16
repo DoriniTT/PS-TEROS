@@ -1,0 +1,117 @@
+{
+  "9_backward_compatibility": {
+    "passed": true,
+    "detail": {
+      "identical_to_example_phase_diagram_py": true,
+      "legacy_src": "/home/thiagotdorini/.cache/psteros_vibrations_lovelace/legacy",
+      "identical_to_pre_feature_code": true,
+      "legacy_equals_analysis_csv": true
+    }
+  },
+  "4_displacements": {
+    "passed": true,
+    "detail": {
+      "displace_site_calls": 252,
+      "vasp_inputs_checked": 252,
+      "problems": []
+    }
+  },
+  "5_mode_counts": {
+    "passed": true,
+    "detail": {
+      "modes": {
+        "sno2_bulk": 33,
+        "alpha_sn": 21,
+        "o2": 1,
+        "slab_o": 36,
+        "slab_sn2o": 24
+      },
+      "expected": {
+        "slab_o": 36,
+        "slab_sn2o": 24,
+        "sno2_bulk": 33,
+        "alpha_sn": 21,
+        "o2": 1
+      },
+      "zero_modes_removed": {
+        "sno2_bulk": 3,
+        "alpha_sn": 3,
+        "o2": 5,
+        "slab_o": 0,
+        "slab_sn2o": 0
+      }
+    }
+  },
+  "6_o2_stretch": {
+    "passed": true,
+    "detail": {
+      "o2_stretch_cm1": 1563.4152384944,
+      "ibrion5_cm1": 1563.385953,
+      "difference_cm1": 0.029285494400028256
+    }
+  },
+  "7_solids": {
+    "passed": true,
+    "detail": {
+      "sno2_bulk_range_cm1": [
+        91.671782026598,
+        747.56783751904
+      ],
+      "sno2_bulk": {
+        "imaginary_modes_cm1": [],
+        "default_read": "ok",
+        "drop_modes": 33
+      },
+      "alpha_sn": {
+        "imaginary_modes_cm1": [],
+        "default_read": "ok",
+        "drop_modes": 21
+      },
+      "o2": {
+        "imaginary_modes_cm1": [],
+        "default_read": "ok",
+        "drop_modes": 1
+      },
+      "slab_o": {
+        "imaginary_modes_cm1": [],
+        "default_read": "ok",
+        "drop_modes": 36
+      },
+      "slab_sn2o": {
+        "imaginary_modes_cm1": [],
+        "default_read": "ok",
+        "drop_modes": 24
+      }
+    }
+  },
+  "8_independent_recomputation": {
+    "passed": true,
+    "detail": {
+      "label": "slab_sn2o",
+      "modes": 24,
+      "max_abs_difference_cm1": 4.433786671143025e-12
+    }
+  },
+  "10_physical_sanity": {
+    "passed": false,
+    "detail": {
+      "max_gamma_slab_o_change_meV_per_A2_up_to_900K": 25.629176062364394,
+      "max_transition_shift_eV": 0.12002216834463009,
+      "oxygen_poor_limit_eV": {
+        "total_energy": -2.4831988493749995,
+        "T0K": -2.440630512695157,
+        "T300K": -2.4376682444902826,
+        "T600K": -2.471284985588765,
+        "T900K": -2.5373731434884466
+      },
+      "formation_free_energy_eV": {
+        "total_energy": -4.966397698749999,
+        "T0K": -4.881261025390314,
+        "T300K": -4.875336488980565,
+        "T600K": -4.94256997117753,
+        "T900K": -5.074746286976893
+      },
+      "poor_limit_moves_with_T": true
+    }
+  }
+}
