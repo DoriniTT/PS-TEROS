@@ -35,6 +35,7 @@ from .phase_diagram_ternary import (
     TernarySurfacePhaseDiagram,
     ternary_surface_phase_diagram,
 )
+from .precision import PRECISION_LEVELS, PrecisionLevel
 from .polar import (
     BottomCheckReport,
     PolarTermination,
@@ -95,6 +96,8 @@ __all__ = [
     "ExecutionPolicy",
     "QeCalculationConfig",
     "SurfaceWorkflowConfig",
+    "PRECISION_LEVELS",
+    "PrecisionLevel",
     "VaspCalculationConfig",
     "qe_fixed_coordinate_flags",
     "SlabIdentity",

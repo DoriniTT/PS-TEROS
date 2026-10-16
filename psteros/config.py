@@ -158,6 +158,13 @@ class QeCalculationConfig:
             )
 
 
+class _DefaultKpointsSpacing(float):
+    """The default of ``kpoints_spacing``: a float that tells "left out" from "written by the user" (it equals 0.20)."""
+
+
+_DEFAULT_KPOINTS_SPACING = _DefaultKpointsSpacing(0.20)
+
+
 @dataclass(frozen=True)
 class VaspCalculationConfig:
     """Inputs shared by aiida-vasp ``VaspWorkChain`` calculations.
@@ -172,20 +179,51 @@ class VaspCalculationConfig:
     reciprocal vector); the VASP adapter converts it for aiida-vasp.
     ``max_iterations`` limits the restarts of the work chain (aiida-vasp's
     default when ``None``).
+
+    ``precision`` is ``"fast"``, ``"moderate"`` or ``"precise"`` (see
+    :mod:`psteros.precision`): the level fills in what ``incar`` and
+    ``kpoints_spacing`` leave out (cutoff, k-point spacing, convergence, the
+    POTCAR of the elements that ``potential_mapping`` does not name), and what
+    you write explicitly wins. Without ``precision`` nothing is filled in, as
+    before. Leaving ``incar`` out selects ``precision="moderate"``, so
+    ``VaspCalculationConfig("vasp@cluster")`` is a complete recipe; to relax,
+    give the ionic tags (``incar={"IBRION": 2, "NSW": 100, "ISIF": 2}``) and the
+    level adds the rest, including ``EDIFFG``.
     """
 
     code_label: str
-    incar: Mapping[str, Any]
+    incar: Mapping[str, Any] | None = None
     potential_family: str = "PBE"
     potential_mapping: Mapping[str, str] = field(default_factory=dict)
-    kpoints_spacing: float = 0.20
+    kpoints_spacing: float = _DEFAULT_KPOINTS_SPACING
     clean_workdir: bool = False
     max_iterations: int | None = None
+    precision: str | None = None
+
+    @property
+    def effective_kpoints_spacing(self) -> float:
+        """``kpoints_spacing``, or the spacing of the precision level when ``precision`` is set and the spacing was left out."""
+
+        if self.precision is not None and isinstance(self.kpoints_spacing, _DefaultKpointsSpacing):
+            from psteros.precision import precision_level
+
+            return precision_level(self.precision).kpoints_spacing
+        return float(self.kpoints_spacing)
 
     def __post_init__(self) -> None:
         if not self.code_label:
             raise ValueError("VASP code_label must not be empty")
-        if not self.incar:
+        if self.incar is None:  # nothing given: the default precision level is the recipe
+            object.__setattr__(self, "incar", {})
+            if self.precision is None:
+                from psteros.precision import DEFAULT_PRECISION
+
+                object.__setattr__(self, "precision", DEFAULT_PRECISION)
+        if self.precision is not None:
+            from psteros.precision import precision_level
+
+            precision_level(self.precision)
+        if not self.incar and self.precision is None:
             raise ValueError("VASP INCAR must not be empty")
         if not self.potential_family:
             raise ValueError("VASP potential_family must not be empty")

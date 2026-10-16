@@ -17,7 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
-from psteros.backends.vasp import lower_keys, split_recipe_incar
+from psteros.backends.vasp import lower_keys, split_recipe_incar, vasp_potential_mapping
 from psteros.blocks import DEFAULT_BLOCKS, Block, Phase, Relax, Static, Vibrations, check_blocks
 from psteros.config import CalculationOverride, SurfaceWorkflowConfig, VaspCalculationConfig
 
@@ -80,15 +80,31 @@ class ReferenceSystem:
                 raise ValueError(f"VASP overrides take INCAR tags under 'INCAR', got namespaces {sorted(other)}")
 
 
+def _reference_symbols(structure: Any) -> list[str]:
+    """Element symbol of every site of a reference structure (pymatgen, AiiDA ``StructureData`` or a PK)."""
+
+    from psteros.precision import structure_symbols
+
+    if isinstance(structure, int):
+        from aiida import orm
+
+        structure = orm.load_node(structure)
+    return structure_symbols(structure)
+
+
 def _block_inputs(
     reference: ReferenceSystem, block: Block, base_incar: Mapping[str, Any], config: VaspCalculationConfig
 ) -> tuple[dict[str, Any], float, dict[str, Any], dict[str, Any]]:
-    """INCAR, k-point spacing, scheduler-option and settings overrides of one block."""
+    """INCAR, k-point spacing, scheduler-option and settings overrides of one block.
+
+    With ``config.precision`` the tags of the precision level that none of the layers above set are added at the lowest
+    priority (and the level's k-point spacing is used when the recipe left it out).
+    """
 
     incar = dict(base_incar)
     incar.update(block.defaults(reference.phase))
     incar.update(block.incar)
-    spacing = config.kpoints_spacing
+    spacing = config.effective_kpoints_spacing
     metadata: dict[str, Any] = {}
     settings: dict[str, Any] = {}
     for override in (reference.override, reference.block_overrides.get(block.name)):
@@ -100,6 +116,11 @@ def _block_inputs(
         metadata.update(dict(override.metadata))
         settings.update(dict(override.settings))
     incar.update(block.required(reference.phase))
+    if config.precision is not None:
+        from psteros.precision import level_incar
+
+        symbols = _reference_symbols(reference.structure)
+        incar = {**lower_keys(level_incar(config.precision, incar, site_symbols=symbols)), **incar}
     return incar, spacing, metadata, settings
 
 
@@ -198,6 +219,10 @@ def build_vasp_reference_workgraph(
                     ).outputs.result
             settings.update(extra_settings)
             prefix = f"{label}_{block.name}"
+            potential_mapping = calculation.potential_mapping
+            if calculation.precision is not None:  # the aiida-vasp protocol's POTCAR of the elements that the recipe does not name
+                symbols = _reference_symbols(reference.structure)
+                potential_mapping = vasp_potential_mapping(calculation, {symbol: symbol for symbol in symbols})
             vasp = add_vasp_block_task(
                 workgraph,
                 name=f"{prefix}_vasp",
@@ -207,7 +232,7 @@ def build_vasp_reference_workgraph(
                 namespaces=namespaces,
                 kpoints_spacing=spacing,
                 potential_family=calculation.potential_family,
-                potential_mapping=calculation.potential_mapping,
+                potential_mapping=potential_mapping,
                 options=options,
                 settings=settings,
                 clean_workdir=calculation.clean_workdir,

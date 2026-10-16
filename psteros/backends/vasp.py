@@ -107,8 +107,16 @@ def recipe_incar(incar: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, An
     return dict(incar), {}
 
 
-def vasp_incar(config: VaspCalculationConfig, override: CalculationOverride | None = None) -> dict[str, Any]:
-    """The INCAR of one structure: the shared recipe updated by ``override.parameters["INCAR"]``."""
+def vasp_incar(
+    config: VaspCalculationConfig,
+    override: CalculationOverride | None = None,
+    site_symbols: Sequence[str] | None = None,
+) -> dict[str, Any]:
+    """The INCAR of one structure: the shared recipe updated by ``override.parameters["INCAR"]``.
+
+    With ``config.precision`` the tags of the precision level that the recipe and the override leave out come first
+    (see :mod:`psteros.precision`; ``site_symbols`` lets the level decide ``ISPIN``); without it nothing is added.
+    """
 
     incar, _ = recipe_incar(config.incar)
     if override and override.parameters:
@@ -116,6 +124,10 @@ def vasp_incar(config: VaspCalculationConfig, override: CalculationOverride | No
             if str(namespace).upper() != "INCAR":
                 raise ValueError(f"VASP overrides take an 'INCAR' namespace, got {namespace!r}")
             incar.update(dict(values))
+    if config.precision is not None:
+        from psteros.precision import level_incar
+
+        incar = {**level_incar(config.precision, incar, site_symbols=site_symbols), **incar}
     return incar
 
 
@@ -123,6 +135,7 @@ def vasp_parameters(
     config: VaspCalculationConfig,
     override: CalculationOverride | None = None,
     number_of_sites: int | None = None,
+    site_symbols: Sequence[str] | None = None,
 ) -> dict[str, Any]:
     """The ``parameters`` input of an aiida-vasp ``VaspWorkChain``.
 
@@ -133,7 +146,7 @@ def vasp_parameters(
 
     _, namespaces = recipe_incar(config.incar)
     parameters: dict[str, Any] = {
-        **lower_keys(namespaces), "incar": lower_keys(vasp_incar(config, override)),
+        **lower_keys(namespaces), "incar": lower_keys(vasp_incar(config, override, site_symbols)),
     }
     if override and override.fixed_sites:
         if number_of_sites is None:
@@ -163,7 +176,12 @@ def vasp_potential_mapping(config: VaspCalculationConfig, kinds: Mapping[str, st
         if kind in mapping:
             continue
         if kind == symbol:
-            mapping[kind] = mapping.get(symbol, symbol)
+            potcar = mapping.get(symbol)
+            if potcar is None and config.precision is not None:
+                from psteros.precision import protocol_potential
+
+                potcar = protocol_potential(symbol)  # the aiida-vasp protocol's POTCAR for the element
+            mapping[kind] = potcar or symbol
         else:
             missing.append(kind)
     if missing:
@@ -245,7 +263,7 @@ def add_vasp_task(
     if not isinstance(reference, orm.StructureData):
         raise TypeError("a deferred VASP structure requires kinds_structure to be an AiiDA StructureData node")
     metadata = execution.scheduler_options()
-    spacing = config.kpoints_spacing
+    spacing = config.effective_kpoints_spacing
     settings: dict[str, Any] = {"ADDITIONAL_RETRIEVE_LIST": list(RETRIEVE)}
     if override:
         metadata.update(dict(override.metadata))
@@ -257,7 +275,9 @@ def add_vasp_task(
         "name": f"{label}_vasp",
         "structure": structure,
         "code": orm.load_code(config.code_label),
-        "parameters": orm.Dict(dict=vasp_parameters(config, override, len(reference.sites))),
+        "parameters": orm.Dict(
+            dict=vasp_parameters(config, override, len(reference.sites), [kinds[site.kind_name] for site in reference.sites])
+        ),
         # ``spacing`` is the recipe's value or the override's, both in psteros units (A^-1 with 2*pi).
         "kpoints_spacing": orm.Float(aiida_vasp_kpoints_spacing(spacing)),
         "potential_family": orm.Str(config.potential_family),

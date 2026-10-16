@@ -16,6 +16,9 @@ Usage
     python campaign.py slabs --profile P --code vasp@my-cluster --potential-family PBE \\
         --refs-pk <PK of the finished refs graph> --submit
 
+Add ``--precision fast|moderate|precise`` to let a precision level set the cutoff, the k-point spacing and the
+convergence (psteros.PRECISION_LEVELS) instead of the ENCUT, EDIFF and k-points written below.
+
 Then run ``phase_diagram.py`` on the two graph PKs.
 """
 
@@ -65,6 +68,16 @@ def recipes(args, name, relax_overrides=None, static_overrides=None):
     """Relaxation and static recipes sharing code, POTCARs, cutoff and k-points."""
 
     def vasp(ionic):
+        precision = getattr(args, "precision", None)  # callers that build their own namespace need not know the option
+        if precision:  # a precision level supplies cutoff, k-points and convergence; the ionic tags stay ours
+            return psteros.VaspCalculationConfig(
+                code_label=args.code,
+                incar={key: ionic[key] for key in ("IBRION", "NSW", "ISIF") if key in ionic},
+                potential_family=args.potential_family,
+                potential_mapping=POTCARS,
+                precision=precision,
+                max_iterations=3,
+            )
         return psteros.VaspCalculationConfig(
             code_label=args.code,
             incar={**ELECTRONIC, **ionic},
@@ -132,6 +145,8 @@ def main(argv=None):
     parser.add_argument("--profile", required=True)
     parser.add_argument("--code", required=True, help="AiiDA label of a vasp.vasp code")
     parser.add_argument("--potential-family", required=True, help="uploaded POTCAR family")
+    parser.add_argument("--precision", choices=tuple(psteros.PRECISION_LEVELS),
+                        help="use a precision level (cutoff, k-points, convergence) instead of the settings above")
     parser.add_argument("--computer", help="name of your AiiDA computer (for the record)")
     parser.add_argument("--queue", help="queue or partition; the scheduler's default when left out")
     parser.add_argument("--ranks", type=int, default=4, help="MPI ranks per job")

@@ -26,6 +26,12 @@ Recent Updates
   workflow (``ChargeNeutralSurfaceStudy``)
 * Absolute surface energies of polar surfaces with pseudo-hydrogen
   passivation (``find_polar_terminations``, ``PolarSurfaceStudy``)
+* Precision levels for VASP recipes (``VaspCalculationConfig(..., precision="fast" | "moderate" | "precise")``):
+  the level fills in the cutoff, the k-point spacing, the convergence tags and the POTCARs that the recipe leaves out,
+  and explicit values win; ``incar`` is now optional (leaving it out selects ``"moderate"``). aiida-vasp has a single
+  VASP protocol, ``balanced``, which is the ``moderate`` level; ``fast`` and ``precise`` are defined by PS-TEROS, with
+  PBE and no spin polarisation unless the structure is magnetic. Recipes that do not use it are unchanged
+  (see :ref:`vasp-precision`)
 * Opt-in vibrational free energies (harmonic, Γ-point finite differences):
   ``build_vibrations_workgraph``, ``read_vibrations``, ``HarmonicVibrations``,
   ``solid_free_energy_ev`` and ``molecule_reference_energy_ev``; slabs with a

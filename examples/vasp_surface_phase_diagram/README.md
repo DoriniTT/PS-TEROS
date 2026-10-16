@@ -22,6 +22,10 @@ vacuum, 400 eV, `kpoints_spacing=0.3`) so that every job fits a short debug
 queue. Converge the cutoff, k-points, slab thickness and vacuum before
 interpreting the numbers.
 
+To use a precision level instead of these hard-coded settings, add
+`--precision fast`, `moderate` or `precise` to the `campaign.py` commands
+(see the guide on the VASP relaxation-to-static graph).
+
 ## 1. Reference calculations
 
 ```bash

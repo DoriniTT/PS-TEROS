@@ -89,6 +89,68 @@ spacing; only the ionic settings differ. ``ENCUT`` and ``EDIFF`` are in eV,
 The builder refuses a relaxation INCAR that does not move the ions
 (``IBRION >= 0`` and ``NSW > 0``) and a static INCAR that does.
 
+.. _vasp-precision:
+
+Or choose a precision level
+---------------------------
+
+Instead of writing the cutoff, the k-point spacing and the convergence tags
+yourself, name a level: ``"fast"``, ``"moderate"`` or ``"precise"``. The
+level fills in what your recipe leaves out, and everything you write
+explicitly wins.
+
+.. code-block:: python
+
+   RELAX = {"IBRION": 2, "NSW": 200, "ISIF": 2}     # only the ionic settings
+   STATIC = {"IBRION": -1, "NSW": 0}
+
+   relax = psteros.VaspCalculationConfig("vasp@my-cluster", RELAX, precision="moderate")
+   static = psteros.VaspCalculationConfig("vasp@my-cluster", STATIC, precision="moderate")
+   # or, for a calculation with nothing else to say: VaspCalculationConfig("vasp@my-cluster")
+
+============  =========  ===================  =========  =====================
+level         ``ENCUT``  ``kpoints_spacing``  ``EDIFF``  relaxation ``EDIFFG``
+============  =========  ===================  =========  =====================
+``fast``      400 eV     0.44 Å⁻¹             1e-5 eV    -0.05 eV/Å
+``moderate``  550 eV     0.31 Å⁻¹             1e-6 eV    -0.03 eV/Å
+``precise``   700 eV     0.19 Å⁻¹             1e-7 eV    -0.01 eV/Å
+============  =========  ===================  =========  =====================
+
+Every level also sets ``PREC = Accurate``, Gaussian smearing (``ISMEAR = 0``,
+``SIGMA = 0.05``), ``LREAL = False``, ``ALGO = Normal``, ``LASPH = True``,
+``NELM = 200``, ``LWAVE`` and ``LCHARG`` off and PBE (``GGA = PE``). The rules:
+
+* **Your values win.** A tag in ``incar``, in a ``CalculationOverride`` or in
+  a block overrides the level, in any upper or lower case, and an explicit
+  ``kpoints_spacing`` (even 0.20) overrides the level's spacing.
+* **``EDIFFG`` only for a relaxation**, that is when the final INCAR of the
+  structure has ``IBRION`` 1, 2 or 3 and ``NSW > 0``; a static or a
+  finite-difference calculation gets none. A static INCAR that an override
+  turns into a relaxation gets it too.
+* **Spin is off unless the structure is magnetic.** ``ISPIN = 1``, except when
+  an element has a magnetic moment in the aiida-vasp protocol (Fe, Co, Ni, Mn,
+  Cr, V, ...): then ``ISPIN = 2`` and ``MAGMOM`` with those moments. Give
+  ``ISPIN`` or ``MAGMOM`` yourself for anything else, such as a triplet molecule.
+* **POTCARs.** An element that ``potential_mapping`` does not name gets the
+  POTCAR of the aiida-vasp protocol (``Sn_d``, ``Sr_sv``, ``Ti_pv``, ``O``, ...);
+  the POTCAR *family* is still yours (``potential_family``).
+* **A recipe without a level is unchanged.** ``precision`` is ``None`` unless
+  you set it, or leave ``incar`` out altogether (then it is ``"moderate"``).
+  The level applies to the surface builders and to the reference blocks.
+
+aiida-vasp has one VASP protocol, ``balanced``, and no ``fast`` or
+``stringent`` one, so PS-TEROS defines the three levels. ``moderate`` is the
+``balanced`` protocol (cutoff, k-point spacing, smearing, electronic settings,
+POTCARs, read from the installed aiida-vasp and checked by a test); ``fast`` and
+``precise`` follow the ends of the scan of aiida-vasp's convergence work chain.
+Three things differ from ``balanced`` on purpose: the functional is PBE
+(``balanced`` uses PBEsol, ``GGA = PS``), the calculation is not spin-polarised
+unless magnetic, and ``EDIFF`` is one number per cell instead of per atom, so
+that the energies of cells of different sizes are comparable. The levels are
+starting points: converge the property you compute before you trust it, and
+tighten ``EDIFF`` (``1e-7`` or less) for the displaced calculations of
+:doc:`vibrations`.
+
 Per-structure settings
 ----------------------
 

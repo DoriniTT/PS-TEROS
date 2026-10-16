@@ -82,7 +82,7 @@ Calculation configuration
 
 .. index:: VaspCalculationConfig
 
-``VaspCalculationConfig(code_label, incar, potential_family="PBE", potential_mapping={}, kpoints_spacing=0.20, clean_workdir=False, max_iterations=None)``
+``VaspCalculationConfig(code_label, incar=None, potential_family="PBE", potential_mapping={}, kpoints_spacing=0.20, clean_workdir=False, max_iterations=None, precision=None)``
    Describe inputs shared by aiida-vasp ``VaspWorkChain`` calculations, the
    central psteros engine.
 
@@ -114,6 +114,21 @@ Calculation configuration
 
    ``clean_workdir``
       Whether the AiiDA work chain should clean its remote working directory.
+
+   ``precision``
+      ``"fast"``, ``"moderate"`` or ``"precise"`` (:ref:`vasp-precision`): the
+      level fills in the cutoff, the k-point spacing, the convergence tags and
+      the POTCAR of the elements that ``potential_mapping`` does not name, and
+      what you write explicitly wins. ``None`` adds nothing, as before. Leaving
+      ``incar`` out selects ``"moderate"``. Unknown names raise a
+      ``ValueError`` that lists the three levels.
+
+``PrecisionLevel`` and ``PRECISION_LEVELS``
+   ``PRECISION_LEVELS`` maps ``"fast"``, ``"moderate"`` and ``"precise"`` to
+   :class:`PrecisionLevel` objects (``encut_ev``, ``kpoints_spacing`` in Å⁻¹ with
+   the 2π, ``kpoints_spacing_aiida_vasp``, ``ediff_ev``,
+   ``force_cutoff_ev_per_angstrom``, ``ediffg_ev_per_angstrom``) so that you can
+   read what a level sets: ``psteros.PRECISION_LEVELS["moderate"].encut_ev``.
 
 .. _api-qe-calculation-config:
 
