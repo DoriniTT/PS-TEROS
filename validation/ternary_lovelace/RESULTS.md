@@ -50,5 +50,25 @@ the other worker, 17467, which had restored the graph from its checkpoint at 07:
 `rerun_modes.py` (graph 15849) ran the same calcfunction on the 60 folders: 27 modes, 3 imaginary (-61.9, -60.2, -60.2 cm-1; the cubic
 perovskite is not a minimum in PBE), the others from 105 to 755 cm-1.
 
+The same happened to `ti_metal_vibrations` (21 of 24 folders; rerun graph 16119) and `tio2_bulk_vibrations`; `sr_metal`, `sro_bulk` and `slab_tio2`
+finished in the graph. Cause, found afterwards in T-4: two daemon workers on one SQLite database.
+
 psteros change (commit `756bfc5`): `harmonic_modes` now names the missing displacements in a `ValueError` instead of a bare `KeyError`;
 new test that fails without the change. The race itself is in the engine, not in psteros.
+
+### T-3 `qsub` refused my jobs: per-user limit of the `par128` queue
+
+`qstat -Qf par128` shows `max_queued = [u:PBS_GENERIC=6]` and `max_run = [u:PBS_GENERIC=6]` (and 12 for the group). The limit counts all of
+the user's jobs in the queue, here shared with other AiiDA profiles (3 to 4 jobs of other projects in `par128` at the time). With
+`max_concurrent_jobs=8` several submissions failed with `qsub: would exceed queue generic's per-user limit`; AiiDA retried 5 times and
+paused each calculation (`Pausing after failed transport task: submit_calculation failed 5 times consecutively`). A graph meant to run
+8 jobs at a time on this queue can run at most 6 minus the user's other jobs; **`max_concurrent_jobs=8` was a bad choice**, mine.
+
+### T-4 Two daemon workers on a SQLite profile
+
+I raised the number of workers to 2 (`verdi daemon incr 1`) to speed up the start of the big graph. The profile uses `core.sqlite_dos`, and the worker log
+shows `sqlite3.OperationalError: database is locked`, and both workers running the same WorkGraph at the same time (every `update_task_state`,
+`continue_workgraph` and `on_wait` line twice, `Restored missing live awaitable ...`). That is how `srtio3_bulk_vibrations`, `ti_metal_vibrations` and
+`tio2_bulk_vibrations` were started with some of their retrieved folders missing (T-2). Back to one worker on 16 Oct 14:56.
+After the restart, the play requests did not reach the worker for 4 h while it loaded the graph (the command timed out), so the last 5 calculations
+(four of them already finished on the cluster, in PBS since 13 Oct) stayed unretrieved until I played them again once the worker was idle.
