@@ -1,4 +1,4 @@
-"""Step C0 of docs/plans/MACE_SURFACE_PLAN.md: smoke test of the CP2K code on Lovelace (queue ``testes``).
+"""Step C0 of docs/plans/MACE_SURFACE_PLAN.md: smoke test of the CP2K code (``cluster.py``; first on Lovelace).
 
 Three ENERGY_FORCE calculations of bulk RuO2 (6 atoms) with one O moved 0.05 A along x (``base``), and the same
 O moved a further +-0.01 A (``plus``, ``minus``). ``check`` reports, per calculation, the MPI ranks and CP2K version
@@ -11,7 +11,7 @@ from the output, the energy, the parsed forces and the DOS; then:
   (agreement within 0.01 eV/A is taken as consistent).
 
 Usage (PYTHONPATH=<worktree>):
-    python c0_smoke.py submit [--cutoff 800]   # builds and submits the graph, writes c0_graph[_<cutoff>].json
+    python c0_smoke.py submit [--cutoff 800]   # builds and submits the graph, writes c0_graph_<cluster>_<cutoff>.json
     python c0_smoke.py check [--cutoff 800]    # after the graph has finished
 
 The first run (500 Ry) agreed to 0.011 eV/A (1.2%); CP2K's total energy is the sum of its terms including the
@@ -29,11 +29,13 @@ import numpy as np
 
 import psteros
 
+import cluster
+
 HERE = Path(__file__).resolve().parent
 PROFILE = "psteros_mace_ruo2"
-CODE = "CP2K-2024.3@lovelace"
+CODE = cluster.CP2K_CODE
 CUTOFF = int(sys.argv[sys.argv.index("--cutoff") + 1]) if "--cutoff" in sys.argv else 500
-SUFFIX = "" if CUTOFF == 500 else f"_{CUTOFF}"
+SUFFIX = f"_{cluster.TAG}_{CUTOFF}"
 MOVED, SHIFT, DELTA = 2, 0.05, 0.01  # index of the moved O, its first shift and the finite-difference step (A)
 
 DFT = {
@@ -62,10 +64,7 @@ def structures():
 def config():
     return psteros.SurfaceWorkflowConfig(
         backend="cp2k", name=f"ruo2_c0_smoke{SUFFIX}",
-        execution=psteros.ExecutionPolicy(
-            computer="lovelace", queue="testes", max_concurrent_jobs=2, max_wallclock_seconds=3000,
-            resources={"num_machines": 1, "num_cores_per_machine": 4, "num_mpiprocs_per_machine": 4},
-            custom_scheduler_commands="#PBS -j oe", extra_options={"import_sys_environment": False}),
+        execution=cluster.execution("debug", 2, 1800),
         calculation=psteros.Cp2kCalculationConfig(
             code_label=CODE, parameters={"FORCE_EVAL": {"METHOD": "Quickstep", "DFT": DFT}},
             basis_sets={"Ru": "DZVP-MOLOPT-PBE-GTH-q16", "O": "DZVP-MOLOPT-PBE-GTH-q6"},

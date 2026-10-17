@@ -1,0 +1,13 @@
+{
+  "workgraph_pk": 388,
+  "labels": [
+    "base",
+    "plus",
+    "minus"
+  ],
+  "code": "CP2K-2026.2@phileas",
+  "moved_site": 2,
+  "shift_angstrom": 0.05,
+  "delta_angstrom": 0.01,
+  "cutoff_ry": 800
+}

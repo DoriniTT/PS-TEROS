@@ -25,9 +25,11 @@ import numpy as np
 
 import psteros
 
+import cluster
+
 HERE = Path(__file__).resolve().parent
 PROFILE = "psteros_mace_ruo2"
-CODE = "CP2K-2024.3@lovelace"
+CODE = cluster.CP2K_CODE
 RATTLES, SIGMA, SEED = 5, 0.05, 20261017
 GEO = {"GEO_OPT": {"OPTIMIZER": "BFGS", "MAX_FORCE": 1.94e-4, "MAX_ITER": 300}}  # 0.01 eV/A
 CELL = psteros.CalculationOverride(parameters={
@@ -44,10 +46,7 @@ def settings() -> dict:
 
 
 def execution(concurrent: int) -> psteros.ExecutionPolicy:
-    return psteros.ExecutionPolicy(
-        computer="lovelace", queue="par128", max_concurrent_jobs=concurrent, max_wallclock_seconds=8 * 3600,
-        resources={"num_machines": 1, "num_cores_per_machine": 128, "num_mpiprocs_per_machine": 128},
-        custom_scheduler_commands="#PBS -j oe", extra_options={"import_sys_environment": False})
+    return cluster.execution("node", concurrent, 8 * 3600)
 
 
 def recipe(run_type: str) -> psteros.Cp2kCalculationConfig:
@@ -92,8 +91,8 @@ def refs(dry: bool) -> None:
     o2 = psteros.CalculationOverride(parameters=O2_PARAMETERS)
     o2_relax = psteros.CalculationOverride(parameters={**O2_PARAMETERS, "MOTION": GEO})
     graph = psteros.build_cp2k_relax_static_workgraph(
-        structures, config("GEO_OPT", "ruo2_c2_refs", 3, {"bulk": CELL, "ru": CELL, "o2": o2_relax}),
-        config("ENERGY_FORCE", "ruo2_c2_refs_static", 3, {"o2": o2}), submit=not dry)
+        structures, config("GEO_OPT", "ruo2_c2_refs", 2, {"bulk": CELL, "ru": CELL, "o2": o2_relax}),
+        config("ENERGY_FORCE", "ruo2_c2_refs_static", 2, {"o2": o2}), submit=not dry)
     print(len(graph.tasks), "tasks")
     if not dry:
         (HERE / "c2_refs.json").write_text(json.dumps({"workgraph_pk": graph.pk, "settings": settings()}, indent=2))
@@ -138,7 +137,8 @@ def labels(dry: bool) -> None:
             for site_index in range(len(rattled)):
                 rattled.translate_sites([site_index], rng.normal(0.0, SIGMA, 3), frac_coords=False, to_unit_cell=True)
             structures[f"{termination}_r{index}"] = rattled
-    graph = psteros.build_cp2k_surface_workgraph(structures, config("ENERGY_FORCE", "ruo2_c2_labels", 2),
+    # labels and truth may run together: one CP2K job each, two in all
+    graph = psteros.build_cp2k_surface_workgraph(structures, config("ENERGY_FORCE", "ruo2_c2_labels", 1),
                                                  submit=not dry)
     print(len(graph.tasks), "tasks; lattice a, c, u =", lattice)
     if not dry:

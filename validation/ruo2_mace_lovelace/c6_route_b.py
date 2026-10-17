@@ -56,7 +56,7 @@ def structures() -> tuple[dict, dict]:
 def submit(dry: bool) -> None:
     chosen, skipped = structures()
     graph = psteros.build_cp2k_surface_workgraph(
-        chosen, c2_cp2k.config("ENERGY_FORCE", "ruo2_c6_route_b", 2), submit=not dry)
+        chosen, c2_cp2k.config("ENERGY_FORCE", "ruo2_c6_route_b", 2), submit=not dry)  # cluster.py: <= 2 jobs
     print(len(chosen), "statics; not converged (left out):", skipped)
     if not dry:
         (HERE / "c6_route_b.json").write_text(json.dumps(

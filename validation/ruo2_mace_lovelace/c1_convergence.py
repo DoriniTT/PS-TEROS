@@ -33,9 +33,11 @@ import numpy as np
 import psteros
 from psteros.backends import add_cp2k_task
 
+import cluster
+
 HERE = Path(__file__).resolve().parent
 PROFILE = "psteros_mace_ruo2"
-CODE = "CP2K-2024.3@lovelace"
+CODE = cluster.CP2K_CODE
 A, C = 4.492, 3.107
 SLABS = ("o_bridge", "o_cus", "metal")
 BASELINE = {"cutoff": 600, "basis": "DZVP", "kspacing": 0.20, "temperature": 300, "vacuum": 22.0}
@@ -55,10 +57,7 @@ RECOMPUTE = {
     "vac30": SLABS,
 }
 COMPARE = {"c400": "base", "c800": "base", "tzv2p": "base", "k015": "base", "t150": "k015", "vac30": "base"}
-EXECUTION = psteros.ExecutionPolicy(
-    computer="lovelace", queue="par128", max_concurrent_jobs=3, max_wallclock_seconds=4 * 3600,
-    resources={"num_machines": 1, "num_cores_per_machine": 128, "num_mpiprocs_per_machine": 128},
-    custom_scheduler_commands="#PBS -j oe", extra_options={"import_sys_environment": False})
+EXECUTION = cluster.execution("node", 2, 4 * 3600)
 CELL = psteros.CalculationOverride(parameters={
     "GLOBAL": {"RUN_TYPE": "CELL_OPT"},
     "FORCE_EVAL": {"STRESS_TENSOR": "ANALYTICAL"},

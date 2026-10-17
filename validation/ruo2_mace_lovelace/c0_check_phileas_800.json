@@ -1,0 +1,49 @@
+{
+  "cutoff_ry": 800,
+  "energies_ev": {
+    "base": -6870.07062003478,
+    "plus": -6870.062045669286,
+    "minus": -6870.077656189863
+  },
+  "base": {
+    "mpi_ranks": [
+      "8"
+    ],
+    "cp2k": [
+      "CP2K version 2026.2"
+    ],
+    "last_entropic_energy_hartree": [
+      "-0.00039722726705"
+    ],
+    "max_force_ev_per_angstrom": 0.7823896113997963
+  },
+  "plus": {
+    "mpi_ranks": [
+      "8"
+    ],
+    "cp2k": [
+      "CP2K version 2026.2"
+    ],
+    "last_entropic_energy_hartree": [
+      "-0.00039338578790"
+    ],
+    "max_force_ev_per_angstrom": 0.931456254506623
+  },
+  "minus": {
+    "mpi_ranks": [
+      "8"
+    ],
+    "cp2k": [
+      "CP2K version 2026.2"
+    ],
+    "last_entropic_energy_hartree": [
+      "-0.00040149136182"
+    ],
+    "max_force_ev_per_angstrom": 0.6225371839319608
+  },
+  "finite_difference_force_x_ev_per_angstrom": -0.7805260288478166,
+  "printed_force_x_ev_per_angstrom": -0.7823896113997963,
+  "difference_ev_per_angstrom": 0.0018635825519797145,
+  "dos_partially_occupied_bins": 13,
+  "energy_consistent_with_forces": true
+}
