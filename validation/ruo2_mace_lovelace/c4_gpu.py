@@ -25,6 +25,8 @@ from pathlib import Path
 import psteros
 from psteros import mlip
 
+import cluster
+
 HERE = Path(__file__).resolve().parent
 JOBS = HERE / "local" / "jobs"
 PROFILE = "psteros_mace_ruo2"
@@ -57,7 +59,10 @@ def input_structure(node, label: str):
 
     from psteros.backends.cp2k import _stage_output
 
-    return _stage_output(node, label, "retrieved").creator.inputs.structure.get_pymatgen()
+    retrieved = _stage_output(node, label, "retrieved")
+    if retrieved is None:
+        raise LookupError(f"{label} has no finished CP2K calculation yet")
+    return retrieved.creator.inputs.structure.get_pymatgen()
 
 
 def labelled(node, label: str) -> mlip.LabelledStructure:
@@ -67,7 +72,9 @@ def labelled(node, label: str) -> mlip.LabelledStructure:
     return mlip.LabelledStructure(label, structure, energy, forces)
 
 
-def frames(rattled: bool) -> list[mlip.LabelledStructure]:
+def frames(rattled: bool, skip_missing: bool = False) -> list[mlip.LabelledStructure]:
+    """Training frames; ``skip_missing`` (the check study only) leaves out labels that are not finished."""
+
     refs, labels = graph("c2_refs.json"), graph("c2_labels.json")
     dos = psteros.read_cp2k_dos(refs, ["bulk"])["bulk"]
     psteros.require_metallic("bulk", partially_occupied=dos.partially_occupied_bins())
@@ -76,7 +83,12 @@ def frames(rattled: bool) -> list[mlip.LabelledStructure]:
     for label in names:
         if "_r" in label and label.rsplit("_r", 1)[1].isdigit() and not rattled:
             continue
-        result.append(labelled(labels, label))
+        try:
+            result.append(labelled(labels, label))
+        except LookupError:
+            if not skip_missing:
+                raise
+            print("check: left out (not finished):", label)
     return result
 
 
@@ -92,20 +104,24 @@ def prepare(study: str) -> None:
     folder = JOBS / study
     if folder.exists():
         raise FileExistsError(f"{folder} exists; prepare each study once")
+    # read every AiiDA input first (retrying SQLite locks), then write the folders
+    plain = cluster.with_retry(frames, False, skip_missing=(study == "check"))
+    rattled = cluster.with_retry(frames, True) if study == "main" else None
+    structures = cluster.with_retry(relaxation_structures) if study == "main" else None
     train, valid, record = mlip.select_replay_structures(REPLAY_FILE, elements=["Ru", "O"])
     base = dict(foundation_model=FOUNDATION, foundation_model_sha256=FOUNDATION_SHA256, replay_file=REPLAY_FILE)
     finetune = []
     if study == "check":
         config = mlip.MaceFineTuneConfig(**base, epochs=2, seeds=(20260920,))
-        mlip.prepare_finetune_job(folder / "ft_check", frames(False), config, name="ruo2_check",
+        mlip.prepare_finetune_job(folder / "ft_check", plain, config, name="ruo2_check",
                                   replay_train=train, replay_valid=valid)
         finetune = ["ft_check"]
         relax = None
     else:
         families = {
-            "m1": (mlip.MaceFineTuneConfig(**{**base, "replay_file": None}, replay=False), frames(False)),
-            "m2": (mlip.MaceFineTuneConfig(**base), frames(False)),
-            "m3": (mlip.MaceFineTuneConfig(**base), frames(True)),
+            "m1": (mlip.MaceFineTuneConfig(**{**base, "replay_file": None}, replay=False), plain),
+            "m2": (mlip.MaceFineTuneConfig(**base), plain),
+            "m3": (mlip.MaceFineTuneConfig(**base), rattled),
         }
         models = {"m0": (FOUNDATION, "omat_pbe")}
         for family, (config, items) in families.items():
@@ -114,7 +130,6 @@ def prepare(study: str) -> None:
             finetune.append(f"ft_{family}")
             for seed in config.seeds:
                 models[f"{family}_seed{seed}"] = (f"../ft_{family}/models/ruo2_{family}_seed{seed}.model", "Default")
-        structures = relaxation_structures()
         fixed = {label: psteros.central_sites(structures[label]) for label in psteros.RUTILE_110_TERMINATIONS}
         mlip.prepare_relax_job(folder / "relax", structures, models, fixed_sites=fixed)
         relax = "relax"

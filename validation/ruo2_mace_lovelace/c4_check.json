@@ -1,0 +1,11 @@
+{
+  "shelljob_pk": 1415,
+  "queue": "testegpu",
+  "driver": {
+    "gpus": 1,
+    "finetune": [
+      "ft_check"
+    ],
+    "relax": null
+  }
+}
