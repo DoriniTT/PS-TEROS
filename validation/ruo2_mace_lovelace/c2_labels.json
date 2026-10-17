@@ -1,0 +1,52 @@
+{
+  "workgraph_pk": 1221,
+  "lattice_a_c_u": [
+    4.53620427880215,
+    3.1362057066366,
+    0.30612318212731837
+  ],
+  "labels": [
+    "o_bridge",
+    "o_cus",
+    "metal",
+    "o_cus_half",
+    "o_bridge_half",
+    "o_cus_no_bridge",
+    "bulk110",
+    "o_bridge_r0",
+    "o_bridge_r1",
+    "o_bridge_r2",
+    "o_bridge_r3",
+    "o_bridge_r4",
+    "o_cus_r0",
+    "o_cus_r1",
+    "o_cus_r2",
+    "o_cus_r3",
+    "o_cus_r4",
+    "metal_r0",
+    "metal_r1",
+    "metal_r2",
+    "metal_r3",
+    "metal_r4",
+    "o_cus_half_r0",
+    "o_cus_half_r1",
+    "o_cus_half_r2",
+    "o_cus_half_r3",
+    "o_cus_half_r4",
+    "o_bridge_half_r0",
+    "o_bridge_half_r1",
+    "o_bridge_half_r2",
+    "o_bridge_half_r3",
+    "o_bridge_half_r4",
+    "o_cus_no_bridge_r0",
+    "o_cus_no_bridge_r1",
+    "o_cus_no_bridge_r2",
+    "o_cus_no_bridge_r3",
+    "o_cus_no_bridge_r4"
+  ],
+  "rattle": {
+    "count": 5,
+    "sigma_angstrom": 0.05,
+    "seed": 20261017
+  }
+}

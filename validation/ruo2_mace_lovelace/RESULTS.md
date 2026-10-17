@@ -88,4 +88,16 @@ route with CP2K, which share one recipe.
 
 ## C2 and C3 (from 2026-10-17)
 
-References (WorkGraph 919): bulk RuO2 and hcp Ru CELL_OPT -> static, O2 GEO_OPT -> static.
+References (WorkGraph 919, 39 min, all exit 0): bulk RuO2 and hcp Ru CELL_OPT -> static, O2 GEO_OPT -> static.
+
+| Quantity | CP2K (this work) | Literature |
+|---|---|---|
+| RuO2 a, c, u | 4.536 A, 3.136 A, 0.3061 | experiment 4.492 A, 3.107 A, 0.306 |
+| hcp Ru a, c | 2.729 A, 4.311 A | experiment 2.706 A, 4.282 A |
+| O2 bond, ⟨S²⟩ | 1.237 A, 2.006 (triplet) | PBE about 1.23 A |
+| ΔH_f(RuO2) | **−3.055 eV/f.u.** (O-poor limit −1.527 eV) | Reuter and Scheffler −3.16, experiment −3.19 |
+| Largest force after the static | 0.0001 (bulk), 0.0011 eV/A (O2) | |
+| Metallic (partly filled DOS bins) | bulk 13, Ru 18 | |
+
+Labels (WorkGraph 1221: the six terminations as built on this lattice, bulk110, 30 rattled copies) and ground truth
+(WorkGraph 1301: GEO_OPT -> static of the six terminations, central trilayer fixed) run together, one CP2K job each.
