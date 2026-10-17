@@ -114,6 +114,22 @@ def test_kpoint_mesh_uses_two_pi_spacing() -> None:
     assert cp2k_kpoints_mesh(np.diag([2 * math.pi / 2.0] * 3), 1.0) == (2, 2, 2)
 
 
+def test_one_kpoint_across_vacuum() -> None:
+    from psteros.backends.cp2k import vacuum_gaps
+
+    slab, _ = psteros.rutile_110_slab(metal="Ru", termination="o_bridge", a=4.492, c=3.107, vacuum_angstrom=22.0)
+    gaps = vacuum_gaps(slab.lattice.matrix, slab.frac_coords)
+    assert gaps[2] >= 22.0 and max(gaps[:2]) < 3.0  # pymatgen pads the vacuum to whole layers
+    assert cp2k_kpoints_mesh(slab.lattice.matrix, 0.15) == (14, 7, 2)
+    assert cp2k_kpoints_mesh(slab.lattice.matrix, 0.15, frac_coords=slab.frac_coords, vacuum_gap_angstrom=8.0) == (14, 7, 1)
+    o2 = psteros.triplet_o2_cell(cell_length=12.0)
+    assert cp2k_kpoints_mesh(o2.lattice.matrix, 0.2, frac_coords=o2.frac_coords, vacuum_gap_angstrom=8.0) == (1, 1, 1)
+    bulk = psteros.rutile_bulk("Ru", a=4.492, c=3.107)
+    assert cp2k_kpoints_mesh(bulk.lattice.matrix, 0.2, frac_coords=bulk.frac_coords, vacuum_gap_angstrom=8.0) == (7, 7, 11)
+    with pytest.raises(ValueError, match="vacuum_gap_angstrom must be positive"):
+        cp2k_config(vacuum_gap_angstrom=0.0)
+
+
 FORCES_AU = """
  ATOMIC FORCES in [a.u.]
 
@@ -311,6 +327,8 @@ def test_cp2k_relax_static_workgraph(tmp_path) -> None:
 
     o2_static = graph.tasks["o2_static_cp2k"].inputs.cp2k
     assert o2_static.kpoints.value is None  # Gamma only for the molecule
+    slab_mesh = slab_static.kpoints.value.get_kpoints_mesh()[0]
+    assert slab_mesh[2] == 1  # one point across the vacuum of the slab
     assert o2_static.parameters.value.get_dict()["FORCE_EVAL"]["DFT"]["MULTIPLICITY"] == 3
 
     links = {(link.from_task.name, link.to_task.name) for link in graph.links}

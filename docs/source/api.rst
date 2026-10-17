@@ -166,7 +166,7 @@ Calculation configuration
 
 .. index:: Cp2kCalculationConfig
 
-``Cp2kCalculationConfig(code_label, parameters, basis_sets, potentials, basis_set_file="BASIS_MOLOPT", potential_file="GTH_POTENTIALS", kpoints_spacing=0.20, input_files={}, max_iterations=3, clean_workdir=False)``
+``Cp2kCalculationConfig(code_label, parameters, basis_sets, potentials, basis_set_file="BASIS_MOLOPT", potential_file="GTH_POTENTIALS", kpoints_spacing=0.20, input_files={}, max_iterations=3, clean_workdir=False, vacuum_gap_angstrom=8.0)``
    Describe inputs shared by aiida-cp2k ``Cp2kBaseWorkChain`` calculations
    (``pip install '.[cp2k]'``); see :doc:`cp2k-workflow`.
 
@@ -195,6 +195,11 @@ Calculation configuration
       Positive spacing in Å⁻¹ with the 2π: a Monkhorst-Pack mesh with
       ``ceil(|b_i| / kpoints_spacing)`` points. ``None`` or a 1×1×1 mesh runs
       at Γ only, without a ``KPOINTS`` section.
+
+   ``vacuum_gap_angstrom``
+      A lattice vector crossed by an empty gap wider than this (the normal of
+      a slab, every direction of a molecule in a box) gets one k-point.
+      ``None`` switches this off.
 
    ``max_iterations``, ``clean_workdir``
       Restarts of the work chain (aiida-cp2k's restart handler is on) and

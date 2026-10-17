@@ -101,9 +101,10 @@ updates the recipe section by section:
 
 ``kpoints_spacing`` is in Å\ :sup:`-1` with the 2π, as for VASP: the
 Monkhorst-Pack mesh has ``ceil(|b_i| / kpoints_spacing)`` points along each
-reciprocal vector. A 1×1×1 mesh (or ``kpoints_spacing=None``) runs at Γ only,
-without a ``KPOINTS`` section; give a molecule a large
-``CalculationOverride(kpoints_distance=...)``. ``basis_set_file`` and
+reciprocal vector, except along a lattice vector crossed by a vacuum gap wider
+than ``vacuum_gap_angstrom`` (8 Å by default), which gets one point: the normal
+of a slab, and every direction of a molecule in a box. A 1×1×1 mesh (or
+``kpoints_spacing=None``) runs at Γ only, without a ``KPOINTS`` section. ``basis_set_file`` and
 ``potential_file`` are read from CP2K's data directory, or from
 ``input_files`` (file name -> local path), which copies them into every job
 and keeps them in the provenance.

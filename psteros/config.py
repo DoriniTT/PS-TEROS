@@ -260,8 +260,11 @@ class Cp2kCalculationConfig:
     ``kpoints_spacing`` is in A^-1 with the 2*pi, as for VASP: a
     Monkhorst-Pack mesh with ``ceil(|b_i| / kpoints_spacing)`` points along
     each reciprocal vector; ``None`` or a 1x1x1 mesh runs at Gamma only, with
-    no ``KPOINTS`` section. ``max_iterations`` limits the restarts of the
-    work chain.
+    no ``KPOINTS`` section. Along a lattice vector crossed by a vacuum gap
+    wider than ``vacuum_gap_angstrom`` (the normal of a slab, every direction
+    of a molecule in a box) the mesh has one point, since nothing disperses
+    across vacuum; ``None`` switches this off. ``max_iterations`` limits the
+    restarts of the work chain.
     """
 
     code_label: str
@@ -274,10 +277,13 @@ class Cp2kCalculationConfig:
     input_files: Mapping[str, str] = field(default_factory=dict)
     max_iterations: int = 3
     clean_workdir: bool = False
+    vacuum_gap_angstrom: float | None = 8.0
 
     def __post_init__(self) -> None:
         if not self.code_label:
             raise ValueError("CP2K code_label must not be empty")
+        if self.vacuum_gap_angstrom is not None:
+            _require_positive("vacuum_gap_angstrom", self.vacuum_gap_angstrom)
         force_eval = self.parameters.get("FORCE_EVAL") if self.parameters else None
         if not isinstance(force_eval, Mapping) or not isinstance(force_eval.get("DFT"), Mapping):
             raise ValueError("CP2K parameters must hold FORCE_EVAL/DFT (upper-case section names)")

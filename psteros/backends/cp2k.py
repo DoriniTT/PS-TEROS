@@ -116,8 +116,33 @@ def cp2k_parameters(
     return parameters
 
 
-def cp2k_kpoints_mesh(cell: Sequence[Sequence[float]], spacing: float | None) -> tuple[int, int, int]:
-    """Monkhorst-Pack mesh ``ceil(|b_i| / spacing)`` (A^-1 with the 2*pi); ``None`` gives Gamma only."""
+def vacuum_gaps(cell: Sequence[Sequence[float]], frac_coords: Sequence[Sequence[float]]) -> tuple[float, float, float]:
+    """Widest empty slab of the cell along each lattice vector, in A (measured along the plane normal)."""
+
+    cell = np.asarray(cell, dtype=float)
+    fractions = np.mod(np.asarray(frac_coords, dtype=float), 1.0)
+    reciprocal = np.linalg.inv(cell).T
+    gaps = []
+    for axis in range(3):
+        values = np.sort(fractions[:, axis]) if len(fractions) else np.array([0.0])
+        steps = np.diff(np.concatenate([values, [values[0] + 1.0]]))
+        spacing = 1.0 / np.linalg.norm(reciprocal[axis])  # distance between lattice planes
+        gaps.append(float(steps.max() * spacing))
+    return tuple(gaps)
+
+
+def cp2k_kpoints_mesh(
+    cell: Sequence[Sequence[float]],
+    spacing: float | None,
+    *,
+    frac_coords: Sequence[Sequence[float]] | None = None,
+    vacuum_gap_angstrom: float | None = None,
+) -> tuple[int, int, int]:
+    """Monkhorst-Pack mesh ``ceil(|b_i| / spacing)`` (A^-1 with the 2*pi); ``None`` gives Gamma only.
+
+    With ``frac_coords`` and ``vacuum_gap_angstrom``, a lattice vector crossed
+    by an empty gap wider than ``vacuum_gap_angstrom`` gets one point.
+    """
 
     if spacing is None:
         return (1, 1, 1)
@@ -125,7 +150,11 @@ def cp2k_kpoints_mesh(cell: Sequence[Sequence[float]], spacing: float | None) ->
         raise ValueError(f"kpoints spacing must be positive, got {spacing!r}")
     reciprocal = 2.0 * math.pi * np.linalg.inv(np.asarray(cell, dtype=float)).T
     lengths = np.linalg.norm(reciprocal, axis=1)
-    return tuple(max(1, math.ceil(length / spacing - 1e-9)) for length in lengths)
+    mesh = [max(1, math.ceil(length / spacing - 1e-9)) for length in lengths]
+    if frac_coords is not None and vacuum_gap_angstrom is not None:
+        gaps = vacuum_gaps(cell, frac_coords)
+        mesh = [1 if gap > vacuum_gap_angstrom else points for points, gap in zip(mesh, gaps)]
+    return tuple(mesh)
 
 
 def parse_cp2k_forces(text: str) -> np.ndarray:
@@ -267,7 +296,9 @@ def add_cp2k_task(
         "settings": orm.Dict(dict=settings),
         "metadata": {"options": metadata},
     }
-    mesh = cp2k_kpoints_mesh(reference.cell, spacing)
+    cartesian = np.array([site.position for site in reference.sites], dtype=float)
+    mesh = cp2k_kpoints_mesh(reference.cell, spacing, frac_coords=cartesian @ np.linalg.inv(np.asarray(reference.cell)),
+                             vacuum_gap_angstrom=config.vacuum_gap_angstrom)
     if mesh != (1, 1, 1):
         kpoints = orm.KpointsData()
         kpoints.set_kpoints_mesh(list(mesh))
