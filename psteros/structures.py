@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from math import ceil
 from typing import Literal
 
+import numpy as np
 from pymatgen.core import Lattice, Structure
 from pymatgen.core.surface import Slab, SlabGenerator
 
@@ -191,3 +192,149 @@ def central_sites(structure: Structure, half_width: float = 1.5) -> tuple[int, .
     heights = [float(np.dot(site.coords, normal)) for site in structure]
     middle = (max(heights) + min(heights)) / 2.0
     return tuple(index for index, height in enumerate(heights) if abs(height - middle) < half_width)
+
+
+RutileTermination = Literal[
+    "o_bridge", "o_cus", "metal", "o_cus_half", "o_bridge_half", "o_cus_no_bridge"
+]
+RUTILE_110_TERMINATIONS: tuple[str, ...] = (
+    "o_bridge", "o_cus", "metal", "o_cus_half", "o_bridge_half", "o_cus_no_bridge"
+)
+
+
+def rutile_bulk(metal: str, *, a: float, c: float, u: float = 0.3056) -> Structure:
+    """Return a conventional rutile MO2 cell (P4_2/mnm, M at 2a, O at 4f (u, u, 0))."""
+
+    if a <= 0 or c <= 0 or not 0 < u < 0.5:
+        raise ValueError("rutile lattice needs a > 0, c > 0 and 0 < u < 0.5")
+    return Structure.from_spacegroup("P4_2/mnm", Lattice.tetragonal(a, c), [metal, "O"], [[0, 0, 0], [u, u, 0]])
+
+
+def _heights(structure: Structure) -> tuple[np.ndarray, np.ndarray]:
+    a, b = structure.lattice.matrix[0], structure.lattice.matrix[1]
+    normal = np.cross(a, b)
+    return structure.cart_coords @ (normal / np.linalg.norm(normal)), normal / np.linalg.norm(normal)
+
+
+def _rutile_110_sites(slab: Structure, metal: str) -> dict[str, list[list[int]]]:
+    """Per surface (bottom, top): indices of the bridging O and of the five-fold (cus) metal atoms."""
+
+    heights, _ = _heights(slab)
+    metals = [index for index, site in enumerate(slab) if site.specie.symbol == metal]
+    oxygens = [index for index, site in enumerate(slab) if site.specie.symbol == "O"]
+    found: dict[str, list[list[int]]] = {"bridge": [], "cus": []}
+    for sign in (-1.0, 1.0):  # bottom, top
+        outer = max(sign * heights[index] for index in metals)
+        plane = [index for index in metals if outer - sign * heights[index] < 0.3]
+        bridge = [index for index in oxygens if sign * heights[index] > outer + 0.5]
+        cus = [
+            index for index in plane
+            if not any(slab.get_distance(index, other) < 2.3 for other in bridge)
+        ]
+        if not bridge or len(cus) * 2 != len(plane):
+            raise RuntimeError("could not identify the bridging O and cus metal rows of the rutile (110) slab")
+        found["bridge"].append(sorted(bridge))
+        found["cus"].append(sorted(cus))
+    return found
+
+
+def _inversion_partner(slab: Structure, index: int, candidates: list[int]) -> int:
+    """The candidate site closest to the image of ``index`` through the centre of the slab."""
+
+    centre = slab.frac_coords.mean(axis=0)
+    centre[2] = (slab.frac_coords[:, 2].max() + slab.frac_coords[:, 2].min()) / 2.0
+    image = 2.0 * centre - slab.frac_coords[index]
+    distances = [slab.lattice.get_distance_and_image(image, slab.frac_coords[other])[0] for other in candidates]
+    return candidates[int(np.argmin(distances))]
+
+
+def rutile_110_slab(
+    *,
+    metal: str,
+    termination: str = "o_bridge",
+    triple_layers: int = 3,
+    vacuum_angstrom: float = 15.0,
+    a: float,
+    c: float,
+    u: float = 0.3056,
+    repeat_c: int = 1,
+    cus_bond_angstrom: float = 1.70,
+) -> tuple[Slab, SlabIdentity]:
+    """Build a symmetric rutile MO2(110) slab with one of six terminations.
+
+    Starting from the stoichiometric O-bridge slab of pymatgen (outermost
+    plane: bridging O rows above six-fold M, five-fold "cus" M exposed),
+    on both surfaces:
+
+    ``"o_bridge"``        stoichiometric (Reuter and Scheffler's RuO2(110)-O\\ :sup:`bridge`)
+    ``"o_cus"``           one O atop every cus M, ``cus_bond_angstrom`` above it (O-rich)
+    ``"metal"``           the bridging O removed (O-poor; their RuO2(110)-Ru)
+    ``"o_cus_half"``      O atop every second cus M (cell doubled along [001])
+    ``"o_bridge_half"``   every second bridging O removed (cell doubled along [001])
+    ``"o_cus_no_bridge"`` O-cus added and bridging O removed (stoichiometric, non-bulk-like)
+
+    The cell is ``c`` (along [001], repeated ``repeat_c`` times) by ``a*sqrt(2)``
+    (along [1-10]). The bottom surface gets the inversion image of every
+    change at the top, so the slab stays symmetric (checked). The atoms that
+    were added sit at a guessed height; a relaxation finds their real place.
+    """
+
+    if termination not in RUTILE_110_TERMINATIONS:
+        raise ValueError(f"termination must be one of {RUTILE_110_TERMINATIONS}, got {termination!r}")
+    if isinstance(triple_layers, bool) or not isinstance(triple_layers, int):
+        raise TypeError(f"triple_layers must be an integer, got {triple_layers!r}")
+    if triple_layers < 3 or triple_layers % 2 == 0:
+        raise ValueError("triple_layers must be an odd integer of at least 3")
+    if vacuum_angstrom <= 0 or cus_bond_angstrom <= 0:
+        raise ValueError("vacuum_angstrom and cus_bond_angstrom must be positive")
+    if isinstance(repeat_c, bool) or not isinstance(repeat_c, int) or repeat_c < 1:
+        raise ValueError("repeat_c must be a positive integer")
+    half = termination in ("o_cus_half", "o_bridge_half")
+    if half and repeat_c % 2:
+        repeat_c *= 2
+
+    bulk = rutile_bulk(metal, a=a, c=c, u=u)
+    generator = SlabGenerator(
+        initial_structure=bulk, miller_index=(1, 1, 0), min_slab_size=triple_layers * a / (2.0**0.5),
+        min_vacuum_size=vacuum_angstrom, center_slab=True, in_unit_planes=False, primitive=False,
+        lll_reduce=True,
+    )
+    candidates = [
+        slab for slab in generator.get_slabs(symmetrize=True)
+        if slab.composition["O"] == 2 * slab.composition[metal]
+    ]
+    if not candidates:
+        raise RuntimeError(f"no stoichiometric symmetric {metal}O2(110) slab was generated")
+    slab = min(candidates, key=len)
+    lengths = slab.lattice.abc
+    along_c = int(np.argmin([abs(length - c) for length in lengths[:2]]))
+    scaling = [1, 1, 1]
+    scaling[along_c] = repeat_c
+    slab.make_supercell(scaling)
+
+    sites = _rutile_110_sites(slab, metal)
+    heights, normal = _heights(slab)
+    remove: list[int] = []
+    add: list[np.ndarray] = []
+    bottom_bridge, top_bridge = sites["bridge"]
+    bottom_cus, top_cus = sites["cus"]
+    if termination in ("metal", "o_cus_no_bridge"):
+        remove += top_bridge + bottom_bridge
+    if termination == "o_bridge_half":
+        chosen = top_bridge[::2]
+        remove += chosen + [_inversion_partner(slab, index, bottom_bridge) for index in chosen]
+    if termination in ("o_cus", "o_cus_no_bridge", "o_cus_half"):
+        chosen = top_cus[::2] if termination == "o_cus_half" else top_cus
+        for index in chosen:
+            partner = _inversion_partner(slab, index, bottom_cus)
+            add.append(slab.cart_coords[index] + cus_bond_angstrom * normal)
+            add.append(slab.cart_coords[partner] - cus_bond_angstrom * normal)
+    for position in add:
+        slab.append("O", position, coords_are_cartesian=True)
+    if remove:
+        slab.remove_sites(sorted(set(remove), reverse=True))
+    if not slab.is_symmetric():
+        raise RuntimeError(f"the {metal}O2(110) {termination} slab lost its symmetry")
+    identity = SlabIdentity((1, 1, 0), termination, triple_layers, vacuum_angstrom)
+    slab.add_site_property("psteros_termination", [termination] * len(slab))
+    return slab, identity

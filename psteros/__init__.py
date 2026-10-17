@@ -19,6 +19,9 @@ from .structures import (
     alpha_sn_bulk,
     central_sites,
     litharge_sno_bulk,
+    RUTILE_110_TERMINATIONS,
+    rutile_110_slab,
+    rutile_bulk,
     rutile_sno2_bulk,
     sno2_110_slab,
     triplet_o2_cell,
@@ -97,6 +100,22 @@ from .workflow import (
     build_surface_workgraph,
 )
 from .backends.cp2k import Cp2kDos, read_cp2k_dos, read_cp2k_forces, read_cp2k_results
+from .mlip import (
+    LabelledStructure,
+    MaceFineTuneConfig,
+    MlipRelaxConfig,
+    MlipRelaxation,
+    check_one_energy_source,
+    fit_element_shifts,
+    mace_training_options,
+    partially_occupied_count,
+    prepare_finetune_job,
+    prepare_relax_job,
+    relax_with_calculator,
+    require_metallic,
+    select_replay_structures,
+    write_extxyz,
+)
 
 __version__ = "2.0.0"
 
@@ -187,4 +206,21 @@ __all__ = [
     "read_cp2k_dos",
     "read_cp2k_forces",
     "read_cp2k_results",
+    "RUTILE_110_TERMINATIONS",
+    "rutile_110_slab",
+    "rutile_bulk",
+    "LabelledStructure",
+    "MaceFineTuneConfig",
+    "MlipRelaxConfig",
+    "MlipRelaxation",
+    "check_one_energy_source",
+    "fit_element_shifts",
+    "mace_training_options",
+    "partially_occupied_count",
+    "prepare_finetune_job",
+    "prepare_relax_job",
+    "relax_with_calculator",
+    "require_metallic",
+    "select_replay_structures",
+    "write_extxyz",
 ]

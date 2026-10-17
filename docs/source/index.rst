@@ -54,6 +54,7 @@ Choose the path that matches what you need now:
    phase-diagram
    reference-thermochemistry
    vibrations
+   mlip
 
 .. toctree::
    :maxdepth: 1

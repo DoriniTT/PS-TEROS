@@ -44,6 +44,11 @@ Recent Updates
   ``build_cp2k_relax_static_workgraph`` and the readers ``read_cp2k_results`` (eV), ``read_cp2k_forces`` (eV/Å) and
   ``read_cp2k_dos``, on aiida-cp2k's ``Cp2kBaseWorkChain`` (see :doc:`/cp2k-workflow`). The QE/VASP builders and
   ``build_vibrations_workgraph`` now raise ``ValueError`` for a CP2K recipe; QE and VASP graphs are unchanged
+* Opt-in MLIP route for metallic systems (see :doc:`/mlip`): ``LabelledStructure``, ``write_extxyz``,
+  ``fit_element_shifts``, ``MaceFineTuneConfig``, ``select_replay_structures``, ``prepare_finetune_job`` and
+  ``prepare_relax_job`` (self-contained MACE fine-tune and relaxation jobs), ``relax_with_calculator``,
+  ``require_metallic`` and ``check_one_energy_source``; ``rutile_bulk`` and ``rutile_110_slab`` with six
+  rutile (110) terminations. ``sno2_110_slab`` and every existing result are unchanged
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

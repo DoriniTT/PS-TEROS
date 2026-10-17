@@ -788,6 +788,52 @@ in K and pressures in bar.
 ``parse_vasp_frequencies_cm1(outcar)``
    Frequencies of the last dynamical matrix in the text of a VASP OUTCAR.
 
+Machine-learned potentials (metallic systems)
+---------------------------------------------
+
+See :doc:`mlip` for the route and its one-source rule. Energies are in eV,
+forces in eV/Å; nothing here needs AiiDA.
+
+``LabelledStructure(label, structure, energy_ev, forces_ev_per_angstrom, role="train")``
+   One DFT static calculation as a training example (``role``: ``"train"``,
+   ``"valid"`` or ``"test"``). ``write_extxyz(frames, destination)`` writes
+   frames with ``REF_energy`` and ``REF_forces`` as MACE reads them.
+
+``fit_element_shifts(compositions, residuals_ev)``
+   Least-squares per-element shifts of E_DFT − E_foundation; raises when the
+   compositions do not separate the elements.
+
+``MaceFineTuneConfig(foundation_model, foundation_model_sha256=None, foundation_head="omat_pbe", replay=True, replay_file=None, replay_min_atoms=2, replay_max_atoms=128, replay_validation_every=5, epochs=100, learning_rate=1e-3, ema_decay=0.999, energy_weight=10.0, forces_weight=10.0, huber_delta=0.01, clip_grad=1.0, seeds=(20260920, 20260921, 20260922), default_dtype="float64")``
+   The fine-tune recipe; ``mace_training_options(config, *, name, seed, atomic_numbers)``
+   gives its ``mace_run_train`` options.
+
+``select_replay_structures(path, *, elements, min_atoms=2, max_atoms=128, validation_every=5)``
+   Replay geometries (training, validation) and a record of the selection.
+
+``prepare_finetune_job(directory, frames, config, *, name, replay_train=(), replay_valid=(), device="cuda", seeds=None)``, ``prepare_relax_job(directory, structures, models, config=MlipRelaxConfig(), *, fixed_sites=None, device="cuda")``
+   Job folders with the inputs and the self-contained scripts ``finetune.py``
+   and ``relax.py`` (they need only ase, torch and mace-torch).
+
+``MlipRelaxConfig(fmax_ev_per_angstrom=0.01, max_steps=2000, optimizer="FIRE", head="Default", default_dtype="float64")``, ``relax_with_calculator(structure, calculator, *, config=MlipRelaxConfig(), fixed_sites=())``
+   Relax positions with any ASE calculator; returns ``MlipRelaxation``
+   (``structure``, ``energy_ev``, ``max_force_ev_per_angstrom``, ``steps``,
+   ``converged``).
+
+``partially_occupied_count(occupations, *, tolerance=0.01)``, ``require_metallic(label, *, partially_occupied)``
+   The metallic-bulk check: states filled between 1% and 99% of the fullest
+   (for CP2K, ``Cp2kDos.partially_occupied_bins()``); ``require_metallic``
+   raises ``ValueError`` when there are none.
+
+``check_one_energy_source(sources)``
+   Returns the single source of label -> ``"dft"``, ``"mlip"`` or
+   ``"mlip_dft"``, or raises ``ValueError`` naming the labels of each source.
+
+``rutile_bulk(metal, *, a, c, u=0.3056)``, ``rutile_110_slab(*, metal, termination="o_bridge", triple_layers=3, vacuum_angstrom=15.0, a, c, u=0.3056, repeat_c=1, cus_bond_angstrom=1.70)``
+   Rutile MO\ :sub:`2` and its symmetric (110) slabs with the terminations of
+   ``RUTILE_110_TERMINATIONS``: ``"o_bridge"`` (stoichiometric), ``"o_cus"``,
+   ``"metal"`` (no bridging O), ``"o_cus_half"`` and ``"o_bridge_half"`` (cell
+   doubled along [001]) and ``"o_cus_no_bridge"``.
+
 Compatibility boundary
 ----------------------
 
