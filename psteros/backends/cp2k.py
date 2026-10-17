@@ -192,8 +192,9 @@ class Cp2kDos:
 
     ``states[s][i]`` is the (k-weighted) fraction of the orbitals of spin
     ``s`` in energy bin ``i`` and ``occupations[s][i]`` their summed
-    occupation, as CP2K writes them. ``fermi_energy_ev`` is in the header of
-    Gamma-point runs only.
+    occupation, as CP2K writes them. ``fermi_energy_ev`` is read from the
+    header when CP2K writes it (``E_Fermi[a.u.] =`` at Gamma, a separate
+    ``E(Fermi) = ... a.u.`` line in recent versions), else ``None``.
     """
 
     energies_ev: tuple[float, ...]
@@ -229,8 +230,9 @@ def parse_cp2k_dos(text: str) -> Cp2kDos:
     if not starts:
         raise ValueError("no 'DOS at iteration step' block in the CP2K density-of-states file")
     block = text[starts[-1]:]
-    header = block.splitlines()[0]
-    fermi = re.search(r"E_Fermi\[a\.u\.\]\s*=\s*(\S+)", header)
+    header = "\n".join(line for line in block.splitlines() if line.strip().startswith("#"))
+    fermi = (re.search(r"E_Fermi\[a\.u\.\]\s*=\s*(\S+)", header)
+             or re.search(r"E\(Fermi\)\s*=\s*(\S+)\s*a\.u\.", header))
     rows = []
     for line in block.splitlines()[1:]:
         if line.strip().startswith("#") or not line.strip():

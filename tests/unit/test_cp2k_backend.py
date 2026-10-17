@@ -176,6 +176,9 @@ def test_parse_cp2k_dos_counts_partially_filled_bins() -> None:
     gamma = _dos([(-0.30, 0.5, 1.0), (0.1, 0.5, 0.0)],
                  header=" # DOS at iteration step i = 3, E_Fermi[a.u.] =   -0.100000")
     assert parse_cp2k_dos(gamma).fermi_energy_ev == pytest.approx(-0.1 * HARTREE_TO_EV)
+    recent = metal.replace(" #  Energy[a.u.]", " # E(Fermi) =     0.381105 a.u. =    10.370391 eV\n #  Energy[a.u.]")
+    assert parse_cp2k_dos(recent).fermi_energy_ev == pytest.approx(0.381105 * HARTREE_TO_EV)
+    assert parse_cp2k_dos(recent).partially_occupied_bins() == 1
     spin = _dos([(-0.3, 0.5, 0.5, 0.5, 0.5), (-0.1, 0.5, 0.5, 0.5, 0.0)], spins=2)
     assert parse_cp2k_dos(spin).partially_occupied_bins() == 0
     assert parse_cp2k_dos(spin + _dos([(-0.3, 0.5, 0.5, 0.5, 0.25)], spins=2)).partially_occupied_bins() == 1
