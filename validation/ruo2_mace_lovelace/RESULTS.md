@@ -117,3 +117,46 @@ the 123 + 30 Ru/O replay structures. Exit 0, 122 s for the whole job.
 
 Projected for the main study (100 passes): M1 about 6 min per seed, M2 about 75 min, M3 about 90 min; on the two
 GPUs of `duasgpus` (M2 then M1 on one, M3 on the other) about 5 h, within its 24 h walltime.
+
+## C2/C3 done; G0 and G5 from CP2K alone (2026-10-17, `c7_analysis.py --dft-only`, `c7_dft.json`)
+
+Labels (WorkGraph 1221, 37 statics) and ground truth (WorkGraph 1301, 6 GEO_OPT -> static) finished with exit 0.
+Diagrams on Δμ_O in [½ ΔH_f, 0] = [−1.527, 0] eV, references bulk110, hcp Ru and O2 (ΔH_f from bulk110 −3.0549,
+from the conventional bulk −3.0546 eV/f.u.: the k-point difference is 0.3 meV/f.u.).
+
+**G0 passes** (o_bridge, o_cus and metal only, as in the paper):
+
+| | CP2K, relaxed (R1) | Reuter and Scheffler | Tolerance |
+|---|---:|---:|---:|
+| o_bridge -> o_cus transition | −0.879 eV | −0.93 eV | ±0.15 |
+| γ(o_bridge) − γ(o_cus) at Δμ_O = 0 | 43.7 meV/A² | 49 meV/A² | ±10 |
+| ΔH_f(RuO2) | −3.055 eV/f.u. | −3.16 eV/f.u. | ±0.20 |
+| metal stable somewhere in the window | no | no | — |
+
+γ at Δμ_O = 0 (meV/A²), relaxed (R1) and as built (R0), and how much the CP2K relaxation lowers it:
+
+| Termination | R1 | R0 | Lowered by relaxation |
+|---|---:|---:|---:|
+| o_bridge | 71.9 | 85.1 | 13.2 |
+| o_cus | 28.2 | 46.7 | 18.5 |
+| metal | 191.0 | 202.7 | 11.8 |
+| o_cus_half | 48.9 | 66.1 | 17.2 |
+| o_bridge_half | 134.4 | 144.4 | 10.0 |
+| o_cus_no_bridge | 132.2 | 149.1 | 16.9 |
+
+R1 with all six terminations: o_bridge -> o_cus_half at −0.924 eV and o_cus_half -> o_cus at −0.835 eV, a window of
+0.09 eV in which half coverage is the most stable (a slight repulsion between O-cus atoms; Reuter and Scheffler found
+the two O-cus lines crossing o_bridge at the same point). G1 requires both transitions within ±0.05 eV. R0 has a single
+transition, o_bridge -> o_cus at −0.772 eV.
+
+**G5: the test is discriminating.** Against R1, R0 fails G1 and G2 (γ off by 10.0 to 18.5 meV/A²): relaxation matters
+for every termination, so G3 is gated for all six.
+
+## C4/C5 main study (submitted 2026-10-17 to Bohr `gpu_a100`, user: "for the mace job, I want you to launch at the
+Bohr GPU")
+
+ShellJob 1591: M2, M3, M1 (3 seeds each) one after the other on the one A100, then 10 models (M0 and the 9 fine-tunes)
+relax 9 structures. Bohr computer copied from `presto` (core.pbspro, `#PBS -l place=excl` as in the earlier Ag3PO4
+MACE jobs there); code `mace-python-cu118@bohr` (`ag3po4_g001_mace_cu118`: mace-torch 0.3.16, torch 2.5.1+cu118, ASE
+3.29); MH-1 copied to `/home/des01/zacarias/dorinitt/models/mace-mh-1/mace-mh-1.model` (SHA-256 checked). The queue
+has one A100 node; at submission another user's 168 h job had run 8.6 h, and one job was queued ahead.

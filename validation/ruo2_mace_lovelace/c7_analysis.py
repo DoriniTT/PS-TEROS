@@ -17,7 +17,8 @@ except within 0.05 eV of an R1 transition, every R1 transition within ±0.05 eV;
 than 2 meV/A^2; G4 |ΔH_f(M) − ΔH_f(CP2K)| <= 0.05 eV/f.u.; G5 is R0 already passing G1 and G2?
 
 Usage (PYTHONPATH=<worktree>):
-    python c7_analysis.py          # writes c7_analysis.json and prints the gates
+    python c7_analysis.py              # writes c7_analysis.json and prints the gates
+    python c7_analysis.py --dft-only   # CP2K only (G0, G5, R0 and R1 diagrams): c7_dft.json
 """
 
 from __future__ import annotations
@@ -144,7 +145,7 @@ def report(path):
     return load("c4_main.json").outputs.report.base.repository.get_object_content(path)
 
 
-def main() -> None:
+def main(dft_only: bool = False) -> None:
     refs, labels, truth_graph = load("c2_refs.json"), load("c2_labels.json"), load("c3_truth.json")
     from psteros.backends.cp2k import _stage_output
 
@@ -165,9 +166,19 @@ def main() -> None:
     out["G0"] = gate_g0(diagram(e_r1, slabs, labels=LITERATURE, window=(-1.8, 0.0), **dft_refs))
     out["G5"] = {"R0_G1": gate_g1(r0, r1), "R0_G2": gate_g2(r0, r1, 5.0)}
     out["G5"]["discriminating"] = not (out["G5"]["R0_G1"]["pass"] and out["G5"]["R0_G2"]["pass"])
+    out["R0"] = {"transitions": [list(t) for t in r0.transitions],
+                 "gamma_at_0_mev": {k: float(v[-1]) for k, v in gammas(r0).items()}}
+    areas = {t: float(np.linalg.norm(np.cross(*slabs[t].lattice.matrix[:2]))) for t in TERMINATIONS}
+    out["relaxation_lowers_gamma_mev"] = {t: 1000 * (e_x0[t] - e_r1[t]) / (2 * areas[t]) for t in TERMINATIONS}
+    if dft_only:
+        (HERE / "c7_dft.json").write_text(json.dumps(out, indent=2, default=float) + "\n")
+        print(json.dumps({k: out[k] for k in ("window_ev", "delta_h_f_cp2k_ev", "delta_h_f_cp2k_bulk110_ev", "G0", "R1",
+                                                 "R0", "relaxation_lowers_gamma_mev")}, indent=1, default=float))
+        print("G5 discriminating:", out["G5"]["discriminating"], "| R0 vs R1 G1:", out["G5"]["R0_G1"]["pass"],
+              "G2:", out["G5"]["R0_G2"]["pass"], out["G5"]["R0_G2"]["max_abs_error_mev"])
+        return
 
     results = json.loads(report("relax/results.json"))["models"]
-    areas = {t: float(np.linalg.norm(np.cross(*slabs[t].lattice.matrix[:2]))) for t in TERMINATIONS}
     route_b = json.loads((HERE / "c6_route_b.json").read_text()) if (HERE / "c6_route_b.json").exists() else None
     b_node = load("c6_route_b.json") if route_b else None
     out["models"] = {}
@@ -210,5 +221,9 @@ def main() -> None:
 if __name__ == "__main__":
     from aiida import load_profile
 
+    import sys
+
+    import cluster
+
     load_profile("psteros_mace_ruo2")
-    main()
+    cluster.with_retry(main, "--dft-only" in sys.argv)

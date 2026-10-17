@@ -6,9 +6,10 @@ also the 30 rattled terminations. Each structure is the input structure of its C
 energies in eV and forces in eV/A from the psteros readers. Bulk RuO2 must be metallic (``require_metallic``).
 
 Studies (one aiida-shell job each, ``gpu_driver.py`` on the node):
-    check   replay fine-tune, one seed, 2 passes; no relaxation (``testegpu``): checks the set-up and the speed
+    check   replay fine-tune, one seed, 2 passes; no relaxation (Lovelace ``testegpu``): set-up and speed
     main    M1 (ordinary), M2 (replay), M3 (replay + rattled), 3 seeds each, then every model and M0 (MH-1
-            zero-shot) relax the six terminations, bulk RuO2 and hcp Ru (cell fixed) and O2 (``duasgpus``)
+            zero-shot) relax the six terminations, bulk RuO2 and hcp Ru (cell fixed) and O2 (Bohr ``gpu_a100``,
+            one A100, the families one after the other; user, 2026-10-17)
 
 Usage (PYTHONPATH=<worktree>):
     python c4_gpu.py prepare check|main      # writes local/jobs/<study>/ (git-ignored)
@@ -30,14 +31,22 @@ import cluster
 HERE = Path(__file__).resolve().parent
 JOBS = HERE / "local" / "jobs"
 PROFILE = "psteros_mace_ruo2"
-CODE = "mace-python-cu118@lovelace"
-RUNTIME = "/home/lovelace/proj/proj962/dorinitt/envs/ag3po4_mace_cu118/bin/python"
-FOUNDATION = "/work/dorinitt/goal03_inputs/models/mace-mh-1.model"
 FOUNDATION_SHA256 = "a522eb7f59c7879963d41586528f4980baf33e086c94aa92e3eafdeccad3be47"
 REPLAY_FILE = ("/home/thiagotdorini/projects/research/ag3po4-h2o-o2-surfaces/projects/archived/"
                "ag3po4_h2o_o2_mace_active_learning/goals/03_mace_finetuning/replay/replay-data-mh-1-omat-pbe.xyz")
 REFERENCES = ("bulk", "ru", "o2")
+# the MACE venv and the MH-1 copy on each GPU computer (same mace-torch 0.3.16, torch 2.5.1+cu118, ASE 3.29)
+COMPUTERS = {
+    "lovelace": {"code": "mace-python-cu118@lovelace",
+                 "runtime": "/home/lovelace/proj/proj962/dorinitt/envs/ag3po4_mace_cu118/bin/python",
+                 "foundation": "/work/dorinitt/goal03_inputs/models/mace-mh-1.model"},
+    "bohr": {"code": "mace-python-cu118@bohr",
+             "runtime": "/home/des01/zacarias/dorinitt/envs/ag3po4_g001_mace_cu118/bin/python",
+             "foundation": "/home/des01/zacarias/dorinitt/models/mace-mh-1/mace-mh-1.model"},
+}
 QUEUES = {
+    "gpu_a100": {"resources": {"num_machines": 1, "num_cores_per_machine": 56, "num_mpiprocs_per_machine": 1},
+                 "custom_scheduler_commands": "#PBS -j oe\n#PBS -l place=excl", "queue_name": "gpu_a100", "max_wallclock_seconds": 48 * 3600},
     "testegpu": {"resources": {"num_machines": 1, "num_cores_per_machine": 8, "num_mpiprocs_per_machine": 8,
                                "ngpus_per_machine": 1},
                  "custom_scheduler_commands": "#PBS -j oe", "queue_name": "testegpu", "max_wallclock_seconds": 1800},
@@ -45,7 +54,8 @@ QUEUES = {
                                "ngpus_per_machine": 2},
                  "custom_scheduler_commands": "#PBS -j oe", "queue_name": "duasgpus", "max_wallclock_seconds": 24 * 3600},
 }
-STUDIES = {"check": {"queue": "testegpu", "gpus": 1}, "main": {"queue": "duasgpus", "gpus": 2}}
+STUDIES = {"check": {"queue": "testegpu", "gpus": 1, "computer": "lovelace"},
+           "main": {"queue": "gpu_a100", "gpus": 1, "computer": "bohr"}}
 
 
 def graph(name: str):
@@ -109,6 +119,7 @@ def prepare(study: str) -> None:
     rattled = cluster.with_retry(frames, True) if study == "main" else None
     structures = cluster.with_retry(relaxation_structures) if study == "main" else None
     train, valid, record = mlip.select_replay_structures(REPLAY_FILE, elements=["Ru", "O"])
+    FOUNDATION = COMPUTERS[STUDIES[study]["computer"]]["foundation"]
     base = dict(foundation_model=FOUNDATION, foundation_model_sha256=FOUNDATION_SHA256, replay_file=REPLAY_FILE)
     finetune = []
     if study == "check":
@@ -133,7 +144,7 @@ def prepare(study: str) -> None:
         fixed = {label: psteros.central_sites(structures[label]) for label in psteros.RUTILE_110_TERMINATIONS}
         mlip.prepare_relax_job(folder / "relax", structures, models, fixed_sites=fixed)
         relax = "relax"
-    # longest fine-tunes first, one lane per GPU
+    # M2 (the proposed method) first; with two GPUs, M2 then M1 on one and M3 on the other
     order = [name for name in ("ft_m2", "ft_m3", "ft_m1") if name in finetune] or finetune
     (folder / "driver.json").write_text(json.dumps(
         {"gpus": STUDIES[study]["gpus"], "finetune": order, "relax": relax}, indent=2) + "\n")
@@ -156,8 +167,9 @@ def submit(study: str, dry: bool) -> None:
         nodes[name] = orm.FolderData(tree=str(folder / name))
         filenames[name] = name
     outputs = ["report"]  # gpu_driver.py collects summaries, logs, evaluations and relaxations there
-    code = orm.load_code(CODE)
-    assert str(code.filepath_executable) == RUNTIME and code.with_mpi is False
+    computer = COMPUTERS[STUDIES[study]["computer"]]
+    code = orm.load_code(computer["code"])
+    assert str(code.filepath_executable) == computer["runtime"] and code.with_mpi is False
     options = dict(QUEUES[STUDIES[study]["queue"]], withmpi=False, redirect_stderr=True, import_sys_environment=False,
                    environment_variables={"OMP_NUM_THREADS": "8", "MKL_NUM_THREADS": "1", "PYTHONUNBUFFERED": "1",
                                           "PYTHONNOUSERSITE": "1",

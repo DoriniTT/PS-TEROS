@@ -1,0 +1,105 @@
+{
+  "window_ev": [
+    -1.5273022333098538,
+    0.0
+  ],
+  "delta_h_f_cp2k_ev": -3.0546044666197076,
+  "delta_h_f_cp2k_bulk110_ev": -3.054937824333024,
+  "R1": {
+    "transitions": [
+      [
+        -0.9240589764271478,
+        "o_bridge",
+        "o_cus_half"
+      ],
+      [
+        -0.8348359549967765,
+        "o_cus_half",
+        "o_cus"
+      ]
+    ],
+    "gamma_at_0_mev": {
+      "o_bridge": 71.8748701566794,
+      "o_cus": 28.16316389220343,
+      "metal": 190.9544372498838,
+      "o_cus_half": 48.910340651818046,
+      "o_bridge_half": 134.44626181375577,
+      "o_cus_no_bridge": 132.21744140172913
+    }
+  },
+  "G0": {
+    "transition_ev": -0.8794474657119568,
+    "obridge_minus_ocus_at_0_mev": 43.71170626447598,
+    "delta_h_f_ev": -3.054937824333024,
+    "metal_stable_somewhere": false,
+    "pass": true
+  },
+  "G5": {
+    "R0_G1": {
+      "pass": false,
+      "disagreeing_delta_mu_ev": [
+        -0.7840151464323917,
+        -0.7814696427102086,
+        -0.7789241389880255,
+        -0.7763786352658424,
+        -0.7738331315436593
+      ],
+      "n_disagreeing": 5,
+      "transitions": {
+        "o_bridge->o_cus_half": {
+          "truth_ev": -0.9240589764271478,
+          "model_ev": null
+        },
+        "o_cus_half->o_cus": {
+          "truth_ev": -0.8348359549967765,
+          "model_ev": null
+        }
+      },
+      "model_transitions": [
+        [
+          -0.7715838825137666,
+          "o_bridge",
+          "o_cus"
+        ]
+      ]
+    },
+    "R0_G2": {
+      "pass": false,
+      "limit_mev": 5.0,
+      "max_abs_error_mev": {
+        "o_bridge": 13.17663046190323,
+        "o_cus": 18.537839003878403,
+        "metal": 11.785835741294932,
+        "o_cus_half": 17.1973834234851,
+        "o_bridge_half": 9.967365771098684,
+        "o_cus_no_bridge": 16.919685098827387
+      }
+    },
+    "discriminating": true
+  },
+  "R0": {
+    "transitions": [
+      [
+        -0.7715838825137666,
+        "o_bridge",
+        "o_cus"
+      ]
+    ],
+    "gamma_at_0_mev": {
+      "o_bridge": 85.05150061858264,
+      "o_cus": 46.70100289608182,
+      "metal": 202.7402729911787,
+      "o_cus_half": 66.10772407530312,
+      "o_bridge_half": 144.41362758485442,
+      "o_cus_no_bridge": 149.13712650055652
+    }
+  },
+  "relaxation_lowers_gamma_mev": {
+    "o_bridge": 13.176630461903219,
+    "o_cus": 18.537839003878393,
+    "metal": 11.785835741294903,
+    "o_cus_half": 17.197383423485086,
+    "o_bridge_half": 9.967365771098663,
+    "o_cus_no_bridge": 16.91968509882737
+  }
+}

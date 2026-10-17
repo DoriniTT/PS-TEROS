@@ -1,0 +1,13 @@
+{
+  "shelljob_pk": 1591,
+  "queue": "gpu_a100",
+  "driver": {
+    "gpus": 1,
+    "finetune": [
+      "ft_m2",
+      "ft_m3",
+      "ft_m1"
+    ],
+    "relax": "relax"
+  }
+}
