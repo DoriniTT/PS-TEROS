@@ -101,3 +101,19 @@ References (WorkGraph 919, 39 min, all exit 0): bulk RuO2 and hcp Ru CELL_OPT ->
 
 Labels (WorkGraph 1221: the six terminations as built on this lattice, bulk110, 30 rattled copies) and ground truth
 (WorkGraph 1301: GEO_OPT -> static of the six terminations, central trilayer fixed) run together, one CP2K job each.
+
+## C4 check: 2-pass replay fine-tune on Lovelace `testegpu` (ShellJob 1415, 2026-10-17)
+
+One seed, 2 passes, the 7 labels finished at the time (bulk, Ru, O2, o_bridge, metal, o_bridge_half, bulk110) and
+the 123 + 30 Ru/O replay structures. Exit 0, 122 s for the whole job.
+
+| Check | Result |
+|---|---|
+| Foundation model | SHA-256 matches `a522eb7f…` at `/work/dorinitt/goal03_inputs/models/mace-mh-1.model` |
+| E0 shifts of the `Default` head (CP2K GTH minus MH-1 PAW) | O −429.35 eV, Ru −2554.04 eV; residual after the shifts 0.069 eV per frame |
+| Untrained heads reproduce MH-1 | `Default` 1.5e-13 eV/atom, 2.4e-15 eV/A; `pt_head` 8.9e-16 eV/atom, 4.8e-9 eV/A |
+| Validation heads | `pt_head`, `Default` (Default last) |
+| Speed | 130 examples per pass in 44 s (float64, batch 1), peak 1.5 GiB |
+
+Projected for the main study (100 passes): M1 about 6 min per seed, M2 about 75 min, M3 about 90 min; on the two
+GPUs of `duasgpus` (M2 then M1 on one, M3 on the other) about 5 h, within its 24 h walltime.
