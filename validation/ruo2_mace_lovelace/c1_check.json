@@ -1,0 +1,119 @@
+{
+  "base": {
+    "delta_h_f_ev": -3.0789012164681253,
+    "gamma_mev_per_angstrom2": {
+      "o_bridge": 83.45018736726009,
+      "o_cus": 46.41099333742218,
+      "metal": 204.6338917230506
+    },
+    "obridge_minus_ocus": 37.03919402983791,
+    "obridge_minus_metal": -121.18370435579051,
+    "relaxed_lattice_angstrom": null
+  },
+  "c400": {
+    "delta_h_f_ev": -3.0657567607230476,
+    "gamma_mev_per_angstrom2": {
+      "o_bridge": 82.83091799127807,
+      "o_cus": 45.877982444927184,
+      "metal": 203.76645649810177
+    },
+    "obridge_minus_ocus": 36.952935546350886,
+    "obridge_minus_metal": -120.9355385068237,
+    "change_against_base": {
+      "delta_h_f_ev": 0.013144455745077721,
+      "obridge_minus_ocus": -0.08625848348702192,
+      "obridge_minus_metal": 0.24816584896680638,
+      "max_force_change_ev_per_angstrom": 0.1995620203411128
+    },
+    "within_criteria": true
+  },
+  "c800": {
+    "delta_h_f_ev": -3.0715184464759204,
+    "gamma_mev_per_angstrom2": {
+      "o_bridge": 83.24035361760664,
+      "o_cus": 46.40344169031891,
+      "metal": 204.2348225722898
+    },
+    "obridge_minus_ocus": 36.83691192728774,
+    "obridge_minus_metal": -120.99446895468316,
+    "change_against_base": {
+      "delta_h_f_ev": 0.007382769992204885,
+      "obridge_minus_ocus": -0.20228210255017132,
+      "obridge_minus_metal": 0.1892354011073536,
+      "max_force_change_ev_per_angstrom": 0.07274225031977966
+    },
+    "within_criteria": true,
+    "relaxed_lattice_angstrom": {
+      "a": 4.5362042796004,
+      "b": 4.5362042780286,
+      "c": 3.1362057066505
+    }
+  },
+  "tzv2p": {
+    "delta_h_f_ev": -3.0782065659141153,
+    "gamma_mev_per_angstrom2": {
+      "o_bridge": 84.74520169022817,
+      "o_cus": 46.24481762874221,
+      "metal": 206.3202310669142
+    },
+    "obridge_minus_ocus": 38.50038406148596,
+    "obridge_minus_metal": -121.57502937668603,
+    "change_against_base": {
+      "delta_h_f_ev": 0.0006946505540099679,
+      "obridge_minus_ocus": 1.4611900316480515,
+      "obridge_minus_metal": -0.3913250208955219,
+      "max_force_change_ev_per_angstrom": 0.09366343736034266
+    },
+    "within_criteria": true
+  },
+  "k015": {
+    "delta_h_f_ev": -3.0782535577194494,
+    "gamma_mev_per_angstrom2": {
+      "o_bridge": 83.37696811551407,
+      "o_cus": 46.35970275965664,
+      "metal": 204.36094459957056
+    },
+    "obridge_minus_ocus": 37.01726535585743,
+    "obridge_minus_metal": -120.98397648405648,
+    "change_against_base": {
+      "delta_h_f_ev": 0.0006476587486758945,
+      "obridge_minus_ocus": -0.02192867398047582,
+      "obridge_minus_metal": 0.1997278717340265,
+      "max_force_change_ev_per_angstrom": 0.040274799864916666
+    },
+    "within_criteria": true
+  },
+  "t150": {
+    "delta_h_f_ev": -3.0772231264694483,
+    "gamma_mev_per_angstrom2": {
+      "o_bridge": 83.40222589632496,
+      "o_cus": 46.42281524415624,
+      "metal": 204.32593637793693
+    },
+    "obridge_minus_ocus": 36.979410652168724,
+    "obridge_minus_metal": -120.92371048161196,
+    "change_against_k015": {
+      "delta_h_f_ev": 0.0010304312500011292,
+      "obridge_minus_ocus": -0.03785470368870847,
+      "obridge_minus_metal": 0.060266002444521405,
+      "max_force_change_ev_per_angstrom": 0.031391092377355934
+    },
+    "within_criteria": true
+  },
+  "vac30": {
+    "delta_h_f_ev": -3.0789012164681253,
+    "gamma_mev_per_angstrom2": {
+      "o_bridge": 83.61644080915441,
+      "o_cus": 46.597703804264825,
+      "metal": 204.75692732549533
+    },
+    "obridge_minus_ocus": 37.01873700488959,
+    "obridge_minus_metal": -121.14048651634091,
+    "change_against_base": {
+      "delta_h_f_ev": 0.0,
+      "obridge_minus_ocus": -0.020457024948321134,
+      "obridge_minus_metal": 0.04321783944959634
+    },
+    "within_criteria": true
+  }
+}

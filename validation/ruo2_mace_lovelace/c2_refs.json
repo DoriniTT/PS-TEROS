@@ -1,0 +1,11 @@
+{
+  "workgraph_pk": 919,
+  "settings": {
+    "basis": "DZVP",
+    "cutoff": 800,
+    "kspacing": 0.2,
+    "temperature": 300,
+    "vacuum": 22.0,
+    "chosen": "2026-10-17, from C1 (c1_check.json): every level within the plan's criteria at 600 Ry; 800 Ry chosen because forces still change by 0.073 eV/A from 600 to 800 Ry, the 800 Ry jobs cost the same, and the 600 Ry CELL_OPT stalled (2 steps in 4 h) while the 800 Ry one finished in 9 min. DZVP kept: TZV2P changes the gamma differences by at most 1.46 meV/A^2 (criterion 2) at twice the cost; it changes forces by up to 0.094 eV/A, which does not enter the comparison of the MACE route with CP2K (both use one recipe)."
+  }
+}

@@ -103,7 +103,9 @@ def relaxed_bulk():
     from aiida import orm
 
     node = orm.load_node(json.loads((HERE / "c2_refs.json").read_text())["workgraph_pk"])
-    bulk = node.outputs["bulk_relaxed_structure"].get_pymatgen()
+    from psteros.backends.cp2k import _stage_output
+
+    bulk = _stage_output(node, "bulk", "structure").get_pymatgen()
     a, c = (bulk.lattice.a + bulk.lattice.b) / 2, bulk.lattice.c
     # psteros.rutile_bulk puts M at (0, 0, 0) first and O at (u, u, 0) third; CP2K keeps the order
     assert bulk[0].specie.symbol == "Ru" and bulk[2].specie.symbol == "O"

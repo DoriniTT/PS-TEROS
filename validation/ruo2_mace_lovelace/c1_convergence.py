@@ -188,8 +188,14 @@ def check() -> None:
         table[level]["within_criteria"] = (abs(changes["delta_h_f_ev"]) <= 0.05
                                            and abs(changes["obridge_minus_ocus"]) <= 2.0
                                            and abs(changes["obridge_minus_metal"]) <= 2.0)
+    from psteros.backends.cp2k import _stage_output
+
     for level in CELL_LEVELS:
-        lattice = node.outputs[f"{level}_bulk_cell_structure"].get_pymatgen().lattice
+        structure = _stage_output(node, f"{level}_bulk_cell", "structure")
+        if structure is None:
+            table[level]["relaxed_lattice_angstrom"] = None  # not finished
+            continue
+        lattice = structure.get_pymatgen().lattice
         table[level]["relaxed_lattice_angstrom"] = {"a": lattice.a, "b": lattice.b, "c": lattice.c}
     print(json.dumps(table, indent=2))
     (HERE / "c1_check.json").write_text(json.dumps(table, indent=2) + "\n")

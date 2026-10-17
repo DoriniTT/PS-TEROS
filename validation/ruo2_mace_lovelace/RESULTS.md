@@ -59,6 +59,33 @@ The force on the moved O differs between the two CP2K builds at the same setting
 −0.782 eV/A here), as do the total energies (the data files of the two versions differ): one build for the whole
 study is required, which is why every CP2K step runs on Phileas.
 
-## C1: convergence on Phileas (WorkGraph 673, submitted 2026-10-17)
+## C1: convergence on Phileas (WorkGraph 673, 2026-10-17)
 
-42 CP2K calculations, 2 at a time on one 96-core node each. Results below when it finishes.
+39 CP2K calculations, 2 at a time on one 96-core node each (37 statics of 13 s to 7 min, 2 cell optimisations).
+Experimental lattices, unrelaxed slabs; `c1_check.json`. Changes against the level compared with (base: DZVP,
+600 Ry, k-spacing 0.20, 300 K, 22 A; t150 is compared with k015):
+
+| Change | ΔH_f (eV/f.u.) | Δ[γ(o_bridge) − γ(o_cus)] | Δ[γ(o_bridge) − γ(metal)] (meV/A²) | Largest force change (eV/A) | Criteria |
+|---|---:|---:|---:|---:|---|
+| 600 → 400 Ry | +0.013 | −0.09 | +0.25 | 0.200 | pass |
+| 600 → 800 Ry | +0.007 | −0.20 | +0.19 | 0.073 | pass |
+| DZVP → TZV2P | +0.001 | +1.46 | −0.39 | 0.094 | pass |
+| k-spacing 0.20 → 0.15 | +0.001 | −0.02 | +0.20 | 0.040 | pass |
+| 300 → 150 K (at 0.15) | +0.001 | −0.04 | +0.06 | 0.031 | pass |
+| vacuum 22 → 30 A | 0.000 | −0.02 | +0.04 | — | pass |
+
+Baseline values: ΔH_f = −3.079 eV/f.u. (Reuter and Scheffler −3.16, experiment −3.19); unrelaxed γ at Δμ_O = 0:
+o_bridge 83.5, o_cus 46.4, metal 204.6 meV/A² (the literature 49 meV/A² is for relaxed slabs; G0 uses R1).
+
+Bulk CELL_OPT (analytical stress with k-points): at 800 Ry it converged in 9 min, a = 4.536 A, c = 3.136 A; at
+600 Ry it stalled after two optimisation steps until the 4 h walltime, and was stopped with the graph.
+
+**Settings chosen (`settings.json`): DZVP-MOLOPT-PBE-GTH (UZH), 800 Ry, REL_CUTOFF 60, k-spacing 0.20, Fermi-Dirac
+300 K, 22 A vacuum.** Every level passes at 600 Ry; 800 Ry because the forces still move by 0.073 eV/A from 600 to
+800 Ry at no extra cost and because the 600 Ry cell optimisation stalled. TZV2P is not needed by the criteria
+(+1.46 meV/A² ≤ 2) and costs twice as much; its force change (0.094 eV/A) does not enter the comparison of the MACE
+route with CP2K, which share one recipe.
+
+## C2 and C3 (from 2026-10-17)
+
+References (WorkGraph 919): bulk RuO2 and hcp Ru CELL_OPT -> static, O2 GEO_OPT -> static.

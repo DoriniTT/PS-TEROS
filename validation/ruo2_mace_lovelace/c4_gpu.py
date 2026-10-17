@@ -52,8 +52,16 @@ def graph(name: str):
     return orm.load_node(json.loads((HERE / name).read_text())["workgraph_pk"])
 
 
-def labelled(node, label: str, retrieved_key: str) -> mlip.LabelledStructure:
-    structure = node.outputs[retrieved_key].creator.inputs.structure.get_pymatgen()
+def input_structure(node, label: str):
+    """The input structure of the CP2K job of ``label`` (its static stage when there is one)."""
+
+    from psteros.backends.cp2k import _stage_output
+
+    return _stage_output(node, label, "retrieved").creator.inputs.structure.get_pymatgen()
+
+
+def labelled(node, label: str) -> mlip.LabelledStructure:
+    structure = input_structure(node, label)
     energy = psteros.read_cp2k_results(node, [label])[0][label]
     forces = psteros.read_cp2k_forces(node, [label])[label]
     return mlip.LabelledStructure(label, structure, energy, forces)
@@ -63,21 +71,20 @@ def frames(rattled: bool) -> list[mlip.LabelledStructure]:
     refs, labels = graph("c2_refs.json"), graph("c2_labels.json")
     dos = psteros.read_cp2k_dos(refs, ["bulk"])["bulk"]
     psteros.require_metallic("bulk", partially_occupied=dos.partially_occupied_bins())
-    result = [labelled(refs, label, f"{label}_static_retrieved") for label in REFERENCES]
+    result = [labelled(refs, label) for label in REFERENCES]
     names = json.loads((HERE / "c2_labels.json").read_text())["labels"]
     for label in names:
         if "_r" in label and label.rsplit("_r", 1)[1].isdigit() and not rattled:
             continue
-        result.append(labelled(labels, label, f"{label}_retrieved"))
+        result.append(labelled(labels, label))
     return result
 
 
 def relaxation_structures() -> dict:
     refs, labels = graph("c2_refs.json"), graph("c2_labels.json")
-    structures = {label: refs.outputs[f"{label}_static_retrieved"].creator.inputs.structure.get_pymatgen()
-                  for label in REFERENCES}
+    structures = {label: input_structure(refs, label) for label in REFERENCES}
     for label in psteros.RUTILE_110_TERMINATIONS:
-        structures[label] = labels.outputs[f"{label}_retrieved"].creator.inputs.structure.get_pymatgen()
+        structures[label] = input_structure(labels, label)
     return structures
 
 

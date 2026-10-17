@@ -146,7 +146,9 @@ def report(path):
 
 def main() -> None:
     refs, labels, truth_graph = load("c2_refs.json"), load("c2_labels.json"), load("c3_truth.json")
-    slabs = {t: labels.outputs[f"{t}_retrieved"].creator.inputs.structure.get_pymatgen() for t in TERMINATIONS}
+    from psteros.backends.cp2k import _stage_output
+
+    slabs = {t: _stage_output(labels, t, "retrieved").creator.inputs.structure.get_pymatgen() for t in TERMINATIONS}
     ref = energies(refs, ("bulk", "ru", "o2"))
     bulk110 = energies(labels, ("bulk110",))["bulk110"]
     dft_refs = dict(bulk_energy=bulk110, bulk_composition={"Ru": 2, "O": 4}, o2_energy=ref["o2"],
