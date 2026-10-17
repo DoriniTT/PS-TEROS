@@ -162,6 +162,44 @@ Calculation configuration
    ``clean_workdir``
       Whether the AiiDA work chain should clean its remote working directory.
 
+.. _api-cp2k-calculation-config:
+
+.. index:: Cp2kCalculationConfig
+
+``Cp2kCalculationConfig(code_label, parameters, basis_sets, potentials, basis_set_file="BASIS_MOLOPT", potential_file="GTH_POTENTIALS", kpoints_spacing=0.20, input_files={}, max_iterations=3, clean_workdir=False)``
+   Describe inputs shared by aiida-cp2k ``Cp2kBaseWorkChain`` calculations
+   (``pip install '.[cp2k]'``); see :doc:`cp2k-workflow`.
+
+   ``code_label``
+      Full AiiDA label of a registered ``cp2k`` code.
+
+   ``parameters``
+      The CP2K input as aiida-cp2k's nested mapping, with upper-case section
+      names; ``FORCE_EVAL/DFT`` is required. ``GLOBAL/RUN_TYPE`` is the run
+      type (``ENERGY_FORCE`` when left out). The structure (``SUBSYS/CELL``,
+      ``COORD``, ``TOPOLOGY``) and ``DFT/KPOINTS`` must not be given: psteros
+      writes them. psteros adds one ``KIND`` per kind (unless ``SUBSYS/KIND``
+      is given), ``PRINT_LEVEL MEDIUM``, and for ``ENERGY_FORCE`` the force
+      file ``psteros_forces.dat`` and the density-of-states file
+      ``psteros.dos``.
+
+   ``basis_sets``, ``potentials``
+      Element -> basis-set name and element -> pseudopotential name; both
+      must name the same elements.
+
+   ``basis_set_file``, ``potential_file``
+      Files CP2K reads them from: its data directory, or ``input_files``
+      (file name -> local path), which are copied into every job.
+
+   ``kpoints_spacing``
+      Positive spacing in Å⁻¹ with the 2π: a Monkhorst-Pack mesh with
+      ``ceil(|b_i| / kpoints_spacing)`` points. ``None`` or a 1×1×1 mesh runs
+      at Γ only, without a ``KPOINTS`` section.
+
+   ``max_iterations``, ``clean_workdir``
+      Restarts of the work chain (aiida-cp2k's restart handler is on) and
+      cleaning of the remote folder.
+
 .. _api-execution-policy:
 
 .. index:: ExecutionPolicy
@@ -194,11 +232,12 @@ Calculation configuration
 ``CalculationOverride(parameters=None, kpoints_distance=None, settings={}, metadata={}, fixed_sites=())``
    Describe a deliberate change for one labelled structure. For VASP,
    ``parameters={"INCAR": {...}}`` updates the INCAR of the shared recipe; for
-   QE, ``parameters`` deep-merges namelist values. ``kpoints_distance``
-   replaces the recipe's k-point distance (QE ``kpoints_distance``, VASP
-   ``kpoints_spacing``) and must be positive. ``fixed_sites`` holds the
-   zero-based indices of sites kept fixed during a relaxation: VASP selective
-   dynamics, QE ``FIXED_COORDS``. ``settings`` and ``metadata`` are passed to
+   QE, ``parameters`` deep-merges namelist values; for CP2K it deep-merges
+   input sections. ``kpoints_distance`` replaces the recipe's k-point distance
+   (QE ``kpoints_distance``, VASP and CP2K ``kpoints_spacing``) and must be
+   positive. ``fixed_sites`` holds the zero-based indices of sites kept fixed
+   during a relaxation: VASP selective dynamics, QE ``FIXED_COORDS``, CP2K
+   ``FIXED_ATOMS``. ``settings`` and ``metadata`` are passed to
    the backend task.
 
 .. _api-surface-workflow-config:
@@ -207,9 +246,10 @@ Calculation configuration
 
 ``SurfaceWorkflowConfig(backend, calculation, execution, name="psteros_surface", role_overrides={})``
    Combine one calculation configuration with an execution policy. Use
-   ``backend="vasp"`` with ``VaspCalculationConfig`` or ``backend="qe"`` with
-   ``QeCalculationConfig``; any other backend string or a mismatched
-   configuration raises an error. ``name`` may contain letters, numbers,
+   ``backend="vasp"`` with ``VaspCalculationConfig``, ``backend="qe"`` with
+   ``QeCalculationConfig`` or ``backend="cp2k"`` with
+   ``Cp2kCalculationConfig``; any other backend string or a mismatched
+   configuration raises an error. CP2K recipes go to the CP2K builders. ``name`` may contain letters, numbers,
    hyphens, and underscores. ``role_overrides`` maps structure labels to
    ``CalculationOverride`` objects.
 
@@ -283,6 +323,44 @@ Graph builders
 ``build_qe_relax_static_workgraph(structures, relaxation, static, *, submit=False)``
    ``build_relax_static_workgraph`` restricted to ``QeCalculationConfig``
    recipes.
+
+``build_surface_workgraph``, ``build_relax_static_workgraph`` and
+``build_vibrations_workgraph`` raise ``ValueError`` for a CP2K recipe.
+
+.. _api-build-cp2k-surface-workgraph:
+
+.. index:: build_cp2k_surface_workgraph
+
+``build_cp2k_surface_workgraph(structures, config, *, submit=False)``
+   One CP2K calculation per label, with the recipe's run type
+   (``ENERGY_FORCE`` by default). Graph outputs: ``<label>_parameters``,
+   ``<label>_structure`` (when CP2K writes one) and ``<label>_retrieved``.
+
+.. _api-build-cp2k-relax-static-workgraph:
+
+.. index:: build_cp2k_relax_static_workgraph
+
+``build_cp2k_relax_static_workgraph(structures, relaxation, static, *, submit=False)``
+   The CP2K counterpart of ``build_relax_static_workgraph``. Every relaxation
+   (recipe plus override) needs ``GLOBAL/RUN_TYPE`` ``GEO_OPT`` or
+   ``CELL_OPT`` and every static calculation ``ENERGY_FORCE`` or ``ENERGY``;
+   both recipes share one execution policy. Graph outputs:
+   ``<label>_relaxed_structure``, ``<label>_relax_parameters``,
+   ``<label>_static_parameters`` and the ``_retrieved`` folders of both
+   stages.
+
+.. _api-read-cp2k-results:
+
+.. index:: read_cp2k_results, read_cp2k_forces, read_cp2k_dos, Cp2kDos
+
+``read_cp2k_results(graph, labels)``, ``read_cp2k_forces(graph, labels)``, ``read_cp2k_dos(graph, labels)``
+   Read a finished CP2K graph (``orm.load_node(pk)``): energies in eV (the
+   static stage when there is one) and structures; forces in eV/Å from the
+   force file of each ``ENERGY_FORCE`` run (unit taken from its header); and
+   the density of states as ``Cp2kDos``, whose
+   ``partially_occupied_bins(tolerance=0.01)`` counts energy bins filled
+   between 1% and 99%: more than zero means partly filled states at the
+   Fermi level, a metal.
 
 Thermodynamic analysis
 ----------------------

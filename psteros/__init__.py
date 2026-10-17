@@ -2,10 +2,12 @@
 
 VASP through ``aiida-vasp`` is the central backend; Quantum ESPRESSO through
 ``aiida-quantumespresso`` is supported with the same recipes and analysis.
+CP2K through ``aiida-cp2k`` runs static calculations and relaxations.
 """
 
 from .config import (
     CalculationOverride,
+    Cp2kCalculationConfig,
     ExecutionPolicy,
     QeCalculationConfig,
     SurfaceWorkflowConfig,
@@ -87,7 +89,14 @@ from .vibrations import (
     solid_free_energy_ev,
 )
 from .vibrations_workflow import VibrationsConfig, build_vibrations_workgraph, read_vibrations
-from .workflow import build_qe_relax_static_workgraph, build_relax_static_workgraph, build_surface_workgraph
+from .workflow import (
+    build_cp2k_relax_static_workgraph,
+    build_cp2k_surface_workgraph,
+    build_qe_relax_static_workgraph,
+    build_relax_static_workgraph,
+    build_surface_workgraph,
+)
+from .backends.cp2k import Cp2kDos, read_cp2k_dos, read_cp2k_forces, read_cp2k_results
 
 __version__ = "2.0.0"
 
@@ -171,4 +180,11 @@ __all__ = [
     "VibrationsConfig",
     "build_vibrations_workgraph",
     "read_vibrations",
+    "Cp2kCalculationConfig",
+    "Cp2kDos",
+    "build_cp2k_relax_static_workgraph",
+    "build_cp2k_surface_workgraph",
+    "read_cp2k_dos",
+    "read_cp2k_forces",
+    "read_cp2k_results",
 ]

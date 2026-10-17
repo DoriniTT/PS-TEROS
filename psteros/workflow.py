@@ -5,9 +5,27 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from psteros.backends import add_qe_task, add_vasp_task
+from psteros.backends import add_cp2k_task, add_qe_task, add_vasp_task
 from psteros.backends.qe import as_aiida_structure
-from psteros.config import QeCalculationConfig, SurfaceWorkflowConfig
+from psteros.config import Cp2kCalculationConfig, QeCalculationConfig, SurfaceWorkflowConfig
+
+
+def _refuse_cp2k(*configs: SurfaceWorkflowConfig) -> None:
+    """The QE/VASP builders branch on ``backend == "vasp"``; keep a CP2K recipe out of their QE branch."""
+
+    if any(config.backend == "cp2k" for config in configs):
+        raise ValueError(
+            "CP2K recipes are built with psteros.build_cp2k_surface_workgraph or "
+            "psteros.build_cp2k_relax_static_workgraph"
+        )
+
+
+def _check_labels(structures: Mapping[str, Any]) -> None:
+    if not structures:
+        raise ValueError("at least one labelled structure is required")
+    invalid = [label for label in structures if not label or not label.replace("_", "").replace("-", "").isalnum()]
+    if invalid:
+        raise ValueError(f"invalid calculation labels: {invalid}")
 
 
 def build_surface_workgraph(
@@ -39,6 +57,7 @@ def build_surface_workgraph(
     invalid = [label for label in structures if not label or not label.replace("_", "").replace("-", "").isalnum()]
     if invalid:
         raise ValueError(f"invalid calculation labels: {invalid}")
+    _refuse_cp2k(config)
 
     from aiida_workgraph import WorkGraph
 
@@ -118,6 +137,7 @@ def build_relax_static_workgraph(
 
     if not structures:
         raise ValueError("at least one labelled structure is required")
+    _refuse_cp2k(relaxation, static)
     if relaxation.backend != static.backend:
         raise ValueError("relaxation and static recipes must use the same backend")
     if relaxation.execution != static.execution:
@@ -205,3 +225,115 @@ def build_qe_relax_static_workgraph(
     if not isinstance(static.calculation, QeCalculationConfig):
         raise TypeError("static requires QeCalculationConfig")
     return build_relax_static_workgraph(structures, relaxation, static, submit=submit)
+
+
+def _cp2k_recipe(config: SurfaceWorkflowConfig, builder: str) -> Cp2kCalculationConfig:
+    if config.backend != "cp2k" or not isinstance(config.calculation, Cp2kCalculationConfig):
+        raise TypeError(f"{builder} requires CP2K recipes (backend='cp2k', Cp2kCalculationConfig)")
+    return config.calculation
+
+
+def build_cp2k_surface_workgraph(
+    structures: Mapping[str, Any],
+    config: SurfaceWorkflowConfig,
+    *,
+    submit: bool = False,
+) -> Any:
+    """Build or submit a WorkGraph with one CP2K calculation per labelled structure.
+
+    The run type is the recipe's ``GLOBAL/RUN_TYPE`` (``ENERGY_FORCE`` when
+    left out), so this is the CP2K counterpart of
+    :func:`build_surface_workgraph` for static calculations. At most
+    ``ExecutionPolicy.max_concurrent_jobs`` calculations run at once.
+
+    Graph outputs per label: ``<label>_parameters`` (aiida-cp2k output, energy
+    in Hartree), ``<label>_structure`` (when CP2K writes one) and
+    ``<label>_retrieved``, which holds the force and density-of-states files
+    of an ``ENERGY_FORCE`` run. :func:`psteros.read_cp2k_results`,
+    :func:`psteros.read_cp2k_forces` and :func:`psteros.read_cp2k_dos` read
+    them in eV and eV/A.
+    """
+
+    _check_labels(structures)
+    calculation = _cp2k_recipe(config, "build_cp2k_surface_workgraph")
+
+    from aiida_workgraph import WorkGraph
+
+    workgraph = WorkGraph(name=config.name)
+    if config.execution.max_concurrent_jobs is not None:
+        workgraph.max_number_jobs = config.execution.max_concurrent_jobs
+    for label, structure in structures.items():
+        task = add_cp2k_task(
+            workgraph, label=label, structure=structure, config=calculation,
+            execution=config.execution, override=config.role_overrides.get(label),
+        )
+        workgraph.outputs.__setattr__(f"{label}_parameters", task.outputs.output_parameters)
+        workgraph.outputs.__setattr__(f"{label}_structure", task.outputs.output_structure)
+        workgraph.outputs.__setattr__(f"{label}_retrieved", task.outputs.retrieved)
+    if submit:
+        workgraph.submit()
+    return workgraph
+
+
+def build_cp2k_relax_static_workgraph(
+    structures: Mapping[str, Any],
+    relaxation: SurfaceWorkflowConfig,
+    static: SurfaceWorkflowConfig,
+    *,
+    submit: bool = False,
+) -> Any:
+    """Build a relaxation-to-static WorkGraph for each structure with CP2K.
+
+    The CP2K counterpart of :func:`build_relax_static_workgraph`: each static
+    calculation starts from the structure of the preceding relaxation, and its
+    energy is the one to analyse. Every relaxation (recipe plus override)
+    must have ``GLOBAL/RUN_TYPE`` ``GEO_OPT`` or ``CELL_OPT``, every static
+    one ``ENERGY_FORCE`` or ``ENERGY`` (or none). ``fixed_sites`` of the
+    relaxation overrides become ``FIXED_ATOMS``. Both recipes share one
+    execution policy.
+
+    Graph outputs per label, in the pattern of the QE builder:
+    ``<label>_relaxed_structure``, ``<label>_relax_parameters``,
+    ``<label>_static_parameters`` and the ``_retrieved`` folders of both
+    stages; :func:`psteros.read_cp2k_results` reads them.
+    """
+
+    from psteros.backends.cp2k import RELAX_RUN_TYPES, STATIC_RUN_TYPES, cp2k_run_type
+
+    _check_labels(structures)
+    relax_recipe = _cp2k_recipe(relaxation, "build_cp2k_relax_static_workgraph")
+    static_recipe = _cp2k_recipe(static, "build_cp2k_relax_static_workgraph")
+    if relaxation.execution != static.execution:
+        raise ValueError("relaxation and static recipes must share one execution policy")
+    for label in structures:
+        relax_type = cp2k_run_type(relax_recipe, relaxation.role_overrides.get(label))
+        if relax_type not in RELAX_RUN_TYPES:
+            raise ValueError(f"{label}: the CP2K relaxation needs GLOBAL/RUN_TYPE GEO_OPT or CELL_OPT, got {relax_type}")
+        static_type = cp2k_run_type(static_recipe, static.role_overrides.get(label))
+        if static_type not in STATIC_RUN_TYPES:
+            raise ValueError(f"{label}: the CP2K static calculation must not move atoms, got RUN_TYPE {static_type}")
+
+    from aiida_workgraph import WorkGraph
+
+    workgraph = WorkGraph(name=f"{relaxation.name}_relax_static")
+    if relaxation.execution.max_concurrent_jobs is not None:
+        workgraph.max_number_jobs = relaxation.execution.max_concurrent_jobs
+    for label, source_structure in structures.items():
+        initial_structure = as_aiida_structure(source_structure)
+        relax_task = add_cp2k_task(
+            workgraph, label=f"{label}_relax", structure=initial_structure, config=relax_recipe,
+            execution=relaxation.execution, override=relaxation.role_overrides.get(label),
+        )
+        static_task = add_cp2k_task(
+            workgraph, label=f"{label}_static", structure=relax_task.outputs.output_structure,
+            kinds_structure=initial_structure, config=static_recipe, execution=static.execution,
+            override=static.role_overrides.get(label),
+        )
+        workgraph.outputs.__setattr__(f"{label}_relaxed_structure", relax_task.outputs.output_structure)
+        workgraph.outputs.__setattr__(f"{label}_relax_parameters", relax_task.outputs.output_parameters)
+        workgraph.outputs.__setattr__(f"{label}_relax_retrieved", relax_task.outputs.retrieved)
+        workgraph.outputs.__setattr__(f"{label}_static_parameters", static_task.outputs.output_parameters)
+        workgraph.outputs.__setattr__(f"{label}_static_retrieved", static_task.outputs.retrieved)
+    if submit:
+        workgraph.submit()
+    return workgraph

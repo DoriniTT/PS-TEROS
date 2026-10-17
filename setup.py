@@ -20,6 +20,9 @@ setup(
             "aiida-quantumespresso",
             "aiida-pseudo",
         ],
+        "cp2k": [
+            "aiida-cp2k>=2.1",
+        ],
         "docs": [
             "sphinx>=4.0.0",
             "sphinx-rtd-theme>=1.0.0",

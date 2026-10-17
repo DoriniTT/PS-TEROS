@@ -40,6 +40,10 @@ Recent Updates
 * Notes in :doc:`/vibrations` on imaginary modes, other compounds (ternary oxides) and running a long graph (queue limits, one daemon worker, recovery)
 * A mode task of ``build_vibrations_workgraph`` that starts with some retrieved folders missing now raises a ``ValueError`` that
   names them, instead of a bare ``KeyError``
+* CP2K backend (``pip install '.[cp2k]'``): ``Cp2kCalculationConfig``, ``build_cp2k_surface_workgraph``,
+  ``build_cp2k_relax_static_workgraph`` and the readers ``read_cp2k_results`` (eV), ``read_cp2k_forces`` (eV/Å) and
+  ``read_cp2k_dos``, on aiida-cp2k's ``Cp2kBaseWorkChain`` (see :doc:`/cp2k-workflow`). The QE/VASP builders and
+  ``build_vibrations_workgraph`` now raise ``ValueError`` for a CP2K recipe; QE and VASP graphs are unchanged
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features
