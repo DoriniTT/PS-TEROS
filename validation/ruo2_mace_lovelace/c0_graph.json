@@ -1,0 +1,12 @@
+{
+  "workgraph_pk": 24,
+  "labels": [
+    "base",
+    "plus",
+    "minus"
+  ],
+  "code": "CP2K-2024.3@lovelace",
+  "moved_site": 2,
+  "shift_angstrom": 0.05,
+  "delta_angstrom": 0.01
+}

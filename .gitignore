@@ -204,3 +204,4 @@ examples/polar_surfaces/output/
 submit_test/
 examples/**/backup/
 .git-commit.sh
+validation/ruo2_mace_lovelace/local/

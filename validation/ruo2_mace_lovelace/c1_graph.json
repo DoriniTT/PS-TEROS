@@ -1,0 +1,32 @@
+{
+  "workgraph_pk": 335,
+  "levels": {
+    "base": {},
+    "c400": {
+      "cutoff": 400
+    },
+    "c800": {
+      "cutoff": 800
+    },
+    "tzv2p": {
+      "basis": "TZV2P"
+    },
+    "k015": {
+      "kspacing": 0.15
+    },
+    "t150": {
+      "kspacing": 0.15,
+      "temperature": 150
+    },
+    "vac30": {
+      "vacuum": 30.0
+    }
+  },
+  "baseline": {
+    "cutoff": 600,
+    "basis": "DZVP",
+    "kspacing": 0.2,
+    "temperature": 300,
+    "vacuum": 22.0
+  }
+}
