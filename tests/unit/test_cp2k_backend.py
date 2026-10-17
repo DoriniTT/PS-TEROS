@@ -220,6 +220,41 @@ def test_readers_convert_units_and_prefer_the_static_stage() -> None:
         psteros.read_cp2k_results(Graph(), ["c"])
 
 
+def test_readers_use_the_called_work_chains_while_the_graph_runs() -> None:
+    pytest.importorskip("aiida")
+
+    class Node:
+        def __init__(self, pk, outputs):
+            self.pk, self.outputs = pk, outputs
+
+    class Link:
+        def __init__(self, label, node):
+            self.link_label, self.node = label, node
+
+    class Links:
+        def get_outgoing(self, link_type=None):
+            return self
+
+        def all(self):
+            return [
+                Link("a_static_cp2k", Node(5, {"output_parameters": {"energy": -1.0}})),
+                Link("a_static_cp2k", Node(9, {"output_parameters": {"energy": -2.0},
+                                               "retrieved": _Folder({FORCES_FILE: FORCES_AU})})),  # re-run: newest
+                Link("a_relax_cp2k", Node(3, {"output_structure": "relaxed-a"})),
+                Link("b_cp2k", Node(7, {})),  # still running
+            ]
+
+    class Graph:
+        outputs = {}  # aiida-workgraph attaches graph outputs only when every task succeeded
+        base = type("Base", (), {"links": Links()})()
+
+    energies, structures = psteros.read_cp2k_results(Graph(), ["a"])
+    assert energies == {"a": pytest.approx(-2.0 * HARTREE_TO_EV)} and structures == {"a": "relaxed-a"}
+    assert psteros.read_cp2k_forces(Graph(), ["a"])["a"].shape == (2, 3)
+    with pytest.raises(ValueError, match="no output parameters for b"):
+        psteros.read_cp2k_results(Graph(), ["b"])
+
+
 def _structures():
     pytest.importorskip("pymatgen")
     from pymatgen.core import Lattice, Structure

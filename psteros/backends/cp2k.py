@@ -329,8 +329,43 @@ def _output(outputs: Any, names: Sequence[str]) -> Any:
     return None
 
 
+def _children(graph: Any) -> dict[str, Any]:
+    """Work chains called by a WorkGraph process, by task name (the newest when a task was re-run)."""
+
+    base = getattr(graph, "base", None)
+    if base is None or not hasattr(base, "links"):
+        return {}
+    from aiida.common.links import LinkType
+
+    links = base.links.get_outgoing(link_type=(LinkType.CALL_WORK, LinkType.CALL_CALC)).all()
+    return {link.link_label: link.node for link in sorted(links, key=lambda link: link.node.pk)}
+
+
+def _stage_output(graph: Any, label: str, kind: str) -> Any:
+    """A graph output of ``label`` or, while the graph runs or after it failed, the output of its task.
+
+    ``kind`` is ``"parameters"`` or ``"retrieved"`` (the static stage when there is one) or ``"structure"``
+    (the relaxed structure when there is one).
+    """
+
+    if kind == "structure":
+        names, tasks, port = (f"{label}_relaxed_structure", f"{label}_structure"), (f"{label}_relax", label), "output_structure"
+    else:
+        names = (f"{label}_static_{kind}", f"{label}_{kind}")
+        tasks, port = (f"{label}_static", label), "output_parameters" if kind == "parameters" else "retrieved"
+    value = _output(graph.outputs, names)
+    if value is not None:
+        return value
+    children = _children(graph)
+    for task in tasks:
+        child = children.get(f"{task}_cp2k")
+        if child is not None:
+            return child.outputs[port] if port in child.outputs else None
+    return None
+
+
 def _retrieved_file(graph: Any, label: str, filename: str) -> str:
-    retrieved = _output(graph.outputs, (f"{label}_static_retrieved", f"{label}_retrieved"))
+    retrieved = _stage_output(graph, label, "retrieved")
     if retrieved is None:
         raise ValueError(f"no retrieved folder for {label}")
     try:
@@ -347,12 +382,14 @@ def read_cp2k_results(graph: Any, labels: Sequence[str]) -> tuple[dict[str, floa
     :func:`psteros.build_cp2k_surface_workgraph` (one calculation per label).
     The energy is CP2K's total ``FORCE_EVAL`` energy; with smearing it is the
     free energy, whose derivatives are the forces. ``graph`` is the WorkGraph
-    process node (``orm.load_node(pk)``).
+    process node (``orm.load_node(pk)``). While the graph runs, or after some
+    of its tasks failed, the outputs are read from the work chains it called,
+    so finished labels can be read before the others.
     """
 
     energies, structures = {}, {}
     for label in labels:
-        parameters = _output(graph.outputs, (f"{label}_static_parameters", f"{label}_parameters"))
+        parameters = _stage_output(graph, label, "parameters")
         if parameters is None:
             raise ValueError(f"no output parameters for {label}")
         values = parameters.get_dict() if hasattr(parameters, "get_dict") else dict(parameters)
@@ -361,7 +398,7 @@ def read_cp2k_results(graph: Any, labels: Sequence[str]) -> tuple[dict[str, floa
         if values.get("energy_units", "a.u.") != "a.u.":
             raise ValueError(f"{label}: unexpected CP2K energy unit {values['energy_units']!r}")
         energies[label] = float(values["energy"]) * HARTREE_TO_EV
-        structure = _output(graph.outputs, (f"{label}_relaxed_structure", f"{label}_structure"))
+        structure = _stage_output(graph, label, "structure")
         if structure is not None:
             structures[label] = structure
     return energies, structures
