@@ -181,3 +181,33 @@ steps in a CPU test). Without it a resumed run diverged (8e-4 in the weights aft
 of a 4-pass replay fine-tune reproduce the uninterrupted run on CPU (energies identical, forces within 4e-19 eV/A,
 both heads). The recipe is kept as it is (the Ag3PO4 r4 models were trained the same way); each chunk records that
 gradient's norm, since a norm above the clip value of 1 scales every update down.
+
+### First finished model: M2, seed 20260920 (2026-10-18, chunks 0-23, 23-80, 80-100; jobs 1599, 1648, 1667)
+
+Model `/work/dorinitt/psteros_mace_ruo2/models/ruo2_m2_seed20260920.model` (SHA-256 `22f9a861…`). The resumed chunks
+loaded their state (start at passes 23 and 80, checkpoint calls 23-79 and 80-99); the exported model is pass 99's
+EMA model. Accumulated gradient norm of the Bessel weights: 0.15 after 23 passes, 0.51 after 80 (below the clip
+value of 1).
+
+Fit to its own training frames (CP2K labels; reported, not a gate):
+
+| Frame | Energy error (meV/atom) | Force RMSE (meV/A) |
+|---|---:|---:|
+| bulk | −4.2 | 9.8 |
+| ru | +12.1 | 6.7 |
+| o2 | −2.7 | 139.9 |
+| o_bridge | −13.3 | 21.4 |
+| o_cus | −3.5 | 71.2 |
+| metal | −20.7 | 12.0 |
+| o_cus_half | −9.7 | 51.1 |
+| o_bridge_half | −18.4 | 25.5 |
+| o_cus_no_bridge | +8.3 | 31.0 |
+| bulk110 | −4.1 | 8.1 |
+
+Training curve of the `Default` head on these frames (EMA): energy RMSE 93 meV/atom after pass 0, 23 at pass 40,
+14-21 between passes 70 and 95, 11 at pass 99; force RMSE 168 -> 30-43 meV/A. Still decreasing and noisy at pass 100
+(batch 1, constant lr 1e-3): 100 passes over 10 frames are 1000 updates of the target head. The replay head drifts:
+on the replay validation structures its force RMSE against MH-1 is 376 meV/A after pass 0 and 414 after pass 99
+(median over structures 122 meV/A at the end). The r4 recipe was made for 71 frames of 892 atoms; here the target
+head sees 10 small frames per pass against 123 replay structures. The plan's recipe stays as fixed; the gates and
+the outcome rules decide.
