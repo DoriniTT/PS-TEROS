@@ -18,18 +18,24 @@ The energies of one diagram come from one source (see
 step 5 (the route that passed the RuO2 gates), or ``"mlip"``, the model at
 its own geometries (which did not). :func:`read_mlip_energies` returns one of
 them for every label; :func:`read_mlip_results` the relaxations.
+
+:class:`MlipSurfaceStudy` is the route for the slabs of a metallic binary
+compound from structures to the phase diagram: it names the calculations,
+fixes the slab centres, builds the graph and turns its energies into a
+:class:`psteros.SurfacePhaseDiagram`.
 """
 
 from __future__ import annotations
 
 import json
 import tempfile
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from psteros.config import CalculationOverride, ExecutionPolicy, SurfaceWorkflowConfig
 from psteros.mlip import MaceFineTuneConfig, MlipRelaxation, MlipRelaxConfig
+from psteros.surface_study import ChargeNeutralStudyResult
 
 MLIP_ENERGY_SOURCES = ("mlip", "mlip_dft")
 
@@ -434,3 +440,174 @@ def read_mlip_energies(graph: Any, labels: Sequence[str], *, energy_source: str 
     if missing:
         raise ValueError(f"no DFT energy at the model geometry for {missing} (dft_check off, or not finished)")
     return energies
+
+
+@dataclass
+class MlipSurfaceStudy:
+    """The MLIP route for the slabs of a metallic binary compound, from structures to the phase diagram.
+
+    Args:
+        bulk: Bulk (pymatgen ``Structure``) relaxed with the DFT recipe of
+            the study; it must be a metal (the graph checks its static).
+        references: ``{element: structure}`` of the reference of each element,
+            relaxed with the same recipe: the elemental solid or a molecule in
+            a box (O2). ``mu = E_ref / atoms + Delta mu``.
+        slabs: ``{label: slab}`` cut at the cell of ``bulk``, e.g. the
+            terminations of :func:`psteros.rutile_110_slab`.
+        fixed_half_width_angstrom: Sites within this distance of the slab
+            mid-plane stay in place in the MACE relaxations
+            (:func:`psteros.central_sites`); ``None`` frees every site.
+        rattled: Rattled copies of each slab added as training statics
+            (:func:`psteros.rattled_copies`, ``rattle_sigma_angstrom``,
+            ``rattle_seed``). 0, with one active-learning round, is the
+            validated recipe; 5 with ``active_learning_rounds=0`` is the
+            alternative that also passed (more DFT, one fine-tune).
+
+    The calculations are labelled ``bulk``, ``ref_<element>`` and the slab
+    labels. :meth:`build` returns the graph of
+    :func:`build_mlip_surface_workgraph`; :meth:`analyse` the phase diagram
+    from its energies, all of one source.
+    """
+
+    bulk: Any
+    references: Mapping[str, Any]
+    slabs: Mapping[str, Any]
+    fixed_half_width_angstrom: float | None = 1.5
+    rattled: int = 0
+    rattle_sigma_angstrom: float = 0.05
+    rattle_seed: int = 20261017
+    structures: dict = field(init=False)
+
+    def __post_init__(self) -> None:
+        from psteros.workflow import _check_labels
+
+        self.elements = sorted({site.specie.symbol for site in self.bulk})
+        if len(self.elements) != 2:
+            raise ValueError(
+                f"MlipSurfaceStudy is for binary compounds (validated on RuO2), got {self.bulk.composition.reduced_formula}"
+            )
+        missing = sorted(set(self.elements).difference(self.references))
+        if missing:
+            raise ValueError(f"references lacks a reference structure for {missing}")
+        if not self.slabs:
+            raise ValueError("at least one slab is required")
+        if isinstance(self.rattled, bool) or not isinstance(self.rattled, int) or self.rattled < 0:
+            raise ValueError("rattled must be a non-negative integer")
+        if self.fixed_half_width_angstrom is not None and self.fixed_half_width_angstrom <= 0:
+            raise ValueError("fixed_half_width_angstrom must be positive (or None)")
+        self.formula = self.bulk.composition.reduced_formula
+        self.structures = {"bulk": self.bulk, **{f"ref_{e}": self.references[e] for e in self.elements}}
+        for label, slab in self.slabs.items():
+            if label in self.structures:
+                raise ValueError(f"slab label {label!r} is taken by a reference")
+            if {site.specie.symbol for site in slab} - set(self.elements):
+                raise ValueError(f"{label}: the slab has elements that are not in the bulk")
+            self.structures[label] = slab
+        _check_labels(self.structures)
+
+    @property
+    def fixed_sites(self) -> dict[str, tuple[int, ...]]:
+        """Sites of each slab that the MACE relaxations keep in place."""
+
+        if self.fixed_half_width_angstrom is None:
+            return {}
+        from psteros.structures import central_sites
+
+        return {label: central_sites(slab, self.fixed_half_width_angstrom) for label, slab in self.slabs.items()}
+
+    @property
+    def training_structures(self) -> dict[str, Any]:
+        """The rattled slabs (only DFT statics for training), ``{"<slab>_r<i>": structure}``."""
+
+        if not self.rattled:
+            return {}
+        from psteros.mlip import rattled_copies
+
+        return rattled_copies(self.slabs, count=self.rattled, sigma_angstrom=self.rattle_sigma_angstrom,
+                              seed=self.rattle_seed)
+
+    def calculation_count(self, active_learning_rounds: int = 1, dft_check: bool = True) -> dict[str, int]:
+        """DFT statics and GPU jobs of :meth:`build` with these options."""
+
+        structures = len(self.structures)
+        statics = structures + len(self.slabs) * self.rattled
+        statics += structures * active_learning_rounds + (structures if dft_check else 0)
+        return {"dft_statics": statics, "gpu_jobs": 2 * (active_learning_rounds + 1)}
+
+    def summary(self) -> str:
+        counts = self.calculation_count()
+        lines = [f"{self.formula}: {len(self.slabs)} slabs, references {', '.join(self.elements)}; "
+                 f"{counts['dft_statics']} DFT statics and {counts['gpu_jobs']} GPU jobs with the defaults"]
+        fixed = self.fixed_sites
+        for label, slab in self.slabs.items():
+            lines.append(f"  {label}: {slab.composition.formula.replace(' ', '')}, {len(slab)} atoms, "
+                         f"{len(fixed.get(label, ()))} fixed")
+        return "\n".join(lines)
+
+    __str__ = summary
+
+    def build(
+        self,
+        static: SurfaceWorkflowConfig,
+        fine_tune: MaceFineTuneConfig,
+        relax: MlipRelaxConfig = MlipRelaxConfig(),
+        *,
+        job: MlipJobConfig,
+        active_learning_rounds: int = 1,
+        dft_check: bool = True,
+        submit: bool = False,
+    ) -> Any:
+        """The graph of :func:`build_mlip_surface_workgraph` for these structures (bulk checked as a metal)."""
+
+        return build_mlip_surface_workgraph(
+            self.structures, static, fine_tune, relax, job=job, metallic_bulk="bulk", fixed_sites=self.fixed_sites,
+            training_structures=self.training_structures or None, active_learning_rounds=active_learning_rounds,
+            dft_check=dft_check, submit=submit,
+        )
+
+    def references_from(self, energies_ev: Mapping[str, float]):
+        """:class:`psteros.BinaryReferences` from the energies of ``bulk`` and ``ref_<element>``."""
+
+        from psteros.phase_diagram import BinaryReferences
+        from psteros.surface_study import reference_energies_per_atom, reservoir_labels
+
+        per_atom = reference_energies_per_atom(
+            self.elements, self.references, {f"ref_{e}": energies_ev[f"ref_{e}"] for e in self.elements})
+        return BinaryReferences(
+            bulk_energy_ev=energies_ev["bulk"], bulk_composition=self.bulk.composition,
+            reference_energies_per_atom_ev=per_atom, reservoir_labels=reservoir_labels(self.elements),
+        )
+
+    def analyse(self, source: Any, *, energy_source: str = "mlip_dft", **diagram_options) -> "MlipStudyResult":
+        """Surface phase diagram of the slabs.
+
+        ``source`` is the finished graph (``orm.load_node(pk)``), whose
+        energies are read with :func:`read_mlip_energies` from
+        ``energy_source`` (``"mlip_dft"``, validated, or ``"mlip"``), or a
+        mapping ``{label: energy in eV}`` typed by hand, which must come from
+        one source too. Composition and area are those of the slabs (the
+        relaxations keep the cell). ``diagram_options`` go to
+        :func:`psteros.surface_phase_diagram`.
+        """
+
+        from psteros.phase_diagram import SlabTermination, surface_phase_diagram
+
+        if isinstance(source, Mapping):
+            energies = {label: float(value) for label, value in source.items()}
+            missing = sorted(set(self.structures).difference(energies))
+            if missing:
+                raise ValueError(f"no energy for {missing}")
+        else:
+            energies = read_mlip_energies(source, list(self.structures), energy_source=energy_source)
+        references = self.references_from(energies)
+        terminations = tuple(
+            SlabTermination.from_structure(label, energies[label], slab) for label, slab in self.slabs.items())
+        diagram = surface_phase_diagram(terminations, references, **diagram_options)
+        return MlipStudyResult(self.formula, references, diagram, terminations, energy_source=energy_source)
+
+
+@dataclass(frozen=True)
+class MlipStudyResult(ChargeNeutralStudyResult):
+    """References, phase diagram and terminations of an :class:`MlipSurfaceStudy`, and the energy source used."""
+
+    energy_source: str = "mlip_dft"

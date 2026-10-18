@@ -334,6 +334,29 @@ and halves the route-(a) error of `metal`, but the relaxations of `metal` and `o
 CP2K minima (72-77 % of the relaxation energy), as with M2. The active-learning statics (M2R), which add labels near
 the relaxed geometries, are what make the relaxations right: the missing ingredient was data, not training.
 
+## The MLIP route against Reuter and Scheffler (2026-10-18, `c9_figure.py`, `docs/images/mlip_ruo2_validation.png`)
+
+The four lines of Fig. 3 of Reuter and Scheffler (PRB 65, 035406; FP-LAPW, GGA, relaxed slabs) were read from the
+vector paths of page 7 of arXiv:cond-mat/0107229 (straight lines to 0.05 meV/A²): O-bridge 79.9 meV/A² (flat),
+O-cus 35.8 − 46.8 Δμ_O, Ru-terminated 200.9 + 46.8 Δμ_O, (2×1) half O-cus 58.2 − 23.4 Δμ_O (meV/A², eV). Their
+O-bridge → O-cus crossing is at −0.943 eV (text: −0.93); their half O-cus line crosses O-bridge at −0.926 eV, just
+after O-cus, so it is never the most stable. The O-poor marker of that figure is at −1.70 eV, the text gives
+ΔG_f = −3.16 eV (−1.58 eV); the 2007 erratum (PRB 75, 049901) corrects the stated temperature dependence of
+ΔG_f, not the surface energies.
+
+| | Reuter and Scheffler (Fig. 3) | CP2K relaxations (R1) | MLIP route (M2R, route b) |
+|---|---|---|---|
+| stable at low Δμ_O | O-bridge | O-bridge | O-bridge |
+| stable at high Δμ_O | O-cus | O-cus | O-cus |
+| boundary (eV) | −0.943 | −0.924 and −0.835 (½ O-cus between) | −0.908 and −0.848 (½ O-cus between) |
+| Ru-terminated (no O-bridge) | never stable | never stable | never stable |
+| γ at Δμ_O = 0 (meV/A²): O-bridge, O-cus, Ru-term., ½ O-cus | 79.9, 35.8, 200.9, 58.2 | 71.9, 28.2, 191.0, 48.9 | 72.0, 28.3, 191.1, 49.4 |
+
+The MLIP route gives Reuter and Scheffler's phase diagram: the same terminations in the same order, the boundary
+0.035-0.095 eV later, every surface energy 8-10 meV/A² below theirs (their stated numerical accuracy is 10
+meV/A²; the offset is CP2K's, the MLIP route follows CP2K to 0.5 meV/A²). The one difference, a 0.09 eV window of
+half O-cus coverage, is in the CP2K relaxations too: a weak repulsion between O-cus atoms that their GGA did not show.
+
 ## Part D: the builder end to end (2026-10-18, `c8_builder.py`, WorkGraph 2572, `c8_check.json`)
 
 `psteros.build_mlip_surface_workgraph` on bulk RuO2, hcp Ru, O2, o_bridge and o_cus (CP2K recipe of the labels on

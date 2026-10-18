@@ -120,7 +120,14 @@ from .mlip import (
     select_replay_structures,
     write_extxyz,
 )
-from .mlip_workflow import MlipJobConfig, build_mlip_surface_workgraph, read_mlip_energies, read_mlip_results
+from .mlip_workflow import (
+    MlipJobConfig,
+    MlipStudyResult,
+    MlipSurfaceStudy,
+    build_mlip_surface_workgraph,
+    read_mlip_energies,
+    read_mlip_results,
+)
 
 __version__ = "2.0.0"
 
@@ -233,6 +240,8 @@ __all__ = [
     "dft_partially_occupied",
     "rattled_copies",
     "MlipJobConfig",
+    "MlipStudyResult",
+    "MlipSurfaceStudy",
     "build_mlip_surface_workgraph",
     "read_mlip_energies",
     "read_mlip_results",

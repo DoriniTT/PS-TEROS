@@ -204,6 +204,11 @@ the foundation model, a new relaxation from the starting structures) and `traini
 statics of M3), and `dft_check` defaults to on. Unit tests: 247 passed. An end-to-end run of the builder on
 Phileas + Lovelace (`c8_builder.py`, 2-pass fine-tunes, two terminations) checks the wiring.
 
+**2026-10-18, the route as a PS-TEROS approach (user: "make this one of the new approaches"):** `MlipSurfaceStudy`
+(structures → graph → phase diagram, binary metallic compounds), the recipe guide `docs/MLIP_SURFACES.md` with a
+flowchart (`docs/images/mlip_route.py`) and the validation figure (`validation/ruo2_mace_lovelace/c9_figure.py`),
+which also sets the MLIP route against Fig. 3 of Reuter and Scheffler (user: "put also the plot by Reuter").
+
 ## Steps
 
 ### Part A: a CP2K backend for PS-TEROS (needed for the DFT, kept)

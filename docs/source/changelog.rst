@@ -54,6 +54,10 @@ Recent Updates
   geometry by default, as validated on RuO2(110)), ``MlipJobConfig``, the readers ``read_mlip_results`` and
   ``read_mlip_energies`` (one energy source), ``dft_label``, ``dft_diagram_energy``, ``dft_partially_occupied``
   and ``rattled_copies``. The existing builders and their outputs are unchanged
+* The MLIP route from structures to the phase diagram: ``MlipSurfaceStudy`` (binary metallic compounds) builds the
+  graph and turns its final DFT energies into a ``SurfacePhaseDiagram`` (``MlipStudyResult``); the recipe, a
+  flowchart and the RuO2(110) validation against CP2K relaxations and Reuter and Scheffler are in
+  ``docs/MLIP_SURFACES.md``
 * ``MaceFineTuneConfig(lr_scheduler_gamma=...)``: an opt-in learning-rate decay per pass; the default 1.0 keeps the
   constant learning rate and the same training options
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details

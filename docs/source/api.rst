@@ -833,6 +833,17 @@ forces in eV/Å; nothing here needs AiiDA.
    Returns the single source of label -> ``"dft"``, ``"mlip"`` or
    ``"mlip_dft"``, or raises ``ValueError`` naming the labels of each source.
 
+``MlipSurfaceStudy(bulk, references, slabs, fixed_half_width_angstrom=1.5, rattled=0, rattle_sigma_angstrom=0.05, rattle_seed=20261017)``
+   The MLIP route for the slabs of a metallic binary compound (see
+   :doc:`mlip` and ``docs/MLIP_SURFACES.md``): ``structures`` (``bulk``,
+   ``ref_<element>``, the slabs), ``fixed_sites``, ``training_structures``,
+   ``calculation_count(active_learning_rounds=1, dft_check=True)``;
+   ``build(static, fine_tune, relax=MlipRelaxConfig(), *, job, active_learning_rounds=1, dft_check=True, submit=False)``
+   returns the graph of ``build_mlip_surface_workgraph`` and
+   ``analyse(source, *, energy_source="mlip_dft", **diagram_options)`` an
+   ``MlipStudyResult`` (``references``, ``diagram``, ``terminations``,
+   ``energy_source``) from the finished graph or from energies typed by hand.
+
 ``build_mlip_surface_workgraph(structures, static, fine_tune, relax=MlipRelaxConfig(), *, job, metallic_bulk, fixed_sites=None, training_structures=None, active_learning_rounds=1, dft_check=True, submit=False)``
    The route as one WorkGraph (DFT statics with any backend, aiida-shell GPU
    jobs). Outputs per label: ``<label>_static_parameters``,

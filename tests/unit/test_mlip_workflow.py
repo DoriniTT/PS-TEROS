@@ -416,3 +416,89 @@ def test_existing_cp2k_builder_is_unchanged(tmp_path) -> None:
     assert {task.name for task in graph.tasks if not task.name.startswith("graph_")} == {"bulk_cp2k", "slab_cp2k", "o2_cp2k"}
     assert _outputs(graph) == {f"{label}_{kind}" for label in ("bulk", "slab", "o2")
                                for kind in ("parameters", "structure", "retrieved")}
+
+
+# ------------------------------------------------------------------ the route from structures to the diagram
+
+
+def _ruo2_study(**options):
+    from pymatgen.core import Lattice, Structure
+
+    bulk = psteros.rutile_bulk("Ru", a=4.49, c=3.11)
+    ru = Structure.from_spacegroup("P6_3/mmc", Lattice.hexagonal(2.706, 4.282), ["Ru"], [[1 / 3, 2 / 3, 0.25]])
+    slabs = {}
+    for termination in ("o_bridge", "o_cus", "metal"):
+        slab, _ = psteros.rutile_110_slab(metal="Ru", termination=termination, a=4.49, c=3.11, vacuum_angstrom=12.0)
+        slabs[termination] = Structure(slab.lattice, slab.species, slab.frac_coords)
+    return psteros.MlipSurfaceStudy(bulk, {"Ru": ru, "O": psteros.triplet_o2_cell(cell_length=10.0)}, slabs, **options)
+
+
+def test_mlip_study_names_and_counts_the_calculations() -> None:
+    study = _ruo2_study()
+    assert list(study.structures) == ["bulk", "ref_O", "ref_Ru", "o_bridge", "o_cus", "metal"]
+    assert study.fixed_sites == {label: psteros.central_sites(slab) for label, slab in study.slabs.items()}
+    assert study.training_structures == {}
+    assert study.calculation_count() == {"dft_statics": 18, "gpu_jobs": 4}  # 6 start + 6 active learning + 6 check
+    assert study.calculation_count(active_learning_rounds=0, dft_check=False) == {"dft_statics": 6, "gpu_jobs": 2}
+    assert "RuO2: 3 slabs" in study.summary()
+    rattled = _ruo2_study(rattled=2, fixed_half_width_angstrom=None)
+    assert list(rattled.training_structures) == ["o_bridge_r0", "o_bridge_r1", "o_cus_r0", "o_cus_r1", "metal_r0", "metal_r1"]
+    assert rattled.fixed_sites == {}
+    assert rattled.calculation_count(active_learning_rounds=0) == {"dft_statics": 18, "gpu_jobs": 2}
+
+
+def test_mlip_study_refuses_what_was_not_validated() -> None:
+    study = _ruo2_study()
+    with pytest.raises(ValueError, match="binary compounds"):
+        psteros.MlipSurfaceStudy(study.references["Ru"], study.references, study.slabs)
+    with pytest.raises(ValueError, match=r"lacks a reference structure for \['O'\]"):
+        psteros.MlipSurfaceStudy(study.bulk, {"Ru": study.references["Ru"]}, study.slabs)
+    with pytest.raises(ValueError, match="taken by a reference"):
+        psteros.MlipSurfaceStudy(study.bulk, study.references, {"bulk": study.slabs["metal"]})
+    from pymatgen.core import Lattice, Structure
+
+    with pytest.raises(ValueError, match="elements that are not in the bulk"):
+        psteros.MlipSurfaceStudy(study.bulk, study.references,
+                                 {"ag": Structure(Lattice.cubic(5.0), ["Ag"], [[0, 0, 0]])})
+    with pytest.raises(ValueError, match="rattled"):
+        _ruo2_study(rattled=-1)
+
+
+def test_mlip_study_analysis_is_the_psteros_phase_diagram() -> None:
+    study = _ruo2_study()
+    energies = {"bulk": -6870.14, "ref_O": -868.70, "ref_Ru": -5126.59, "o_bridge": -20607.54,
+                "o_cus": -21477.99, "metal": -19735.10}
+    result = study.analyse(energies)
+    o2 = energies["ref_O"]
+    references = psteros.BinaryOxideReferences(bulk_energy_ev=energies["bulk"], bulk_composition={"Ru": 2, "O": 4},
+                                               oxygen_molecule_energy_ev=o2, metal_energy_per_atom_ev=energies["ref_Ru"] / 2)
+    direct = psteros.surface_phase_diagram(
+        [psteros.SlabTermination.from_structure(label, energies[label], slab) for label, slab in study.slabs.items()],
+        references)
+    assert result.references.formation_enthalpy_ev == pytest.approx(references.formation_enthalpy_ev)
+    assert [(round(mu, 9), a, b) for mu, a, b in result.diagram.transitions] == \
+        [(round(mu, 9), a, b) for mu, a, b in direct.transitions]
+    assert result.energy_source == "mlip_dft" and "RuO2: 3 terminations" in result.summary()
+    with pytest.raises(ValueError, match=r"no energy for \['metal'\]"):
+        study.analyse({key: value for key, value in energies.items() if key != "metal"})
+
+
+@pytest.mark.tier2
+@pytest.mark.requires_aiida
+def test_mlip_study_builds_the_route(tmp_path) -> None:
+    pytest.importorskip("aiida_cp2k")
+    pytest.importorskip("aiida_shell")
+    computer = _computer(tmp_path)
+    static, fine_tune, job = _recipes(tmp_path, computer)
+    static = psteros.SurfaceWorkflowConfig(backend="cp2k", name="ruo2", execution=static.execution,
+                                           calculation=static.calculation,
+                                           role_overrides={"ref_O": psteros.CalculationOverride(kpoints_distance=100.0)})
+    study = _ruo2_study(rattled=1)
+    graph = study.build(static, fine_tune, job=job)
+    names = {task.name for task in graph.tasks}
+    assert {"o_bridge_r0_static_cp2k", "ref_O_static_cp2k", "ref_O_al1_static_cp2k", "metal_mlip_dft_energy"} <= names
+    settings = graph.tasks["mlip_round0_training"].inputs.settings.value.get_dict()
+    assert settings["metallic_bulk"] == "bulk"
+    plan = json.loads(graph.tasks["mlip_round0_relax"].inputs.nodes.job.value.get_object_content("job.json"))
+    fixed = {item["label"]: item["fixed"] for item in plan["structures"]}
+    assert fixed["o_cus"] == list(study.fixed_sites["o_cus"]) and fixed["bulk"] == []
