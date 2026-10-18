@@ -11,7 +11,7 @@ nine structures.
 
 Usage (PYTHONPATH=<worktree>):
     python c4_chunks.py prepare       # base folders and plan (local/jobs/chunks)
-    python c4_chunks.py add-variant   # M2L, the extra variant (below), into the plan
+    python c4_chunks.py add-variant [m2l|m2r]   # an extra variant (below) into the plan
     python c4_chunks.py run           # the orchestrator loop; resumable from local/jobs/chunks/plan.json
     python c4_chunks.py status
 
@@ -47,7 +47,11 @@ TRAIN_BUDGET_SECONDS = 1200
 FIRST_GUESS_SECONDS_PER_PASS = {"m1": 6.0, "m2": 52.0, "m3": 64.0}
 FAMILIES = ("m2", "m1", "m3")
 EXTRA = {"m2l": {"epochs": 500, "lr_scheduler_gamma": 0.990832, "seeds": (20260920,), "replay": True,
-                 "frames": "plain", "rate_from": "m2"}}
+                 "frames": "plain", "rate_from": "m2"},
+         # the plan's one active-learning round for M2, which failed routes (a) and (b): its frames plus the six
+         # route-(b) CP2K statics at the geometries of M2 seed 20260920; recipe and seeds of M2
+         "m2r": {"epochs": 100, "lr_scheduler_gamma": 1.0, "seeds": (20260920, 20260921, 20260922), "replay": True,
+                 "frames": "plain+al", "rate_from": "m2"}}
 MAX_IN_FLIGHT = 2
 MAX_FAILURES = 3
 
@@ -260,15 +264,30 @@ def step(plan: dict) -> bool:
         entry["state"] == "done" for entry in relax.values())
 
 
-def add_variant() -> None:
+def al_frames() -> list:
+    """The route-(b) CP2K statics at the geometries of M2 seed 20260920, as training frames ``al_<termination>``."""
+
+    graph = c4_gpu.graph("c6_route_b.json")
+    result = []
+    for termination in psteros.RUTILE_110_TERMINATIONS:
+        frame = c4_gpu.labelled(graph, f"m2_seed20260920_{termination}")
+        result.append(mlip.LabelledStructure(f"al_{termination}", frame.structure, frame.energy_ev,
+                                             frame.forces_ev_per_angstrom))
+    return result
+
+
+def add_variant(family: str) -> None:
     plan = json.loads(PLAN.read_text())
+    if family in plan.get("extra_families", []):
+        raise ValueError(f"{family} is already in the plan")
+    spec = EXTRA[family]
     structures = cluster.with_retry(c4_gpu.relaxation_structures)
     plain = cluster.with_retry(c4_gpu.frames, False)
+    if spec["frames"] == "plain+al":
+        plain = plain + cluster.with_retry(al_frames)
     train, valid, _ = mlip.select_replay_structures(c4_gpu.REPLAY_FILE, elements=["Ru", "O"])
     fixed = {label: psteros.central_sites(structures[label]) for label in psteros.RUTILE_110_TERMINATIONS}
-    for family, spec in EXTRA.items():
-        if family in plan.get("extra_families", []):
-            raise ValueError(f"{family} is already in the plan")
+    for family, spec in ((family, spec),):
         config = mlip.MaceFineTuneConfig(
             foundation_model=COMPUTER["foundation"], foundation_model_sha256=c4_gpu.FOUNDATION_SHA256,
             replay_file=c4_gpu.REPLAY_FILE, epochs=spec["epochs"], seeds=spec["seeds"],
@@ -310,7 +329,10 @@ if __name__ == "__main__":
     from aiida import load_profile
 
     load_profile("psteros_mace_ruo2")
-    {"prepare": prepare, "add-variant": add_variant, "run": run_loop, "status": status}[sys.argv[1]]()
+    if sys.argv[1] == "add-variant":
+        add_variant(sys.argv[2] if len(sys.argv) > 2 else "m2l")
+    else:
+        {"prepare": prepare, "run": run_loop, "status": status}[sys.argv[1]]()
 
 
 # ---------------------------------------------------------------- readers for c6_route_b.py and c7_analysis.py

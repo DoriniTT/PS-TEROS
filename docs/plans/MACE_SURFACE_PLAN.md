@@ -125,6 +125,9 @@ Models (identical settings except the named difference):
 - **M1**: ordinary fine-tune on the statics.
 - **M2**: replay fine-tune on the statics. **This is the proposed method.**
 - **M3**: replay fine-tune on the statics plus rattled statics (only if D2 includes them).
+- **M2R** (2026-10-18, the plan's one active-learning round, triggered because M2 failed routes (a) and (b)): M2's
+  frames plus the six route-(b) CP2K statics at the geometries of M2 seed 20260920, M2's recipe and three seeds;
+  judged with the same gates.
 - **M2L** (added 2026-10-18 at the user's request, after the first M2 model was still converging at pass 100; fixed
   before any of its results; **reported, not gated**): the M2 recipe with 500 passes and a learning rate decaying
   from 1e-3 to 1e-5 (ExponentialLR, gamma 0.990832 per pass), deployment seed only; relaxed and checked by route (b)

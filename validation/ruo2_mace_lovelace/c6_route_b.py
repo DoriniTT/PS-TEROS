@@ -5,7 +5,8 @@ the chunked study (``c4_chunks.py``). Only relaxations that reached 0.01 eV/A ar
 The CP2K recipe is the one of the labels (``c2_cp2k.recipe``, ``settings.json``).
 
 Usage (PYTHONPATH=<worktree>):
-    python c6_route_b.py submit [--dry]
+    python c6_route_b.py submit [--dry]                                  # M0 and M1-M3 (c6_route_b.json)
+    python c6_route_b.py submit --models m2r_seed20260920 --record c6_route_b_m2r.json
 """
 
 from __future__ import annotations
@@ -33,12 +34,12 @@ def relaxed(model: str, label: str):
     return AseAtomsAdaptor.get_structure(atoms)
 
 
-def structures() -> tuple[dict, dict]:
+def structures(models=MODELS) -> tuple[dict, dict]:
     import c4_chunks
 
     results = c4_chunks.relax_results()  # the main study ran in chunks on testegpu (c4_chunks.py)
     chosen, skipped = {}, {}
-    for model in MODELS:
+    for model in models:
         for label in psteros.RUTILE_110_TERMINATIONS:
             row = results[model]["structures"][label]
             if row["converged"]:
@@ -50,13 +51,13 @@ def structures() -> tuple[dict, dict]:
     return chosen, skipped
 
 
-def submit(dry: bool) -> None:
-    chosen, skipped = structures()
+def submit(dry: bool, models=MODELS, record: str = "c6_route_b.json") -> None:
+    chosen, skipped = structures(models)
     graph = psteros.build_cp2k_surface_workgraph(
         chosen, c2_cp2k.config("ENERGY_FORCE", "ruo2_c6_route_b", 2), submit=not dry)  # cluster.py: <= 2 jobs
     print(len(chosen), "statics; not converged (left out):", skipped)
     if not dry:
-        (HERE / "c6_route_b.json").write_text(json.dumps(
+        (HERE / record).write_text(json.dumps(
             {"workgraph_pk": graph.pk, "labels": list(chosen), "not_converged": skipped}, indent=2) + "\n")
         print("WorkGraph", graph.pk)
 
@@ -64,5 +65,9 @@ def submit(dry: bool) -> None:
 if __name__ == "__main__":
     from aiida import load_profile
 
+    import cluster
+
     load_profile(c2_cp2k.PROFILE)
-    submit("--dry" in sys.argv)
+    models = tuple(sys.argv[sys.argv.index("--models") + 1].split(",")) if "--models" in sys.argv else MODELS
+    record = sys.argv[sys.argv.index("--record") + 1] if "--record" in sys.argv else "c6_route_b.json"
+    cluster.with_retry(submit, "--dry" in sys.argv, models, record)

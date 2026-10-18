@@ -195,8 +195,8 @@ def main(dft_only: bool = False) -> None:
     import c4_chunks
 
     results = c4_chunks.relax_results()  # the main study ran in chunks on testegpu
-    route_b = json.loads((HERE / "c6_route_b.json").read_text()) if (HERE / "c6_route_b.json").exists() else None
-    b_node = load("c6_route_b.json") if route_b else None
+    # every route-(b) batch: c6_route_b.json (M0, M1-M3) and the later ones (c6_route_b_<variant>.json)
+    batches = [(json.loads(path.read_text()), load(path.name)) for path in sorted(HERE.glob("c6_route_b*.json"))]
     out["models"] = {}
     for model, data in results.items():
         rows = data["structures"]
@@ -211,7 +211,9 @@ def main(dft_only: bool = False) -> None:
                           labels=TERMINATIONS, window=window)
         entry["route_a"] = {"G1": gate_g1(route_a, r1), "G2": gate_g2(route_a, r1, 5.0),
                             "gamma_at_0_mev": {k: float(v[-1]) for k, v in gammas(route_a).items()}}
-        if route_b and all(f"{model}_{t}" in route_b["labels"] for t in TERMINATIONS):
+        found = [(record, node) for record, node in batches if all(f"{model}_{t}" in record["labels"] for t in TERMINATIONS)]
+        if found:
+            route_b, b_node = found[-1]
             try:
                 e_b = energies(b_node, [f"{model}_{t}" for t in TERMINATIONS])
             except ValueError as error:  # route (b) still running

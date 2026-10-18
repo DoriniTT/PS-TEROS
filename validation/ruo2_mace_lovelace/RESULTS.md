@@ -247,3 +247,25 @@ most stable models (largest error 4.0 to 5.3 meV/A², spread about 1 meV/A²), w
 G1 is demanding here because of the 0.09 eV o_cus_half window of R1: M3 seed 20260922 reproduces it (−0.885 and
 −0.817 eV against −0.924 and −0.835), the other models either shift it by more than 0.05 eV or miss it.
 
+
+## Route (b): one CP2K static at each model geometry (2026-10-18, WorkGraph 2137, 24 statics, all exit 0)
+
+Deployment seeds; CP2K references (bulk110, hcp Ru, O2); against R1.
+
+| Model | G1 | transitions (eV; R1 −0.924, −0.835) | G2: largest error (meV/A², ≤ 2) | G3 (≥ 90 % of the CP2K relaxation) | recovered fraction per termination |
+|---|---|---|---:|---|---|
+| m0 | pass | -0.903, -0.859 | 1.52 | fail | o_bridge 0.97, o_cus 0.98, metal 0.87, o_cus_half 0.94, o_bridge_half 0.85, o_cus_no_bridge 0.94 |
+| m1_seed20260920 | fail | -1.040, -0.773 | 31.21 | fail | o_bridge -0.69, o_cus -0.13, metal -0.62, o_cus_half -0.13, o_bridge_half -1.18, o_cus_no_bridge -0.84 |
+| **m2_seed20260920** | pass | -0.899, -0.823 | 3.36 | fail | o_bridge 0.94, o_cus 0.90, metal 0.71, o_cus_half 0.91, o_bridge_half 0.72, o_cus_no_bridge 0.89 |
+| m3_seed20260920 | pass | -0.910, -0.848 | 0.50 | pass | o_bridge 1.00, o_cus 1.00, metal 0.99, o_cus_half 0.98, o_bridge_half 0.95, o_cus_no_bridge 1.00 |
+
+**Outcome for M2 (the plan's rules): it fails route (a) and route (b) (G2 3.36 meV/A² on `metal`, G3 72 % on
+`metal` and `o_bridge_half`).** The rule fixed before the results applies: one active-learning round. M2R = M2's
+frames plus the six route-(b) statics of M2 seed 20260920 (16 frames), M2's recipe and seeds, relaxed and judged
+again; if it fails again the plan stops and reports. Started 2026-10-18 (`c4_chunks.py add-variant m2r`).
+
+Reported: M3 (five rattled statics per termination) passes every gate of route (b) (γ within 0.50 meV/A²,
+95-100 % of the relaxation energy) and is closest in route (a); MH-1 zero-shot (M0) with one CP2K static passes
+G1 and G2 of route (b) (1.52 meV/A²) but recovers only 85-87 % of the relaxation of `metal` and `o_bridge_half`;
+the ordinary fine-tune (M1) moves the slabs away from the CP2K minima (negative recovered fractions).
+
