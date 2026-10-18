@@ -160,3 +160,24 @@ relax 9 structures. Bohr computer copied from `presto` (core.pbspro, `#PBS -l pl
 MACE jobs there); code `mace-python-cu118@bohr` (`ag3po4_g001_mace_cu118`: mace-torch 0.3.16, torch 2.5.1+cu118, ASE
 3.29); MH-1 copied to `/home/des01/zacarias/dorinitt/models/mace-mh-1/mace-mh-1.model` (SHA-256 checked). The queue
 has one A100 node; at submission another user's 168 h job had run 8.6 h, and one job was queued ahead.
+
+**Moved again (2026-10-18).** After 13 h the Bohr job (PBS 355444) had not started: the one A100 node ran another
+user's 168 h job (21.8 h in) with a second 168 h job queued ahead. Cancelled; the user chose "Split into testegpu
+chunks".
+
+## C4/C5 in chunks on Lovelace `testegpu` (from 2026-10-18, `c4_chunks.py`)
+
+`testegpu` runs one A100 job of at most 30 min per user (two queued). Every fine-tune (M1, M2, M3 × 3 seeds, 100
+passes, unchanged recipe) runs as a chain of jobs, each one chunk of one run of about 20 min of training, sized from
+the measured time per pass; the training state and the models stay in `/work/dorinitt/psteros_mace_ruo2`. Then one
+relaxation job per model (M0 and the nine fine-tunes).
+
+Chunking is exact. The state carried between jobs holds the raw weights, the EMA, the optimizer and scheduler, the
+shuffling generator, the random-number states and the accumulated gradient of a trainable parameter outside the
+optimizer: **MACE 0.3.16 clips the gradient norm over every model parameter, while `optimizer.zero_grad` clears only
+the optimised ones, so the gradient of the radial Bessel weights (`radial_embedding.bessel_fn.bessel_weights`, not in
+any optimizer group) accumulates over the whole training and enters the clipping of every step** (norm 0.49 after 7
+steps in a CPU test). Without it a resumed run diverged (8e-4 in the weights after one chunk); with it, three chunks
+of a 4-pass replay fine-tune reproduce the uninterrupted run on CPU (energies identical, forces within 4e-19 eV/A,
+both heads). The recipe is kept as it is (the Ag3PO4 r4 models were trained the same way); each chunk records that
+gradient's norm, since a norm above the clip value of 1 scales every update down.

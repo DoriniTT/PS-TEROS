@@ -3,7 +3,7 @@
 Energy sources (each diagram takes all its energies from one source, psteros.check_one_energy_source):
     R0      CP2K statics of the terminations as built (c2_labels), CP2K references
     R1      CP2K relax -> static (c3_truth), CP2K references: the ground truth
-    <M>     route (a): model M at its own geometries, for slabs, bulk RuO2, hcp Ru and O2 (c4_main report)
+    <M>     route (a): model M at its own geometries, for slabs, bulk RuO2, hcp Ru and O2 (c4_chunks relaxations)
     <M>_dft route (b): CP2K static at the geometry of model M (c6_route_b), CP2K references
 Models: m0 (MH-1 zero-shot) and m1, m2, m3 with seeds 20260920 (deployment seed; the gates use it, decided
 before any result), 20260921 and 20260922 (the committee spread).
@@ -141,8 +141,6 @@ def energies(node, labels):
     return psteros.read_cp2k_results(node, list(labels))[0]
 
 
-def report(path):
-    return load("c4_main.json").outputs.report.base.repository.get_object_content(path)
 
 
 def main(dft_only: bool = False) -> None:
@@ -178,7 +176,9 @@ def main(dft_only: bool = False) -> None:
               "G2:", out["G5"]["R0_G2"]["pass"], out["G5"]["R0_G2"]["max_abs_error_mev"])
         return
 
-    results = json.loads(report("relax/results.json"))["models"]
+    import c4_chunks
+
+    results = c4_chunks.relax_results()  # the main study ran in chunks on testegpu
     route_b = json.loads((HERE / "c6_route_b.json").read_text()) if (HERE / "c6_route_b.json").exists() else None
     b_node = load("c6_route_b.json") if route_b else None
     out["models"] = {}

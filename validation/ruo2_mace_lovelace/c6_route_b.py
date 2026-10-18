@@ -1,7 +1,7 @@
 """Step C6 of docs/plans/MACE_SURFACE_PLAN.md: one CP2K static on each model-relaxed slab (route b).
 
-Models: M0 (MH-1 zero-shot) and the deployment seed (20260920) of M1, M2 and M3, read from the report of the
-``main`` GPU job (``c4_main.json``). Only relaxations that reached 0.01 eV/A are computed; the others are listed.
+Models: M0 (MH-1 zero-shot) and the deployment seed (20260920) of M1, M2 and M3, read from the relaxation jobs of
+the chunked study (``c4_chunks.py``). Only relaxations that reached 0.01 eV/A are computed; the others are listed.
 The CP2K recipe is the one of the labels (``c2_cp2k.recipe``, ``settings.json``).
 
 Usage (PYTHONPATH=<worktree>):
@@ -23,23 +23,20 @@ HERE = Path(__file__).resolve().parent
 MODELS = ("m0", "m1_seed20260920", "m2_seed20260920", "m3_seed20260920")
 
 
-def report_file(path: str) -> str:
-    from aiida import orm
-
-    node = orm.load_node(json.loads((HERE / "c4_main.json").read_text())["shelljob_pk"])
-    return node.outputs.report.base.repository.get_object_content(path)
-
-
 def relaxed(model: str, label: str):
     from ase.io import read
     from pymatgen.io.ase import AseAtomsAdaptor
 
-    atoms = read(io.StringIO(report_file(f"relax/relaxed/{model}/{label}.extxyz")), format="extxyz")
+    import c4_chunks
+
+    atoms = read(io.StringIO(c4_chunks.relaxed_text(model, label)), format="extxyz")
     return AseAtomsAdaptor.get_structure(atoms)
 
 
 def structures() -> tuple[dict, dict]:
-    results = json.loads(report_file("relax/results.json"))["models"]
+    import c4_chunks
+
+    results = c4_chunks.relax_results()  # the main study ran in chunks on testegpu (c4_chunks.py)
     chosen, skipped = {}, {}
     for model in MODELS:
         for label in psteros.RUTILE_110_TERMINATIONS:

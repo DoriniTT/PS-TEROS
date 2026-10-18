@@ -309,6 +309,9 @@ try:
                 f"{name}: the E0s changed"
             assert (folder / "train.extxyz").read_bytes() == (ROOT / "train.extxyz").read_bytes(), f"{name}: data"
         else:
+            if folder.exists() and BASE != ROOT:
+                # a first chunk that ended before saving a state (a walltime): keep it aside and start again
+                folder.rename(folder.with_name(f"{name}.incomplete.{int(time.time())}"))
             folder.mkdir(parents=True, exist_ok=False)
             shutil.copy(ROOT / "train.extxyz", folder / "train.extxyz")
             if replay:
