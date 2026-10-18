@@ -7,6 +7,8 @@ label a replay fine-tune of MACE-MH-1, which then relaxes the terminations on a 
 |---|---|
 | `ruo2_mlip.py labels` | Builds (and with `--submit` submits) the CP2K static graph of bulk RuO₂, hcp Ru, O₂ and the six RuO₂(110) terminations. |
 | `ruo2_mlip.py jobs` | Reads the finished graph, checks that the bulk is a metal, and writes the fine-tune and relaxation job folders. |
+| `ruo2_mlip_graph.py build` | The whole route as one WorkGraph (`build_mlip_surface_workgraph`): CP2K statics, fine-tune and relaxations on a GPU code, one active-learning round, a CP2K static at each relaxed geometry. |
+| `ruo2_mlip_graph.py read` | Reads the energies of that graph from one source (`read_mlip_energies`, `"mlip_dft"`) and the relaxations. |
 
 On the GPU node, in each folder: `python finetune.py`, then `python relax.py` (with the fine-tuned `models/`
 next to it). The scripts need only ase, torch and mace-torch.

@@ -569,3 +569,178 @@ def prepare_relax_job(
     (folder / "job.json").write_text(json.dumps(job, indent=2) + "\n")
     (folder / "relax.py").write_text(script_path("relax.py").read_text())
     return folder
+
+
+def rattled_copies(
+    structures: Mapping[str, Any],
+    *,
+    count: int = 5,
+    sigma_angstrom: float = 0.05,
+    seed: int = 20261017,
+) -> dict[str, Any]:
+    """Rattled copies of each structure as extra training statics: ``{"<label>_r<i>": structure}``.
+
+    Every site of copy ``i`` of ``label`` is moved by a vector whose Cartesian
+    components are normal with standard deviation ``sigma_angstrom`` (A). One
+    random generator (numpy ``default_rng(seed)``) runs over the structures in
+    the order given, so the same call gives the same copies. The defaults are
+    the M3 recipe of the RuO2 validation (5 copies, 0.05 A).
+    """
+
+    if isinstance(count, bool) or not isinstance(count, int) or count < 1:
+        raise ValueError("count must be a positive integer")
+    if sigma_angstrom <= 0:
+        raise ValueError("sigma_angstrom must be positive")
+    rng = np.random.default_rng(seed)
+    result = {}
+    for label, structure in structures.items():
+        for index in range(count):
+            rattled = structure.copy()
+            for site_index in range(len(rattled)):
+                rattled.translate_sites([site_index], rng.normal(0.0, sigma_angstrom, 3), frac_coords=False,
+                                        to_unit_cell=True)
+            result[f"{label}_r{index}"] = rattled
+    return result
+
+
+DFT_BACKENDS = ("qe", "vasp", "cp2k")
+
+
+def vasprun_free_energy(text: str) -> float:
+    """Free energy TOTEN (eV) of the last ionic step of a ``vasprun.xml``, whose derivatives are the forces."""
+
+    import xml.etree.ElementTree as ElementTree
+
+    steps = ElementTree.fromstring(text).findall("calculation")
+    if not steps:
+        raise ValueError("vasprun.xml has no calculation")
+    for item in steps[-1].findall("energy/i"):
+        if item.get("name") == "e_fr_energy":
+            return float(item.text)
+    raise ValueError("vasprun.xml: no e_fr_energy in the last calculation")
+
+
+def vasprun_occupations(text: str) -> list[float]:
+    """Occupation numbers of every band, k-point and spin in the ``eigenvalues`` of the last ionic step of a
+    ``vasprun.xml``."""
+
+    import xml.etree.ElementTree as ElementTree
+
+    steps = ElementTree.fromstring(text).findall("calculation")
+    block = steps[-1].find("eigenvalues") if steps else None
+    if block is None:
+        raise ValueError("vasprun.xml has no eigenvalues in its last calculation")
+    return [float(row.text.split()[1]) for row in block.iter("r")]
+
+
+def qe_xml_occupations(text: str) -> list[float]:
+    """Occupation numbers of every k-point of a Quantum ESPRESSO ``data-file-schema.xml``."""
+
+    import xml.etree.ElementTree as ElementTree
+
+    values = []
+    for element in ElementTree.fromstring(text).iter():
+        if element.tag.rsplit("}", 1)[-1] == "occupations" and element.text and element.text.split():
+            values.extend(float(value) for value in element.text.split())
+    if not values:
+        raise ValueError("data-file-schema.xml has no occupations")
+    return values
+
+
+def dft_label(
+    backend: str,
+    *,
+    label: str,
+    structure: Any,
+    parameters: Mapping[str, Any],
+    files: Mapping[str, str],
+    role: str = "train",
+) -> LabelledStructure:
+    """A training frame from one finished DFT static calculation.
+
+    ``parameters`` is the parsed output (CP2K and QE ``output_parameters``,
+    VASP ``misc``); ``files`` maps file names of the retrieved folder to their
+    text. The energy is the one whose derivatives are the forces, the
+    electronic free energy with smearing: CP2K's total energy (from Hartree)
+    and its ``psteros_forces.dat``; QE's total energy and the forces of
+    ``aiida.out`` (``tprnfor``); VASP's ``e_fr_energy`` and forces from
+    ``vasprun.xml``.
+    """
+
+    if backend not in DFT_BACKENDS:
+        raise ValueError(f"{label}: backend must be one of {DFT_BACKENDS}, got {backend!r}")
+
+    def text(name: str) -> str:
+        if name not in files:
+            raise ValueError(f"{label}: the retrieved folder of the {backend} static has no {name}")
+        return files[name]
+
+    if backend == "cp2k":
+        from psteros.backends.cp2k import FORCES_FILE, parse_cp2k_forces
+
+        energy = dft_diagram_energy(backend, label=label, parameters=parameters)
+        forces = parse_cp2k_forces(text(FORCES_FILE))
+    elif backend == "qe":
+        from psteros.vibrations_workflow import qe_output_forces
+
+        energy = dft_diagram_energy(backend, label=label, parameters=parameters)
+        forces = qe_output_forces(text("aiida.out"), len(structure))
+    else:
+        from psteros.vibrations_workflow import vasprun_forces
+
+        vasprun = text("vasprun.xml")
+        energy = vasprun_free_energy(vasprun)
+        symbols, forces = vasprun_forces(vasprun)
+        if symbols != [site.specie.symbol for site in structure]:
+            raise ValueError(f"{label}: the atoms of vasprun.xml are not in the order of the structure")
+    return LabelledStructure(label, structure, energy, forces, role=role)
+
+
+def dft_partially_occupied(backend: str, *, label: str, files: Mapping[str, str]) -> int:
+    """Partly filled states of a finished DFT static (see :func:`partially_occupied_count`).
+
+    CP2K: the bins of ``psteros.dos``; VASP: the occupations of
+    ``vasprun.xml``; QE: those of ``data-file-schema.xml``.
+    """
+
+    if backend not in DFT_BACKENDS:
+        raise ValueError(f"{label}: backend must be one of {DFT_BACKENDS}, got {backend!r}")
+    names = {"cp2k": "psteros.dos", "vasp": "vasprun.xml", "qe": "data-file-schema.xml"}
+    if names[backend] not in files:
+        raise ValueError(f"{label}: the retrieved folder of the {backend} static has no {names[backend]}")
+    content = files[names[backend]]
+    if backend == "cp2k":
+        from psteros.backends.cp2k import parse_cp2k_dos
+
+        return parse_cp2k_dos(content).partially_occupied_bins()
+    occupations = vasprun_occupations(content) if backend == "vasp" else qe_xml_occupations(content)
+    return partially_occupied_count(occupations)
+
+
+def dft_diagram_energy(backend: str, *, label: str, parameters: Mapping[str, Any]) -> float:
+    """Energy (eV) of a DFT static as psteros reads it for a phase diagram.
+
+    CP2K: the total energy (from Hartree, :func:`psteros.read_cp2k_results`);
+    QE: ``energy``; VASP: ``energy_extrapolated`` (sigma -> 0) of ``misc``,
+    as the VASP builders of psteros.
+    """
+
+    if backend == "cp2k":
+        from psteros.backends.cp2k import HARTREE_TO_EV
+
+        if "energy" not in parameters or parameters.get("energy_units", "a.u.") != "a.u.":
+            raise ValueError(f"{label}: no CP2K total energy in Hartree in the output parameters")
+        return float(parameters["energy"]) * HARTREE_TO_EV
+    if backend == "qe":
+        if "energy" not in parameters or parameters.get("energy_units", "eV") != "eV":
+            raise ValueError(f"{label}: no QE total energy in eV in the output parameters")
+        return float(parameters["energy"])
+    if backend == "vasp":
+        energies = dict(parameters)
+        if isinstance(energies.get("total_energies"), Mapping):
+            energies = dict(energies["total_energies"])
+        for key in ("energy_extrapolated", "energy_no_entropy", "energy"):
+            if key in energies:
+                return float(energies[key])
+        raise ValueError(f"{label}: no total energy in the VASP misc output; keys: {sorted(energies)}")
+    raise ValueError(f"{label}: backend must be one of {DFT_BACKENDS}, got {backend!r}")

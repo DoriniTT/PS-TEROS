@@ -16,9 +16,15 @@ in the existing workflows changes when you do not use it.
    The route is for **metallic systems only** (metals, alloys, metallic
    oxides such as RuO\ :sub:`2`). ``require_metallic`` stops it when the bulk
    has no partly filled states at the Fermi level. Semiconductors and
-   insulators need a separate treatment. The route is being validated on
-   RuO\ :sub:`2`\ (110) against full DFT relaxations and Reuter and Scheffler,
-   Phys. Rev. B 65, 035406 (2002); see ``docs/plans/MACE_SURFACE_PLAN.md``.
+   insulators need a separate treatment. The route was validated on
+   RuO\ :sub:`2`\ (110) against full CP2K relaxations and Reuter and Scheffler,
+   Phys. Rev. B 65, 035406 (2002), with gates fixed before the results (see
+   ``docs/plans/MACE_SURFACE_PLAN.md`` and
+   ``validation/ruo2_mace_lovelace/RESULTS.md``): with one active-learning
+   round and one DFT static at each relaxed geometry (``"mlip_dft"``) every
+   gate passed (surface energies within 0.5 meV/Å\ :sup:`2`, phase boundaries
+   within 0.02 eV, 96-99 % of the DFT relaxation energy); the model's own
+   energies (``"mlip"``) missed by 6-9 meV/Å\ :sup:`2`. Use ``"mlip_dft"``.
 
 One energy source per diagram
 -----------------------------
@@ -85,3 +91,57 @@ The steps
 
 ``rutile_110_slab`` builds the six RuO\ :sub:`2`\ (110) terminations of the
 validation (``RUTILE_110_TERMINATIONS``) for any rutile MO\ :sub:`2`.
+
+
+The whole route as one WorkGraph
+--------------------------------
+
+``build_mlip_surface_workgraph`` wires the validated route for QE, VASP or
+CP2K statics and a GPU computer with a MACE environment:
+
+1. one DFT static of every structure (slabs and references, the references
+   already relaxed with the same recipe) and of the optional
+   ``training_structures`` (for example ``rattled_copies`` of the slabs);
+2. a replay fine-tune (``MaceFineTuneConfig``) on those labels, after checking
+   that ``metallic_bulk`` is a metal;
+3. the model of the first seed relaxes every structure (cell fixed,
+   ``fixed_sites`` kept in place); the other seeds relax them too, as a
+   committee in ``mlip_round<r>_relax_results``;
+4. ``active_learning_rounds`` times (1 by default, as validated): one DFT
+   static at each relaxed geometry joins the labels, a new fine-tune from the
+   foundation model trains on all of them, and the new model relaxes the
+   structures again from the start;
+5. with ``dft_check`` (default), one DFT static at each final geometry.
+
+Every task is wired when the graph is built; calcfunctions only turn finished
+calculations into the next job's inputs (the training folder, the relaxed
+structure). The fine-tune and relaxation jobs are aiida-shell jobs that run
+``finetune.py`` and ``relax.py`` with the Python of ``MlipJobConfig.code_label``;
+a relaxation links the remote folder of its fine-tune, so both run on that
+computer and the folder, which holds the models, is never cleaned. A
+relaxation that does not reach ``fmax`` stops the graph instead of sending an
+unrelaxed geometry to DFT.
+
+.. code-block:: python
+
+   import psteros
+
+   static = psteros.SurfaceWorkflowConfig(backend="cp2k", name="ruo2", calculation=cp2k_recipe,
+                                          execution=cpu_execution, role_overrides={"o2": triplet})
+   fine_tune = psteros.MaceFineTuneConfig("/work/me/models/mace-mh-1.model",
+                                          replay_file="replay-data-mh-1-omat-pbe.xyz")
+   job = psteros.MlipJobConfig("mace-python@gpu-cluster", psteros.ExecutionPolicy(
+       queue="gpu", with_mpi=False, max_wallclock_seconds=6 * 3600,
+       resources={"num_machines": 1, "num_mpiprocs_per_machine": 8, "ngpus_per_machine": 1}))
+   graph = psteros.build_mlip_surface_workgraph(
+       structures, static, fine_tune, job=job, metallic_bulk="bulk",
+       fixed_sites={label: psteros.central_sites(structures[label]) for label in slabs}, submit=True)
+   # when it has finished (or while it runs, for the parts that have):
+   energies = psteros.read_mlip_energies(graph_node, list(structures), energy_source="mlip_dft")
+   relaxations = psteros.read_mlip_results(graph_node, list(structures))
+
+The energies of ``read_mlip_energies`` all come from one source, so the slabs
+and the references go into one diagram. For RuO\ :sub:`2`\ (110) the route
+needed three DFT statics per termination (start, active learning, check), 34 %
+of the CP2K time of relaxing and re-computing them; the saving grows with the
+number of relaxation steps, which the route does not pay for.

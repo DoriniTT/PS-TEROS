@@ -49,6 +49,13 @@ Recent Updates
   ``prepare_relax_job`` (self-contained MACE fine-tune and relaxation jobs), ``relax_with_calculator``,
   ``require_metallic`` and ``check_one_energy_source``; ``rutile_bulk`` and ``rutile_110_slab`` with six
   rutile (110) terminations. ``sno2_110_slab`` and every existing result are unchanged
+* The MLIP route as one WorkGraph (``pip install '.[mlip]'``; mace-torch only on the GPU computer): ``build_mlip_surface_workgraph`` (DFT statics with QE, VASP or CP2K, replay
+  fine-tune and relaxations as aiida-shell GPU jobs, one active-learning round and a DFT static at each relaxed
+  geometry by default, as validated on RuO2(110)), ``MlipJobConfig``, the readers ``read_mlip_results`` and
+  ``read_mlip_energies`` (one energy source), ``dft_label``, ``dft_diagram_energy``, ``dft_partially_occupied``
+  and ``rattled_copies``. The existing builders and their outputs are unchanged
+* ``MaceFineTuneConfig(lr_scheduler_gamma=...)``: an opt-in learning-rate decay per pass; the default 1.0 keeps the
+  constant learning rate and the same training options
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

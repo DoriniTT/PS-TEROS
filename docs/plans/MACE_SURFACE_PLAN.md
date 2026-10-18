@@ -193,6 +193,17 @@ from MH-1 on the replay validation structures (forgetting); the electronic entro
   DZVP, TZVP, TZV2P-MOLOPT-PBE-GTH) and `POTENTIAL_UZH` (Ru GTH-PBE-q16, O q6), and k-point DOS output.
 - Slab vacuum: 22 Å, so that `kpoints_spacing=0.20` gives one k-point along the normal (11×5×1 for 1×1 cells).
 
+**2026-10-18, Part C finished (`validation/ruo2_mace_lovelace/RESULTS.md`):** M2 (the method as proposed) failed
+route (a) and route (b); the pre-registered active-learning round M2R passed every gate of route (b) (γ within
+0.49 meV/Å², transitions within 0.016 eV, 96–99 % of the CP2K relaxation) and failed route (a) (6–9 meV/Å² for the three seeds). The
+outcome rule "only (b) → MACE relaxation + one DFT static" applies, with one active-learning round.
+
+**2026-10-18, Part D written:** the builder D1 follows the validated route rather than the plain M2 recipe: it adds
+`active_learning_rounds` (default 1: a DFT static at each relaxed geometry joins the labels, a new fine-tune from
+the foundation model, a new relaxation from the starting structures) and `training_structures` (e.g. the rattled
+statics of M3), and `dft_check` defaults to on. Unit tests: 247 passed. An end-to-end run of the builder on
+Phileas + Lovelace (`c8_builder.py`, 2-pass fine-tunes, two terminations) checks the wiring.
+
 ## Steps
 
 ### Part A: a CP2K backend for PS-TEROS (needed for the DFT, kept)
@@ -263,17 +274,20 @@ fixed atoms) and the legacy `psteros/core/aimd_cp2k.py`; reuse ideas, not import
 
 ### Part D: the PS-TEROS MLIP feature (only if Part C passes, or the user decides to build it anyway)
 
-- [ ] D1. **New builder** `build_mlip_surface_workgraph(structures, static, fine_tune, relax, *, mlip_code,
+- [x] D1. **New builder** `build_mlip_surface_workgraph(structures, static, fine_tune, relax, *, mlip_code,
   dft_check=True, submit=False)`: DFT statics through `add_cp2k_task`, `add_vasp_task` or `add_qe_task` (backend
   parity) -> calcfunction that writes the training set -> aiida-shell job for the fine-tune -> one aiida-shell job for
   all relaxations -> optional DFT statics on the relaxed geometries. All tasks wired at build time. New outputs only:
   `{label}_mlip_relaxed_structure`, `{label}_mlip_energy`, `{label}_mlip_check_static_{...}`, `mlip_model`. Existing
   builders and outputs untouched; the remote folders of the model are never cleaned. The fine-tune task waits for
-  `require_metallic` on the bulk static.
-- [ ] D2. **Reader** `read_mlip_results(pk)` -> `{label: MlipRelaxation}`, working while the graph runs or after it
+  `require_metallic` on the bulk static. *(Done 2026-10-18 as `build_mlip_surface_workgraph(structures, static,
+  fine_tune, relax, *, job, metallic_bulk, fixed_sites, training_structures, active_learning_rounds=1,
+  dft_check=True, submit=False)`; outputs `{label}_mlip_relaxed_structure`, `{label}_mlip_energy`,
+  `{label}_mlip_dft_energy`, `mlip_round{r}_...`; the remote folder of each fine-tune is linked by its relaxation.)*
+- [x] D2. **Reader** `read_mlip_results(pk)` -> `{label: MlipRelaxation}`, working while the graph runs or after it
   fails; a helper that builds terminations and references from one `energy_source` (`"mlip"` or `"mlip_dft"`), and
   raises `ValueError` naming the labels when sources are mixed.
-- [ ] D3. **Packaging and docs.** `setup.py` extra `mlip = ["ase", "aiida-shell"]` (mace-torch is needed only on the
+- [x] D3. **Packaging and docs.** `setup.py` extra `mlip = ["ase", "aiida-shell"]` (mace-torch is needed only on the
   GPU host); new names in `__all__`; `docs/source/mlip.rst` with the formula and the one-source rule; example
   `examples/mlip_ruo2/`; changelog entry; a test that the existing call paths give the same results.
 

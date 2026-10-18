@@ -106,16 +106,21 @@ from .mlip import (
     MlipRelaxConfig,
     MlipRelaxation,
     check_one_energy_source,
+    dft_diagram_energy,
+    dft_label,
+    dft_partially_occupied,
     fit_element_shifts,
     mace_training_options,
     partially_occupied_count,
     prepare_finetune_job,
     prepare_relax_job,
+    rattled_copies,
     relax_with_calculator,
     require_metallic,
     select_replay_structures,
     write_extxyz,
 )
+from .mlip_workflow import MlipJobConfig, build_mlip_surface_workgraph, read_mlip_energies, read_mlip_results
 
 __version__ = "2.0.0"
 
@@ -223,4 +228,12 @@ __all__ = [
     "require_metallic",
     "select_replay_structures",
     "write_extxyz",
+    "dft_diagram_energy",
+    "dft_label",
+    "dft_partially_occupied",
+    "rattled_copies",
+    "MlipJobConfig",
+    "build_mlip_surface_workgraph",
+    "read_mlip_energies",
+    "read_mlip_results",
 ]

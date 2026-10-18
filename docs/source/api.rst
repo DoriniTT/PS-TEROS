@@ -808,7 +808,7 @@ forces in eV/Å; nothing here needs AiiDA.
    Least-squares per-element shifts of E_DFT − E_foundation; raises when the
    compositions do not separate the elements.
 
-``MaceFineTuneConfig(foundation_model, foundation_model_sha256=None, foundation_head="omat_pbe", replay=True, replay_file=None, replay_min_atoms=2, replay_max_atoms=128, replay_validation_every=5, epochs=100, learning_rate=1e-3, ema_decay=0.999, energy_weight=10.0, forces_weight=10.0, huber_delta=0.01, clip_grad=1.0, seeds=(20260920, 20260921, 20260922), default_dtype="float64")``
+``MaceFineTuneConfig(foundation_model, foundation_model_sha256=None, foundation_head="omat_pbe", replay=True, replay_file=None, replay_min_atoms=2, replay_max_atoms=128, replay_validation_every=5, epochs=100, learning_rate=1e-3, ema_decay=0.999, energy_weight=10.0, forces_weight=10.0, huber_delta=0.01, clip_grad=1.0, seeds=(20260920, 20260921, 20260922), default_dtype="float64", lr_scheduler_gamma=1.0)``
    The fine-tune recipe; ``mace_training_options(config, *, name, seed, atomic_numbers)``
    gives its ``mace_run_train`` options.
 
@@ -832,6 +832,32 @@ forces in eV/Å; nothing here needs AiiDA.
 ``check_one_energy_source(sources)``
    Returns the single source of label -> ``"dft"``, ``"mlip"`` or
    ``"mlip_dft"``, or raises ``ValueError`` naming the labels of each source.
+
+``build_mlip_surface_workgraph(structures, static, fine_tune, relax=MlipRelaxConfig(), *, job, metallic_bulk, fixed_sites=None, training_structures=None, active_learning_rounds=1, dft_check=True, submit=False)``
+   The route as one WorkGraph (DFT statics with any backend, aiida-shell GPU
+   jobs). Outputs per label: ``<label>_static_parameters``,
+   ``<label>_static_retrieved``, ``<label>_mlip_relaxed_structure``,
+   ``<label>_mlip_energy`` (eV) and, with ``dft_check``,
+   ``<label>_mlip_dft_energy`` (eV), ``<label>_mlip_dft_parameters``,
+   ``<label>_mlip_dft_retrieved``; per round ``r``:
+   ``mlip_round<r>_finetune_summary``, ``mlip_round<r>_model_folder``,
+   ``mlip_round<r>_relax_results``. ``MlipJobConfig(code_label, execution, device="cuda")``
+   names the Python of the MACE environment and its scheduler settings
+   (``with_mpi=False``).
+
+``read_mlip_results(graph, labels, *, seed=None, round=None)``, ``read_mlip_energies(graph, labels, *, energy_source="mlip_dft")``
+   ``MlipRelaxation`` per label (the deployed seed and the last finished round
+   by default), and the energies (eV) of one source: ``"mlip_dft"`` or
+   ``"mlip"``; both work while the graph runs, for the parts that finished.
+
+``dft_label(backend, *, label, structure, parameters, files, role="train")``, ``dft_diagram_energy(backend, *, label, parameters)``, ``dft_partially_occupied(backend, *, label, files)``
+   A training frame from a finished QE, VASP or CP2K static (the free
+   energy, whose derivatives are the forces), the energy psteros uses for a
+   diagram (VASP: sigma -> 0), and the partly filled states of the bulk.
+
+``rattled_copies(structures, *, count=5, sigma_angstrom=0.05, seed=20261017)``
+   ``{"<label>_r<i>": structure}`` with every site moved by a normal vector of
+   ``sigma_angstrom`` per component: extra training statics.
 
 ``rutile_bulk(metal, *, a, c, u=0.3056)``, ``rutile_110_slab(*, metal, termination="o_bridge", triple_layers=3, vacuum_angstrom=15.0, a, c, u=0.3056, repeat_c=1, cus_bond_angstrom=1.70)``
    Rutile MO\ :sub:`2` and its symmetric (110) slabs with the terminations of
