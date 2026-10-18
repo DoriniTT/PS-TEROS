@@ -125,6 +125,10 @@ Models (identical settings except the named difference):
 - **M1**: ordinary fine-tune on the statics.
 - **M2**: replay fine-tune on the statics. **This is the proposed method.**
 - **M3**: replay fine-tune on the statics plus rattled statics (only if D2 includes them).
+- **M2L** (added 2026-10-18 at the user's request, after the first M2 model was still converging at pass 100; fixed
+  before any of its results; **reported, not gated**): the M2 recipe with 500 passes and a learning rate decaying
+  from 1e-3 to 1e-5 (ExponentialLR, gamma 0.990832 per pass), deployment seed only; relaxed and checked by route (b)
+  like the others.
 
 Two energy routes per model:
 

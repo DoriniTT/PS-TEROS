@@ -10,9 +10,15 @@ uninterrupted run (checked on CPU to machine precision). Chunks are sized from t
 nine structures.
 
 Usage (PYTHONPATH=<worktree>):
-    python c4_chunks.py prepare     # base folders and plan (local/jobs/chunks)
-    python c4_chunks.py run         # the orchestrator loop; resumable from local/jobs/chunks/plan.json
+    python c4_chunks.py prepare       # base folders and plan (local/jobs/chunks)
+    python c4_chunks.py add-variant   # M2L, the extra variant (below), into the plan
+    python c4_chunks.py run           # the orchestrator loop; resumable from local/jobs/chunks/plan.json
     python c4_chunks.py status
+
+Extra variant M2L (user, 2026-10-18, after the first M2 model was not converged at 100 passes; fixed before any of
+its results; reported, not gated): the M2 recipe with 500 passes and a learning rate decaying from 1e-3 to 1e-5
+(MACE ExponentialLR, gamma = 0.01 ** (1 / 500) = 0.990832 per pass), deployment seed 20260920 only. Priority: the
+main-study fine-tunes first, then the relaxation of every model whose training is done, then M2L.
 """
 
 from __future__ import annotations
@@ -40,6 +46,8 @@ WALLTIME = 1800
 TRAIN_BUDGET_SECONDS = 1200
 FIRST_GUESS_SECONDS_PER_PASS = {"m1": 6.0, "m2": 52.0, "m3": 64.0}
 FAMILIES = ("m2", "m1", "m3")
+EXTRA = {"m2l": {"epochs": 500, "lr_scheduler_gamma": 0.990832, "seeds": (20260920,), "replay": True,
+                 "frames": "plain", "rate_from": "m2"}}
 MAX_IN_FLIGHT = 2
 MAX_FAILURES = 3
 
@@ -199,34 +207,86 @@ def step(plan: dict) -> bool:
                 if entry["failures"] >= MAX_FAILURES:
                     raise RuntimeError(f"relax {model} failed {MAX_FAILURES} times")
     busy = {name for name, run in runs.items() if run["chunks"] and run["chunks"][-1]["state"] == "active"}
+
+    def trained(model: str) -> bool:
+        if model == "m0":
+            return True
+        family, seed = model.split("_seed")
+        run = runs[f"ruo2_{family}_seed{seed}"]
+        return run["epochs_done"] >= run["passes"]
+
+    def next_task():
+        """Main fine-tunes, then relaxations of trained models (main first), then the extra variants."""
+
+        families = list(FAMILIES) + [family for family in plan.get("extra_families", []) if family not in FAMILIES]
+        main = set(FAMILIES)
+        for group in ("main", "relax", "extra"):
+            if group == "relax":
+                ready = [model for model, entry in relax.items() if entry["state"] == "waiting" and trained(model)]
+                ready.sort(key=lambda model: model.split("_seed")[0] not in main and model != "m0")
+                if ready:
+                    return ("relax", ready[0])
+                continue
+            for family in families:
+                if (family in main) != (group == "main"):
+                    continue
+                for name, run in runs.items():
+                    if run["family"] == family and name not in busy and run["epochs_done"] < run["passes"]:
+                        return ("chunk", name)
+        return None
+
     while in_flight < MAX_IN_FLIGHT:
-        candidates = [name for family in FAMILIES for name, run in runs.items()
-                      if run["family"] == family and name not in busy and run["epochs_done"] < run["passes"]]
-        if candidates:
-            name = candidates[0]
-            run = runs[name]
+        task = next_task()
+        if task is None:
+            break
+        kind, key = task
+        if kind == "chunk":
+            run = runs[key]
             per_pass = plan["seconds_per_pass"][run["family"]]
             size = max(1, math.floor(TRAIN_BUDGET_SECONDS / per_pass))
             start, stop = run["epochs_done"], min(run["passes"], run["epochs_done"] + size)
-            folder = chunk_folder(name, run, start, stop)
-            pk = cluster.with_retry(submit_folder, folder, f"ruo2_{name}_{start}-{stop}")
+            folder = chunk_folder(key, run, start, stop)
+            pk = cluster.with_retry(submit_folder, folder, f"ruo2_{key}_{start}-{stop}")
             run["chunks"].append({"start": start, "stop": stop, "pk": pk, "state": "active", "folder": folder.name})
-            busy.add(name)
-            log(f"submitted {name} passes {start}-{stop} as job {pk}")
-        elif all(run["epochs_done"] >= run["passes"] for run in runs.values()):
-            waiting = [model for model, entry in relax.items() if entry["state"] == "waiting"]
-            if not waiting:
-                break
-            model = waiting[0]
-            pk = cluster.with_retry(submit_folder, relax_folder(model), f"ruo2_relax_{model}")
-            relax[model].update(state="active", pk=pk)
-            log(f"submitted relaxations with {model} as job {pk}")
+            busy.add(key)
+            log(f"submitted {key} passes {start}-{stop} as job {pk}")
         else:
-            break
+            pk = cluster.with_retry(submit_folder, relax_folder(key), f"ruo2_relax_{key}")
+            relax[key].update(state="active", pk=pk)
+            log(f"submitted relaxations with {key} as job {pk}")
         in_flight += 1
     PLAN.write_text(json.dumps(plan, indent=2) + "\n")
     return all(run["epochs_done"] >= run["passes"] for run in runs.values()) and all(
         entry["state"] == "done" for entry in relax.values())
+
+
+def add_variant() -> None:
+    plan = json.loads(PLAN.read_text())
+    structures = cluster.with_retry(c4_gpu.relaxation_structures)
+    plain = cluster.with_retry(c4_gpu.frames, False)
+    train, valid, _ = mlip.select_replay_structures(c4_gpu.REPLAY_FILE, elements=["Ru", "O"])
+    fixed = {label: psteros.central_sites(structures[label]) for label in psteros.RUTILE_110_TERMINATIONS}
+    for family, spec in EXTRA.items():
+        if family in plan.get("extra_families", []):
+            raise ValueError(f"{family} is already in the plan")
+        config = mlip.MaceFineTuneConfig(
+            foundation_model=COMPUTER["foundation"], foundation_model_sha256=c4_gpu.FOUNDATION_SHA256,
+            replay_file=c4_gpu.REPLAY_FILE, epochs=spec["epochs"], seeds=spec["seeds"],
+            lr_scheduler_gamma=spec["lr_scheduler_gamma"])
+        mlip.prepare_finetune_job(JOBS / f"ft_{family}", plain, config, name=f"ruo2_{family}",
+                                  replay_train=train, replay_valid=valid)
+        for seed in config.seeds:
+            name = f"ruo2_{family}_seed{seed}"
+            plan["runs"][name] = {"family": family, "seed": seed, "passes": config.epochs, "epochs_done": 0,
+                                  "failures": 0, "chunks": []}
+            model = f"{family}_seed{seed}"
+            mlip.prepare_relax_job(JOBS / f"relax_{model}", structures,
+                                   {model: (f"{REMOTE_ROOT}/models/{name}.model", "Default")}, fixed_sites=fixed)
+            plan["relax"][model] = {"state": "waiting", "pk": None, "failures": 0}
+        plan["seconds_per_pass"][family] = plan["seconds_per_pass"][spec["rate_from"]]
+        plan.setdefault("extra_families", []).append(family)
+        log(f"added the extra variant {family}: {spec}")
+    PLAN.write_text(json.dumps(plan, indent=2) + "\n")
 
 
 def run_loop() -> None:
@@ -250,7 +310,7 @@ if __name__ == "__main__":
     from aiida import load_profile
 
     load_profile("psteros_mace_ruo2")
-    {"prepare": prepare, "run": run_loop, "status": status}[sys.argv[1]]()
+    {"prepare": prepare, "add-variant": add_variant, "run": run_loop, "status": status}[sys.argv[1]]()
 
 
 # ---------------------------------------------------------------- readers for c6_route_b.py and c7_analysis.py

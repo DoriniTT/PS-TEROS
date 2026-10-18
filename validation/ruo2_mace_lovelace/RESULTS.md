@@ -211,3 +211,7 @@ on the replay validation structures its force RMSE against MH-1 is 376 meV/A aft
 (median over structures 122 meV/A at the end). The r4 recipe was made for 71 frames of 892 atoms; here the target
 head sees 10 small frames per pass against 123 replay structures. The plan's recipe stays as fixed; the gates and
 the outcome rules decide.
+
+**Extra variant M2L** (user, 2026-10-18: "yes" to a labelled extra variant; fixed before any of its results;
+reported, not gated): the M2 recipe with 500 passes and a learning rate decaying from 1e-3 to 1e-5 (gamma 0.990832 per
+pass), seed 20260920, after the main study's fine-tunes and next to their relaxations (`c4_chunks.py add-variant`).
