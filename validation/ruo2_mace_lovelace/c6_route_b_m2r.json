@@ -1,0 +1,12 @@
+{
+  "workgraph_pk": 2396,
+  "labels": [
+    "m2r_seed20260920_o_bridge",
+    "m2r_seed20260920_o_cus",
+    "m2r_seed20260920_metal",
+    "m2r_seed20260920_o_cus_half",
+    "m2r_seed20260920_o_bridge_half",
+    "m2r_seed20260920_o_cus_no_bridge"
+  ],
+  "not_converged": {}
+}

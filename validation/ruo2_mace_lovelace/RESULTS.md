@@ -269,3 +269,48 @@ Reported: M3 (five rattled statics per termination) passes every gate of route (
 G1 and G2 of route (b) (1.52 meV/A²) but recovers only 85-87 % of the relaxation of `metal` and `o_bridge_half`;
 the ordinary fine-tune (M1) moves the slabs away from the CP2K minima (negative recovered fractions).
 
+
+## Active-learning round M2R (2026-10-18, `c4_chunks.py`, route (b) WorkGraph 2396, 6 statics, all exit 0)
+
+M2R = M2's 10 frames plus the six CP2K statics at the M2 seed-20260920 geometries (WorkGraph 2137), 16 frames, M2's
+recipe (100 passes, constant lr 1e-3) and seeds; fine-tunes and relaxations on `testegpu` as before, every relaxation
+converged. Route (b) with the deployment seed: one CP2K static at each M2R geometry (`c6_route_b_m2r.json`).
+
+Route (a), against R1:
+
+| Model | ΔH_f (eV/f.u.) | G4 (≤ 0.05) | G1 | model transitions (eV) | G2: largest error (meV/A², ≤ 5) | o_bridge | o_cus | metal | o_cus_half | o_bridge_half | o_cus_no_bridge |
+|---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| **m2r_seed20260920** | -3.036 | pass (+0.018) | fail | o_bridge -> o_cus at -0.967 (no o_cus_half window) | 7.1 | 2.1 | 2.2 | 6.5 | 1.2 | 2.0 | 7.1 |
+| m2r_seed20260921 | -3.100 | pass (-0.046) | fail | -1.033, -1.019 | 6.4 | 4.2 | 3.1 | 2.1 | 1.5 | 3.3 | 6.4 |
+
+Route (b), against R1:
+
+| Model | G1 | transitions (eV; R1 −0.924, −0.835) | G2: largest error (meV/A², ≤ 2) | G3 (≥ 90 % of the CP2K relaxation) | recovered fraction per termination |
+|---|---|---|---:|---|---|
+| **m2r_seed20260920** | pass | -0.908, -0.848 | 0.49 | pass | o_bridge 0.99, o_cus 0.99, metal 0.99, o_cus_half 0.97, o_bridge_half 0.96, o_cus_no_bridge 0.99 |
+
+**Outcome (the plan's rules, after the one active-learning round): M2R fails route (a) and passes route (b).** All
+gates of route (b) pass (G1, G2 0.49 meV/A², G3 96-99 %, G4 +0.018 eV), with G0 and G5 from CP2K alone. The
+validated workflow for RuO2(110) is therefore: replay fine-tune on the statics of the unrelaxed terminations,
+one active-learning round with a CP2K static at each model geometry, relaxation with the retrained model on the
+GPU, and one CP2K static at each final geometry for the energies of the diagram. Energies taken from the model
+itself (route (a)) are not good enough: 6-7 meV/A² on single terminations, enough to close the 0.09 eV o_cus_half
+window or move it by 0.1 eV.
+
+DFT cost of the slabs (CP2K time from the output timing report, one Phileas node with 96 ranks; the references
+bulk, hcp Ru and O2 are the same for every route and left out):
+
+| Route | CP2K calculations on the six terminations | CP2K time (s) | against R1 | gates |
+|---|---|---:|---:|---|
+| R1: CP2K relax (7-13 BFGS steps) + static | 6 GEO_OPT + 6 statics | 4859 | 100 % | reference |
+| M0 route (b): MH-1 zero-shot + one static | 6 statics | 609 | 13 % | G3 fails (85-87 % on metal, o_bridge_half) |
+| M2 route (b) | 6 start statics + 6 final statics | 1137 | 23 % | G2, G3 fail |
+| **M2R route (b)** | 6 start + 6 active-learning + 6 final statics | 1629 | 34 % | all pass |
+| M3 route (b) | 6 start + 30 rattled + 6 final statics | 3874 | 80 % | all pass |
+
+GPU time on `testegpu` per model: fine-tune 100 passes about 1900 s (M2 1977 s, M2R 1870 s, M3 2458 s in chunks),
+relaxation of the six terminations 5-14 min including the queue. M2R needs two fine-tunes (M2, then M2R). The
+saving in DFT is modest here because the CP2K relaxations of these small cells (16-38 atoms) converge in 7-13 BFGS
+steps from good starting geometries, so one relaxation costs about 7 statics; the method needs 3 statics per
+termination. The saving grows with the number of relaxation steps (larger cells, softer surfaces, adsorbates),
+since the DFT cost of the method does not depend on it.
