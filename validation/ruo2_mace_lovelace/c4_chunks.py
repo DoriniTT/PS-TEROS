@@ -104,7 +104,7 @@ def submit_folder(folder: Path, label: str) -> int:
 
 
 def chunk_folder(name: str, run: dict, start: int, stop: int) -> Path:
-    folder = JOBS / "jobs" / f"{name}_{start:03d}-{stop:03d}_try{run['failures']}"
+    folder = JOBS / "jobs" / f"{name}_{start:03d}-{stop:03d}_{int(time.time())}"
     shutil.copytree(JOBS / f"ft_{run['family']}", folder / "ft")
     job = json.loads((folder / "ft" / "job.json").read_text())
     spec = next(item for item in job["runs"] if item["name"] == name)

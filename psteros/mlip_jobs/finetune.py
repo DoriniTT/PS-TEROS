@@ -199,7 +199,9 @@ def check_train(original, record, passes, folder=None, stop=None):
         state_path = None if folder is None else folder / STATE_FILE
         start = 0
         if state_path is not None and state_path.exists():
-            state = torch.load(state_path, map_location=DEVICE, weights_only=False)
+            # on the CPU: the generator states must stay CPU byte tensors; the model, optimizer and EMA move what
+            # they load to the device of their parameters
+            state = torch.load(state_path, map_location="cpu", weights_only=False)
             keyword["model"].load_state_dict(state["model"])
             keyword["optimizer"].load_state_dict(state["optimizer"])
             keyword["lr_scheduler"].lr_scheduler.load_state_dict(state["lr_scheduler"])
