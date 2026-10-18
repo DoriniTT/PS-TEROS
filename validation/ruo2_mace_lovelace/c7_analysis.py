@@ -225,7 +225,7 @@ def main(dft_only: bool = False) -> None:
             entry["route_b"] = {"G1": gate_g1(diagram_b, r1), "G2": gate_g2(diagram_b, r1, 2.0),
                                 "G3": gate_g3(e_x0, e_b, e_r1, areas)}
         out["models"][model] = entry
-    for family in ("m1", "m2", "m3"):
+    for family in ("m1", "m2", "m3", "m2r"):
         members = [f"{family}_seed{seed}" for seed in SEEDS if f"{family}_seed{seed}" in out["models"]]
         if members:
             curves = np.array([[out["models"][m]["route_a"]["gamma_at_0_mev"][t] for t in TERMINATIONS] for m in members])

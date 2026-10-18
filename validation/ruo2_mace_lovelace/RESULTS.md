@@ -282,6 +282,9 @@ Route (a), against R1:
 |---|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|
 | **m2r_seed20260920** | -3.036 | pass (+0.018) | fail | o_bridge -> o_cus at -0.967 (no o_cus_half window) | 7.1 | 2.1 | 2.2 | 6.5 | 1.2 | 2.0 | 7.1 |
 | m2r_seed20260921 | -3.100 | pass (-0.046) | fail | -1.033, -1.019 | 6.4 | 4.2 | 3.1 | 2.1 | 1.5 | 3.3 | 6.4 |
+| m2r_seed20260922 | -2.986 | fail (+0.069) | fail | o_bridge -> o_cus at -1.041 (no o_cus_half window) | 9.0 | 1.0 | 9.0 | 5.6 | 3.4 | 2.5 | 3.9 |
+
+Committee spread of γ at Δμ_O = 0 over the three M2R seeds: 3.0 meV/A² at most (M2: 4.5).
 
 Route (b), against R1:
 
@@ -294,7 +297,7 @@ gates of route (b) pass (G1, G2 0.49 meV/A², G3 96-99 %, G4 +0.018 eV), with G0
 validated workflow for RuO2(110) is therefore: replay fine-tune on the statics of the unrelaxed terminations,
 one active-learning round with a CP2K static at each model geometry, relaxation with the retrained model on the
 GPU, and one CP2K static at each final geometry for the energies of the diagram. Energies taken from the model
-itself (route (a)) are not good enough: 6-7 meV/A² on single terminations, enough to close the 0.09 eV o_cus_half
+itself (route (a)) are not good enough: 6-9 meV/A² on single terminations over the three seeds, enough to close the 0.09 eV o_cus_half
 window or move it by 0.1 eV.
 
 DFT cost of the slabs (CP2K time from the output timing report, one Phileas node with 96 ranks; the references
