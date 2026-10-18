@@ -1,0 +1,30 @@
+{
+  "workgraph_pk": 2137,
+  "labels": [
+    "m0_o_bridge",
+    "m0_o_cus",
+    "m0_metal",
+    "m0_o_cus_half",
+    "m0_o_bridge_half",
+    "m0_o_cus_no_bridge",
+    "m1_seed20260920_o_bridge",
+    "m1_seed20260920_o_cus",
+    "m1_seed20260920_metal",
+    "m1_seed20260920_o_cus_half",
+    "m1_seed20260920_o_bridge_half",
+    "m1_seed20260920_o_cus_no_bridge",
+    "m2_seed20260920_o_bridge",
+    "m2_seed20260920_o_cus",
+    "m2_seed20260920_metal",
+    "m2_seed20260920_o_cus_half",
+    "m2_seed20260920_o_bridge_half",
+    "m2_seed20260920_o_cus_no_bridge",
+    "m3_seed20260920_o_bridge",
+    "m3_seed20260920_o_cus",
+    "m3_seed20260920_metal",
+    "m3_seed20260920_o_cus_half",
+    "m3_seed20260920_o_bridge_half",
+    "m3_seed20260920_o_cus_no_bridge"
+  ],
+  "not_converged": {}
+}

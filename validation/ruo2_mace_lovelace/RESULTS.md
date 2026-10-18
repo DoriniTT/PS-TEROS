@@ -215,3 +215,35 @@ the outcome rules decide.
 **Extra variant M2L** (user, 2026-10-18: "yes" to a labelled extra variant; fixed before any of its results;
 reported, not gated): the M2 recipe with 500 passes and a learning rate decaying from 1e-3 to 1e-5 (gamma 0.990832 per
 pass), seed 20260920, after the main study's fine-tunes and next to their relaxations (`c4_chunks.py add-variant`).
+
+## Main study finished; route (a) gates (2026-10-18, `c7_analysis.py`, `c7_analysis.json`)
+
+All 9 fine-tunes (M1, M2, M3 × 3 seeds) and the 10 relaxation jobs finished on `testegpu` without a failure; every
+one of the 90 relaxations reached 0.01 eV/A (30-60 FIRE steps). Route (a): every energy of the diagram from the
+model itself, at its own geometries, against R1 (CP2K relax -> static); window [−1.527, 0] eV. The gated model is
+M2 seed 20260920; the other rows are reported.
+
+| Model | ΔH_f (eV/f.u.) | G4 (≤ 0.05) | G1 | G2: largest error (meV/A², ≤ 5) | o_bridge | o_cus | metal | o_cus_half | o_bridge_half | o_cus_no_bridge |
+|---|---:|---|---|---:|---:|---:|---:|---:|---:|---:|
+| m0 | -3.185 | fail (-0.130) | fail | 8.1 | 2.8 | 8.1 | 1.5 | 3.9 | 2.4 | 1.1 |
+| m1_seed20260920 | -3.070 | pass (-0.015) | fail | 23.3 | 15.4 | 22.1 | 23.3 | 16.6 | 13.3 | 17.3 |
+| m1_seed20260921 | -3.077 | pass (-0.022) | fail | 24.5 | 15.7 | 24.5 | 23.7 | 18.7 | 13.8 | 22.0 |
+| m1_seed20260922 | -3.058 | pass (-0.004) | fail | 28.6 | 16.3 | 22.5 | 28.6 | 17.1 | 16.1 | 21.4 |
+| **m2_seed20260920** | -3.073 | pass (-0.019) | fail | 17.8 | 6.8 | 3.2 | 17.8 | 4.6 | 9.0 | 1.2 |
+| m2_seed20260921 | -3.145 | fail (-0.091) | fail | 10.1 | 2.4 | 0.1 | 6.8 | 2.3 | 1.4 | 10.1 |
+| m2_seed20260922 | -3.001 | fail (+0.054) | fail | 11.2 | 1.3 | 1.7 | 11.2 | 1.2 | 4.4 | 10.1 |
+| m3_seed20260920 | -3.133 | fail (-0.078) | fail | 5.3 | 4.7 | 3.7 | 4.8 | 5.3 | 2.6 | 1.5 |
+| m3_seed20260921 | -3.053 | pass (+0.001) | fail | 4.0 | 1.4 | 0.6 | 4.0 | 2.2 | 2.3 | 1.3 |
+| m3_seed20260922 | -2.999 | fail (+0.056) | pass | 4.2 | 1.4 | 2.8 | 4.2 | 2.4 | 1.3 | 0.1 |
+
+CP2K: ΔH_f −3.055 eV/f.u.; R1 transitions o_bridge -> o_cus_half at -0.924 eV and o_cus_half -> o_cus at -0.835 eV.
+Committee spread of γ at Δμ_O = 0 (standard deviation over the three seeds, meV/A²): M1 2.4 at most; M2 4.5 at most; M3 1.6 at most.
+
+Reading: **the method as proposed (M2) fails route (a)** (G1, and G2 with 17.8 meV/A² on `metal`; G4 passes).
+Statics of the starting geometries alone are not enough: the ordinary fine-tune (M1) is the worst model (13 to 29
+meV/A² on every termination), worse than MH-1 zero-shot (M0: 1 to 8 meV/A², but ΔH_f off by 0.13 eV); replay (M2)
+is much better than M1 but uneven between seeds; adding five rattled statics per termination (M3) gives the best and
+most stable models (largest error 4.0 to 5.3 meV/A², spread about 1 meV/A²), with G2 passing for two seeds of three.
+G1 is demanding here because of the 0.09 eV o_cus_half window of R1: M3 seed 20260922 reproduces it (−0.885 and
+−0.817 eV against −0.924 and −0.835), the other models either shift it by more than 0.05 eV or miss it.
+

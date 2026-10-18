@@ -1,0 +1,726 @@
+{
+  "window_ev": [
+    -1.5273022333098538,
+    0.0
+  ],
+  "delta_h_f_cp2k_ev": -3.0546044666197076,
+  "delta_h_f_cp2k_bulk110_ev": -3.054937824333024,
+  "R1": {
+    "transitions": [
+      [
+        -0.9240589764271478,
+        "o_bridge",
+        "o_cus_half"
+      ],
+      [
+        -0.8348359549967765,
+        "o_cus_half",
+        "o_cus"
+      ]
+    ],
+    "gamma_at_0_mev": {
+      "o_bridge": 71.8748701566794,
+      "o_cus": 28.16316389220343,
+      "metal": 190.9544372498838,
+      "o_cus_half": 48.910340651818046,
+      "o_bridge_half": 134.44626181375577,
+      "o_cus_no_bridge": 132.21744140172913
+    }
+  },
+  "G0": {
+    "transition_ev": -0.8794474657119568,
+    "obridge_minus_ocus_at_0_mev": 43.71170626447598,
+    "delta_h_f_ev": -3.054937824333024,
+    "metal_stable_somewhere": false,
+    "pass": true
+  },
+  "G5": {
+    "R0_G1": {
+      "pass": false,
+      "disagreeing_delta_mu_ev": [
+        -0.7840151464323917,
+        -0.7814696427102086,
+        -0.7789241389880255,
+        -0.7763786352658424,
+        -0.7738331315436593
+      ],
+      "n_disagreeing": 5,
+      "transitions": {
+        "o_bridge->o_cus_half": {
+          "truth_ev": -0.9240589764271478,
+          "model_ev": null
+        },
+        "o_cus_half->o_cus": {
+          "truth_ev": -0.8348359549967765,
+          "model_ev": null
+        }
+      },
+      "model_transitions": [
+        [
+          -0.7715838825137666,
+          "o_bridge",
+          "o_cus"
+        ]
+      ]
+    },
+    "R0_G2": {
+      "pass": false,
+      "limit_mev": 5.0,
+      "max_abs_error_mev": {
+        "o_bridge": 13.17663046190323,
+        "o_cus": 18.537839003878403,
+        "metal": 11.785835741294932,
+        "o_cus_half": 17.1973834234851,
+        "o_bridge_half": 9.967365771098684,
+        "o_cus_no_bridge": 16.919685098827387
+      }
+    },
+    "discriminating": true
+  },
+  "R0": {
+    "transitions": [
+      [
+        -0.7715838825137666,
+        "o_bridge",
+        "o_cus"
+      ]
+    ],
+    "gamma_at_0_mev": {
+      "o_bridge": 85.05150061858264,
+      "o_cus": 46.70100289608182,
+      "metal": 202.7402729911787,
+      "o_cus_half": 66.10772407530312,
+      "o_bridge_half": 144.41362758485442,
+      "o_cus_no_bridge": 149.13712650055652
+    }
+  },
+  "relaxation_lowers_gamma_mev": {
+    "o_bridge": 13.176630461903219,
+    "o_cus": 18.537839003878393,
+    "metal": 11.785835741294903,
+    "o_cus_half": 17.197383423485086,
+    "o_bridge_half": 9.967365771098663,
+    "o_cus_no_bridge": 16.91968509882737
+  },
+  "models": {
+    "m0": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -3.1846261005797842,
+      "G4": {
+        "pass": false,
+        "difference_ev": -0.1300216339600766
+      },
+      "route_a": {
+        "G1": {
+          "pass": false,
+          "disagreeing_delta_mu_ev": [
+            -0.9851099404848558,
+            -0.9825644367626727,
+            -0.9800189330404896,
+            -0.9774734293183065,
+            -0.9749279255961234
+          ],
+          "n_disagreeing": 5,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": null
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": null
+            }
+          },
+          "model_transitions": [
+            [
+              -0.9871753605752323,
+              "o_bridge",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": false,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 2.764085462826614,
+            "o_cus": 8.118549805893082,
+            "metal": 1.4768559104109045,
+            "o_cus_half": 3.9314871933810593,
+            "o_bridge_half": 2.3521668817116392,
+            "o_cus_no_bridge": 1.1277119557824165
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 69.11078469385279,
+          "o_cus": 20.04461408631176,
+          "metal": 192.43129316029328,
+          "o_cus_half": 44.978853458437705,
+          "o_bridge_half": 132.09409493204484,
+          "o_cus_no_bridge": 133.34515335751155
+        }
+      },
+      "route_b": {
+        "pending": "no output parameters for m0_o_bridge"
+      }
+    },
+    "m1_seed20260920": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -3.069591782269754,
+      "G4": {
+        "pass": true,
+        "difference_ev": -0.014987315650046185
+      },
+      "route_a": {
+        "G1": {
+          "pass": false,
+          "disagreeing_delta_mu_ev": [
+            -1.0131104814288698,
+            -1.0105649777066867,
+            -1.0080194739845036,
+            -1.0054739702623205,
+            -1.0029284665401375,
+            -1.0003829628179544,
+            -0.9978374590957712,
+            -0.995291955373588,
+            -0.992746451651405,
+            -0.990200947929222
+          ],
+          "n_disagreeing": 16,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": null
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": null
+            }
+          },
+          "model_transitions": [
+            [
+              -1.0140330407406282,
+              "o_bridge",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": false,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 15.411393482599593,
+            "o_cus": 22.100781254418962,
+            "metal": 23.312932296274482,
+            "o_cus_half": 16.551671154112753,
+            "o_bridge_half": 13.276429007139953,
+            "o_cus_no_bridge": 17.333382973408874
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 56.463476674079814,
+          "o_cus": 6.0623826377872945,
+          "metal": 167.64150495361213,
+          "o_cus_half": 32.3586694977067,
+          "o_bridge_half": 121.16983280661722,
+          "o_cus_no_bridge": 114.88405842832026
+        }
+      },
+      "route_b": {
+        "pending": "no output parameters for m1_seed20260920_o_bridge"
+      }
+    },
+    "m1_seed20260921": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -3.0767170827334667,
+      "G4": {
+        "pass": true,
+        "difference_ev": -0.02211261611375903
+      },
+      "route_a": {
+        "G1": {
+          "pass": false,
+          "disagreeing_delta_mu_ev": [
+            -1.0563840447059822,
+            -1.0538385409837991,
+            -1.051293037261616,
+            -1.048747533539433,
+            -1.0462020298172499,
+            -1.0436565260950668,
+            -1.0411110223728837,
+            -1.0385655186507006,
+            -1.0360200149285175,
+            -1.0334745112063344
+          ],
+          "n_disagreeing": 33,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": null
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": null
+            }
+          },
+          "model_transitions": [
+            [
+              -1.0568230119320108,
+              "o_bridge",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": false,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 15.66297819993867,
+            "o_cus": 24.479181642628035,
+            "metal": 23.732110464935744,
+            "o_cus_half": 18.682202969554595,
+            "o_bridge_half": 13.803019311321421,
+            "o_cus_no_bridge": 21.970077215970903
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 56.211891956740736,
+          "o_cus": 3.68398224957823,
+          "metal": 167.22232678495087,
+          "o_cus_half": 30.22813768226486,
+          "o_bridge_half": 120.64324250243575,
+          "o_cus_no_bridge": 110.24736418575823
+        }
+      }
+    },
+    "m1_seed20260922": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -3.0581233400182555,
+      "G4": {
+        "pass": true,
+        "difference_ev": -0.0035188733985478393
+      },
+      "route_a": {
+        "G1": {
+          "pass": false,
+          "disagreeing_delta_mu_ev": [
+            -1.0029284665401375,
+            -1.0003829628179544,
+            -0.9978374590957712,
+            -0.995291955373588,
+            -0.992746451651405,
+            -0.990200947929222,
+            -0.9876554442070389,
+            -0.9851099404848558,
+            -0.9825644367626727,
+            -0.9800189330404896
+          ],
+          "n_disagreeing": 12,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": null
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": null
+            }
+          },
+          "model_transitions": [
+            [
+              -1.0045681653383554,
+              "o_bridge",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": false,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 16.252580091264676,
+            "o_cus": 22.471529469041855,
+            "metal": 28.61603616597982,
+            "o_cus_half": 17.106627763671938,
+            "o_bridge_half": 16.062863676100392,
+            "o_cus_no_bridge": 21.421079734182086
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 55.62229006541473,
+          "o_cus": 5.6916344231644045,
+          "metal": 162.3384010839068,
+          "o_cus_half": 31.803712888147533,
+          "o_bridge_half": 118.38339813765678,
+          "o_cus_no_bridge": 110.79636166754705
+        }
+      }
+    },
+    "m2_seed20260920": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -3.0734609529113186,
+      "G4": {
+        "pass": true,
+        "difference_ev": -0.018856486291610963
+      },
+      "route_a": {
+        "G1": {
+          "pass": false,
+          "disagreeing_delta_mu_ev": [
+            -0.7840151464323917,
+            -0.7814696427102086,
+            -0.7789241389880255
+          ],
+          "n_disagreeing": 3,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": -0.833460390682376
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": -0.7774809959173581
+            }
+          },
+          "model_transitions": [
+            [
+              -0.833460390682376,
+              "o_bridge",
+              "o_cus_half"
+            ],
+            [
+              -0.7774809959173581,
+              "o_cus_half",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": false,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 6.837336243889467,
+            "o_cus": 3.1604242370407434,
+            "metal": 17.794519722127802,
+            "o_cus_half": 4.585798248471008,
+            "o_bridge_half": 8.969561714428963,
+            "o_cus_no_bridge": 1.1589077402963142
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 65.03753391278994,
+          "o_cus": 25.002739655165517,
+          "metal": 173.1599175277588,
+          "o_cus_half": 44.324542403348445,
+          "o_bridge_half": 125.47670009932821,
+          "o_cus_no_bridge": 133.37634914202545
+        }
+      },
+      "route_b": {
+        "pending": "no output parameters for m2_seed20260920_o_bridge"
+      }
+    },
+    "m2_seed20260921": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -3.1452668166107287,
+      "G4": {
+        "pass": false,
+        "difference_ev": -0.09066234999102107
+      },
+      "route_a": {
+        "G1": {
+          "pass": false,
+          "disagreeing_delta_mu_ev": [],
+          "n_disagreeing": 0,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": null
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": null
+            }
+          },
+          "model_transitions": [
+            [
+              -0.9260702208421207,
+              "o_bridge",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": false,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 2.3825251763908852,
+            "o_cus": 0.0652063404809411,
+            "metal": 6.820530351941528,
+            "o_cus_half": 2.341399944382161,
+            "o_bridge_half": 1.3657879779916584,
+            "o_cus_no_bridge": 10.147023619532064
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 74.25739533307029,
+          "o_cus": 28.22837023268154,
+          "metal": 184.13390689794508,
+          "o_cus_half": 51.25174059619881,
+          "o_bridge_half": 133.08047383576553,
+          "o_cus_no_bridge": 142.3644650212612
+        }
+      }
+    },
+    "m2_seed20260922": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -3.0010383147532593,
+      "G4": {
+        "pass": false,
+        "difference_ev": 0.05356615186644831
+      },
+      "route_a": {
+        "G1": {
+          "pass": false,
+          "disagreeing_delta_mu_ev": [],
+          "n_disagreeing": 0,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": -0.8205687760514592
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": -0.8170051803995191
+            }
+          },
+          "model_transitions": [
+            [
+              -0.8205687760514592,
+              "o_bridge",
+              "o_cus_half"
+            ],
+            [
+              -0.8170051803995191,
+              "o_cus_half",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": false,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 1.3407679835947306,
+            "o_cus": 1.6742767055437042,
+            "metal": 11.167749173221381,
+            "o_cus_half": 1.2311498491629607,
+            "o_bridge_half": 4.392234417190565,
+            "o_cus_no_bridge": 10.07903136815571
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 70.53410217308468,
+          "o_cus": 29.837440597744305,
+          "metal": 179.78668807666523,
+          "o_cus_half": 50.14149050097961,
+          "o_bridge_half": 130.0540273965666,
+          "o_cus_no_bridge": 142.29647276988484
+        }
+      }
+    },
+    "m3_seed20260920": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -3.1328997243306276,
+      "G4": {
+        "pass": false,
+        "difference_ev": -0.07829525771091994
+      },
+      "route_a": {
+        "G1": {
+          "pass": false,
+          "disagreeing_delta_mu_ev": [],
+          "n_disagreeing": 0,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": -0.9019621919952668
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": -0.896256434142856
+            }
+          },
+          "model_transitions": [
+            [
+              -0.9019621919952668,
+              "o_bridge",
+              "o_cus_half"
+            ],
+            [
+              -0.896256434142856,
+              "o_cus_half",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": false,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 4.723868905678998,
+            "o_cus": 3.746604282382563,
+            "metal": 4.796016486319331,
+            "o_cus_half": 5.273013788197005,
+            "o_bridge_half": 2.5568625193861294,
+            "o_cus_no_bridge": 1.4860828337955638
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 76.5987390623584,
+          "o_cus": 31.909768174583167,
+          "metal": 186.15842076356725,
+          "o_cus_half": 54.18335444001363,
+          "o_bridge_half": 137.0031243331405,
+          "o_cus_no_bridge": 133.7035242355247
+        }
+      },
+      "route_b": {
+        "pending": "no output parameters for m3_seed20260920_o_bridge"
+      }
+    },
+    "m3_seed20260921": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -3.05345538305221,
+      "G4": {
+        "pass": true,
+        "difference_ev": 0.0011490835674976552
+      },
+      "route_a": {
+        "G1": {
+          "pass": false,
+          "disagreeing_delta_mu_ev": [],
+          "n_disagreeing": 0,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": null
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": null
+            }
+          },
+          "model_transitions": [
+            [
+              -0.8967760103876685,
+              "o_bridge",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": true,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 1.4286676230524336,
+            "o_cus": 0.5673765461123139,
+            "metal": 3.9763364929709155,
+            "o_cus_half": 2.2112585168401466,
+            "o_bridge_half": 2.3080682669472594,
+            "o_cus_no_bridge": 1.2693015506019663
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 73.30353777973184,
+          "o_cus": 28.730540438315725,
+          "metal": 186.9781007569129,
+          "o_cus_half": 51.12159916865817,
+          "o_bridge_half": 136.754330080703,
+          "o_cus_no_bridge": 133.4867429523311
+        }
+      }
+    },
+    "m3_seed20260922": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -2.9989182218971564,
+      "G4": {
+        "pass": false,
+        "difference_ev": 0.05568624472255124
+      },
+      "route_a": {
+        "G1": {
+          "pass": true,
+          "disagreeing_delta_mu_ev": [],
+          "n_disagreeing": 0,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": -0.8846067471823741
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": -0.817377835002958
+            }
+          },
+          "model_transitions": [
+            [
+              -0.8846067471823741,
+              "o_bridge",
+              "o_cus_half"
+            ],
+            [
+              -0.817377835002958,
+              "o_cus_half",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": true,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 1.4064110188929106,
+            "o_cus": 2.820735675179904,
+            "metal": 4.2268183203396745,
+            "o_cus_half": 2.3868699567287877,
+            "o_bridge_half": 1.3233284896020905,
+            "o_cus_no_bridge": 0.13444555946031755
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 73.28128117557232,
+          "o_cus": 30.983899567380497,
+          "metal": 186.72761892954696,
+          "o_cus_half": 51.29721060854542,
+          "o_bridge_half": 135.76959030335644,
+          "o_cus_no_bridge": 132.35188696118945
+        }
+      }
+    }
+  },
+  "m1_committee_spread_at_0_mev": {
+    "o_bridge": 0.3525337132579978,
+    "o_cus": 1.0448237435293615,
+    "metal": 2.407196415456614,
+    "o_cus_half": 0.9024398954744559,
+    "o_bridge_half": 1.2086913063247775,
+    "o_cus_no_bridge": 2.068536695402873
+  },
+  "m2_committee_spread_at_0_mev": {
+    "o_bridge": 3.787127601119485,
+    "o_cus": 2.0101999145055145,
+    "metal": 4.512216037047584,
+    "o_cus_half": 3.0378284504175816,
+    "o_bridge_half": 3.12567642937435,
+    "o_cus_no_bridge": 4.221103799048993
+  },
+  "m3_committee_spread_at_0_mev": {
+    "o_bridge": 1.558645198029069,
+    "o_cus": 1.335096710662447,
+    "metal": 0.3429614473776563,
+    "o_cus_half": 1.4037652120641753,
+    "o_bridge_half": 0.5326263242722397,
+    "o_cus_no_bridge": 0.5927164927260822
+  }
+}

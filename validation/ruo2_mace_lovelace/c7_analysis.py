@@ -64,12 +64,27 @@ def gammas(result) -> dict[str, np.ndarray]:
     return {label: 1000 * np.array([p.gamma_ev_per_angstrom2 for p in points]) for label, points in result.curves.items()}
 
 
+def on_grid(result, grid) -> dict[str, np.ndarray]:
+    """γ (meV/A^2) of every termination on ``grid``; γ is linear in Δμ, so the interpolation is exact."""
+
+    mu = np.array(result.delta_mu_ev)
+    return {label: np.interp(grid, mu, values) for label, values in gammas(result).items()}
+
+
+def stable_on_grid(result, grid) -> list[str]:
+    values = on_grid(result, grid)
+    labels = list(values)
+    table = np.array([values[label] for label in labels])
+    return [labels[i] for i in table.argmin(axis=0)]
+
+
 def gate_g1(model, truth, window_ev=0.05) -> dict:
     grid = np.array(truth.delta_mu_ev)
     near = np.zeros(len(grid), dtype=bool)
     for mu, *_ in truth.transitions:
         near |= np.abs(grid - mu) <= window_ev
-    disagree = [float(mu) for mu, a, b, n in zip(grid, model.stable, truth.stable, near) if a != b and not n]
+    model_stable = stable_on_grid(model, grid)
+    disagree = [float(mu) for mu, a, b, n in zip(grid, model_stable, truth.stable, near) if a != b and not n]
     matched = {}
     for mu, below, above in truth.transitions:
         partners = [m for m, b, a in model.transitions if (b, a) == (below, above)]
@@ -83,7 +98,8 @@ def gate_g1(model, truth, window_ev=0.05) -> dict:
 
 
 def gate_g2(model, truth, limit) -> dict:
-    a, b = gammas(model), gammas(truth)
+    grid = np.array(truth.delta_mu_ev)
+    a, b = on_grid(model, grid), gammas(truth)
     worst = {label: float(np.abs(a[label] - b[label]).max()) for label in b}
     return {"pass": max(worst.values()) <= limit, "limit_mev": limit, "max_abs_error_mev": worst}
 
@@ -196,7 +212,12 @@ def main(dft_only: bool = False) -> None:
         entry["route_a"] = {"G1": gate_g1(route_a, r1), "G2": gate_g2(route_a, r1, 5.0),
                             "gamma_at_0_mev": {k: float(v[-1]) for k, v in gammas(route_a).items()}}
         if route_b and all(f"{model}_{t}" in route_b["labels"] for t in TERMINATIONS):
-            e_b = energies(b_node, [f"{model}_{t}" for t in TERMINATIONS])
+            try:
+                e_b = energies(b_node, [f"{model}_{t}" for t in TERMINATIONS])
+            except ValueError as error:  # route (b) still running
+                entry["route_b"] = {"pending": str(error)}
+                out["models"][model] = entry
+                continue
             e_b = {t: e_b[f"{model}_{t}"] for t in TERMINATIONS}
             diagram_b = diagram(e_b, slabs, labels=TERMINATIONS, window=window, **dft_refs)
             entry["route_b"] = {"G1": gate_g1(diagram_b, r1), "G2": gate_g2(diagram_b, r1, 2.0),
@@ -212,7 +233,7 @@ def main(dft_only: bool = False) -> None:
     for model, entry in out["models"].items():
         summary[model] = {"G4": entry["G4"]["pass"], "a_G1": entry["route_a"]["G1"]["pass"],
                           "a_G2": entry["route_a"]["G2"]["pass"]}
-        if "route_b" in entry:
+        if "route_b" in entry and "G1" in entry["route_b"]:
             summary[model].update(b_G1=entry["route_b"]["G1"]["pass"], b_G2=entry["route_b"]["G2"]["pass"],
                                   b_G3=entry["route_b"]["G3"]["pass"])
     print(json.dumps(summary, indent=1))
