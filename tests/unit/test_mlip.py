@@ -88,6 +88,20 @@ def test_fine_tune_recipe_and_training_options() -> None:
         mlip.MlipRelaxConfig(optimizer="CG")
 
 
+def test_learning_rate_decay_is_opt_in() -> None:
+    config = mlip.MaceFineTuneConfig("/models/m.model", replay_file="/data/replay.xyz")
+    default = mlip.mace_training_options(config, name="m2", seed=20260920, atomic_numbers=[8, 44])
+    assert default["lr_scheduler_gamma"] == 1.0  # constant learning rate, as before
+    decaying = mlip.MaceFineTuneConfig("/models/m.model", replay_file="/data/replay.xyz", epochs=500,
+                                       lr_scheduler_gamma=0.990832)
+    options = mlip.mace_training_options(decaying, name="m2l", seed=20260920, atomic_numbers=[8, 44])
+    assert options["lr_scheduler_gamma"] == 0.990832 and options["max_num_epochs"] == 500
+    assert {k: v for k, v in options.items() if k not in ("lr_scheduler_gamma", "max_num_epochs", "patience", "name")} \
+        == {k: v for k, v in default.items() if k not in ("lr_scheduler_gamma", "max_num_epochs", "patience", "name")}
+    with pytest.raises(ValueError, match="lr_scheduler_gamma"):
+        mlip.MaceFineTuneConfig("/models/m.model", replay=False, lr_scheduler_gamma=1.5)
+
+
 def test_relaxation_keeps_fixed_sites_and_converges() -> None:
     pytest.importorskip("ase")
     from ase.calculators.emt import EMT

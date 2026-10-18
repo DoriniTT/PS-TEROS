@@ -217,6 +217,9 @@ def check_train(original, record, passes, folder=None, stop=None):
                 if name in state["outside_gradients"]:
                     parameter.grad = state["outside_gradients"][name].to(parameter.device)
             start = int(state["epoch"])
+            # MACE steps the scheduler before every pass but the first of a run (epoch > start_epoch): take the
+            # step of pass ``start`` that an uninterrupted run takes (a no-op for a constant learning rate)
+            keyword["lr_scheduler"].step()
         assert start < last <= passes, f"nothing to train: epochs {start} to {last} of {passes}"
         keyword.update(start_epoch=start, max_num_epochs=last)
         record.update(start_epoch=start, stop_epoch=last)

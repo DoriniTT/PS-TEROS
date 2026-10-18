@@ -150,6 +150,9 @@ class MaceFineTuneConfig:
     an EMA of ``ema_decay``, the universal loss (energy and force weights,
     Huber ``huber_delta``) and batch size 1; the final EMA model is kept, the
     validation is reported but never picks the model. One model per seed.
+    ``lr_scheduler_gamma`` below 1 multiplies the learning rate by that factor
+    after every pass (MACE's ``ExponentialLR``); the default 1.0 keeps it
+    constant, as before.
     """
 
     foundation_model: str
@@ -169,6 +172,7 @@ class MaceFineTuneConfig:
     clip_grad: float = 1.0
     seeds: tuple[int, ...] = (20260920, 20260921, 20260922)
     default_dtype: str = "float64"
+    lr_scheduler_gamma: float = 1.0
 
     def __post_init__(self) -> None:
         if not self.foundation_model or not self.foundation_head:
@@ -192,6 +196,8 @@ class MaceFineTuneConfig:
         object.__setattr__(self, "seeds", seeds)
         if self.default_dtype not in ("float32", "float64"):
             raise ValueError("MaceFineTuneConfig: default_dtype must be 'float32' or 'float64'")
+        if not 0 < self.lr_scheduler_gamma <= 1:
+            raise ValueError("MaceFineTuneConfig: lr_scheduler_gamma must be in (0, 1]")
 
 
 def select_replay_structures(
@@ -314,7 +320,7 @@ def mace_training_options(
         "num_workers": 0,
         "error_table": "PerAtomRMSE",
         "scheduler": "ExponentialLR",
-        "lr_scheduler_gamma": 1.0,
+        "lr_scheduler_gamma": config.lr_scheduler_gamma,
         "save_all_checkpoints": True,
     }
     if config.replay:
