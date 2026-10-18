@@ -1025,6 +1025,145 @@
         }
       }
     },
+    "m2l_seed20260920": {
+      "all_slabs_converged": true,
+      "delta_h_f_ev": -3.0545057797742174,
+      "G4": {
+        "pass": true,
+        "difference_ev": 9.868684549019235e-05
+      },
+      "route_a": {
+        "G1": {
+          "pass": false,
+          "disagreeing_delta_mu_ev": [],
+          "n_disagreeing": 0,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": -0.9156946875881432
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": -0.9107427011766731
+            }
+          },
+          "model_transitions": [
+            [
+              -0.9156946875881432,
+              "o_bridge",
+              "o_cus_half"
+            ],
+            [
+              -0.9107427011766731,
+              "o_cus_half",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": false,
+          "limit_mev": 5.0,
+          "max_abs_error_mev": {
+            "o_bridge": 1.7348855356810589,
+            "o_cus": 3.4134372234051398,
+            "metal": 10.623172719337163,
+            "o_cus_half": 1.5270178965701007,
+            "o_bridge_half": 3.9535445083310066,
+            "o_cus_no_bridge": 3.4902553703441868
+          }
+        },
+        "gamma_at_0_mev": {
+          "o_bridge": 70.13998462099835,
+          "o_cus": 24.749726668801124,
+          "metal": 180.33126453054945,
+          "o_cus_half": 47.38332275524935,
+          "o_bridge_half": 130.49271730542617,
+          "o_cus_no_bridge": 128.72718603138495
+        }
+      },
+      "route_b": {
+        "G1": {
+          "pass": true,
+          "disagreeing_delta_mu_ev": [],
+          "n_disagreeing": 0,
+          "transitions": {
+            "o_bridge->o_cus_half": {
+              "truth_ev": -0.9240589764271478,
+              "model_ev": -0.9130098028367113
+            },
+            "o_cus_half->o_cus": {
+              "truth_ev": -0.8348359549967765,
+              "model_ev": -0.832781957109944
+            }
+          },
+          "model_transitions": [
+            [
+              -0.9130098028367113,
+              "o_bridge",
+              "o_cus_half"
+            ],
+            [
+              -0.832781957109944,
+              "o_cus_half",
+              "o_cus"
+            ]
+          ]
+        },
+        "G2": {
+          "pass": false,
+          "limit_mev": 2.0,
+          "max_abs_error_mev": {
+            "o_bridge": 0.8796697909236144,
+            "o_cus": 1.2053071968394846,
+            "metal": 2.656708008966035,
+            "o_cus_half": 1.1542616507451555,
+            "o_bridge_half": 2.7848688504250845,
+            "o_cus_no_bridge": 0.8630104730295898
+          }
+        },
+        "G3": {
+          "pass": false,
+          "terminations": {
+            "o_bridge": {
+              "dft_relaxation_mev_per_angstrom2": 13.176630461903219,
+              "recovered_fraction": 0.9332401562397197,
+              "gated": true,
+              "pass": true
+            },
+            "o_cus": {
+              "dft_relaxation_mev_per_angstrom2": 18.537839003878393,
+              "recovered_fraction": 0.9349812458406128,
+              "gated": true,
+              "pass": true
+            },
+            "metal": {
+              "dft_relaxation_mev_per_angstrom2": 11.785835741294903,
+              "recovered_fraction": 0.7745846737319181,
+              "gated": true,
+              "pass": false
+            },
+            "o_cus_half": {
+              "dft_relaxation_mev_per_angstrom2": 17.197383423485086,
+              "recovered_fraction": 0.9328815539944959,
+              "gated": true,
+              "pass": true
+            },
+            "o_bridge_half": {
+              "dft_relaxation_mev_per_angstrom2": 9.967365771098663,
+              "recovered_fraction": 0.720601318906141,
+              "gated": true,
+              "pass": false
+            },
+            "o_cus_no_bridge": {
+              "dft_relaxation_mev_per_angstrom2": 16.91968509882737,
+              "recovered_fraction": 0.948993703606848,
+              "gated": true,
+              "pass": true
+            }
+          }
+        }
+      }
+    },
     "m2r_seed20260920": {
       "all_slabs_converged": true,
       "delta_h_f_ev": -3.0363724293472387,

@@ -317,3 +317,30 @@ saving in DFT is modest here because the CP2K relaxations of these small cells (
 steps from good starting geometries, so one relaxation costs about 7 statics; the method needs 3 statics per
 termination. The saving grows with the number of relaxation steps (larger cells, softer surfaces, adsorbates),
 since the DFT cost of the method does not depend on it.
+
+## Extra variant M2L (reported, not gated; 2026-10-18, route (b) WorkGraph 2821, 6 statics, all exit 0)
+
+M2's frames and seed 20260920 with 500 passes and the learning rate decaying from 1e-3 to 1e-5 (gamma 0.990832 per
+pass), trained in 8 chunks on `testegpu`; every relaxation converged.
+
+| Model | ΔH_f (eV/f.u.) | G4 | route (a) G1 | route (a) transitions (eV) | route (a) G2 (meV/A²) | route (b) G1 | route (b) transitions | route (b) G2 (meV/A²) | route (b) G3: recovered fraction |
+|---|---:|---|---|---|---:|---|---|---:|---|
+| m2_seed20260920 | -3.073 | pass (-0.019) | fail | -0.833, -0.777 | 17.8 | pass | -0.899, -0.823 | 3.36 | fail: metal 0.71, o_bridge_half 0.72 |
+| m2l_seed20260920 | -3.055 | pass (+0.000) | fail | -0.916, -0.911 | 10.6 (metal) | pass | -0.913, -0.833 | 2.78 | fail: metal 0.77, o_bridge_half 0.72 (others 0.93-0.95) |
+| **m2r_seed20260920** | -3.036 | pass (+0.018) | fail | -0.967 (one transition) | 7.1 | pass | -0.908, -0.848 | 0.49 | pass: 0.96-0.99 |
+
+Reading: five times more training with a decaying learning rate fixes the formation enthalpy (ΔH_f equal to CP2K's)
+and halves the route-(a) error of `metal`, but the relaxations of `metal` and `o_bridge_half` still stop short of the
+CP2K minima (72-77 % of the relaxation energy), as with M2. The active-learning statics (M2R), which add labels near
+the relaxed geometries, are what make the relaxations right: the missing ingredient was data, not training.
+
+## Part D: the builder end to end (2026-10-18, `c8_builder.py`, WorkGraph 2572, `c8_check.json`)
+
+`psteros.build_mlip_surface_workgraph` on bulk RuO2, hcp Ru, O2, o_bridge and o_cus (CP2K recipe of the labels on
+Phileas, at most 2 jobs; 2-pass replay fine-tunes with one seed on `testegpu`; one active-learning round; DFT
+check). A wiring check, not a result. The graph finished (exit 0, no task failed; the first fine-tune waited for a
+`testegpu` slot and was played again after qsub refused it at the per-user limit of 2). The builder's first statics
+give the energies of the C2 graphs for the same structures (difference 0, 3e-10 eV for the bulk); every relaxation of
+both rounds converged; the second fine-tune trained on the 5 first statics and the 5 active-learning statics;
+`read_mlip_results` and both sources of `read_mlip_energies` read the finished graph. The fine-tune job found the
+same 123 + 30 Ru-O replay structures as the study.

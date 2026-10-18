@@ -1,0 +1,80 @@
+{
+  "workgraph_pk": 2572,
+  "state": "finished",
+  "exit_status": 0,
+  "not_finished_ok": [],
+  "first_static_minus_c2_ev": {
+    "bulk": 2.710294211283326e-10,
+    "ru": 0.0,
+    "o2": 0.0,
+    "o_bridge": 0.0,
+    "o_cus": 0.0
+  },
+  "relaxations": {
+    "bulk": {
+      "energy_ev": -6869.962389223085,
+      "max_force": 0.004985163457918486,
+      "steps": 3,
+      "converged": true
+    },
+    "ru": {
+      "energy_ev": -5126.2164081124565,
+      "max_force": 0.009936611450254486,
+      "steps": 2,
+      "converged": true
+    },
+    "o2": {
+      "energy_ev": -868.5560626664328,
+      "max_force": 0.0026119800459022506,
+      "steps": 9,
+      "converged": true
+    },
+    "o_bridge": {
+      "energy_ev": -20607.415977598004,
+      "max_force": 0.0038409805854854873,
+      "steps": 43,
+      "converged": true
+    },
+    "o_cus": {
+      "energy_ev": -21478.425708682662,
+      "max_force": 0.009916878991828915,
+      "steps": 41,
+      "converged": true
+    }
+  },
+  "mlip_ev": {
+    "bulk": -6869.962389223085,
+    "ru": -5126.2164081124565,
+    "o2": -868.5560626664328,
+    "o_bridge": -20607.415977598004,
+    "o_cus": -21478.425708682662
+  },
+  "mlip_dft_ev": {
+    "bulk": -6870.1422835974,
+    "ru": -5126.5889867562,
+    "o2": -868.70438693236,
+    "o_bridge": -20607.536631506,
+    "o_cus": -21477.989056171
+  },
+  "frames": {
+    "mlip_round0_training": [
+      "bulk",
+      "ru",
+      "o2",
+      "o_bridge",
+      "o_cus"
+    ],
+    "mlip_round1_training": [
+      "bulk",
+      "ru",
+      "o2",
+      "o_bridge",
+      "o_cus",
+      "bulk_al1",
+      "ru_al1",
+      "o2_al1",
+      "o_bridge_al1",
+      "o_cus_al1"
+    ]
+  }
+}
