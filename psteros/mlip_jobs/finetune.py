@@ -17,12 +17,21 @@ REF_forces in eV/A) and, for a multi-head replay fine-tune, ``replay_train_geome
    epoch's EMA model (validation is reported, never used to pick).
 6. Evaluation: energy and force errors of the ``Default`` head on the training frames; force RMSE of both heads
    against the foundation model on the replay validation structures (what replay keeps).
+
+Short queues (optional): with ``"persistent_root"`` in ``job.json`` the runs and models live in that folder instead
+of the job folder, and a run with ``"stop_epoch"`` below its number of passes stops after that epoch and saves its
+whole training state (raw weights, EMA, optimizer, scheduler, the shuffling generator, the random-number states, the
+accumulated gradients of trainable parameters outside the optimizer, which enter MACE's gradient clipping, and the
+epoch) to
+``runs/<name>/psteros_state.pt``. The next job with the same run continues from it, so a fine-tune split into several
+jobs follows the same path as one uninterrupted run. Light copies of the run's results are kept in the job folder.
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import random
 import re
 import shutil
 import time
@@ -173,14 +182,71 @@ def check_configure(original, expected, expected_shift, first_frame, first_repla
     return checked
 
 
-def check_train(original, record, passes):
+STATE_FILE = "psteros_state.pt"
+
+
+class ChunkDone(Exception):
+    """Raised after the last epoch of a chunk (the state is saved) to skip MACE's export and evaluation."""
+
+
+def check_train(original, record, passes, folder=None, stop=None):
     def checked(**keyword):
         loaders = keyword["valid_loaders"]
         assert set(loaders) == ({"Default", "pt_head"} if replay else {"Default"}), sorted(loaders)
         assert keyword["max_num_epochs"] == passes and keyword["patience"] == passes + 1
         record.update(validation_heads=list(loaders), training_examples_per_epoch=len(keyword["train_loader"].dataset))
+        last = passes if stop is None else stop
+        state_path = None if folder is None else folder / STATE_FILE
+        start = 0
+        if state_path is not None and state_path.exists():
+            state = torch.load(state_path, map_location=DEVICE, weights_only=False)
+            keyword["model"].load_state_dict(state["model"])
+            keyword["optimizer"].load_state_dict(state["optimizer"])
+            keyword["lr_scheduler"].lr_scheduler.load_state_dict(state["lr_scheduler"])
+            if keyword.get("ema") is not None:
+                keyword["ema"].load_state_dict(state["ema"])
+            keyword["train_loader"].generator.set_state(state["shuffle"])
+            torch.set_rng_state(state["torch_rng"])
+            if DEVICE == "cuda" and state.get("cuda_rng") is not None:
+                torch.cuda.set_rng_state(state["cuda_rng"])
+            np.random.set_state(state["numpy_rng"])
+            random.setstate(state["python_rng"])
+            for name, parameter in keyword["model"].named_parameters():
+                if name in state["outside_gradients"]:
+                    parameter.grad = state["outside_gradients"][name].to(parameter.device)
+            start = int(state["epoch"])
+        assert start < last <= passes, f"nothing to train: epochs {start} to {last} of {passes}"
+        keyword.update(start_epoch=start, max_num_epochs=last)
+        record.update(start_epoch=start, stop_epoch=last)
         dump()
-        return original(**keyword)
+        result = original(**keyword)
+        if last < passes:
+            saved = {
+                "epoch": last, "model": keyword["model"].state_dict(), "optimizer": keyword["optimizer"].state_dict(),
+                "lr_scheduler": keyword["lr_scheduler"].lr_scheduler.state_dict(),
+                "ema": keyword["ema"].state_dict() if keyword.get("ema") is not None else None,
+                "shuffle": keyword["train_loader"].generator.get_state(),
+                "torch_rng": torch.get_rng_state(),
+                "cuda_rng": torch.cuda.get_rng_state() if DEVICE == "cuda" else None,
+                "numpy_rng": np.random.get_state(), "python_rng": random.getstate(),
+                # MACE clips the gradient norm over every model parameter, while optimizer.zero_grad clears only the
+                # optimised ones: the gradient of a trainable parameter outside the optimizer (the Bessel weights of
+                # the radial embedding) keeps accumulating and enters the clipping of every later step
+                "outside_gradients": {
+                    name: parameter.grad.detach().clone()
+                    for name, parameter in keyword["model"].named_parameters()
+                    if parameter.grad is not None and id(parameter) not in {
+                        id(member) for group in keyword["optimizer"].param_groups for member in group["params"]}
+                },
+            }
+            temporary = state_path.with_suffix(".tmp")
+            torch.save(saved, temporary)
+            os.replace(temporary, state_path)
+            record["state_saved_after_epoch"] = last
+            record["outside_gradient_norms"] = {name: float(grad.norm()) for name, grad in saved["outside_gradients"].items()}
+            dump()
+            raise ChunkDone()
+        return result
 
     return checked
 
@@ -207,32 +273,63 @@ def force_rmse(calc, items):
 
 
 originals = (run_train.configure_model, run_train.tools.train, tools.CheckpointHandler.save)
-(ROOT / "models").mkdir(exist_ok=True)
+BASE = Path(JOB["persistent_root"]) if JOB.get("persistent_root") else ROOT
+(BASE / "models").mkdir(parents=True, exist_ok=True)
 SUMMARY["status"] = "training"
+
+
+def keep_light_copies(folder: Path, name: str) -> None:
+    """With a persistent root, copy the small results of a run into the job folder (what the job returns)."""
+
+    if BASE == ROOT:
+        return
+    target = ROOT / "runs" / name
+    for pattern in ("evaluation.json", "config.json", "E0s.json", "results/logs/*.log"):
+        for path in folder.glob(pattern):
+            destination = target / path.relative_to(folder)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(path, destination)
+
+
 try:
     for spec in JOB["runs"]:
         name, passes = spec["name"], int(spec["options"]["max_num_epochs"])
+        stop = int(spec.get("stop_epoch", passes))
         record = SUMMARY["runs"].setdefault(name, {"seed": spec["options"]["seed"], "status": "starting"})
-        folder = ROOT / "runs" / name
-        folder.mkdir(parents=True, exist_ok=False)
-        shutil.copy(ROOT / "train.extxyz", folder / "train.extxyz")
-        if replay:
-            shutil.copytree(ROOT / "replay_labels", folder / "replay_labels")
-        (folder / "E0s.json").write_text(json.dumps(dict(zip(map(str, numbers), e0s.tolist())), indent=2) + "\n")
+        folder = BASE / "runs" / name
+        e0s_text = json.dumps(dict(zip(map(str, numbers), e0s.tolist())), indent=2) + "\n"
         options = dict(spec["options"], device=DEVICE, mean=mean, std=std)
-        (folder / "config.json").write_text(json.dumps(options, indent=2) + "\n")
+        config_text = json.dumps(options, indent=2) + "\n"
+        if (folder / STATE_FILE).exists():
+            # a later chunk: the recipe and the data must be those the run started with
+            assert (folder / "config.json").read_text() == config_text, f"{name}: the MACE options changed"
+            # the E0s come from GPU predictions, whose last bits can change between jobs; the run keeps its own
+            previous = json.loads((folder / "E0s.json").read_text())
+            assert all(abs(previous[key] - value) < 1e-6 for key, value in json.loads(e0s_text).items()), \
+                f"{name}: the E0s changed"
+            assert (folder / "train.extxyz").read_bytes() == (ROOT / "train.extxyz").read_bytes(), f"{name}: data"
+        else:
+            folder.mkdir(parents=True, exist_ok=False)
+            shutil.copy(ROOT / "train.extxyz", folder / "train.extxyz")
+            if replay:
+                shutil.copytree(ROOT / "replay_labels", folder / "replay_labels")
+            (folder / "E0s.json").write_text(e0s_text)
+            (folder / "config.json").write_text(config_text)
         os.chdir(folder)
         expected_shift = float(counts(frames[0], numbers) @ shifts)
         run_train.configure_model = check_configure(
             originals[0], base_pred[0], expected_shift, frames[0],
             replay_labelled["train"][0] if replay else None, record)
-        run_train.tools.train = check_train(originals[1], record, passes)
+        run_train.tools.train = check_train(originals[1], record, passes, folder, stop)
         tools.CheckpointHandler.save = last_only_save(originals[2], record, passes - 1)
         start = time.monotonic()
         if DEVICE == "cuda":
             torch.cuda.reset_peak_memory_stats()
+        chunk_done = False
         try:
             run_train.run(tools.build_default_arg_parser().parse_args(["--config", "config.json"]))
+        except ChunkDone:
+            chunk_done = True
         finally:
             run_train.configure_model, run_train.tools.train, tools.CheckpointHandler.save = originals
             os.chdir(ROOT)
@@ -241,7 +338,13 @@ try:
                 record["peak_allocated_GiB"] = torch.cuda.max_memory_allocated() / 2**30
             dump()
         assert record.get("initialization_passed"), "the initialisation check did not run"
-        assert record["checkpoint_save_calls"] == list(range(passes)), record["checkpoint_save_calls"]
+        assert record["checkpoint_save_calls"] == list(range(record["start_epoch"], record["stop_epoch"])), \
+            record["checkpoint_save_calls"]
+        if chunk_done:
+            record["status"] = f"chunk done ({record['stop_epoch']} of {passes} passes)"
+            keep_light_copies(folder, name)
+            dump()
+            continue
         logs = [p for p in (folder / "results/logs").glob("*.log") if not p.name.endswith("_debug.log")]
         loaded = re.findall(r"Loaded Stage one model from epoch (\d+)", logs[0].read_text()) if len(logs) == 1 else []
         assert loaded == [str(passes - 1)], f"the exported model is not the last epoch: {loaded}"
@@ -249,9 +352,10 @@ try:
         if not exported.is_file():
             exported = folder / "results/checkpoints" / f"{name}.model"
         assert exported.is_file(), "no exported model"
-        final = ROOT / "models" / f"{name}.model"
+        final = BASE / "models" / f"{name}.model"
         shutil.copy(exported, final)
-        record.update(model=str(final.relative_to(ROOT)), model_sha256=sha256(final), status="trained")
+        record.update(model=str(final.relative_to(BASE)), model_path=str(final), model_sha256=sha256(final),
+                      status="trained")
         dump()
         evaluation = {"train": force_rmse(calculator(final, "Default"), frames)}
         if replay:
@@ -259,6 +363,7 @@ try:
                 evaluation[f"replay_valid_{head}_vs_foundation"] = force_rmse(calculator(final, head),
                                                                              replay_labelled["valid"])
         (folder / "evaluation.json").write_text(json.dumps(evaluation, indent=2) + "\n")
+        keep_light_copies(folder, name)
         record["status"] = "completed"
         dump()
     SUMMARY["status"] = "completed"
