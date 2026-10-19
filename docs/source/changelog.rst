@@ -59,6 +59,11 @@ Recent Updates
   flowchart are in ``docs/MLIP_SURFACES.md``
 * ``MaceFineTuneConfig(lr_scheduler_gamma=...)``: an opt-in learning-rate decay per pass; the default 1.0 keeps the
   constant learning rate and the same training options
+* Bug fix: the MACE jobs of ``build_mlip_surface_workgraph`` failed at the first fine-tune with exit status 410
+  (``ERROR_STDERR_NOT_EMPTY``) unless ``MlipJobConfig.execution.extra_options`` set ``redirect_stderr``: MACE writes
+  its log and torch's warnings to stderr, and aiida-shell fails a job whose stderr is not empty. The fine-tune
+  and relaxation jobs now write stderr into stdout by default (``redirect_stderr=False`` in ``extra_options``
+  keeps the old behaviour). No results change; graphs that failed this way can be built again
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

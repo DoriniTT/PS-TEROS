@@ -502,3 +502,24 @@ def test_mlip_study_builds_the_route(tmp_path) -> None:
     plan = json.loads(graph.tasks["mlip_round0_relax"].inputs.nodes.job.value.get_object_content("job.json"))
     fixed = {item["label"]: item["fixed"] for item in plan["structures"]}
     assert fixed["o_cus"] == list(study.fixed_sites["o_cus"]) and fixed["bulk"] == []
+
+
+@pytest.mark.tier2
+@pytest.mark.requires_aiida
+def test_mace_jobs_merge_stderr_into_stdout(tmp_path) -> None:
+    """MACE logs to stderr and aiida-shell fails a job whose stderr is not empty (exit 410), so the jobs redirect it."""
+
+    pytest.importorskip("aiida_cp2k")
+    pytest.importorskip("aiida_shell")
+    from dataclasses import replace
+
+    computer = _computer(tmp_path)
+    static, fine_tune, job = _recipes(tmp_path, computer)
+    assert "redirect_stderr" not in job.execution.scheduler_options()
+    graph = psteros.build_mlip_surface_workgraph(_structures(), static, fine_tune, job=job, metallic_bulk="bulk")
+    for name in ("mlip_round0_finetune", "mlip_round0_relax", "mlip_round1_finetune", "mlip_round1_relax"):
+        assert graph.tasks[name].inputs.metadata.options.redirect_stderr.value is True, name
+    kept = replace(job, execution=replace(job.execution, extra_options={**job.execution.extra_options,
+                                                                         "redirect_stderr": False}))
+    graph = psteros.build_mlip_surface_workgraph(_structures(), static, fine_tune, job=kept, metallic_bulk="bulk")
+    assert graph.tasks["mlip_round0_finetune"].inputs.metadata.options.redirect_stderr.value is False

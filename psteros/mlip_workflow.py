@@ -49,7 +49,9 @@ class MlipJobConfig:
     settings of one job (one GPU; ``with_mpi=False``, the jobs run one Python
     process). Each fine-tune and each relaxation is one job; a relaxation
     links the remote folder of its fine-tune, where the models stay, so that
-    folder is never cleaned. ``device`` is ``"cuda"`` or ``"cpu"``.
+    folder is never cleaned. ``device`` is ``"cuda"`` or ``"cpu"``. The jobs
+    write their stderr (MACE's log, torch warnings) into stdout
+    (``redirect_stderr``), unless ``execution.extra_options`` says otherwise.
     """
 
     code_label: str
@@ -278,7 +280,8 @@ def build_mlip_surface_workgraph(
         workgraph.outputs.__setattr__(f"{label}_static_retrieved", retrieved)
     labels_of_frames = list(frame_labels)
 
-    execution = job.execution.scheduler_options()
+    # MACE logs to stderr, and aiida-shell fails a job whose stderr is not empty (exit 410): merge it into stdout
+    execution = {"redirect_stderr": True, **job.execution.scheduler_options()}
     deployed = f"seed{fine_tune.seeds[0]}"
     for round_ in range(active_learning_rounds + 1):
         name = f"{static.name}_round{round_}"
