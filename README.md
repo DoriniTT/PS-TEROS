@@ -22,6 +22,7 @@ PS-TEROS automates the pathway from crystal structures to thermodynamic stabilit
 - **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation → static SCF) with bounded job concurrency and full provenance tracking.
 - **Polar Surfaces:** Absolute surface energies of polar faces (zinc blende (111), wurtzite (0001)) with a pseudo-hydrogen passivated bottom, on the same scale as non-polar ones ([guide](docs/POLAR_SURFACES.md)).
 - **Charge-Neutral Terminations:** Symmetric, charge-neutral slabs for semiconductors and insulators, and `ChargeNeutralSurfaceStudy` to run all of them with their references in one graph ([guide](docs/CHARGE_NEUTRAL_TERMINATIONS.md)).
+- **MLIP Route for Metallic Systems:** A fine-tuned MACE model relaxes the slabs on a GPU and one DFT static per relaxed geometry gives their energies, so no slab is relaxed with DFT (`MlipSurfaceStudy`, [guide](docs/MLIP_SURFACES.md)).
 - **Pure-Python Thermodynamics:** Evaluates surface free energies (J/m², eV/Å²) and termination phase diagrams directly as a function of chemical potential (Δμ<sub>O</sub> for an oxide, Δμ<sub>As</sub> for GaAs, ...).
 
 ## Quickstart
@@ -141,6 +142,7 @@ POTCAR family, see the [Installation Guide](docs/source/installation.rst).
 - **[SnO₂ Surface Model](docs/source/examples.rst):** Deep dive into terminations and thermodynamic reference states.
 - **[VASP Guide](docs/source/vasp-workflow.rst):** Setting up a two-stage relaxation → static workflow, with per-structure settings and fixed atoms.
 - **[Quantum ESPRESSO Guide](docs/source/qe-workflow.rst):** The same workflow with Quantum ESPRESSO.
+- **[MLIP Route](docs/MLIP_SURFACES.md):** The recipe for metallic systems: DFT statics, a replay fine-tune of MACE-MH-1, GPU relaxations, one active-learning round and the final DFT statics.
 - **[Surface Phase Diagrams](docs/source/phase-diagram.rst):** From energies to γ(Δμ<sub>O</sub>) (binary oxides) or stable-termination maps over (Δμ<sub>A</sub>, Δμ<sub>O</sub>) (ternary oxides), as a figure or a CSV table.
 - **[API Reference](docs/source/api.rst):** Public classes, functions, and configuration schemas.
 

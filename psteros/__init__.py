@@ -2,10 +2,12 @@
 
 VASP through ``aiida-vasp`` is the central backend; Quantum ESPRESSO through
 ``aiida-quantumespresso`` is supported with the same recipes and analysis.
+CP2K through ``aiida-cp2k`` runs static calculations and relaxations.
 """
 
 from .config import (
     CalculationOverride,
+    Cp2kCalculationConfig,
     ExecutionPolicy,
     QeCalculationConfig,
     SurfaceWorkflowConfig,
@@ -17,6 +19,9 @@ from .structures import (
     alpha_sn_bulk,
     central_sites,
     litharge_sno_bulk,
+    RUTILE_110_TERMINATIONS,
+    rutile_110_slab,
+    rutile_bulk,
     rutile_sno2_bulk,
     sno2_110_slab,
     triplet_o2_cell,
@@ -87,7 +92,42 @@ from .vibrations import (
     solid_free_energy_ev,
 )
 from .vibrations_workflow import VibrationsConfig, build_vibrations_workgraph, read_vibrations
-from .workflow import build_qe_relax_static_workgraph, build_relax_static_workgraph, build_surface_workgraph
+from .workflow import (
+    build_cp2k_relax_static_workgraph,
+    build_cp2k_surface_workgraph,
+    build_qe_relax_static_workgraph,
+    build_relax_static_workgraph,
+    build_surface_workgraph,
+)
+from .backends.cp2k import Cp2kDos, read_cp2k_dos, read_cp2k_forces, read_cp2k_results
+from .mlip import (
+    LabelledStructure,
+    MaceFineTuneConfig,
+    MlipRelaxConfig,
+    MlipRelaxation,
+    check_one_energy_source,
+    dft_diagram_energy,
+    dft_label,
+    dft_partially_occupied,
+    fit_element_shifts,
+    mace_training_options,
+    partially_occupied_count,
+    prepare_finetune_job,
+    prepare_relax_job,
+    rattled_copies,
+    relax_with_calculator,
+    require_metallic,
+    select_replay_structures,
+    write_extxyz,
+)
+from .mlip_workflow import (
+    MlipJobConfig,
+    MlipStudyResult,
+    MlipSurfaceStudy,
+    build_mlip_surface_workgraph,
+    read_mlip_energies,
+    read_mlip_results,
+)
 
 __version__ = "2.0.0"
 
@@ -171,4 +211,38 @@ __all__ = [
     "VibrationsConfig",
     "build_vibrations_workgraph",
     "read_vibrations",
+    "Cp2kCalculationConfig",
+    "Cp2kDos",
+    "build_cp2k_relax_static_workgraph",
+    "build_cp2k_surface_workgraph",
+    "read_cp2k_dos",
+    "read_cp2k_forces",
+    "read_cp2k_results",
+    "RUTILE_110_TERMINATIONS",
+    "rutile_110_slab",
+    "rutile_bulk",
+    "LabelledStructure",
+    "MaceFineTuneConfig",
+    "MlipRelaxConfig",
+    "MlipRelaxation",
+    "check_one_energy_source",
+    "fit_element_shifts",
+    "mace_training_options",
+    "partially_occupied_count",
+    "prepare_finetune_job",
+    "prepare_relax_job",
+    "relax_with_calculator",
+    "require_metallic",
+    "select_replay_structures",
+    "write_extxyz",
+    "dft_diagram_energy",
+    "dft_label",
+    "dft_partially_occupied",
+    "rattled_copies",
+    "MlipJobConfig",
+    "MlipStudyResult",
+    "MlipSurfaceStudy",
+    "build_mlip_surface_workgraph",
+    "read_mlip_energies",
+    "read_mlip_results",
 ]

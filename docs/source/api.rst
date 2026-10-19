@@ -162,6 +162,49 @@ Calculation configuration
    ``clean_workdir``
       Whether the AiiDA work chain should clean its remote working directory.
 
+.. _api-cp2k-calculation-config:
+
+.. index:: Cp2kCalculationConfig
+
+``Cp2kCalculationConfig(code_label, parameters, basis_sets, potentials, basis_set_file="BASIS_MOLOPT", potential_file="GTH_POTENTIALS", kpoints_spacing=0.20, input_files={}, max_iterations=3, clean_workdir=False, vacuum_gap_angstrom=8.0)``
+   Describe inputs shared by aiida-cp2k ``Cp2kBaseWorkChain`` calculations
+   (``pip install '.[cp2k]'``); see :doc:`cp2k-workflow`.
+
+   ``code_label``
+      Full AiiDA label of a registered ``cp2k`` code.
+
+   ``parameters``
+      The CP2K input as aiida-cp2k's nested mapping, with upper-case section
+      names; ``FORCE_EVAL/DFT`` is required. ``GLOBAL/RUN_TYPE`` is the run
+      type (``ENERGY_FORCE`` when left out). The structure (``SUBSYS/CELL``,
+      ``COORD``, ``TOPOLOGY``) and ``DFT/KPOINTS`` must not be given: psteros
+      writes them. psteros adds one ``KIND`` per kind (unless ``SUBSYS/KIND``
+      is given), ``PRINT_LEVEL MEDIUM``, and for ``ENERGY_FORCE`` the force
+      file ``psteros_forces.dat`` and the density-of-states file
+      ``psteros.dos``.
+
+   ``basis_sets``, ``potentials``
+      Element -> basis-set name and element -> pseudopotential name; both
+      must name the same elements.
+
+   ``basis_set_file``, ``potential_file``
+      Files CP2K reads them from: its data directory, or ``input_files``
+      (file name -> local path), which are copied into every job.
+
+   ``kpoints_spacing``
+      Positive spacing in Å⁻¹ with the 2π: a Monkhorst-Pack mesh with
+      ``ceil(|b_i| / kpoints_spacing)`` points. ``None`` or a 1×1×1 mesh runs
+      at Γ only, without a ``KPOINTS`` section.
+
+   ``vacuum_gap_angstrom``
+      A lattice vector crossed by an empty gap wider than this (the normal of
+      a slab, every direction of a molecule in a box) gets one k-point.
+      ``None`` switches this off.
+
+   ``max_iterations``, ``clean_workdir``
+      Restarts of the work chain (aiida-cp2k's restart handler is on) and
+      cleaning of the remote folder.
+
 .. _api-execution-policy:
 
 .. index:: ExecutionPolicy
@@ -194,11 +237,12 @@ Calculation configuration
 ``CalculationOverride(parameters=None, kpoints_distance=None, settings={}, metadata={}, fixed_sites=())``
    Describe a deliberate change for one labelled structure. For VASP,
    ``parameters={"INCAR": {...}}`` updates the INCAR of the shared recipe; for
-   QE, ``parameters`` deep-merges namelist values. ``kpoints_distance``
-   replaces the recipe's k-point distance (QE ``kpoints_distance``, VASP
-   ``kpoints_spacing``) and must be positive. ``fixed_sites`` holds the
-   zero-based indices of sites kept fixed during a relaxation: VASP selective
-   dynamics, QE ``FIXED_COORDS``. ``settings`` and ``metadata`` are passed to
+   QE, ``parameters`` deep-merges namelist values; for CP2K it deep-merges
+   input sections. ``kpoints_distance`` replaces the recipe's k-point distance
+   (QE ``kpoints_distance``, VASP and CP2K ``kpoints_spacing``) and must be
+   positive. ``fixed_sites`` holds the zero-based indices of sites kept fixed
+   during a relaxation: VASP selective dynamics, QE ``FIXED_COORDS``, CP2K
+   ``FIXED_ATOMS``. ``settings`` and ``metadata`` are passed to
    the backend task.
 
 .. _api-surface-workflow-config:
@@ -207,9 +251,10 @@ Calculation configuration
 
 ``SurfaceWorkflowConfig(backend, calculation, execution, name="psteros_surface", role_overrides={})``
    Combine one calculation configuration with an execution policy. Use
-   ``backend="vasp"`` with ``VaspCalculationConfig`` or ``backend="qe"`` with
-   ``QeCalculationConfig``; any other backend string or a mismatched
-   configuration raises an error. ``name`` may contain letters, numbers,
+   ``backend="vasp"`` with ``VaspCalculationConfig``, ``backend="qe"`` with
+   ``QeCalculationConfig`` or ``backend="cp2k"`` with
+   ``Cp2kCalculationConfig``; any other backend string or a mismatched
+   configuration raises an error. CP2K recipes go to the CP2K builders. ``name`` may contain letters, numbers,
    hyphens, and underscores. ``role_overrides`` maps structure labels to
    ``CalculationOverride`` objects.
 
@@ -283,6 +328,44 @@ Graph builders
 ``build_qe_relax_static_workgraph(structures, relaxation, static, *, submit=False)``
    ``build_relax_static_workgraph`` restricted to ``QeCalculationConfig``
    recipes.
+
+``build_surface_workgraph``, ``build_relax_static_workgraph`` and
+``build_vibrations_workgraph`` raise ``ValueError`` for a CP2K recipe.
+
+.. _api-build-cp2k-surface-workgraph:
+
+.. index:: build_cp2k_surface_workgraph
+
+``build_cp2k_surface_workgraph(structures, config, *, submit=False)``
+   One CP2K calculation per label, with the recipe's run type
+   (``ENERGY_FORCE`` by default). Graph outputs: ``<label>_parameters``,
+   ``<label>_structure`` (when CP2K writes one) and ``<label>_retrieved``.
+
+.. _api-build-cp2k-relax-static-workgraph:
+
+.. index:: build_cp2k_relax_static_workgraph
+
+``build_cp2k_relax_static_workgraph(structures, relaxation, static, *, submit=False)``
+   The CP2K counterpart of ``build_relax_static_workgraph``. Every relaxation
+   (recipe plus override) needs ``GLOBAL/RUN_TYPE`` ``GEO_OPT`` or
+   ``CELL_OPT`` and every static calculation ``ENERGY_FORCE`` or ``ENERGY``;
+   both recipes share one execution policy. Graph outputs:
+   ``<label>_relaxed_structure``, ``<label>_relax_parameters``,
+   ``<label>_static_parameters`` and the ``_retrieved`` folders of both
+   stages.
+
+.. _api-read-cp2k-results:
+
+.. index:: read_cp2k_results, read_cp2k_forces, read_cp2k_dos, Cp2kDos
+
+``read_cp2k_results(graph, labels)``, ``read_cp2k_forces(graph, labels)``, ``read_cp2k_dos(graph, labels)``
+   Read a finished CP2K graph (``orm.load_node(pk)``): energies in eV (the
+   static stage when there is one) and structures; forces in eV/Å from the
+   force file of each ``ENERGY_FORCE`` run (unit taken from its header); and
+   the density of states as ``Cp2kDos``, whose
+   ``partially_occupied_bins(tolerance=0.01)`` counts energy bins filled
+   between 1% and 99%: more than zero means partly filled states at the
+   Fermi level, a metal.
 
 Thermodynamic analysis
 ----------------------
@@ -709,6 +792,89 @@ in K and pressures in bar.
 
 ``parse_vasp_frequencies_cm1(outcar)``
    Frequencies of the last dynamical matrix in the text of a VASP OUTCAR.
+
+Machine-learned potentials (metallic systems)
+---------------------------------------------
+
+See :doc:`mlip` for the route and its one-source rule. Energies are in eV,
+forces in eV/Å; nothing here needs AiiDA.
+
+``LabelledStructure(label, structure, energy_ev, forces_ev_per_angstrom, role="train")``
+   One DFT static calculation as a training example (``role``: ``"train"``,
+   ``"valid"`` or ``"test"``). ``write_extxyz(frames, destination)`` writes
+   frames with ``REF_energy`` and ``REF_forces`` as MACE reads them.
+
+``fit_element_shifts(compositions, residuals_ev)``
+   Least-squares per-element shifts of E_DFT − E_foundation; raises when the
+   compositions do not separate the elements.
+
+``MaceFineTuneConfig(foundation_model, foundation_model_sha256=None, foundation_head="omat_pbe", replay=True, replay_file=None, replay_min_atoms=2, replay_max_atoms=128, replay_validation_every=5, epochs=100, learning_rate=1e-3, ema_decay=0.999, energy_weight=10.0, forces_weight=10.0, huber_delta=0.01, clip_grad=1.0, seeds=(20260920, 20260921, 20260922), default_dtype="float64", lr_scheduler_gamma=1.0)``
+   The fine-tune recipe; ``mace_training_options(config, *, name, seed, atomic_numbers)``
+   gives its ``mace_run_train`` options.
+
+``select_replay_structures(path, *, elements, min_atoms=2, max_atoms=128, validation_every=5)``
+   Replay geometries (training, validation) and a record of the selection.
+
+``prepare_finetune_job(directory, frames, config, *, name, replay_train=(), replay_valid=(), device="cuda", seeds=None)``, ``prepare_relax_job(directory, structures, models, config=MlipRelaxConfig(), *, fixed_sites=None, device="cuda")``
+   Job folders with the inputs and the self-contained scripts ``finetune.py``
+   and ``relax.py`` (they need only ase, torch and mace-torch).
+
+``MlipRelaxConfig(fmax_ev_per_angstrom=0.01, max_steps=2000, optimizer="FIRE", head="Default", default_dtype="float64")``, ``relax_with_calculator(structure, calculator, *, config=MlipRelaxConfig(), fixed_sites=())``
+   Relax positions with any ASE calculator; returns ``MlipRelaxation``
+   (``structure``, ``energy_ev``, ``max_force_ev_per_angstrom``, ``steps``,
+   ``converged``).
+
+``partially_occupied_count(occupations, *, tolerance=0.01)``, ``require_metallic(label, *, partially_occupied)``
+   The metallic-bulk check: states filled between 1% and 99% of the fullest
+   (for CP2K, ``Cp2kDos.partially_occupied_bins()``); ``require_metallic``
+   raises ``ValueError`` when there are none.
+
+``check_one_energy_source(sources)``
+   Returns the single source of label -> ``"dft"``, ``"mlip"`` or
+   ``"mlip_dft"``, or raises ``ValueError`` naming the labels of each source.
+
+``MlipSurfaceStudy(bulk, references, slabs, fixed_half_width_angstrom=1.5, rattled=0, rattle_sigma_angstrom=0.05, rattle_seed=20261017)``
+   The MLIP route for the slabs of a metallic binary compound (see
+   :doc:`mlip` and ``docs/MLIP_SURFACES.md``): ``structures`` (``bulk``,
+   ``ref_<element>``, the slabs), ``fixed_sites``, ``training_structures``,
+   ``calculation_count(active_learning_rounds=1, dft_check=True)``;
+   ``build(static, fine_tune, relax=MlipRelaxConfig(), *, job, active_learning_rounds=1, dft_check=True, submit=False)``
+   returns the graph of ``build_mlip_surface_workgraph`` and
+   ``analyse(source, *, energy_source="mlip_dft", **diagram_options)`` an
+   ``MlipStudyResult`` (``references``, ``diagram``, ``terminations``,
+   ``energy_source``) from the finished graph or from energies typed by hand.
+
+``build_mlip_surface_workgraph(structures, static, fine_tune, relax=MlipRelaxConfig(), *, job, metallic_bulk, fixed_sites=None, training_structures=None, active_learning_rounds=1, dft_check=True, submit=False)``
+   The route as one WorkGraph (DFT statics with any backend, aiida-shell GPU
+   jobs). Outputs per label: ``<label>_static_parameters``,
+   ``<label>_static_retrieved``, ``<label>_mlip_relaxed_structure``,
+   ``<label>_mlip_energy`` (eV) and, with ``dft_check``,
+   ``<label>_mlip_dft_energy`` (eV), ``<label>_mlip_dft_parameters``,
+   ``<label>_mlip_dft_retrieved``; per round ``r``:
+   ``mlip_round<r>_finetune_summary``, ``mlip_round<r>_model_folder``,
+   ``mlip_round<r>_relax_results``. ``MlipJobConfig(code_label, execution, device="cuda")``
+   names the Python of the MACE environment and its scheduler settings
+   (``with_mpi=False``).
+
+``read_mlip_results(graph, labels, *, seed=None, round=None)``, ``read_mlip_energies(graph, labels, *, energy_source="mlip_dft")``
+   ``MlipRelaxation`` per label (the deployed seed and the last finished round
+   by default), and the energies (eV) of one source: ``"mlip_dft"`` or
+   ``"mlip"``; both work while the graph runs, for the parts that finished.
+
+``dft_label(backend, *, label, structure, parameters, files, role="train")``, ``dft_diagram_energy(backend, *, label, parameters)``, ``dft_partially_occupied(backend, *, label, files)``
+   A training frame from a finished QE, VASP or CP2K static (the free
+   energy, whose derivatives are the forces), the energy psteros uses for a
+   diagram (VASP: sigma -> 0), and the partly filled states of the bulk.
+
+``rattled_copies(structures, *, count=5, sigma_angstrom=0.05, seed=20261017)``
+   ``{"<label>_r<i>": structure}`` with every site moved by a normal vector of
+   ``sigma_angstrom`` per component: extra training statics.
+
+``rutile_bulk(metal, *, a, c, u=0.3056)``, ``rutile_110_slab(*, metal, termination="o_bridge", triple_layers=3, vacuum_angstrom=15.0, a, c, u=0.3056, repeat_c=1, cus_bond_angstrom=1.70)``
+   Rutile MO\ :sub:`2` and its symmetric (110) slabs with the terminations of
+   ``RUTILE_110_TERMINATIONS``: ``"o_bridge"`` (stoichiometric), ``"o_cus"``,
+   ``"metal"`` (no bridging O), ``"o_cus_half"`` and ``"o_bridge_half"`` (cell
+   doubled along [001]) and ``"o_cus_no_bridge"``.
 
 Compatibility boundary
 ----------------------

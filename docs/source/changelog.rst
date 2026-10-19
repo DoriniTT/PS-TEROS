@@ -40,6 +40,25 @@ Recent Updates
 * Notes in :doc:`/vibrations` on imaginary modes, other compounds (ternary oxides) and running a long graph (queue limits, one daemon worker, recovery)
 * A mode task of ``build_vibrations_workgraph`` that starts with some retrieved folders missing now raises a ``ValueError`` that
   names them, instead of a bare ``KeyError``
+* CP2K backend (``pip install '.[cp2k]'``): ``Cp2kCalculationConfig``, ``build_cp2k_surface_workgraph``,
+  ``build_cp2k_relax_static_workgraph`` and the readers ``read_cp2k_results`` (eV), ``read_cp2k_forces`` (eV/Å) and
+  ``read_cp2k_dos``, on aiida-cp2k's ``Cp2kBaseWorkChain`` (see :doc:`/cp2k-workflow`). The QE/VASP builders and
+  ``build_vibrations_workgraph`` now raise ``ValueError`` for a CP2K recipe; QE and VASP graphs are unchanged
+* Opt-in MLIP route for metallic systems (see :doc:`/mlip`): ``LabelledStructure``, ``write_extxyz``,
+  ``fit_element_shifts``, ``MaceFineTuneConfig``, ``select_replay_structures``, ``prepare_finetune_job`` and
+  ``prepare_relax_job`` (self-contained MACE fine-tune and relaxation jobs), ``relax_with_calculator``,
+  ``require_metallic`` and ``check_one_energy_source``; ``rutile_bulk`` and ``rutile_110_slab`` with six
+  rutile (110) terminations. ``sno2_110_slab`` and every existing result are unchanged
+* The MLIP route as one WorkGraph (``pip install '.[mlip]'``; mace-torch only on the GPU computer): ``build_mlip_surface_workgraph`` (DFT statics with QE, VASP or CP2K, replay
+  fine-tune and relaxations as aiida-shell GPU jobs, one active-learning round and a DFT static at each relaxed
+  geometry by default), ``MlipJobConfig``, the readers ``read_mlip_results`` and
+  ``read_mlip_energies`` (one energy source), ``dft_label``, ``dft_diagram_energy``, ``dft_partially_occupied``
+  and ``rattled_copies``. The existing builders and their outputs are unchanged
+* The MLIP route from structures to the phase diagram: ``MlipSurfaceStudy`` (binary metallic compounds) builds the
+  graph and turns its final DFT energies into a ``SurfacePhaseDiagram`` (``MlipStudyResult``); the recipe and a
+  flowchart are in ``docs/MLIP_SURFACES.md``
+* ``MaceFineTuneConfig(lr_scheduler_gamma=...)``: an opt-in learning-rate decay per pass; the default 1.0 keeps the
+  constant learning rate and the same training options
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

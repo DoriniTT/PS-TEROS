@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Mapping
 
 
-BackendName = Literal["qe", "vasp"]
+BackendName = Literal["qe", "vasp", "cp2k"]
 
 
 def _require_positive(name: str, value: float | int) -> None:
@@ -240,13 +240,83 @@ class VaspCalculationConfig:
 
 
 @dataclass(frozen=True)
+class Cp2kCalculationConfig:
+    """Inputs shared by aiida-cp2k ``Cp2kBaseWorkChain`` calculations (Quickstep, GPW).
+
+    ``parameters`` is the CP2K input as the nested mapping of aiida-cp2k, with
+    upper-case section names; it must hold ``FORCE_EVAL/DFT`` (method, XC,
+    ``MGRID``, ``SCF`` with smearing for a metal, ...). The run type is
+    ``GLOBAL/RUN_TYPE`` (``ENERGY_FORCE`` when left out); a relaxation needs
+    ``GEO_OPT`` or ``CELL_OPT`` and its ``MOTION`` section. psteros adds what
+    depends on the structure: the cell and coordinates (through aiida-cp2k),
+    one ``KIND`` per kind with the names of ``basis_sets`` and ``potentials``
+    (element -> name, e.g. ``{"Ru": "DZVP-MOLOPT-PBE-GTH-q16"}``), the k-point
+    mesh, the fixed atoms of a relaxation, and, for ``ENERGY_FORCE``, the
+    force and density-of-states files that the readers use.
+
+    ``basis_set_file`` and ``potential_file`` are the files CP2K reads, from
+    its data directory or from ``input_files`` (file name -> local path,
+    copied into every job, which keeps them in the provenance).
+    ``kpoints_spacing`` is in A^-1 with the 2*pi, as for VASP: a
+    Monkhorst-Pack mesh with ``ceil(|b_i| / kpoints_spacing)`` points along
+    each reciprocal vector; ``None`` or a 1x1x1 mesh runs at Gamma only, with
+    no ``KPOINTS`` section. Along a lattice vector crossed by a vacuum gap
+    wider than ``vacuum_gap_angstrom`` (the normal of a slab, every direction
+    of a molecule in a box) the mesh has one point, since nothing disperses
+    across vacuum; ``None`` switches this off. ``max_iterations`` limits the
+    restarts of the work chain.
+    """
+
+    code_label: str
+    parameters: Mapping[str, Any]
+    basis_sets: Mapping[str, str]
+    potentials: Mapping[str, str]
+    basis_set_file: str = "BASIS_MOLOPT"
+    potential_file: str = "GTH_POTENTIALS"
+    kpoints_spacing: float | None = 0.20
+    input_files: Mapping[str, str] = field(default_factory=dict)
+    max_iterations: int = 3
+    clean_workdir: bool = False
+    vacuum_gap_angstrom: float | None = 8.0
+
+    def __post_init__(self) -> None:
+        if not self.code_label:
+            raise ValueError("CP2K code_label must not be empty")
+        if self.vacuum_gap_angstrom is not None:
+            _require_positive("vacuum_gap_angstrom", self.vacuum_gap_angstrom)
+        force_eval = self.parameters.get("FORCE_EVAL") if self.parameters else None
+        if not isinstance(force_eval, Mapping) or not isinstance(force_eval.get("DFT"), Mapping):
+            raise ValueError("CP2K parameters must hold FORCE_EVAL/DFT (upper-case section names)")
+        if "KPOINTS" in force_eval["DFT"]:
+            raise ValueError("give the CP2K k-points with kpoints_spacing, not FORCE_EVAL/DFT/KPOINTS")
+        placed = sorted({"CELL", "COORD", "TOPOLOGY"}.intersection(force_eval.get("SUBSYS", {})))
+        if placed:
+            raise ValueError(f"CP2K FORCE_EVAL/SUBSYS must not set {placed}: psteros writes the structure")
+        if not self.basis_sets or not self.potentials:
+            raise ValueError("CP2K basis_sets and potentials must name a basis set and a potential per element")
+        missing = sorted(set(self.basis_sets).symmetric_difference(self.potentials))
+        if missing:
+            raise ValueError(f"CP2K basis_sets and potentials must cover the same elements; differ for {missing}")
+        if not self.basis_set_file or not self.potential_file:
+            raise ValueError("CP2K basis_set_file and potential_file must not be empty")
+        if self.kpoints_spacing is not None:
+            _require_positive("kpoints_spacing", self.kpoints_spacing)
+        _require_positive("max_iterations", self.max_iterations)
+        bad = sorted(name for name in self.input_files if not name or "/" in name)
+        if bad:
+            raise ValueError(f"CP2K input_files keys must be plain file names, got {bad}")
+
+
+@dataclass(frozen=True)
 class CalculationOverride:
     """Per-structure changes to a shared calculation recipe.
 
     ``parameters`` updates the recipe: ``{"INCAR": {...}}`` for VASP, namelists
-    such as ``{"SYSTEM": {...}}`` for QE. ``fixed_sites`` holds the indices of
-    the sites kept fixed during a relaxation (VASP selective dynamics, QE
-    ``FIXED_COORDS``), e.g. the central layers of a slab.
+    such as ``{"SYSTEM": {...}}`` for QE, input sections such as
+    ``{"FORCE_EVAL": {"DFT": {"UKS": True}}}`` for CP2K (merged section by
+    section). ``fixed_sites`` holds the indices of the sites kept fixed during
+    a relaxation (VASP selective dynamics, QE ``FIXED_COORDS``, CP2K
+    ``FIXED_ATOMS``), e.g. the central layers of a slab.
     """
 
     parameters: Mapping[str, Mapping[str, Any]] | None = None
@@ -276,17 +346,19 @@ class SurfaceWorkflowConfig:
     """
 
     backend: BackendName
-    calculation: QeCalculationConfig | VaspCalculationConfig
+    calculation: QeCalculationConfig | VaspCalculationConfig | Cp2kCalculationConfig
     execution: ExecutionPolicy
     name: str = "psteros_surface"
     role_overrides: Mapping[str, CalculationOverride] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.backend not in ("qe", "vasp"):
-            raise ValueError(f"backend must be 'qe' or 'vasp', got {self.backend!r}")
+        if self.backend not in ("qe", "vasp", "cp2k"):
+            raise ValueError(f"backend must be 'qe' or 'vasp' (or 'cp2k' with Cp2kCalculationConfig), got {self.backend!r}")
         if self.backend == "qe" and not isinstance(self.calculation, QeCalculationConfig):
             raise TypeError("backend='qe' requires QeCalculationConfig")
         if self.backend == "vasp" and not isinstance(self.calculation, VaspCalculationConfig):
             raise TypeError("backend='vasp' requires VaspCalculationConfig")
+        if self.backend == "cp2k" and not isinstance(self.calculation, Cp2kCalculationConfig):
+            raise TypeError("backend='cp2k' requires Cp2kCalculationConfig")
         if not self.name or not self.name.replace("_", "").replace("-", "").isalnum():
             raise ValueError("name must contain letters, numbers, '_' or '-'")

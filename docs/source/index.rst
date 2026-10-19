@@ -50,9 +50,11 @@ Choose the path that matches what you need now:
 
    vasp-workflow
    qe-workflow
+   cp2k-workflow
    phase-diagram
    reference-thermochemistry
    vibrations
+   mlip
 
 .. toctree::
    :maxdepth: 1

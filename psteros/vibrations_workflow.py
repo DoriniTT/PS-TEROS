@@ -155,6 +155,8 @@ def build_vibrations_workgraph(
     )
     if unknown:
         raise ValueError(f"VibrationsConfig names labels that are not in structures: {unknown}")
+    if static.backend == "cp2k":
+        raise ValueError("build_vibrations_workgraph supports VASP and QE recipes; CP2K is not supported yet")
     if static.backend == "vasp":
         from psteros.backends.vasp import vasp_incar
         from psteros.workflow import _relaxation_check
