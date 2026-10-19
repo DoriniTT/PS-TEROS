@@ -128,6 +128,22 @@ from frequencies calculated elsewhere:
 The complete VASP example is ``examples/vasp_surface_phase_diagram``
 (``vibrations.py``, then ``phase_diagram.py --vib-pk ... --temperature ...``).
 
+On the MLIP route
+-----------------
+
+The MLIP route (:doc:`mlip`) gives the same modes from its fine-tuned MACE
+model, on the GPU and without DFT: ``build(..., vibrations=VibrationsConfig(...))``
+of ``MlipRoute`` or ``MlipSurfaceStudy`` (or ``build_mlip_surface_workgraph``)
+adds one job with the same finite differences at the MACE-relaxed geometries,
+the sites held in place in the relaxation being the frozen region. Its
+``<label>_mlip_vibrations`` outputs are read by ``read_vibrations``, and
+``analyse(graph, temperature_k=T)`` turns every energy into its free energy
+with ``free_energies_with_vibrations`` (solids ``E + F_vib(T)``, the frozen
+region counted as bulk; gas references ``E + ZPE``). Because the model is
+cheap, a bulk supercell much larger than the DFT one costs little. To check
+the model's modes, ``dft_vibrations`` builds this page's graph on the MACE
+geometries (with QE, VASP or CP2K).
+
 Imaginary modes and the phase diagram
 -------------------------------------
 

@@ -46,7 +46,8 @@ def mlip_training_folder(settings: orm.Dict, **inputs) -> orm.FolderData:
     ``settings`` holds ``backend``, ``name``, ``device``, the
     :class:`~psteros.mlip.MaceFineTuneConfig` fields (``fine_tune``), the
     labels of the training frames (``frames``) and the label of the bulk that
-    must be metallic (``metallic_bulk``). ``inputs`` holds, for every frame,
+    must be metallic (``metallic_bulk``; not checked when ``metal_check`` is
+    false). ``inputs`` holds, for every frame,
     ``structure_<label>``, ``output_<label>`` (output parameters, VASP
     ``misc``) and ``retrieved_<label>``, and for a replay fine-tune
     ``replay_train`` and ``replay_valid`` (extended XYZ of the replay
@@ -56,8 +57,9 @@ def mlip_training_folder(settings: orm.Dict, **inputs) -> orm.FolderData:
     options = settings.get_dict()
     backend = options["backend"]
     bulk = options["metallic_bulk"]
-    files = retrieved_files(inputs[f"retrieved_{bulk}"], backend)
-    mlip.require_metallic(bulk, partially_occupied=mlip.dft_partially_occupied(backend, label=bulk, files=files))
+    if options.get("metal_check", True):
+        files = retrieved_files(inputs[f"retrieved_{bulk}"], backend)
+        mlip.require_metallic(bulk, partially_occupied=mlip.dft_partially_occupied(backend, label=bulk, files=files))
     frames = [
         mlip.dft_label(
             backend,
@@ -125,3 +127,49 @@ def mlip_dft_energy(output: orm.Dict, settings: orm.Dict) -> orm.Float:
 
     options = settings.get_dict()
     return orm.Float(mlip.dft_diagram_energy(options["backend"], label=options["label"], parameters=output.get_dict()))
+
+
+@task.calcfunction
+def mlip_vibrations_folder(settings: orm.Dict, **structures) -> orm.FolderData:
+    """The folder of the vibrations job (:func:`psteros.mlip.prepare_vibrations_job`) on the relaxed structures.
+
+    ``settings`` holds ``model`` (``[path, head]``), ``displaced_sites``
+    (label -> sites), ``displacement_angstrom``, ``default_dtype`` and
+    ``device``; ``structures`` holds ``structure_<label>``, the relaxed
+    structure of each label (a bulk as its supercell).
+    """
+
+    options = settings.get_dict()
+    plain = {label: structures[f"structure_{label}"].get_pymatgen_structure() for label in options["displaced_sites"]}
+    with tempfile.TemporaryDirectory() as scratch:
+        folder = mlip.prepare_vibrations_job(
+            Path(scratch) / "job", plain, tuple(options["model"]), options["displaced_sites"],
+            displacement_angstrom=options["displacement_angstrom"], default_dtype=options["default_dtype"],
+            device=options["device"],
+        )
+        return orm.FolderData(tree=str(folder))
+
+
+@task.calcfunction
+def mlip_harmonic_modes(structure: orm.StructureData, settings: orm.Dict, forces: orm.FolderData) -> orm.Dict:
+    """Harmonic modes of ``settings["label"]`` from the forces of the MACE vibrations job.
+
+    ``forces`` is the job's ``vibrations/`` folder; ``structure`` the
+    displaced structure (a bulk as its supercell); ``settings`` the options of
+    :func:`psteros.backends.vibration_tasks.harmonic_modes`. The output reads
+    like a ``<label>_vibrations`` of :func:`psteros.build_vibrations_workgraph`.
+    """
+
+    from psteros.backends.vibration_tasks import modes_from_forces
+
+    options = settings.get_dict()
+    label = options["label"]
+    names = set(forces.base.repository.list_object_names())
+    if f"{label}.npz" not in names:
+        raise ValueError(f"{label}: the vibrations job wrote no {label}.npz")
+    with np.load(io.BytesIO(forces.base.repository.get_object_content(f"{label}.npz", mode="rb"))) as data:
+        plus, minus = data["forces_plus"], data["forces_minus"]
+    expected = (3 * len(options["displaced_sites"]), len(structure.sites), 3)
+    if plus.shape != expected or minus.shape != expected:
+        raise ValueError(f"{label}: the vibrations job wrote forces of shape {plus.shape}, expected {expected}")
+    return orm.Dict({**modes_from_forces(structure, options, plus, minus), "model": options["model"]})

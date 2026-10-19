@@ -60,6 +60,13 @@ def _forces(folder: orm.FolderData, backend: str, symbols: list[str]) -> list[li
         if found != symbols:
             raise ValueError("the atoms of vasprun.xml are not in the order of the structure")
         return forces
+    if backend == "cp2k":
+        from psteros.backends.cp2k import FORCES_FILE, parse_cp2k_forces
+
+        forces = parse_cp2k_forces(folder.get_object_content(FORCES_FILE))
+        if len(forces) != len(symbols):
+            raise ValueError(f"the CP2K force file has {len(forces)} atoms, the structure {len(symbols)}")
+        return forces.tolist()
     return qe_output_forces(folder.get_object_content("aiida.out"), len(symbols))
 
 
@@ -85,15 +92,12 @@ def harmonic_modes(structure: orm.StructureData, settings: orm.Dict, **retrieved
     key of :func:`psteros.vibrations_workflow.displacement_key`.
     """
 
-    from psteros.vibrations import harmonic_vibrations_from_forces
     from psteros.vibrations_workflow import displacement_key
 
     options = settings.get_dict()
     sites = list(options["displaced_sites"])
     backend = options["backend"]
-    supercell_size = int(options["supercell_size"])
     symbols = [structure.get_kind(site.kind_name).symbol for site in structure.sites]
-    masses = [structure.get_kind(site.kind_name).mass for site in structure.sites]
 
     expected = [displacement_key(site, axis, sign) for site in sites for axis in range(3) for sign in ("plus", "minus")]
     missing = [key for key in expected if key not in retrieved]
@@ -109,6 +113,23 @@ def harmonic_modes(structure: orm.StructureData, settings: orm.Dict, **retrieved
         for axis in range(3):
             for sign in forces:
                 forces[sign].append(_forces(retrieved[displacement_key(site, axis, sign)], backend, symbols))
+    return orm.Dict(modes_from_forces(structure, options, forces["plus"], forces["minus"]))
+
+
+def modes_from_forces(structure: orm.StructureData, options: dict, forces_plus, forces_minus) -> dict:
+    """The content of a ``<label>_vibrations`` output from the forces of the displaced structures.
+
+    ``forces_plus[3 k + a]`` and ``forces_minus[3 k + a]`` are the forces
+    (eV/A, one row per site of ``structure``) after moving the ``k``-th site
+    of ``options["displaced_sites"]`` by ``+d`` and ``-d`` along axis ``a``.
+    """
+
+    from psteros.vibrations import harmonic_vibrations_from_forces
+
+    sites = list(options["displaced_sites"])
+    supercell_size = int(options["supercell_size"])
+    symbols = [structure.get_kind(site.kind_name).symbol for site in structure.sites]
+    masses = [structure.get_kind(site.kind_name).mass for site in structure.sites]
 
     if options.get("molecule"):
         zero_modes = 5 if _is_linear(structure) else 6
@@ -131,17 +152,17 @@ def harmonic_modes(structure: orm.StructureData, settings: orm.Dict, **retrieved
         masses_amu=masses,
         displaced_sites=sites,
         displacement_angstrom=float(options["displacement_angstrom"]),
-        forces_plus=forces["plus"],
-        forces_minus=forces["minus"],
+        forces_plus=forces_plus,
+        forces_minus=forces_minus,
         composition={symbol: count // supercell_size for symbol, count in composition.items()},
         frozen_composition=frozen,
         zero_modes=zero_modes,
         supercell_size=supercell_size,
         imaginary_modes="drop",  # stored as negative numbers; read_vibrations applies the policy
     )
-    return orm.Dict({
+    return {
         **vibrations.to_dict(),
         "displaced_sites": sites,
         "displacement_angstrom": float(options["displacement_angstrom"]),
         "zero_modes": zero_modes,
-    })
+    }

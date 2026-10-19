@@ -672,6 +672,10 @@ See :doc:`vibrations` for the model and a worked example.
    the ``bulk`` vibrations and must have the bulk stoichiometry.
 ``molecule_reference_energy_ev(energy_ev, vibrations)``
    ``E + ZPE`` of a gas molecule that fixes ``Delta mu = 0`` (e.g. O2).
+``free_energies_with_vibrations(energies_ev, vibrations, temperature_k, *, bulk_label, molecule_labels=())``
+   Every energy of a diagram as a free energy, by label: ``molecule_labels``
+   get ``E + ZPE``, every other label ``E + F_vib(T)`` with the vibrations of
+   ``bulk_label`` for a frozen region. Every label needs its vibrations.
 
 .. index:: harmonic_vibrations_from_forces
 
@@ -692,7 +696,8 @@ See :doc:`vibrations` for the model and a worked example.
    Finite-difference step, explicit sites per label, Γ-only supercells per
    label (bulk) and the labels of gas molecules.
 ``read_vibrations(graph, labels, *, imaginary_modes="raise", low_frequency_cutoff_cm1=None)``
-   ``{label: HarmonicVibrations}`` from a finished vibrations graph.
+   ``{label: HarmonicVibrations}`` from a finished vibrations graph, or from
+   the ``<label>_mlip_vibrations`` of an MLIP graph built with ``vibrations``.
 
 .. _api-ev-per-angstrom2-to-j-per-m2:
 
@@ -793,8 +798,8 @@ in K and pressures in bar.
 ``parse_vasp_frequencies_cm1(outcar)``
    Frequencies of the last dynamical matrix in the text of a VASP OUTCAR.
 
-Machine-learned potentials (metallic systems)
----------------------------------------------
+Machine-learned potentials (the MLIP route)
+-------------------------------------------
 
 See :doc:`mlip` for the route and its one-source rule. Energies are in eV,
 forces in eV/Å; nothing here needs AiiDA.
@@ -818,6 +823,10 @@ forces in eV/Å; nothing here needs AiiDA.
 ``prepare_finetune_job(directory, frames, config, *, name, replay_train=(), replay_valid=(), device="cuda", seeds=None)``, ``prepare_relax_job(directory, structures, models, config=MlipRelaxConfig(), *, fixed_sites=None, device="cuda")``
    Job folders with the inputs and the self-contained scripts ``finetune.py``
    and ``relax.py`` (they need only ase, torch and mace-torch).
+``prepare_vibrations_job(directory, structures, model, displaced_sites, *, displacement_angstrom=0.01, default_dtype="float64", device="cuda")``
+   The folder of a vibrations job: the model ``(path, head)`` gives the forces
+   of every structure with each site of ``displaced_sites[label]`` moved by
+   ``±d`` along x, y and z (``vibrations.py``; ``vibrations/<label>.npz``).
 
 ``MlipRelaxConfig(fmax_ev_per_angstrom=0.01, max_steps=2000, optimizer="FIRE", head="Default", default_dtype="float64")``, ``relax_with_calculator(structure, calculator, *, config=MlipRelaxConfig(), fixed_sites=())``
    Relax positions with any ASE calculator; returns ``MlipRelaxation``
@@ -834,17 +843,35 @@ forces in eV/Å; nothing here needs AiiDA.
    ``"mlip_dft"``, or raises ``ValueError`` naming the labels of each source.
 
 ``MlipSurfaceStudy(bulk, references, slabs, fixed_half_width_angstrom=1.5, rattled=0, rattle_sigma_angstrom=0.05, rattle_seed=20261017)``
-   The MLIP route for the slabs of a metallic binary compound (see
+   The MLIP route for your own slabs of a binary compound (see
    :doc:`mlip` and ``docs/MLIP_SURFACES.md``): ``structures`` (``bulk``,
    ``ref_<element>``, the slabs), ``fixed_sites``, ``training_structures``,
-   ``calculation_count(active_learning_rounds=1, dft_check=True)``;
-   ``build(static, fine_tune, relax=MlipRelaxConfig(), *, job, active_learning_rounds=1, dft_check=True, submit=False)``
-   returns the graph of ``build_mlip_surface_workgraph`` and
-   ``analyse(source, *, energy_source="mlip_dft", **diagram_options)`` an
+   ``molecule_labels``, ``calculation_count(active_learning_rounds=1, dft_check=True, vibrations=False)``;
+   ``build(static, fine_tune, relax=MlipRelaxConfig(), *, job, active_learning_rounds=1, dft_check=True, vibrations=None, allow_non_metallic=False, submit=False)``
+   returns the graph of ``build_mlip_surface_workgraph`` (the bulk checked
+   to be a metal unless ``allow_non_metallic``) and
+   ``analyse(source, *, energy_source="mlip_dft", temperature_k=None, vibrations=None, **diagram_options)`` an
    ``MlipStudyResult`` (``references``, ``diagram``, ``terminations``,
-   ``energy_source``) from the finished graph or from energies typed by hand.
+   ``energy_source``, ``temperature_k``) from the finished graph or from
+   energies typed by hand; with ``temperature_k``, from the free energies of
+   the graph's vibrations or of ``vibrations``.
+   ``dft_vibrations(source, static, vibrations=None, *, submit=False)`` builds
+   DFT finite differences (QE, VASP or CP2K) at the model's geometries.
 
-``build_mlip_surface_workgraph(structures, static, fine_tune, relax=MlipRelaxConfig(), *, job, metallic_bulk, fixed_sites=None, training_structures=None, active_learning_rounds=1, dft_check=True, submit=False)``
+``MlipRoute(study, fixed_half_width_angstrom=1.5, rattled=0, rattle_sigma_angstrom=0.05, rattle_seed=20261017)``
+   The MLIP route for a ``ChargeNeutralSurfaceStudy`` or a
+   ``PolarSurfaceStudy``, whose slabs have the right electron count, so the
+   bulk is not checked to be a metal: ``structures``, ``slabs``,
+   ``fixed_sites`` (the centres of charge-neutral slabs; none for polar
+   slabs), ``training_structures``, ``molecule_labels``,
+   ``calculation_count(...)``; ``build(static, fine_tune, relax=MlipRelaxConfig(), *, job, active_learning_rounds=1, dft_check=True, vibrations=None, submit=False)``
+   (polar: VASP, no vibrations); ``read(source, *, energy_source="mlip_dft")``
+   gives ``(energies, relaxed_structures)``;
+   ``analyse(source, *, energy_source="mlip_dft", relaxed_structures=None, temperature_k=None, vibrations=None, **options)``
+   gives the study's result (``MlipStudyResult`` or ``PolarStudyResult``);
+   ``dft_vibrations`` as above.
+
+``build_mlip_surface_workgraph(structures, static, fine_tune, relax=MlipRelaxConfig(), *, job, metallic_bulk, fixed_sites=None, training_structures=None, active_learning_rounds=1, dft_check=True, vibrations=None, allow_non_metallic=False, submit=False)``
    The route as one WorkGraph (DFT statics with any backend, aiida-shell GPU
    jobs). Outputs per label: ``<label>_static_parameters``,
    ``<label>_static_retrieved``, ``<label>_mlip_relaxed_structure``,
@@ -852,7 +879,11 @@ forces in eV/Å; nothing here needs AiiDA.
    ``<label>_mlip_dft_energy`` (eV), ``<label>_mlip_dft_parameters``,
    ``<label>_mlip_dft_retrieved``; per round ``r``:
    ``mlip_round<r>_finetune_summary``, ``mlip_round<r>_model_folder``,
-   ``mlip_round<r>_relax_results``. ``MlipJobConfig(code_label, execution, device="cuda")``
+   ``mlip_round<r>_relax_results``; with ``vibrations`` (a
+   ``VibrationsConfig``) one more GPU job gives ``<label>_mlip_vibrations``
+   and ``mlip_vibrations_results``. ``allow_non_metallic=True`` skips the
+   metal check of ``metallic_bulk``, with a warning about the electron count
+   of the slabs. ``MlipJobConfig(code_label, execution, device="cuda")``
    names the Python of the MACE environment and its scheduler settings
    (``with_mpi=False``).
 

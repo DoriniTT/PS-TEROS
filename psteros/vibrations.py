@@ -246,6 +246,50 @@ def molecule_reference_energy_ev(energy_ev: float, vibrations: HarmonicVibration
     return energy_ev + vibrations.zero_point_energy_ev
 
 
+def free_energies_with_vibrations(
+    energies_ev: Mapping[str, float],
+    vibrations: Mapping[str, HarmonicVibrations],
+    temperature_k: float,
+    *,
+    bulk_label: str,
+    molecule_labels: Sequence[str] = (),
+) -> dict[str, float]:
+    """Every energy of a diagram turned into its free energy at ``temperature_k``.
+
+    The labels of ``molecule_labels`` (gas references) get
+    :func:`molecule_reference_energy_ev` (``E + ZPE``); every other label is a
+    solid and gets :func:`solid_free_energy_ev` (``E + F_vib(T)``), with the
+    vibrations of ``bulk_label`` for a frozen region. The result has the
+    labels of ``energies_ev`` and goes wherever those energies went (the
+    ``analyse`` of a study, the references and terminations of a diagram).
+    Every label needs its vibrations: a diagram with free energies for some
+    structures and total energies for others is not consistent.
+    """
+
+    missing = sorted(set(energies_ev).difference(vibrations))
+    if missing:
+        raise ValueError(
+            f"no vibrations for {missing}: every energy of a diagram needs its vibrations at temperature_k"
+        )
+    unknown = sorted(set(molecule_labels).difference(energies_ev))
+    if unknown:
+        raise ValueError(f"molecule_labels are not labels of energies_ev: {unknown}")
+    if bulk_label not in energies_ev or bulk_label in molecule_labels:
+        raise ValueError(f"bulk_label {bulk_label!r} must be a solid label of energies_ev")
+    _check_temperature(temperature_k)
+    bulk = vibrations[bulk_label]
+    result = {}
+    for label, energy in energies_ev.items():
+        if label in molecule_labels:
+            result[label] = molecule_reference_energy_ev(energy, vibrations[label])
+            continue
+        try:
+            result[label] = solid_free_energy_ev(energy, vibrations[label], temperature_k, bulk=bulk)
+        except ValueError as error:
+            raise ValueError(f"{label}: {error}") from error
+    return result
+
+
 def harmonic_vibrations_from_forces(
     *,
     masses_amu: Sequence[float],

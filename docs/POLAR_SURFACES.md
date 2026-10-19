@@ -194,6 +194,28 @@ face (`GaAs_111_term_1`, ...), in absolute J/m² or eV/Å². Symmetric slabs of
 other orientations can be added to the same diagram with
 `psteros.SlabTermination(...)` and the same references.
 
+### On the MLIP route
+
+With a GPU, a fine-tuned MACE model can relax the slabs instead of VASP
+([`MLIP_SURFACES.md`](MLIP_SURFACES.md)): VASP gives the training labels and
+the final energies, MACE the relaxed geometries.
+
+```python
+route = psteros.MlipRoute(study)        # no metal check: the bottoms are passivated
+static = psteros.SurfaceWorkflowConfig(
+    backend="vasp", ...,                # a static INCAR (IBRION = -1, NSW = 0)
+    calculation=psteros.VaspCalculationConfig(..., potential_mapping=study.potential_mapping({"Ga": "Ga_d"})),
+    role_overrides=study.vasp_overrides("static"))
+graph = route.build(static, fine_tune, job=job, submit=True)
+result = route.analyse(orm.load_node(graph.pk))    # PolarStudyResult, bottom checks of the MACE-relaxed slabs
+```
+
+Every atom relaxes, as above, and the bottom check runs on the MACE
+geometries. For MACE the pseudo-hydrogens are hydrogen atoms that the
+fine-tune learns from their VASP labels. Vibrations are not available for
+polar slabs. A complete script is
+[`examples/mlip_routes/gaas_polar_mlip.py`](../examples/mlip_routes/gaas_polar_mlip.py).
+
 ## Checks
 
 * **Bottom check** (`check_bottoms`): see above; `result.bottom_checks[face]`

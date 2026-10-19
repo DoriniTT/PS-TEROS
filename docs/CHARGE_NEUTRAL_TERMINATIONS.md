@@ -142,6 +142,23 @@ A complete script for the non-polar ZnO faces, with a dry run that only cuts
 the slabs, is
 [`examples/charge_neutral_terminations/zno_vasp_study.py`](../examples/charge_neutral_terminations/zno_vasp_study.py).
 
+### On the MLIP route
+
+With a GPU, a fine-tuned MACE model can relax the slabs instead of DFT
+([`MLIP_SURFACES.md`](MLIP_SURFACES.md)). The study stays the same; the route
+replaces the relaxation graph:
+
+```python
+route = psteros.MlipRoute(study)        # no metal check: these slabs are charge-neutral
+static = psteros.SurfaceWorkflowConfig(backend="vasp", ..., role_overrides=study.vasp_overrides("static"))
+graph = route.build(static, fine_tune, job=job, submit=True)
+result = route.analyse(orm.load_node(graph.pk))    # the same study.analyse, on the final DFT statics
+```
+
+The bulk, the references and the competing phases must be relaxed with DFT
+first; the slabs are not. A complete script is
+[`examples/mlip_routes/sno2_charge_neutral_mlip.py`](../examples/mlip_routes/sno2_charge_neutral_mlip.py).
+
 ### Legacy builders
 
 The `psteros.core` builders take the same options:

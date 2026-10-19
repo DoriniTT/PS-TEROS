@@ -1,4 +1,4 @@
-"""WorkGraph of the MLIP route to a surface phase diagram (metallic systems).
+"""WorkGraph of the MLIP route to a surface phase diagram.
 
 :func:`build_mlip_surface_workgraph` runs the route (``docs/MLIP_SURFACES.md``):
 
@@ -10,7 +10,9 @@
 4. ``active_learning_rounds`` times: one DFT static at each relaxed geometry
    is added to the labels, the model is fine-tuned again from the foundation
    model on all labels and relaxes the structures again from the start;
-5. with ``dft_check``, one DFT static at each final geometry.
+5. with ``dft_check``, one DFT static at each final geometry;
+6. with ``vibrations``, the harmonic modes of every structure from the
+   deployed model at its relaxed geometry (one more GPU job).
 
 The energies of one diagram come from one source (see
 :func:`psteros.check_one_energy_source`): ``"mlip_dft"``, the DFT statics of
@@ -18,16 +20,27 @@ step 5 (the default), or ``"mlip"``, the model at its own geometries.
 :func:`read_mlip_energies` returns one of
 them for every label; :func:`read_mlip_results` the relaxations.
 
-:class:`MlipSurfaceStudy` is the route for the slabs of a metallic binary
+:class:`MlipSurfaceStudy` is the route for your own slabs of a binary
 compound from structures to the phase diagram: it names the calculations,
 fixes the slab centres, builds the graph and turns its energies into a
-:class:`psteros.SurfacePhaseDiagram`.
+:class:`psteros.SurfacePhaseDiagram`. :class:`MlipRoute` runs the slabs that
+psteros cuts with the right electron count (:class:`psteros.ChargeNeutralSurfaceStudy`,
+:class:`psteros.PolarSurfaceStudy`), so it serves semiconductors and
+insulators as well as metals.
+
+Why the metal check: in a metal the electron count of a slab needs no care,
+any cut of the bulk will do. A slab of a semiconductor or an insulator must
+be charge-neutral (or passivated), which pymatgen's ``SlabGenerator`` alone
+does not ensure. Hand-cut slabs therefore need a metallic bulk unless
+``allow_non_metallic=True``; the slabs of :class:`MlipRoute` are cut with
+electron counting and need no check.
 """
 
 from __future__ import annotations
 
 import json
 import tempfile
+import warnings
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -35,8 +48,16 @@ from typing import Any, Mapping, Sequence
 from psteros.config import CalculationOverride, ExecutionPolicy, SurfaceWorkflowConfig
 from psteros.mlip import MaceFineTuneConfig, MlipRelaxation, MlipRelaxConfig
 from psteros.surface_study import ChargeNeutralStudyResult
+from psteros.vibrations_workflow import VibrationsConfig
 
 MLIP_ENERGY_SOURCES = ("mlip", "mlip_dft")
+
+#: Warning of a graph whose bulk is not checked to be a metal.
+NON_METALLIC_WARNING = (
+    "allow_non_metallic=True: the bulk is not checked to be a metal. The slabs of a semiconductor or an insulator "
+    "need the right electron count (charge-neutral or passivated), which pymatgen's SlabGenerator alone does not "
+    "ensure; psteros.MlipRoute with a ChargeNeutralSurfaceStudy or a PolarSurfaceStudy cuts such slabs"
+)
 
 
 @dataclass(frozen=True)
@@ -156,6 +177,8 @@ def build_mlip_surface_workgraph(
     training_structures: Mapping[str, Any] | None = None,
     active_learning_rounds: int = 1,
     dft_check: bool = True,
+    vibrations: VibrationsConfig | None = None,
+    allow_non_metallic: bool = False,
     submit: bool = False,
 ) -> Any:
     """Build or submit the WorkGraph of the MLIP route (see the module docstring).
@@ -180,8 +203,8 @@ def build_mlip_surface_workgraph(
         Code and scheduler of the GPU jobs (:class:`MlipJobConfig`).
     metallic_bulk
         Label of the bulk that must be a metal (partly filled states in its
-        static); the first fine-tune stops otherwise. The route is for
-        metallic systems only.
+        static); the first fine-tune stops otherwise, unless
+        ``allow_non_metallic``.
     fixed_sites
         Labels -> zero-based sites that the model keeps in place, e.g.
         :func:`psteros.central_sites` of each slab.
@@ -192,6 +215,18 @@ def build_mlip_surface_workgraph(
         Number of rounds of step 4 (1 by default; 0 skips them).
     dft_check
         Run the DFT statics of step 5 (needed for the ``"mlip_dft"`` energies).
+    vibrations
+        A :class:`psteros.VibrationsConfig`: the deployed model of the last
+        round gives the Gamma-point harmonic modes of every structure at its
+        relaxed geometry, by the finite differences of
+        :func:`psteros.build_vibrations_workgraph` (one GPU job). The
+        ``fixed_sites`` are not displaced (their region is counted as bulk);
+        a bulk is displaced in its ``supercells`` entry; ``molecules`` lose
+        their zero modes. ``None`` (the default) adds nothing.
+    allow_non_metallic
+        Do not check that ``metallic_bulk`` is a metal. For a semiconductor or
+        an insulator, the slabs must then have the right electron count
+        (a warning says so); see :class:`MlipRoute`.
     submit
         Submit the graph when true; otherwise return it unsubmitted.
 
@@ -202,8 +237,39 @@ def build_mlip_surface_workgraph(
     ``<label>_mlip_dft_energy`` (eV), ``<label>_mlip_dft_parameters`` and
     ``<label>_mlip_dft_retrieved``; per round ``r`` (0 is the first fine-tune)
     ``mlip_round<r>_finetune_summary``, ``mlip_round<r>_model_folder`` and
-    ``mlip_round<r>_relax_results`` (every seed's relaxations).
+    ``mlip_round<r>_relax_results`` (every seed's relaxations); with
+    ``vibrations`` ``<label>_mlip_vibrations`` (read by
+    :func:`psteros.read_vibrations`) and ``mlip_vibrations_results``.
     """
+
+    if not isinstance(allow_non_metallic, bool):
+        raise TypeError("allow_non_metallic must be True or False")
+    if allow_non_metallic:
+        warnings.warn(NON_METALLIC_WARNING, UserWarning, stacklevel=2)
+    return _mlip_workgraph(
+        structures, static, fine_tune, relax, job=job, metallic_bulk=metallic_bulk, metal_check=not allow_non_metallic,
+        fixed_sites=fixed_sites, training_structures=training_structures, active_learning_rounds=active_learning_rounds,
+        dft_check=dft_check, vibrations=vibrations, submit=submit,
+    )
+
+
+def _mlip_workgraph(
+    structures: Mapping[str, Any],
+    static: SurfaceWorkflowConfig,
+    fine_tune: MaceFineTuneConfig,
+    relax: MlipRelaxConfig,
+    *,
+    job: MlipJobConfig,
+    metallic_bulk: str,
+    metal_check: bool,
+    fixed_sites: Mapping[str, Sequence[int]] | None,
+    training_structures: Mapping[str, Any] | None,
+    active_learning_rounds: int,
+    dft_check: bool,
+    vibrations: VibrationsConfig | None,
+    submit: bool,
+) -> Any:
+    """The graph of :func:`build_mlip_surface_workgraph`; ``metal_check=False`` skips the metal check silently."""
 
     from psteros.mlip import select_replay_structures
     from psteros.workflow import _check_labels
@@ -240,6 +306,18 @@ def build_mlip_surface_workgraph(
     for label, sites in fixed_sites.items():
         if any(site < 0 or site >= len(plain[label]) for site in sites):
             raise ValueError(f"{label}: fixed_sites must be within [0, {len(plain[label])})")
+    displaced: dict[str, tuple[int, ...]] = {}
+    if vibrations is not None:
+        if not isinstance(vibrations, VibrationsConfig):
+            raise TypeError("vibrations must be a VibrationsConfig")
+        unknown = sorted(
+            (set(vibrations.displaced_sites) | set(vibrations.supercells) | set(vibrations.molecules)).difference(structures)
+        )
+        if unknown:
+            raise ValueError(f"VibrationsConfig names labels that are not in structures: {unknown}")
+        for label, structure in plain.items():
+            override = CalculationOverride(fixed_sites=fixed_sites.get(label, ()))
+            displaced[label] = vibrations.sites_to_displace(label, len(structure), override)
 
     from aiida import orm
     from aiida_workgraph import WorkGraph, shelljob
@@ -283,13 +361,17 @@ def build_mlip_surface_workgraph(
     # MACE logs to stderr, and aiida-shell fails a job whose stderr is not empty (exit 410): merge it into stdout
     execution = {"redirect_stderr": True, **job.execution.scheduler_options()}
     deployed = f"seed{fine_tune.seeds[0]}"
+    final: dict[str, Any] = {}
     for round_ in range(active_learning_rounds + 1):
         name = f"{static.name}_round{round_}"
-        settings = orm.Dict({
+        options = {
             "backend": static.backend, "name": name, "device": job.device, "metallic_bulk": metallic_bulk,
             "frames": list(labels_of_frames), "fine_tune": json.loads(json.dumps(asdict(fine_tune))),
             "replay_selection": replay_record,
-        })
+        }
+        if not metal_check:
+            options["metal_check"] = False
+        settings = orm.Dict(options)
         folder = workgraph.add_task(
             mlip_training_folder, name=f"mlip_round{round_}_training", settings=settings,
             inputs={**frames, **replay_nodes},
@@ -327,6 +409,7 @@ def build_mlip_surface_workgraph(
                                f"retrieved_{frame}": retrieved})
                 labels_of_frames.append(frame)
                 continue
+            final[label] = relaxed.outputs.structure
             workgraph.outputs.__setattr__(f"{label}_mlip_relaxed_structure", relaxed.outputs.structure)
             workgraph.outputs.__setattr__(f"{label}_mlip_energy", relaxed.outputs.energy)
             if dft_check:
@@ -339,9 +422,58 @@ def build_mlip_surface_workgraph(
                 workgraph.outputs.__setattr__(f"{label}_mlip_dft_energy", energy.outputs.result)
                 workgraph.outputs.__setattr__(f"{label}_mlip_dft_parameters", output)
                 workgraph.outputs.__setattr__(f"{label}_mlip_dft_retrieved", retrieved)
+    if vibrations is not None:
+        _add_mlip_vibrations(workgraph, vibrations, final, displaced, plain, code=code, execution=execution,
+                             model=(models[deployed][0], relax.head), deployed=deployed, relax=relax, job=job,
+                             finetune=finetune, name=static.name)
     if submit:
         workgraph.submit()
     return workgraph
+
+
+def _add_mlip_vibrations(workgraph, vibrations, structures, displaced, plain, *, code, execution, model, deployed,
+                         relax, job, finetune, name) -> None:
+    """The GPU job of the harmonic modes and one modes task per label (``<label>_mlip_vibrations``)."""
+
+    from aiida import orm
+    from aiida_workgraph import shelljob
+
+    from psteros.backends.mlip_tasks import mlip_harmonic_modes, mlip_vibrations_folder
+    from psteros.backends.vibration_tasks import repeat_structure
+
+    targets, sites, sizes = {}, {}, {}
+    for label, structure in structures.items():
+        size = vibrations.supercells.get(label, (1, 1, 1))
+        sizes[label] = size[0] * size[1] * size[2]
+        sites[label] = list(displaced[label])
+        if sizes[label] > 1:
+            structure = workgraph.add_task(
+                repeat_structure, name=f"{label}_mlip_supercell", structure=structure, size=orm.List(list(size))
+            ).outputs.result
+            sites[label] = list(range(len(plain[label]) * sizes[label]))
+        targets[label] = structure
+    folder = workgraph.add_task(
+        mlip_vibrations_folder, name="mlip_vibrations_job",
+        settings=orm.Dict({"model": list(model), "displaced_sites": sites, "device": job.device,
+                           "displacement_angstrom": vibrations.displacement_angstrom,
+                           "default_dtype": relax.default_dtype}),
+        structures={f"structure_{label}": structure for label, structure in targets.items()},
+    )
+    forces = workgraph.add_task(
+        shelljob, name="mlip_vibrations", command=code, arguments=["-u", "vibrations.py"],
+        nodes={"job": folder.outputs.result, "finetune": finetune.outputs.remote_folder}, filenames={"finetune": "finetune"},
+        outputs=["results.json", "vibrations"],
+        metadata={"label": f"{name}_vibrations", "options": {**execution, "use_symlinks": True}},
+    )
+    workgraph.outputs.__setattr__("mlip_vibrations_results", forces.outputs.results_json)
+    for label, structure in targets.items():
+        modes = workgraph.add_task(
+            mlip_harmonic_modes, name=f"{label}_mlip_vibrations", structure=structure, forces=forces.outputs.vibrations,
+            settings=orm.Dict({"label": label, "model": deployed, "displaced_sites": sites[label],
+                               "displacement_angstrom": vibrations.displacement_angstrom,
+                               "supercell_size": sizes[label], "molecule": label in vibrations.molecules}),
+        )
+        workgraph.outputs.__setattr__(f"{label}_mlip_vibrations", modes.outputs.result)
 
 
 def _task_node(graph: Any, name: str) -> Any:
@@ -444,13 +576,137 @@ def read_mlip_energies(graph: Any, labels: Sequence[str], *, energy_source: str 
     return energies
 
 
+def _relaxed_structures(graph: Any, labels: Sequence[str]) -> dict[str, Any]:
+    """The structures of the last relaxation round of a graph that may still run or have failed (``StructureData``)."""
+
+    rounds = _relax_rounds(graph)
+    if not rounds:
+        raise ValueError("no relaxation job of this graph has run")
+    structures, missing = {}, []
+    for label in labels:
+        node = _task_node(graph, f"{label}_mlip_round{rounds[-1]}_relaxed")
+        if node is None or not node.is_finished_ok:
+            missing.append(label)
+            continue
+        structures[label] = node.outputs.structure
+    if missing:
+        raise ValueError(f"no relaxed structure of {missing} in round {rounds[-1]}")
+    return structures
+
+
+def _with_molecules(vibrations: VibrationsConfig | None, molecules: Sequence[str]) -> VibrationsConfig | None:
+    """``vibrations`` with the gas references among its molecules (their rotations are zero modes)."""
+
+    if vibrations is None:
+        return None
+    if not isinstance(vibrations, VibrationsConfig):
+        raise TypeError("vibrations must be a VibrationsConfig")
+    return replace(vibrations, molecules=tuple(dict.fromkeys([*vibrations.molecules, *molecules])))
+
+
+def _check_half_width(value: Any, slabs: Mapping[str, Any]) -> None:
+    """``fixed_half_width_angstrom``: positive, ``None``, or a mapping of slab labels to either."""
+
+    values = dict(value) if isinstance(value, Mapping) else {None: value}
+    unknown = sorted(label for label in values if label is not None and label not in slabs)
+    if unknown:
+        raise ValueError(f"fixed_half_width_angstrom names labels that are not slabs: {unknown}")
+    if any(width is not None and not width > 0 for width in values.values()):
+        raise ValueError("fixed_half_width_angstrom must be positive (or None)")
+
+
+def _central_sites(slabs: Mapping[str, Any], half_width: Any) -> dict[str, tuple[int, ...]]:
+    """The sites of each slab within its half-width of the mid-plane (a mapping gives one width per slab)."""
+
+    from psteros.structures import central_sites
+
+    widths = dict(half_width) if isinstance(half_width, Mapping) else {label: half_width for label in slabs}
+    return {label: central_sites(slab, widths[label]) for label, slab in slabs.items()
+            if widths.get(label) is not None}
+
+
+def _check_frozen_regions(structures: Mapping[str, Any], fixed_sites: Mapping[str, Sequence[int]], bulk: Any) -> None:
+    """A frozen slab centre is counted as bulk in the vibrations, so it must have the bulk stoichiometry."""
+
+    from math import isclose
+
+    reference = bulk.composition.get_el_amt_dict()
+    wrong = []
+    for label, sites in fixed_sites.items():
+        if not sites:
+            continue
+        counts: dict[str, int] = {}
+        for index in sites:
+            symbol = structures[label][index].specie.symbol
+            counts[symbol] = counts.get(symbol, 0) + 1
+        ratios = [counts.get(element, 0) / amount for element, amount in reference.items()]
+        if set(counts) != set(reference) or any(not isclose(ratio, ratios[0]) for ratio in ratios):
+            wrong.append(f"{label} ({''.join(f'{e}{n}' for e, n in sorted(counts.items()))})")
+    if wrong:
+        raise ValueError(
+            f"vibrations: the frozen centre of {', '.join(wrong)} does not have the bulk stoichiometry "
+            f"{bulk.composition.reduced_formula}, so it cannot be counted as bulk; change "
+            "fixed_half_width_angstrom, for one slab with {label: half-width} (None frees every site)"
+        )
+
+
+def _free_energies(
+    energies: Mapping[str, float],
+    source: Any,
+    temperature_k: float | None,
+    vibrations: Mapping[str, Any] | None,
+    molecules: Sequence[str],
+) -> dict[str, float]:
+    """``energies``, or with ``temperature_k`` their free energies with the vibrations of ``source`` or ``vibrations``."""
+
+    if temperature_k is None:
+        if vibrations is not None:
+            raise ValueError("vibrations are used only with temperature_k")
+        return dict(energies)
+    if vibrations is None:
+        if isinstance(source, Mapping):
+            raise ValueError("with energies typed by hand, give vibrations={label: HarmonicVibrations} too")
+        from psteros.vibrations_workflow import read_vibrations
+
+        vibrations = read_vibrations(source, list(energies))
+    from psteros.vibrations import free_energies_with_vibrations
+
+    return free_energies_with_vibrations(energies, vibrations, temperature_k, bulk_label="bulk",
+                                         molecule_labels=tuple(molecules))
+
+
+def _dft_vibrations(
+    relaxed: Mapping[str, Any],
+    static: SurfaceWorkflowConfig,
+    vibrations: VibrationsConfig | None,
+    fixed_sites: Mapping[str, Sequence[int]],
+    molecules: Sequence[str],
+    submit: bool,
+) -> Any:
+    """:func:`psteros.build_vibrations_workgraph` (also with CP2K) on the model's geometries, fixed sites kept fixed."""
+
+    from psteros.vibrations_workflow import _vibrations_workgraph
+
+    overrides = dict(static.role_overrides)
+    for label, sites in fixed_sites.items():
+        if sites:
+            overrides[label] = replace(overrides.get(label) or CalculationOverride(), fixed_sites=tuple(sites))
+    return _vibrations_workgraph(relaxed, replace(static, role_overrides=overrides),
+                                 _with_molecules(vibrations or VibrationsConfig(), molecules), submit=submit,
+                                 allow_cp2k=True)
+
+
 @dataclass
 class MlipSurfaceStudy:
-    """The MLIP route for the slabs of a metallic binary compound, from structures to the phase diagram.
+    """The MLIP route for your own slabs of a binary compound, from structures to the phase diagram.
 
     Args:
         bulk: Bulk (pymatgen ``Structure``) relaxed with the DFT recipe of
-            the study; it must be a metal (the graph checks its static).
+            the study; it must be a metal (the graph checks its static)
+            unless :meth:`build` gets ``allow_non_metallic=True``, because
+            the electron count of hand-cut slabs is right only for a metal.
+            For semiconductors and insulators :class:`MlipRoute` cuts the
+            slabs.
         references: ``{element: structure}`` of the reference of each element,
             relaxed with the same recipe: the elemental solid or a molecule in
             a box (O2). ``mu = E_ref / atoms + Delta mu``.
@@ -458,7 +714,9 @@ class MlipSurfaceStudy:
             terminations of :func:`psteros.rutile_110_slab`.
         fixed_half_width_angstrom: Sites within this distance of the slab
             mid-plane stay in place in the MACE relaxations
-            (:func:`psteros.central_sites`); ``None`` frees every site.
+            (:func:`psteros.central_sites`); ``None`` frees every site; a
+            mapping ``{slab label: half-width or None}`` sets it per slab
+            (the slabs it leaves out are free).
         rattled: Rattled copies of each slab added as training statics
             (:func:`psteros.rattled_copies`, ``rattle_sigma_angstrom``,
             ``rattle_seed``). 0, with one active-learning round, is the
@@ -468,13 +726,14 @@ class MlipSurfaceStudy:
     The calculations are labelled ``bulk``, ``ref_<element>`` and the slab
     labels. :meth:`build` returns the graph of
     :func:`build_mlip_surface_workgraph`; :meth:`analyse` the phase diagram
-    from its energies, all of one source.
+    from its energies, all of one source, and with ``temperature_k`` from the
+    free energies of the vibrations.
     """
 
     bulk: Any
     references: Mapping[str, Any]
     slabs: Mapping[str, Any]
-    fixed_half_width_angstrom: float | None = 1.5
+    fixed_half_width_angstrom: float | Mapping[str, float | None] | None = 1.5
     rattled: int = 0
     rattle_sigma_angstrom: float = 0.05
     rattle_seed: int = 20261017
@@ -495,8 +754,7 @@ class MlipSurfaceStudy:
             raise ValueError("at least one slab is required")
         if isinstance(self.rattled, bool) or not isinstance(self.rattled, int) or self.rattled < 0:
             raise ValueError("rattled must be a non-negative integer")
-        if self.fixed_half_width_angstrom is not None and self.fixed_half_width_angstrom <= 0:
-            raise ValueError("fixed_half_width_angstrom must be positive (or None)")
+        _check_half_width(self.fixed_half_width_angstrom, self.slabs)
         self.formula = self.bulk.composition.reduced_formula
         self.structures = {"bulk": self.bulk, **{f"ref_{e}": self.references[e] for e in self.elements}}
         for label, slab in self.slabs.items():
@@ -513,9 +771,7 @@ class MlipSurfaceStudy:
 
         if self.fixed_half_width_angstrom is None:
             return {}
-        from psteros.structures import central_sites
-
-        return {label: central_sites(slab, self.fixed_half_width_angstrom) for label, slab in self.slabs.items()}
+        return _central_sites(self.slabs, self.fixed_half_width_angstrom)
 
     @property
     def training_structures(self) -> dict[str, Any]:
@@ -528,13 +784,23 @@ class MlipSurfaceStudy:
         return rattled_copies(self.slabs, count=self.rattled, sigma_angstrom=self.rattle_sigma_angstrom,
                               seed=self.rattle_seed)
 
-    def calculation_count(self, active_learning_rounds: int = 1, dft_check: bool = True) -> dict[str, int]:
+    @property
+    def molecule_labels(self) -> tuple[str, ...]:
+        """Labels of the gas references (molecules in a box)."""
+
+        from psteros.surface_study import GAS_REFERENCES
+
+        return tuple(f"ref_{element}" for element in self.elements if element in GAS_REFERENCES)
+
+    def calculation_count(
+        self, active_learning_rounds: int = 1, dft_check: bool = True, vibrations: bool = False
+    ) -> dict[str, int]:
         """DFT statics and GPU jobs of :meth:`build` with these options."""
 
         structures = len(self.structures)
         statics = structures + len(self.slabs) * self.rattled
         statics += structures * active_learning_rounds + (structures if dft_check else 0)
-        return {"dft_statics": statics, "gpu_jobs": 2 * (active_learning_rounds + 1)}
+        return {"dft_statics": statics, "gpu_jobs": 2 * (active_learning_rounds + 1) + (1 if vibrations else 0)}
 
     def summary(self) -> str:
         counts = self.calculation_count()
@@ -557,15 +823,48 @@ class MlipSurfaceStudy:
         job: MlipJobConfig,
         active_learning_rounds: int = 1,
         dft_check: bool = True,
+        vibrations: VibrationsConfig | None = None,
+        allow_non_metallic: bool = False,
         submit: bool = False,
     ) -> Any:
-        """The graph of :func:`build_mlip_surface_workgraph` for these structures (bulk checked as a metal)."""
+        """The graph of :func:`build_mlip_surface_workgraph` for these structures (bulk checked as a metal).
 
+        ``vibrations`` adds the model's harmonic modes of every structure
+        (the gas references are added to its ``molecules``); the frozen
+        centre of each slab must then have the bulk stoichiometry.
+        ``allow_non_metallic`` skips the metal check (see
+        :func:`build_mlip_surface_workgraph`).
+        """
+
+        if vibrations is not None:
+            _check_frozen_regions(self.slabs, self.fixed_sites, self.bulk)
         return build_mlip_surface_workgraph(
             self.structures, static, fine_tune, relax, job=job, metallic_bulk="bulk", fixed_sites=self.fixed_sites,
             training_structures=self.training_structures or None, active_learning_rounds=active_learning_rounds,
-            dft_check=dft_check, submit=submit,
+            dft_check=dft_check, vibrations=_with_molecules(vibrations, self.molecule_labels),
+            allow_non_metallic=allow_non_metallic, submit=submit,
         )
+
+    def dft_vibrations(
+        self,
+        source: Any,
+        static: SurfaceWorkflowConfig,
+        vibrations: VibrationsConfig | None = None,
+        *,
+        submit: bool = False,
+    ) -> Any:
+        """DFT finite differences at the model's geometries, to check the model's vibrations.
+
+        ``source`` is the finished graph of :meth:`build`; the graph of
+        :func:`psteros.build_vibrations_workgraph` is built on its relaxed
+        structures with ``static`` (QE, VASP, or CP2K with ``RUN_TYPE
+        ENERGY_FORCE``), the slab centres kept fixed as in the relaxations
+        and the gas references as molecules. Its ``<label>_vibrations`` go to
+        :meth:`analyse` as ``vibrations=psteros.read_vibrations(...)``.
+        """
+
+        relaxed = _relaxed_structures(source, list(self.structures))
+        return _dft_vibrations(relaxed, static, vibrations, self.fixed_sites, self.molecule_labels, submit)
 
     def references_from(self, energies_ev: Mapping[str, float]):
         """:class:`psteros.BinaryReferences` from the energies of ``bulk`` and ``ref_<element>``."""
@@ -580,7 +879,15 @@ class MlipSurfaceStudy:
             reference_energies_per_atom_ev=per_atom, reservoir_labels=reservoir_labels(self.elements),
         )
 
-    def analyse(self, source: Any, *, energy_source: str = "mlip_dft", **diagram_options) -> "MlipStudyResult":
+    def analyse(
+        self,
+        source: Any,
+        *,
+        energy_source: str = "mlip_dft",
+        temperature_k: float | None = None,
+        vibrations: Mapping[str, Any] | None = None,
+        **diagram_options,
+    ) -> "MlipStudyResult":
         """Surface phase diagram of the slabs.
 
         ``source`` is the finished graph (``orm.load_node(pk)``), whose
@@ -590,6 +897,13 @@ class MlipSurfaceStudy:
         one source too. Composition and area are those of the slabs (the
         relaxations keep the cell). ``diagram_options`` go to
         :func:`psteros.surface_phase_diagram`.
+
+        With ``temperature_k`` every energy becomes a free energy
+        (:func:`psteros.free_energies_with_vibrations`): solids
+        ``E + F_vib(T)``, the slab centres counted as bulk, gas references
+        ``E + ZPE``. The modes are those of the graph (built with
+        ``vibrations``) or ``vibrations={label: HarmonicVibrations}``, for
+        example ``psteros.read_vibrations`` of :meth:`dft_vibrations`.
         """
 
         from psteros.phase_diagram import SlabTermination, surface_phase_diagram
@@ -601,15 +915,260 @@ class MlipSurfaceStudy:
                 raise ValueError(f"no energy for {missing}")
         else:
             energies = read_mlip_energies(source, list(self.structures), energy_source=energy_source)
+        energies = _free_energies({label: energies[label] for label in self.structures}, source, temperature_k,
+                                  vibrations, self.molecule_labels)
         references = self.references_from(energies)
         terminations = tuple(
             SlabTermination.from_structure(label, energies[label], slab) for label, slab in self.slabs.items())
         diagram = surface_phase_diagram(terminations, references, **diagram_options)
-        return MlipStudyResult(self.formula, references, diagram, terminations, energy_source=energy_source)
+        return MlipStudyResult(self.formula, references, diagram, terminations, energy_source=energy_source,
+                               temperature_k=temperature_k)
 
 
 @dataclass(frozen=True)
 class MlipStudyResult(ChargeNeutralStudyResult):
-    """References, phase diagram and terminations of an :class:`MlipSurfaceStudy`, and the energy source used."""
+    """References, phase diagram and terminations of an :class:`MlipSurfaceStudy`, and the energy source used.
+
+    ``temperature_k`` is the temperature of the vibrational free energies, or
+    ``None`` for total energies.
+    """
 
     energy_source: str = "mlip_dft"
+    temperature_k: float | None = None
+
+
+@dataclass
+class MlipRoute:
+    """The MLIP route for the slabs that psteros cuts with the right electron count.
+
+    Args:
+        study: A :class:`psteros.ChargeNeutralSurfaceStudy` (charge-neutral
+            symmetric slabs of an element, a binary or a ternary compound,
+            one or more orientations) or a :class:`psteros.PolarSurfaceStudy`
+            (polar faces on a pseudo-hydrogen passivated bottom, VASP only).
+            Its bulk and references must already be relaxed with the DFT
+            recipe of the route; its slabs are not relaxed with DFT.
+        fixed_half_width_angstrom: Sites within this distance of the
+            mid-plane of each charge-neutral slab stay in place in the MACE
+            relaxations (:func:`psteros.central_sites`); ``None`` frees every
+            site; a mapping ``{slab label: half-width or None}`` sets it per
+            slab. Polar slabs relax every atom, as in the polar method, and
+            their bottoms are checked by :meth:`analyse`.
+        rattled, rattle_sigma_angstrom, rattle_seed: Rattled copies of each
+            slab as extra training statics, as in :class:`MlipSurfaceStudy`.
+
+    The slabs are charge-neutral or passivated by construction, so the bulk
+    is not checked to be a metal: the route serves metals, semiconductors and
+    insulators. :meth:`build` returns the graph of
+    :func:`build_mlip_surface_workgraph`; :meth:`analyse` gives the study's
+    own result (phase diagram, bottom checks, ...) from the graph's energies
+    and relaxed structures.
+    """
+
+    study: Any
+    fixed_half_width_angstrom: float | Mapping[str, float | None] | None = 1.5
+    rattled: int = 0
+    rattle_sigma_angstrom: float = 0.05
+    rattle_seed: int = 20261017
+
+    def __post_init__(self) -> None:
+        from psteros.polar_workflow import PolarSurfaceStudy
+        from psteros.surface_study import ChargeNeutralSurfaceStudy
+
+        if not isinstance(self.study, (ChargeNeutralSurfaceStudy, PolarSurfaceStudy)):
+            raise TypeError(
+                "MlipRoute takes a ChargeNeutralSurfaceStudy or a PolarSurfaceStudy, whose slabs have the right "
+                "electron count; for your own slabs use MlipSurfaceStudy"
+            )
+        if isinstance(self.rattled, bool) or not isinstance(self.rattled, int) or self.rattled < 0:
+            raise ValueError("rattled must be a non-negative integer")
+        _check_half_width(self.fixed_half_width_angstrom, self.slabs)
+        self.polar = isinstance(self.study, PolarSurfaceStudy)
+        self.formula = self.study.formula
+
+    @property
+    def structures(self) -> dict[str, Any]:
+        """Every calculation of the study, by label."""
+
+        return dict(self.study.structures)
+
+    @property
+    def slabs(self) -> dict[str, Any]:
+        """The slabs of the diagram (role ``slab``), by label."""
+
+        return {label: self.study.structures[label] for label, role in self.study.roles.items() if role == "slab"}
+
+    @property
+    def fixed_sites(self) -> dict[str, tuple[int, ...]]:
+        """Sites of each charge-neutral slab that the MACE relaxations keep in place (none for polar slabs)."""
+
+        if self.polar or self.fixed_half_width_angstrom is None:
+            return {}
+        return _central_sites(self.slabs, self.fixed_half_width_angstrom)
+
+    @property
+    def training_structures(self) -> dict[str, Any]:
+        """The rattled slabs (only DFT statics for training), ``{"<slab>_r<i>": structure}``."""
+
+        if not self.rattled:
+            return {}
+        from psteros.mlip import rattled_copies
+
+        return rattled_copies(self.slabs, count=self.rattled, sigma_angstrom=self.rattle_sigma_angstrom,
+                              seed=self.rattle_seed)
+
+    @property
+    def molecule_labels(self) -> tuple[str, ...]:
+        """Labels of the gas references and, for a polar study, of the pseudo-molecules and clusters."""
+
+        from psteros.surface_study import GAS_REFERENCES
+
+        labels = []
+        for label, role in self.study.roles.items():
+            if role == "reference" and label[len("ref_"):] in GAS_REFERENCES:
+                labels.append(label)
+            elif role in ("pseudo_molecule", "cluster"):
+                labels.append(label)
+        return tuple(labels)
+
+    def calculation_count(
+        self, active_learning_rounds: int = 1, dft_check: bool = True, vibrations: bool = False
+    ) -> dict[str, int]:
+        """DFT statics and GPU jobs of :meth:`build` with these options."""
+
+        structures = len(self.study.structures)
+        statics = structures + len(self.slabs) * self.rattled
+        statics += structures * active_learning_rounds + (structures if dft_check else 0)
+        return {"dft_statics": statics, "gpu_jobs": 2 * (active_learning_rounds + 1) + (1 if vibrations else 0)}
+
+    def summary(self) -> str:
+        counts = self.calculation_count()
+        kind = "polar, passivated bottom" if self.polar else "charge-neutral"
+        lines = [f"{self.formula}: {len(self.slabs)} slabs ({kind}), {len(self.study.structures)} calculations; "
+                 f"{counts['dft_statics']} DFT statics and {counts['gpu_jobs']} GPU jobs with the defaults"]
+        fixed = self.fixed_sites
+        for label, slab in self.slabs.items():
+            lines.append(f"  {label}: {slab.composition.formula.replace(' ', '')}, {len(slab)} atoms, "
+                         f"{len(fixed.get(label, ()))} fixed")
+        return "\n".join(lines)
+
+    __str__ = summary
+
+    def build(
+        self,
+        static: SurfaceWorkflowConfig,
+        fine_tune: MaceFineTuneConfig,
+        relax: MlipRelaxConfig = MlipRelaxConfig(),
+        *,
+        job: MlipJobConfig,
+        active_learning_rounds: int = 1,
+        dft_check: bool = True,
+        vibrations: VibrationsConfig | None = None,
+        submit: bool = False,
+    ) -> Any:
+        """The graph of :func:`build_mlip_surface_workgraph` for the study (no metal check).
+
+        ``static`` is the DFT static recipe of every calculation, with the
+        study's overrides of the static stage (``study.vasp_overrides("static")``,
+        ``study.qe_overrides("static")``, or your own for CP2K); the rattled
+        copies of a slab use the slab's override. A polar study needs VASP
+        (the pseudo-hydrogen potentials). ``vibrations`` adds the model's
+        harmonic modes of every structure (gas references are added to its
+        ``molecules``; the frozen centre of each slab must have the bulk
+        stoichiometry); polar studies have none, because the pseudo chemical
+        potentials are 0 K energies.
+        """
+
+        if self.polar and static.backend != "vasp":
+            raise ValueError(
+                f"{self.formula}: a polar study runs with VASP (pseudo-hydrogen potentials), got backend {static.backend!r}"
+            )
+        if self.polar and vibrations is not None:
+            raise ValueError(
+                f"{self.formula}: polar slabs have no vibrations yet (their pseudo chemical potentials are 0 K energies)"
+            )
+        extra = self.training_structures
+        if extra:
+            overrides = dict(static.role_overrides)
+            for label in extra:
+                slab = label.rsplit("_r", 1)[0]
+                if slab in overrides and label not in overrides:
+                    overrides[label] = overrides[slab]
+            static = replace(static, role_overrides=overrides)
+        if vibrations is not None:
+            _check_frozen_regions(self.slabs, self.fixed_sites, self.study.bulk)
+        return _mlip_workgraph(
+            self.structures, static, fine_tune, relax, job=job, metallic_bulk="bulk", metal_check=False,
+            fixed_sites=self.fixed_sites, training_structures=extra or None,
+            active_learning_rounds=active_learning_rounds, dft_check=dft_check,
+            vibrations=_with_molecules(vibrations, self.molecule_labels), submit=submit,
+        )
+
+    def read(self, source: Any, *, energy_source: str = "mlip_dft") -> tuple[dict[str, float], dict[str, Any]]:
+        """Energies (eV, all from ``energy_source``) and relaxed structures of every calculation of a graph.
+
+        The same pair as :func:`psteros.read_vasp_results`, so it can go to
+        the study's own ``analyse``.
+        """
+
+        labels = list(self.study.structures)
+        return read_mlip_energies(source, labels, energy_source=energy_source), _relaxed_structures(source, labels)
+
+    def analyse(
+        self,
+        source: Any,
+        *,
+        energy_source: str = "mlip_dft",
+        relaxed_structures: Mapping[str, Any] | None = None,
+        temperature_k: float | None = None,
+        vibrations: Mapping[str, Any] | None = None,
+        **options,
+    ) -> Any:
+        """The study's result from the graph of :meth:`build`.
+
+        ``source`` is the finished graph (energies from ``energy_source``,
+        relaxed structures of the last round) or energies typed by hand
+        ``{label: eV}``, with ``relaxed_structures`` if you have them (the
+        built structures otherwise; for a polar study the bottom check then
+        compares nothing). ``temperature_k`` and ``vibrations`` turn the
+        energies into free energies as in :meth:`MlipSurfaceStudy.analyse`.
+        ``options`` go to the study's ``analyse``. A charge-neutral study
+        gives an :class:`MlipStudyResult`, a polar one a
+        :class:`psteros.PolarStudyResult` (with the bottom checks of the
+        MACE-relaxed slabs).
+        """
+
+        if self.polar and temperature_k is not None:
+            raise ValueError(f"{self.formula}: polar slabs have no vibrations yet; leave temperature_k out")
+        if isinstance(source, Mapping):
+            energies = {label: float(value) for label, value in source.items()}
+            missing = sorted(set(self.study.structures).difference(energies))
+            if missing:
+                raise ValueError(f"no energy for {missing}")
+            relaxed = dict(relaxed_structures or self.study.structures)
+        else:
+            energies, relaxed = self.read(source, energy_source=energy_source)
+            relaxed.update(relaxed_structures or {})
+        energies = _free_energies({label: energies[label] for label in self.study.structures}, source,
+                                  temperature_k, vibrations, self.molecule_labels)
+        if self.polar:
+            return self.study.analyse(energies, relaxed, **options)
+        result = self.study.analyse(energies, relaxed, **options)
+        return MlipStudyResult(result.formula, result.references, result.diagram, result.terminations,
+                               result.surface_energies_j_per_m2, energy_source=energy_source,
+                               temperature_k=temperature_k)
+
+    def dft_vibrations(
+        self,
+        source: Any,
+        static: SurfaceWorkflowConfig,
+        vibrations: VibrationsConfig | None = None,
+        *,
+        submit: bool = False,
+    ) -> Any:
+        """DFT finite differences at the model's geometries (see :meth:`MlipSurfaceStudy.dft_vibrations`)."""
+
+        if self.polar:
+            raise ValueError(f"{self.formula}: polar slabs have no vibrations yet")
+        relaxed = _relaxed_structures(source, list(self.study.structures))
+        return _dft_vibrations(relaxed, static, vibrations, self.fixed_sites, self.molecule_labels, submit)

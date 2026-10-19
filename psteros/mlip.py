@@ -1,4 +1,4 @@
-"""Machine-learned potentials for surface energies of metallic systems (no AiiDA).
+"""Machine-learned potentials for surface energies (no AiiDA).
 
 The route: DFT static calculations of the bulk, the references and every
 termination label a fine-tune of a MACE foundation model; the fine-tuned
@@ -434,14 +434,18 @@ def partially_occupied_count(occupations: Any, *, tolerance: float = 0.01) -> in
 def require_metallic(label: str, *, partially_occupied: int) -> None:
     """Raise ``ValueError`` unless the bulk ``label`` has partly filled states (a metal).
 
-    The MLIP route is for metallic systems only; semiconductors and
-    insulators need a separate treatment.
+    Hand-cut slabs on the MLIP route need a metallic bulk: in a metal any cut
+    has a sensible electron count, in a semiconductor or an insulator it does
+    not. Their slabs are cut by :class:`psteros.MlipRoute` (charge-neutral or
+    passivated), which needs no check.
     """
 
     if partially_occupied <= 0:
         raise ValueError(
             f"{label}: the bulk has no partly filled states at the Fermi level, so it is not a metal; "
-            "the MLIP route of psteros is for metallic systems only"
+            "hand-cut slabs on the MLIP route of psteros are for metallic systems only. For a semiconductor or an "
+            "insulator, cut the slabs with psteros.MlipRoute(ChargeNeutralSurfaceStudy(...) or "
+            "PolarSurfaceStudy(...)), or pass allow_non_metallic=True if their electron count is right"
         )
 
 
@@ -568,6 +572,53 @@ def prepare_relax_job(
     }
     (folder / "job.json").write_text(json.dumps(job, indent=2) + "\n")
     (folder / "relax.py").write_text(script_path("relax.py").read_text())
+    return folder
+
+
+def prepare_vibrations_job(
+    directory: str | Path,
+    structures: Mapping[str, Any],
+    model: tuple[str, str],
+    displaced_sites: Mapping[str, Sequence[int]],
+    *,
+    displacement_angstrom: float = 0.01,
+    default_dtype: str = "float64",
+    device: str = "cuda",
+) -> Path:
+    """Write the folder of one vibrations job: the model ``model`` (path, head) gives the forces of every pymatgen
+    structure of ``structures`` (label -> structure) with each site of ``displaced_sites[label]`` moved by ``+d`` and
+    ``-d`` along x, y and z (``d = displacement_angstrom``), as the displaced DFT statics of
+    :func:`psteros.build_vibrations_workgraph`. A bulk is given as its supercell."""
+
+    from psteros.mlip_jobs import script_path
+
+    if not structures:
+        raise ValueError("give at least one structure")
+    if set(displaced_sites) != set(structures):
+        raise ValueError("displaced_sites must name the sites of every structure, and only those")
+    if not 0 < displacement_angstrom <= 0.1:
+        raise ValueError("displacement_angstrom must be in (0, 0.1] A")
+    if device not in ("cuda", "cpu"):
+        raise ValueError("device must be 'cuda' or 'cpu'")
+    if default_dtype not in ("float32", "float64"):
+        raise ValueError("default_dtype must be 'float32' or 'float64'")
+    folder = Path(directory)
+    folder.mkdir(parents=True, exist_ok=False)
+    items = []
+    for label, structure in structures.items():
+        sites = [int(index) for index in displaced_sites[label]]
+        if not sites or len(set(sites)) != len(sites) or any(index < 0 or index >= len(structure) for index in sites):
+            raise ValueError(f"{label}: displaced_sites must be distinct sites within [0, {len(structure)})")
+        frame = LabelledStructure(label, structure, 0.0, np.zeros((len(structure), 3)))
+        write_extxyz([frame], folder / f"{label}.extxyz")
+        items.append({"label": label, "file": f"{label}.extxyz", "sites": sites})
+    path, head = model
+    job = {
+        "device": device, "default_dtype": default_dtype, "displacement_angstrom": float(displacement_angstrom),
+        "model": {"path": str(path), "head": head}, "structures": items,
+    }
+    (folder / "job.json").write_text(json.dumps(job, indent=2) + "\n")
+    (folder / "vibrations.py").write_text(script_path("vibrations.py").read_text())
     return folder
 
 

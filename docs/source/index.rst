@@ -21,6 +21,8 @@ Choose the path that matches what you need now:
   :doc:`build one unsubmitted graph <tutorial>`.
 * **Learning the model?** Read :doc:`how a calculation fits together <concepts>`
   before the :doc:`SnO2 surface-energy model <examples>`.
+* **Have a GPU?** The :doc:`MLIP route <mlip>` is the default: a fine-tuned
+  MACE model relaxes the slabs, DFT single points give their energies.
 * **Preparing VASP work?** Use the :doc:`relaxation-to-static guide
   <vasp-workflow>` after the tutorial (Quantum ESPRESSO: :doc:`qe-workflow`).
 * **Have the energies?** :doc:`Build a surface phase diagram <phase-diagram>`
@@ -48,13 +50,13 @@ Choose the path that matches what you need now:
    :maxdepth: 1
    :caption: Prepare a calculation
 
+   mlip
    vasp-workflow
    qe-workflow
    cp2k-workflow
    phase-diagram
    reference-thermochemistry
    vibrations
-   mlip
 
 .. toctree::
    :maxdepth: 1

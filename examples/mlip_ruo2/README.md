@@ -1,7 +1,8 @@
 # RuO₂(110) with a fine-tuned MACE model
 
-The opt-in MLIP route of psteros (metallic systems only; see `docs/source/mlip.rst`): CP2K static calculations
-label a replay fine-tune of MACE-MH-1, which then relaxes the terminations on a GPU.
+The MLIP route of psteros (see `docs/source/mlip.rst`) with your own slabs: CP2K static calculations label a
+replay fine-tune of MACE-MH-1, which then relaxes the terminations on a GPU. RuO₂ is a metal, so hand-cut slabs are
+fine and the graph checks the bulk; for a semiconductor see `examples/mlip_routes/`.
 
 | File | What it does |
 |---|---|

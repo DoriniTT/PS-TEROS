@@ -23,10 +23,11 @@ STYLE = {
 }
 
 
-def box(ax, x, y, w, h, kind, title, body="", number=None, title_size=11.5):
+def box(ax, x, y, w, h, kind, title, body="", number=None, title_size=11.5, dashed=False):
     face, edge = STYLE[kind]
     ax.add_patch(FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0,rounding_size=0.16",
-                                facecolor=face, edgecolor=edge, linewidth=1.6, zorder=2))
+                                facecolor=face, edgecolor=edge, linewidth=1.6, zorder=2,
+                                linestyle=(0, (4, 3)) if dashed else "-"))
     left = x + 0.22
     if number is not None:
         ax.add_patch(plt.Circle((x + 0.42, y + h / 2), 0.25, facecolor=edge, edgecolor="none", zorder=3))
@@ -68,7 +69,7 @@ def main() -> None:
     side = right + 0.45  # side notes
 
     ax.text(0.3, 12.75, "The MLIP route of PS-TEROS", fontsize=18, fontweight="bold", color=INK, va="top")
-    ax.text(0.3, 12.25, "MACE finds the relaxed geometry, DFT gives its energy  ·  for metallic systems",
+    ax.text(0.3, 12.25, "MACE finds the relaxed geometry, DFT gives its energy  ·  the default route with a GPU",
             fontsize=10.8, color=MUTED, va="top")
     legend_x = 0.3
     for kind, label in (("dft", "DFT, on CPUs"), ("gpu", "MACE, on a GPU"), ("check", "check"), ("result", "result")):
@@ -80,7 +81,7 @@ def main() -> None:
 
     # 0 inputs
     box(ax, x, 10.15, w, 1.15, "input", "Structures",
-        "bulk and references (metal, O$_2$ in a box) relaxed with DFT\nslabs as built, not relaxed")
+        "bulk and references (solids, O$_2$ in a box) relaxed with DFT\nslabs as built, not relaxed")
     arrow(ax, (cx, 10.15), (cx, 9.8))
     # 1 first statics
     box(ax, x, 8.8, w, 1.0, "dft", "One DFT static of every structure",
@@ -93,11 +94,11 @@ def main() -> None:
                          facecolor=STYLE["check"][0], edgecolor=STYLE["check"][1], linewidth=1.6, zorder=2))
     ax.add_patch(plt.Circle((cx - dw - 0.4, dy), 0.25, facecolor=STYLE["check"][1], edgecolor="none", zorder=3))
     ax.text(cx - dw - 0.4, dy, "2", ha="center", va="center", color="white", fontsize=11, fontweight="bold", zorder=4)
-    ax.text(cx, dy + 0.12, "Is the bulk a metal?", ha="center", va="center", fontsize=11, fontweight="bold",
+    ax.text(cx, dy + 0.12, "Right electron count?", ha="center", va="center", fontsize=11, fontweight="bold",
             color=INK, zorder=4)
-    ax.text(cx, dy - 0.2, "partly filled states at the Fermi level", ha="center", va="center", fontsize=8.6,
+    ax.text(cx, dy - 0.2, "a metallic bulk, or slabs cut by psteros", ha="center", va="center", fontsize=8.6,
             color=MUTED, zorder=4)
-    box(ax, side, dy - 0.5, 2.0, 1.0, "stop", "Stop", "the route is for\nmetals only", title_size=10.5)
+    box(ax, side, dy - 0.5, 2.25, 1.0, "stop", "Stop", "cut the slabs with\nelectron counting", title_size=10.5)
     arrow(ax, (cx + dw, dy), (side, dy), color=STYLE["stop"][1])
     ax.text(cx + dw + 0.1, dy + 0.14, "no", fontsize=9, color=STYLE["stop"][1], fontweight="bold")
     arrow(ax, (cx, dy - dh), (cx, 6.85))
@@ -135,6 +136,12 @@ def main() -> None:
     box(ax, x, 0.12, w, 1.0, "result", "Surface phase diagram  γ(Δμ$_\\mathrm{O}$)",
         "slabs and references from one energy source", number=7)
 
+    # optional: the model's vibrations, next to the final statics
+    box(ax, side, 1.47, 2.25, 1.0, "gpu", "Vibrations", "optional, MACE\nHessians on the GPU",
+        title_size=10.5, dashed=True)
+    arrow(ax, (side + 1.12, 1.47), (right, 0.62), color=STYLE["gpu"][1], connection="arc3,rad=-0.25", dashed=True)
+    ax.text(side + 1.32, 0.98, "F$_\\mathrm{vib}$(T)", fontsize=8.6, color=STYLE["gpu"][1], fontweight="bold")
+
     # side notes
     def note(y, head, text, color):
         ax.text(side, y, head, fontsize=10.2, fontweight="bold", color=color, va="top")
@@ -142,9 +149,9 @@ def main() -> None:
 
     note(6.8, "Why the extra round", "the first model has only seen\nunrelaxed slabs; the round adds\nlabels near the "
          "relaxed\ngeometries", loop)
-    note(2.45, "DFT cost", "3 statics per termination,\nhowever many steps a DFT\nrelaxation would take",
+    note(4.75, "DFT cost", "3 statics per termination,\nhowever many steps a DFT\nrelaxation would take",
          STYLE["dft"][1])
-    note(0.95, "One energy source", "slabs and references from the\nfinal DFT statics, never the\nmodel's own energies",
+    note(3.45, "One energy source", "slabs and references from the\nfinal DFT statics, never the\nmodel's own energies",
          STYLE["result"][1])
 
     for suffix in ("png", "svg"):

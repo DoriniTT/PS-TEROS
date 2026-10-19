@@ -59,11 +59,25 @@ Recent Updates
   flowchart are in ``docs/MLIP_SURFACES.md``
 * ``MaceFineTuneConfig(lr_scheduler_gamma=...)``: an opt-in learning-rate decay per pass; the default 1.0 keeps the
   constant learning rate and the same training options
+* The MLIP route becomes the route the docs recommend when a GPU is available (README, :doc:`/mlip`); the DFT
+  relaxation route is unchanged and remains the one without a GPU
+* The MLIP route for semiconductors and insulators: ``MlipRoute(study)`` runs a ``ChargeNeutralSurfaceStudy``
+  (elements, binary and ternary compounds, several orientations) or a ``PolarSurfaceStudy`` (VASP, pseudo-hydrogen
+  passivated bottoms, bottom checks of the MACE-relaxed slabs) on the route; their slabs have the right electron
+  count, so the bulk is not checked to be a metal. ``build_mlip_surface_workgraph(..., allow_non_metallic=True)``
+  and ``MlipSurfaceStudy.build(..., allow_non_metallic=True)`` skip the metal check of hand-cut slabs with a warning.
+  Without these options the graphs and results are unchanged
+* Vibrations on the MLIP route: ``vibrations=VibrationsConfig(...)`` in ``build_mlip_surface_workgraph``,
+  ``MlipSurfaceStudy.build`` and ``MlipRoute.build`` adds one GPU job in which the deployed model gives the Γ-point
+  finite-difference modes of every structure (``<label>_mlip_vibrations``, read by ``read_vibrations``;
+  ``prepare_vibrations_job`` and the job script ``vibrations.py``); ``analyse(..., temperature_k=...)`` uses free
+  energies (``free_energies_with_vibrations``, new). ``dft_vibrations`` builds DFT finite differences on the MACE
+  geometries, with QE, VASP or CP2K, to check them. ``build_vibrations_workgraph`` itself is unchanged
 * Bug fix: the MACE jobs of ``build_mlip_surface_workgraph`` failed at the first fine-tune with exit status 410
   (``ERROR_STDERR_NOT_EMPTY``) unless ``MlipJobConfig.execution.extra_options`` set ``redirect_stderr``: MACE writes
-  its log and torch's warnings to stderr, and aiida-shell fails a job whose stderr is not empty. The fine-tune
-  and relaxation jobs now write stderr into stdout by default (``redirect_stderr=False`` in ``extra_options``
-  keeps the old behaviour). No results change; graphs that failed this way can be built again
+  its log and torch's warnings to stderr, and aiida-shell fails a job whose stderr is not empty. The fine-tune,
+  relaxation and vibrations jobs now write stderr into stdout by default (``redirect_stderr=False`` in
+  ``extra_options`` keeps the old behaviour). No results change; graphs that failed this way can be built again
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

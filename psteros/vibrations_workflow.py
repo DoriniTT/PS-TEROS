@@ -5,7 +5,11 @@
 z, runs one static calculation per displacement (VASP or QE, with the same
 recipe as the energies) and turns the forces into harmonic modes.  Each
 label gives a ``<label>_vibrations`` output that :func:`read_vibrations`
-reads as :class:`psteros.HarmonicVibrations`.
+reads as :class:`psteros.HarmonicVibrations`; it also reads the
+``<label>_mlip_vibrations`` of :func:`psteros.build_mlip_surface_workgraph`
+(the same modes from a fine-tuned MACE model). The ``dft_vibrations`` of
+:class:`psteros.MlipSurfaceStudy` and :class:`psteros.MlipRoute` build the
+same graph with CP2K too.
 
 The sites kept fixed in the relaxation (``CalculationOverride.fixed_sites``
 of the recipe) are not displaced: a slab with a frozen centre gets the
@@ -144,6 +148,19 @@ def build_vibrations_workgraph(
     ``<label>_vibrations`` (a ``Dict``, see :func:`read_vibrations`).
     """
 
+    return _vibrations_workgraph(structures, static, vibrations, submit=submit, allow_cp2k=False)
+
+
+def _vibrations_workgraph(
+    structures: Mapping[str, Any],
+    static: SurfaceWorkflowConfig,
+    vibrations: VibrationsConfig | None,
+    *,
+    submit: bool,
+    allow_cp2k: bool,
+) -> Any:
+    """The graph of :func:`build_vibrations_workgraph`; ``allow_cp2k`` also runs CP2K (``RUN_TYPE ENERGY_FORCE``)."""
+
     vibrations = vibrations or VibrationsConfig()
     if not structures:
         raise ValueError("at least one labelled structure is required")
@@ -155,8 +172,15 @@ def build_vibrations_workgraph(
     )
     if unknown:
         raise ValueError(f"VibrationsConfig names labels that are not in structures: {unknown}")
-    if static.backend == "cp2k":
+    if static.backend == "cp2k" and not allow_cp2k:
         raise ValueError("build_vibrations_workgraph supports VASP and QE recipes; CP2K is not supported yet")
+    if static.backend == "cp2k":
+        from psteros.backends.cp2k import cp2k_run_type
+
+        for label in structures:
+            run_type = cp2k_run_type(static.calculation, static.role_overrides.get(label))
+            if run_type != "ENERGY_FORCE":
+                raise ValueError(f"{label}: the displaced CP2K calculations need RUN_TYPE ENERGY_FORCE, got {run_type}")
     if static.backend == "vasp":
         from psteros.backends.vasp import vasp_incar
         from psteros.workflow import _relaxation_check
@@ -246,6 +270,13 @@ def _add_static_task(
     reference: Any,
     override: CalculationOverride,
 ) -> Any:
+    if static.backend == "cp2k":
+        from psteros.backends import add_cp2k_task
+
+        return add_cp2k_task(
+            workgraph, label=label, structure=structure, kinds_structure=reference,
+            config=static.calculation, execution=static.execution, override=override,
+        )
     if static.backend == "vasp":
         from psteros.backends import add_vasp_task
 
@@ -273,6 +304,8 @@ def read_vibrations(
     ``graph`` is the WorkGraph process node (``orm.load_node(pk)``); the
     result maps each label to a :class:`psteros.HarmonicVibrations`.
     ``imaginary_modes`` and ``low_frequency_cutoff_cm1`` are passed to it.
+    A :func:`psteros.build_mlip_surface_workgraph` graph built with
+    ``vibrations`` is read the same way (its ``<label>_mlip_vibrations``).
     """
 
     from psteros.surface_study import _graph_output
@@ -280,7 +313,7 @@ def read_vibrations(
 
     result = {}
     for label in labels:
-        data = _graph_output(graph.outputs, (f"{label}_vibrations",))
+        data = _graph_output(graph.outputs, (f"{label}_vibrations", f"{label}_mlip_vibrations"))
         if data is None:
             raise ValueError(f"no vibrations output for {label}")
         try:

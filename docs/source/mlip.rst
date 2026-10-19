@@ -9,26 +9,48 @@ afford. The MLIP route of psteros replaces those relaxations: a few DFT
 *static* calculations teach a MACE foundation model your system, the model
 relaxes every slab on a GPU, and one more DFT static at each relaxed geometry
 gives the energies of the surface phase diagram. In one line: **MACE finds the
-relaxed geometry, DFT gives its energy.** Nothing in the existing workflows
-changes when you do not use it.
+relaxed geometry, DFT gives its energy.**
+
+It is the route psteros recommends when you have a GPU: the slab relaxations,
+usually the bottleneck of a study, cost minutes on the GPU instead of DFT
+hours, so a study can afford many more terminations. Without a GPU, relax the
+slabs with DFT as before (:doc:`vasp-workflow`, :doc:`qe-workflow`,
+:doc:`cp2k-workflow`); nothing in those workflows changes.
 
 .. figure:: ../images/mlip_route.png
    :width: 100%
    :alt: Flowchart of the MLIP route
 
-   The MLIP route: DFT statics, a metal check, a replay fine-tune and a MACE
-   relaxation on a GPU, one active-learning round, and the final DFT statics
-   that enter the diagram.
+   The MLIP route: DFT statics, the electron-count check, a replay fine-tune
+   and a MACE relaxation on a GPU, one active-learning round, the final DFT
+   statics that enter the diagram and, optionally, the model's vibrations.
 
 .. warning::
 
-   The route is for **metallic systems only** (metals, alloys, metallic
-   oxides such as RuO\ :sub:`2`). ``require_metallic`` stops it when the bulk
-   has no partly filled states at the Fermi level. Semiconductors and
-   insulators need a separate treatment. Converge the DFT recipe for your
-   system and check a new system against a few DFT relaxations before relying
-   on the route. Use the final DFT energies (``"mlip_dft"``), not the model's
-   own (``"mlip"``).
+   Converge the DFT recipe for your system and check a new system against a
+   few DFT relaxations before relying on the route. Use the final DFT
+   energies (``"mlip_dft"``), not the model's own (``"mlip"``).
+
+Metals, semiconductors and insulators
+-------------------------------------
+
+The route itself does not care whether the compound is a metal. The slabs do:
+in a metal any cut of the bulk has a sensible electron count, but a slab of a
+semiconductor or an insulator must be charge-neutral, or passivated, which
+pymatgen's ``SlabGenerator`` alone does not ensure. So psteros asks for one of
+two things:
+
+* **Slabs cut by psteros** with electron counting:
+  ``MlipRoute(ChargeNeutralSurfaceStudy(...))`` (symmetric, charge-neutral
+  slabs of an element, a binary or a ternary compound) or
+  ``MlipRoute(PolarSurfaceStudy(...))`` (polar faces on a pseudo-hydrogen
+  passivated bottom); see :ref:`mlip-route-studies`. These run for any
+  compound, with no metal check.
+* **Your own slabs** (``MlipSurfaceStudy``, ``build_mlip_surface_workgraph``):
+  the graph checks that the bulk is a metal (partly filled states at the
+  Fermi level, ``require_metallic``) and stops otherwise. With
+  ``allow_non_metallic=True`` it runs anyway and warns you that the electron
+  count of the slabs is then your responsibility.
 
 The recipe
 ----------
@@ -38,7 +60,8 @@ The recipe
    relaxed bulk cell and do not relax them.
 2. **One DFT static of every structure** (bulk, references, slabs as built):
    energies and forces, the training labels.
-3. **Check that the bulk is a metal**; the graph stops otherwise.
+3. **Check the electron count**: slabs cut by psteros pass; your own slabs
+   need a metallic bulk (or ``allow_non_metallic=True``).
 4. **Replay fine-tune of MACE-MH-1** on a GPU: a new head learns the DFT
    labels while the original head keeps training on the foundation model's
    own labels of ~150 small structures of the same elements, so the model does
@@ -52,6 +75,8 @@ The recipe
    slabs and the references alike, enter the diagram.
 
 That is three DFT statics per termination instead of a DFT relaxation.
+Optionally, the final model also gives the harmonic vibrations of every
+structure (see :ref:`mlip-vibrations`).
 
 Run it: ``MlipSurfaceStudy``
 ----------------------------
@@ -89,6 +114,80 @@ of energies typed by hand. A full script is
 Instead of the active-learning round, ``rattled=5`` adds five rattled copies
 of each slab to the first training set; with ``active_learning_rounds=0`` one
 fine-tune then runs, with more DFT statics up front.
+
+.. _mlip-route-studies:
+
+Run it: ``MlipRoute`` with the studies of psteros
+-------------------------------------------------
+
+``MlipRoute(study)`` runs a ``ChargeNeutralSurfaceStudy`` or a
+``PolarSurfaceStudy`` on the MLIP route. The study cuts the slabs (one or
+more orientations, any number of elements) and keeps its labels, its settings
+and its analysis; the route replaces the DFT relaxations:
+
+.. code-block:: python
+
+   study = psteros.ChargeNeutralSurfaceStudy(
+       sno2_bulk, [(1, 1, 0), (1, 0, 0)], references={"Sn": tin, "O": psteros.triplet_o2_cell()})
+   route = psteros.MlipRoute(study)        # the centre of each slab held in place, as above
+   print(route)                            # slabs, fixed sites, DFT statics and GPU jobs
+
+   static = psteros.SurfaceWorkflowConfig(
+       backend="vasp", name="sno2", execution=cpu_execution,
+       calculation=psteros.VaspCalculationConfig(
+           "vasp@cpu-cluster", incar={"ENCUT": 520, "EDIFF": 1e-6, "ISMEAR": 0, "SIGMA": 0.05,
+                                      "IBRION": -1, "NSW": 0, "LREAL": False}),
+       role_overrides=study.vasp_overrides("static"))
+   graph = route.build(static, fine_tune, job=job, submit=True)
+
+   result = route.analyse(orm.load_node(graph.pk))   # the study's own analysis, on the final DFT energies
+   result.diagram.plot("sno2_mlip.png")
+
+``route.read(graph)`` gives the energies and the MACE-relaxed structures, the
+same pair as ``read_vasp_results``. A ternary study gives a
+``TernarySurfacePhaseDiagram``, an element its surface energies.
+
+**Polar surfaces.** ``MlipRoute(PolarSurfaceStudy(...))`` runs the polar
+faces with VASP (the pseudo-hydrogen POTCARs); use
+``study.potential_mapping(...)`` and ``study.vasp_overrides("static")`` in the
+static recipe. Every atom of a polar slab relaxes, as in the polar method, and
+``analyse`` returns the ``PolarStudyResult`` with the bottom check of the
+MACE-relaxed slabs. For MACE the pseudo-hydrogens are hydrogen atoms; the
+fine-tune learns them from their DFT labels like any other atom.
+
+.. _mlip-vibrations:
+
+Vibrations on the GPU
+---------------------
+
+With ``vibrations=psteros.VibrationsConfig(...)``, ``build`` adds one GPU job
+in which the deployed model of the last round gives the harmonic modes of
+every structure at its relaxed geometry, by the same Γ-point finite
+differences as ``build_vibrations_workgraph`` (:doc:`vibrations`): the
+sites held in place in the relaxation are not displaced (their region is
+counted as bulk, so it must have the bulk stoichiometry, which ``build``
+checks), a bulk is displaced in its ``supercells`` entry, and the gas
+references are molecules. No DFT calculation is added, so a large supercell
+costs little. ``analyse(graph, temperature_k=...)`` then uses free energies:
+
+.. code-block:: python
+
+   graph = route.build(static, fine_tune, job=job, submit=True,
+                       vibrations=psteros.VibrationsConfig(supercells={"bulk": (3, 3, 3), "ref_Sn": (3, 3, 3)}))
+   result = route.analyse(orm.load_node(graph.pk), temperature_k=800.0)
+
+The energies are still the final DFT statics; only the vibrational terms come
+from the model. These are not mixed sources in the sense below: a constant
+offset per element has no curvature, so it does not enter the modes. The
+modes of the model have not yet been compared with DFT finite differences for
+a series of systems, so check a few: ``route.dft_vibrations(graph, static)``
+builds the finite-difference graph of ``build_vibrations_workgraph`` on the
+MACE geometries with the same fixed sites (QE, VASP, and here also CP2K with
+``RUN_TYPE ENERGY_FORCE``), and
+``route.analyse(graph, temperature_k=T, vibrations=psteros.read_vibrations(check, labels))``
+uses those modes instead. ``read_vibrations`` reads both graphs.
+Polar slabs have no vibrations yet (their pseudo chemical potentials are 0 K
+energies).
 
 One energy source per diagram
 -----------------------------
@@ -175,9 +274,12 @@ CP2K statics and a GPU computer with a MACE environment:
    static at each relaxed geometry joins the labels, a new fine-tune from the
    foundation model trains on all of them, and the new model relaxes the
    structures again from the start;
-5. with ``dft_check`` (default), one DFT static at each final geometry.
+5. with ``dft_check`` (default), one DFT static at each final geometry;
+6. with ``vibrations``, the harmonic modes of every structure from the
+   deployed model (``<label>_mlip_vibrations``).
 
-Every task is wired when the graph is built; calcfunctions only turn finished
+``allow_non_metallic=True`` skips the metal check of step 2, with a warning
+about the electron count of the slabs. Every task is wired when the graph is built; calcfunctions only turn finished
 calculations into the next job's inputs (the training folder, the relaxed
 structure). The fine-tune and relaxation jobs are aiida-shell jobs that run
 ``finetune.py`` and ``relax.py`` with the Python of ``MlipJobConfig.code_label``;

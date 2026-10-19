@@ -17,17 +17,22 @@ Determining which termination is thermodynamically favored requires coordinating
 
 PS-TEROS automates the pathway from crystal structures to thermodynamic stability:
 
+- **Two Routes to the Energies:** the **MLIP route**, the default when you have a GPU: a few DFT single points teach a MACE foundation model your system, the fine-tuned model relaxes every slab on the GPU, and one DFT single point per relaxed geometry gives its energy, so no slab is relaxed with DFT and a study can afford many more terminations (`MlipRoute`, `MlipSurfaceStudy`, [guide](docs/MLIP_SURFACES.md)). Without a GPU, the **DFT route** relaxes every slab with DFT (relaxation → static).
 - **Slab Builders:** Programmatically generates bulk references and multiple symmetric/asymmetric surface terminations (e.g., rutile SnO₂).
-- **Typed DFT Recipes:** Enforces strict parameter harmony across all terminations, bulk references, and reservoirs in **VASP** (the central engine, through aiida-vasp); the same recipes also run **Quantum ESPRESSO**.
-- **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation → static SCF) with bounded job concurrency and full provenance tracking.
+- **Typed DFT Recipes:** Enforces strict parameter harmony across all terminations, bulk references, and reservoirs in **VASP** (the central engine, through aiida-vasp); the same recipes also run **Quantum ESPRESSO**, and **CP2K** runs statics and relaxations.
+- **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation → static SCF, or the MLIP route's DFT and GPU jobs) with bounded job concurrency and full provenance tracking.
 - **Polar Surfaces:** Absolute surface energies of polar faces (zinc blende (111), wurtzite (0001)) with a pseudo-hydrogen passivated bottom, on the same scale as non-polar ones ([guide](docs/POLAR_SURFACES.md)).
 - **Charge-Neutral Terminations:** Symmetric, charge-neutral slabs for semiconductors and insulators, and `ChargeNeutralSurfaceStudy` to run all of them with their references in one graph ([guide](docs/CHARGE_NEUTRAL_TERMINATIONS.md)).
-- **MLIP Route for Metallic Systems:** A fine-tuned MACE model relaxes the slabs on a GPU and one DFT static per relaxed geometry gives their energies, so no slab is relaxed with DFT (`MlipSurfaceStudy`, [guide](docs/MLIP_SURFACES.md)).
+- **Vibrational Free Energies:** Harmonic Γ-point modes of slabs, bulks and molecules, from DFT finite differences or, on the MLIP route, from the fine-tuned model on the GPU ([guide](docs/source/vibrations.rst)).
 - **Pure-Python Thermodynamics:** Evaluates surface free energies (J/m², eV/Å²) and termination phase diagrams directly as a function of chemical potential (Δμ<sub>O</sub> for an oxide, Δμ<sub>As</sub> for GaAs, ...).
 
 ## Quickstart
 
-The complete, tested version of these three steps is
+Both routes start from the same structures and end in the same phase diagram; they differ in step 2. The MLIP
+route needs a GPU computer with a MACE environment (`pip install '.[mlip]'` here, mace-torch there); the DFT route
+needs only CPUs.
+
+The complete, tested version of the DFT route is
 [`examples/vasp_surface_phase_diagram`](examples/vasp_surface_phase_diagram) (SnO₂(110) with VASP;
 [`examples/qe_surface_phase_diagram`](examples/qe_surface_phase_diagram) is the same campaign with Quantum ESPRESSO).
 
@@ -54,7 +59,40 @@ For semiconductors and insulators, `psteros.ChargeNeutralSurfaceStudy` cuts
 the charge-neutral terminations instead and also gives the per-calculation
 overrides and the analysis ([guide](docs/CHARGE_NEUTRAL_TERMINATIONS.md#in-the-ps-teros-workflow)).
 
-### 2. Relax and compute the energies (AiiDA WorkGraph)
+### 2a. The MLIP route (default, with a GPU)
+
+The bulk and the references are relaxed with DFT once; the slabs are not relaxed with DFT at all. The slabs of a
+semiconductor must have the right electron count, so PS-TEROS cuts them (`ChargeNeutralSurfaceStudy`, or
+`PolarSurfaceStudy` for polar faces); for a metal, your own slabs work too (`MlipSurfaceStudy`):
+
+```python
+study = psteros.ChargeNeutralSurfaceStudy(bulk, [(1, 1, 0)], references={"Sn": metal, "O": psteros.triplet_o2_cell()})
+route = psteros.MlipRoute(study)        # slab centres held in place in the MACE relaxations
+print(route)                            # slabs, DFT statics and GPU jobs
+
+static = psteros.SurfaceWorkflowConfig(
+    backend="vasp",
+    calculation=psteros.VaspCalculationConfig(
+        code_label="vasp@my-cluster", incar={"ENCUT": 520, "PREC": "Accurate", "EDIFF": 1e-6, "ISMEAR": 0,
+                                             "SIGMA": 0.05, "LREAL": False, "IBRION": -1, "NSW": 0},
+        potential_family="PBE", potential_mapping={"Sn": "Sn_d"}, kpoints_spacing=0.25,
+    ),
+    execution=psteros.ExecutionPolicy(computer="my-cluster", queue="my-queue", max_concurrent_jobs=2,
+                                      resources={"num_machines": 1, "num_mpiprocs_per_machine": 32}),
+    role_overrides=study.vasp_overrides("static"),   # triplet O2, Gamma-only molecule
+)
+fine_tune = psteros.MaceFineTuneConfig("/path/on/gpu/mace-mh-1.model", replay_file="replay-data-mh-1-omat-pbe.xyz")
+job = psteros.MlipJobConfig("mace-python@my-gpu-cluster", psteros.ExecutionPolicy(
+    queue="gpu", with_mpi=False, resources={"num_machines": 1, "num_mpiprocs_per_machine": 8}))
+graph = route.build(static, fine_tune, job=job, submit=True)
+```
+
+The graph runs the DFT statics, a replay fine-tune of MACE-MH-1 and the relaxations on the GPU, one
+active-learning round and a final DFT static at each relaxed geometry. `vibrations=psteros.VibrationsConfig(...)`
+adds the model's harmonic modes. The recipe, its flowchart and its rules are in the
+[MLIP guide](docs/MLIP_SURFACES.md).
+
+### 2b. The DFT route (no GPU): relax and compute the energies
 
 One recipe per stage keeps every calculation on the same numerical settings; per-structure overrides
 handle the bulk cell relaxations and the triplet O₂:
@@ -98,7 +136,19 @@ can be fixed with `psteros.CalculationOverride(fixed_sites=psteros.central_sites
 
 ### 3. Build the surface phase diagram
 
-When the graph has finished, feed the static energies to the pure-Python analysis. It writes the phase
+**MLIP route:** the study's own analysis runs on the final DFT energies (with `temperature_k=...` on free energies,
+if the graph has the vibrations):
+
+```python
+from aiida import orm
+
+result = route.analyse(orm.load_node(graph.pk))
+print(result)                               # stable termination per Delta mu_O range
+result.diagram.plot("phase_diagram.png")
+result.diagram.to_csv("phase_diagram.csv")
+```
+
+**DFT route:** when the graph has finished, feed the static energies to the pure-Python analysis. It writes the phase
 diagram **directly as a figure**, and **exports all the data as CSV** for plotting it your own way:
 
 ```python
@@ -142,7 +192,7 @@ POTCAR family, see the [Installation Guide](docs/source/installation.rst).
 - **[SnO₂ Surface Model](docs/source/examples.rst):** Deep dive into terminations and thermodynamic reference states.
 - **[VASP Guide](docs/source/vasp-workflow.rst):** Setting up a two-stage relaxation → static workflow, with per-structure settings and fixed atoms.
 - **[Quantum ESPRESSO Guide](docs/source/qe-workflow.rst):** The same workflow with Quantum ESPRESSO.
-- **[MLIP Route](docs/MLIP_SURFACES.md):** The recipe for metallic systems: DFT statics, a replay fine-tune of MACE-MH-1, GPU relaxations, one active-learning round and the final DFT statics.
+- **[MLIP Route](docs/MLIP_SURFACES.md):** The default route with a GPU, for metals, semiconductors and insulators: DFT statics, a replay fine-tune of MACE-MH-1, GPU relaxations, one active-learning round, the final DFT statics and optional vibrations from the model.
 - **[Surface Phase Diagrams](docs/source/phase-diagram.rst):** From energies to γ(Δμ<sub>O</sub>) (binary oxides) or stable-termination maps over (Δμ<sub>A</sub>, Δμ<sub>O</sub>) (ternary oxides), as a figure or a CSV table.
 - **[API Reference](docs/source/api.rst):** Public classes, functions, and configuration schemas.
 

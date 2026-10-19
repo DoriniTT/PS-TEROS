@@ -7,7 +7,7 @@ Phase ``jobs``    reads the finished ``labels`` graph and writes the job folders
                   (``python finetune.py``, then ``python relax.py``).
 
 The CP2K settings are placeholders sized as a smoke test: converge the cutoff, basis, k-points and vacuum first.
-psteros routes the MLIP method to metallic systems only; ``jobs`` checks that bulk RuO2 is a metal.
+These are hand-cut slabs, which need a metallic bulk; ``jobs`` checks that bulk RuO2 is a metal.
 
 Usage
 -----

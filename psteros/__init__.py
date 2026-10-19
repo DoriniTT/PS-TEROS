@@ -87,6 +87,7 @@ from .thermochemistry import (
 )
 from .vibrations import (
     HarmonicVibrations,
+    free_energies_with_vibrations,
     harmonic_vibrations_from_forces,
     molecule_reference_energy_ev,
     solid_free_energy_ev,
@@ -114,6 +115,7 @@ from .mlip import (
     partially_occupied_count,
     prepare_finetune_job,
     prepare_relax_job,
+    prepare_vibrations_job,
     rattled_copies,
     relax_with_calculator,
     require_metallic,
@@ -122,6 +124,7 @@ from .mlip import (
 )
 from .mlip_workflow import (
     MlipJobConfig,
+    MlipRoute,
     MlipStudyResult,
     MlipSurfaceStudy,
     build_mlip_surface_workgraph,
@@ -245,4 +248,7 @@ __all__ = [
     "build_mlip_surface_workgraph",
     "read_mlip_energies",
     "read_mlip_results",
+    "MlipRoute",
+    "free_energies_with_vibrations",
+    "prepare_vibrations_job",
 ]
