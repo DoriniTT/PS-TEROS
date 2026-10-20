@@ -813,9 +813,27 @@ forces in eV/Å; nothing here needs AiiDA.
    Least-squares per-element shifts of E_DFT − E_foundation; raises when the
    compositions do not separate the elements.
 
-``MaceFineTuneConfig(foundation_model, foundation_model_sha256=None, foundation_head="omat_pbe", replay=True, replay_file=None, replay_min_atoms=2, replay_max_atoms=128, replay_validation_every=5, epochs=100, learning_rate=1e-3, ema_decay=0.999, energy_weight=10.0, forces_weight=10.0, huber_delta=0.01, clip_grad=1.0, seeds=(20260920, 20260921, 20260922), default_dtype="float64", lr_scheduler_gamma=1.0)``
+``MaceFineTuneConfig(foundation_model, foundation_model_sha256=None, foundation_head="omat_pbe", replay=True, replay_file=None, replay_min_atoms=2, replay_max_atoms=128, replay_validation_every=5, epochs=100, learning_rate=1e-3, ema_decay=0.999, energy_weight=10.0, forces_weight=10.0, huber_delta=0.01, clip_grad=1.0, seeds=(20260920, 20260921, 20260922), default_dtype="float64", lr_scheduler_gamma=1.0, foundation_name=None)``
    The fine-tune recipe; ``mace_training_options(config, *, name, seed, atomic_numbers)``
-   gives its ``mace_run_train`` options.
+   gives its ``mace_run_train`` options. ``foundation_name`` names a model
+   of ``MACE_FOUNDATION_MODELS``: the head must be one of its heads and the
+   checksum its own. ``MaceFineTuneConfig.for_foundation(name, foundation_model, *, head=None, **options)``
+   fills in the default head and the release's checksum.
+
+``MACE_FOUNDATION_MODELS``, ``mace_foundation_model(name)``
+   The released MACE models the route has been run with (read-only mapping
+   of name -> ``MaceFoundationModel``: ``url``, ``filename``, ``sha256``,
+   ``licence``, ``min_mace_torch``, ``heads``, ``default_head``,
+   ``replay_url``, ``use``, ``head(name=None)``); each
+   ``MaceFoundationHead`` has ``name`` (as the model file names it),
+   ``functional``, ``hubbard`` (``"mp"``, ``"none"`` or ``None``),
+   ``training_data`` and ``for_slabs``. See :ref:`mlip-foundation-models`.
+
+``recipe_level_of_theory(calculation)``, ``foundation_level_warnings(model, head, calculation, elements)``
+   ``(functional, uses_hubbard_u)`` of a QE, VASP or CP2K recipe (``None``
+   where it cannot be read), and the messages the MLIP builders turn into
+   warnings when the recipe's functional or +U differs from the training
+   data of the head (empty when nothing does).
 
 ``select_replay_structures(path, *, elements, min_atoms=2, max_atoms=128, validation_every=5)``
    Replay geometries (training, validation) and a record of the selection.

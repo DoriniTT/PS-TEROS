@@ -153,6 +153,14 @@ class MaceFineTuneConfig:
     ``lr_scheduler_gamma`` below 1 multiplies the learning rate by that factor
     after every pass (MACE's ``ExponentialLR``); the default 1.0 keeps it
     constant, as before.
+
+    ``foundation_name`` (optional) says which released model the file is, a
+    key of :data:`psteros.MACE_FOUNDATION_MODELS`: ``foundation_head`` must
+    then be one of its heads, ``foundation_model_sha256``, when given, its
+    checksum, and the MLIP builders warn when the DFT recipe differs from the
+    level of theory of that head (:func:`psteros.foundation_level_warnings`).
+    :meth:`for_foundation` fills in the head and the checksum. Without it
+    nothing is checked, as before.
     """
 
     foundation_model: str
@@ -173,10 +181,39 @@ class MaceFineTuneConfig:
     seeds: tuple[int, ...] = (20260920, 20260921, 20260922)
     default_dtype: str = "float64"
     lr_scheduler_gamma: float = 1.0
+    foundation_name: str | None = None
+
+    @classmethod
+    def for_foundation(
+        cls, name: str, foundation_model: str, *, head: str | None = None, **options: Any
+    ) -> "MaceFineTuneConfig":
+        """The recipe for the released model ``name`` of :data:`psteros.MACE_FOUNDATION_MODELS`.
+
+        ``foundation_model`` is the path of its file on the GPU computer;
+        ``head`` defaults to the model's default head and the checksum to the
+        release's (pass ``foundation_model_sha256=None`` to skip the check).
+        ``options`` are the other fields (``replay_file``, ``epochs``, ...).
+        """
+
+        from psteros.mace_models import mace_foundation_model
+
+        model = mace_foundation_model(name)
+        options.setdefault("foundation_model_sha256", model.sha256)
+        return cls(foundation_model, foundation_head=model.head(head).name, foundation_name=name, **options)
 
     def __post_init__(self) -> None:
         if not self.foundation_model or not self.foundation_head:
             raise ValueError("MaceFineTuneConfig needs foundation_model and foundation_head")
+        if self.foundation_name is not None:
+            from psteros.mace_models import mace_foundation_model
+
+            model = mace_foundation_model(self.foundation_name)
+            if self.foundation_head not in model.head_names:
+                raise ValueError(f"MaceFineTuneConfig: {model.name} has no head {self.foundation_head!r}; "
+                                 f"its heads are {list(model.head_names)}")
+            if self.foundation_model_sha256 is not None and self.foundation_model_sha256 != model.sha256:
+                raise ValueError(f"MaceFineTuneConfig: foundation_model_sha256 is not the checksum of {model.name} "
+                                 f"({model.sha256})")
         if self.replay and not self.replay_file:
             raise ValueError("MaceFineTuneConfig: replay=True needs replay_file")
         if not 1 <= self.replay_min_atoms <= self.replay_max_atoms:

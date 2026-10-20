@@ -122,6 +122,14 @@ from .mlip import (
     select_replay_structures,
     write_extxyz,
 )
+from .mace_models import (
+    MACE_FOUNDATION_MODELS,
+    MaceFoundationHead,
+    MaceFoundationModel,
+    foundation_level_warnings,
+    mace_foundation_model,
+    recipe_level_of_theory,
+)
 from .mlip_workflow import (
     MlipJobConfig,
     MlipRoute,
@@ -251,4 +259,10 @@ __all__ = [
     "MlipRoute",
     "free_energies_with_vibrations",
     "prepare_vibrations_job",
+    "MACE_FOUNDATION_MODELS",
+    "MaceFoundationHead",
+    "MaceFoundationModel",
+    "foundation_level_warnings",
+    "mace_foundation_model",
+    "recipe_level_of_theory",
 ]

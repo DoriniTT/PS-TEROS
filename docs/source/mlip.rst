@@ -155,6 +155,108 @@ static recipe. Every atom of a polar slab relaxes, as in the polar method, and
 MACE-relaxed slabs. For MACE the pseudo-hydrogens are hydrogen atoms; the
 fine-tune learns them from their DFT labels like any other atom.
 
+.. _mlip-foundation-models:
+
+Choosing the foundation model
+-----------------------------
+
+The route fine-tunes any MACE model file, MACE-MH-1 by default.
+``psteros.MACE_FOUNDATION_MODELS`` lists the released models that have been
+run through the route's fine-tune and relaxation jobs (every head below, with
+mace-torch 0.3.16), with the DFT each head was trained on:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 22 18 8 30
+
+   * - ``name``
+     - heads for solids and slabs
+     - trained on
+     - licence
+     - use it when
+   * - ``mace-mh-1``
+     - ``omat_pbe`` (default), ``mp_pbe_refit_add``, ``oc20_usemppbe``,
+       ``matpes_r2scan``
+     - PBE/PBE+U (OMat24, MPtrj), PBE (OC20), r2SCAN (MatPES)
+     - ASL
+     - the default: one model for bulk, surfaces and molecules
+   * - ``mace-omat-0-medium``, ``mace-omat-0-small``
+     - ``default``, ``omat_pbe``
+     - PBE/PBE+U (OMat24)
+     - ASL
+     - a single-head model; ``small`` is faster for large slabs
+   * - ``mace-matpes-pbe-0``
+     - ``default``
+     - PBE without +U (MatPES)
+     - ASL
+     - your DFT has no +U on transition-metal oxides
+   * - ``mace-matpes-r2scan-0``
+     - ``default``
+     - r2SCAN (MatPES)
+     - ASL
+     - your DFT is r2SCAN (or use ``mace-mh-1``, head ``matpes_r2scan``)
+   * - ``mace-mpa-0-medium``
+     - ``default``
+     - PBE/PBE+U (MPtrj, sAlex)
+     - MIT
+     - you need an MIT-licensed model
+   * - ``mace-mp-0b3-medium``, ``mace-mp-0-medium``
+     - ``default``, ``Default``
+     - PBE/PBE+U (MPtrj)
+     - MIT
+     - comparison with earlier work; weak on surfaces before fine-tuning
+
+``MaceFineTuneConfig.for_foundation(name, path, head=None, **options)`` builds
+the recipe of one of them: the model's default head unless ``head`` is given,
+and the release's checksum, which the job checks before training:
+
+.. code-block:: python
+
+   model = psteros.mace_foundation_model("mace-matpes-r2scan-0")
+   print(model.url, model.replay_url)   # download both; the model goes to the GPU computer
+   fine_tune = psteros.MaceFineTuneConfig.for_foundation(
+       "mace-matpes-r2scan-0", "/work/me/models/" + model.filename,
+       replay_file="matpes-r2scan-replay-data.extxyz")
+
+**Match the level of theory of your DFT.** The fine-tune fits one energy
+shift per element between your DFT and the model, which absorbs constant
+offsets (pseudopotentials, reference energies) but not a different functional
+or a different +U scheme; those the fine-tune must learn from your few labels.
+So with a named model (``for_foundation`` or ``foundation_name=...``) the
+builders warn (``psteros.foundation_level_warnings``) when:
+
+* the functional of the DFT recipe differs from the head's (read from the
+  recipe by ``psteros.recipe_level_of_theory``: VASP ``GGA``/``METAGGA``/
+  ``LHFCALC`` and the POTCAR family, QE ``input_dft`` or the pseudopotential
+  family, CP2K ``XC_FUNCTIONAL``), naming the heads trained on yours;
+* the head was trained with the Materials Project +U (on Co, Cr, Fe, Mn, Mo,
+  Ni, V or W in oxides and fluorides), the study has such an oxide or
+  fluoride and the recipe has no +U, or the head was trained without +U and
+  the recipe uses it;
+* the head was trained on molecules only (``omol``, ``spice_wB97M`` of
+  MACE-MH-1).
+
+A recipe whose functional cannot be read gives no warning. A different level
+of theory is allowed (fine-tuning across functionals works), the warning only
+tells you that the model starts further away.
+
+**Replay data.** The job relabels the replay geometries with the foundation
+model itself, so any replay file works with any model; ``model.replay_url``
+is the one of the model's release (the structures it was trained on).
+
+**Head names** are those of the model files, which do not always match the
+model cards: most single-head models call their head ``default``, MACE-OMAT-0
+small ``omat_pbe``, and MACE calls the head of the 2023 MACE-MP-0 file, which
+has none, ``Default``. The MACE-MH-1 file has ``mp_pbe_refit_add`` and no
+``rgd1_b3lyp`` head. A recipe without ``foundation_name`` is not checked, as
+before: any MACE model file and head work.
+
+In a zero-shot benchmark of cleavage energies (fixed DFT geometries,
+metallic compounds; `arXiv:2508.21663 <https://arxiv.org/abs/2508.21663>`_)
+the models trained on OMat24 do best among the MACE models (MACE-OMAT 7.8 %
+mean absolute percentage error, MACE-MPA 9.7 %, MACE-MP-0b3 25.2 %). After
+fine-tuning such differences shrink; choose by the level of theory first.
+
 .. _mlip-vibrations:
 
 Vibrations on the GPU

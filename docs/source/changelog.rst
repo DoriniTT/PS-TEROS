@@ -78,6 +78,14 @@ Recent Updates
   its log and torch's warnings to stderr, and aiida-shell fails a job whose stderr is not empty. The fine-tune,
   relaxation and vibrations jobs now write stderr into stdout by default (``redirect_stderr=False`` in
   ``extra_options`` keeps the old behaviour). No results change; graphs that failed this way can be built again
+* The other MACE foundation models on the MLIP route (see :ref:`mlip-foundation-models`): ``MACE_FOUNDATION_MODELS``
+  (MACE-MH-1 and its heads, MACE-OMAT-0, MACE-MATPES-PBE-0 and -r2SCAN-0, MACE-MPA-0, MACE-MP-0b3 and MACE-MP-0, with
+  their files, checksums, licences, heads as the files name them, level of theory and replay data),
+  ``mace_foundation_model``, ``MaceFoundationModel``, ``MaceFoundationHead``,
+  ``MaceFineTuneConfig.for_foundation`` and the new last field ``MaceFineTuneConfig(foundation_name=...)``; with a
+  named model the MLIP builders warn when the functional or the +U of the DFT recipe differs from the training data
+  of the head (``recipe_level_of_theory``, ``foundation_level_warnings``). Recipes without ``foundation_name`` are not
+  checked and give the same graphs, settings and results as before
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

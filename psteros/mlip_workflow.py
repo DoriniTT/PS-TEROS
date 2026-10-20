@@ -303,6 +303,13 @@ def _mlip_workgraph(
     _check_static(static, frame_labels)
     plain = {label: _pymatgen(label, structure) for label, structure in structures.items()}
     plain_extra = {label: _pymatgen(label, structure) for label, structure in extra.items()}
+    if fine_tune.foundation_name is not None:
+        from psteros.mace_models import foundation_level_warnings
+
+        present = {site.specie.symbol for item in (*plain.values(), *plain_extra.values()) for site in item}
+        for message in foundation_level_warnings(fine_tune.foundation_name, fine_tune.foundation_head,
+                                                 static.calculation, present):
+            warnings.warn(f"MaceFineTuneConfig: {message}", UserWarning, stacklevel=3)
     for label, sites in fixed_sites.items():
         if any(site < 0 or site >= len(plain[label]) for site in sites):
             raise ValueError(f"{label}: fixed_sites must be within [0, {len(plain[label])})")
@@ -361,12 +368,15 @@ def _mlip_workgraph(
     # MACE logs to stderr, and aiida-shell fails a job whose stderr is not empty (exit 410): merge it into stdout
     execution = {"redirect_stderr": True, **job.execution.scheduler_options()}
     deployed = f"seed{fine_tune.seeds[0]}"
+    recipe = json.loads(json.dumps(asdict(fine_tune)))
+    if recipe["foundation_name"] is None:  # left out: the settings of the graph stay as they were
+        del recipe["foundation_name"]
     final: dict[str, Any] = {}
     for round_ in range(active_learning_rounds + 1):
         name = f"{static.name}_round{round_}"
         options = {
             "backend": static.backend, "name": name, "device": job.device, "metallic_bulk": metallic_bulk,
-            "frames": list(labels_of_frames), "fine_tune": json.loads(json.dumps(asdict(fine_tune))),
+            "frames": list(labels_of_frames), "fine_tune": recipe,
             "replay_selection": replay_record,
         }
         if not metal_check:

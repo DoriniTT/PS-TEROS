@@ -186,6 +186,31 @@ CP2K) on the MACE geometries with the same fixed sites, and
 `route.analyse(graph, temperature_k=T, vibrations=psteros.read_vibrations(check, labels))`
 uses its modes instead. Polar slabs have no vibrations yet.
 
+## Other MACE models
+
+MACE-MH-1 is the default, but any MACE model file works.
+`psteros.MACE_FOUNDATION_MODELS` lists the released ones that have been run
+through the route, with their heads, the DFT they were trained on, licence,
+download and replay data. Choose by the level of theory of your DFT:
+
+| Your DFT | Model (head) |
+|---|---|
+| PBE, with the Materials Project +U on TM oxides/fluorides, or no such compound | `mace-mh-1` (`omat_pbe`), `mace-omat-0-medium` |
+| PBE without +U on TM oxides/fluorides | `mace-matpes-pbe-0` |
+| r2SCAN | `mace-mh-1` (`matpes_r2scan`), `mace-matpes-r2scan-0` |
+| an MIT-licensed model is required | `mace-mpa-0-medium` |
+
+```python
+model = psteros.mace_foundation_model("mace-matpes-pbe-0")   # model.url, model.replay_url
+fine_tune = psteros.MaceFineTuneConfig.for_foundation(
+    "mace-matpes-pbe-0", "/work/me/models/" + model.filename, replay_file="matpes-pbe-replay-data.xyz")
+```
+
+With a named model the builders warn when the DFT recipe's functional or +U
+differs from the head's training data: the per-element energy shifts of the
+fine-tune absorb constant offsets, not a different functional. Details, and
+the head names of each file, in [`docs/source/mlip.rst`](source/mlip.rst).
+
 ## Rules the route enforces
 
 * **The right electron count.** Hand-cut slabs need a metallic bulk (the first
@@ -223,6 +248,7 @@ uses its modes instead. Polar slabs have no vibrations yet.
   `psteros.build_mlip_surface_workgraph`, `psteros.read_mlip_energies`,
   `psteros.read_mlip_results`, `psteros.MaceFineTuneConfig`,
   `psteros.MlipJobConfig`, `psteros.free_energies_with_vibrations`,
-  `psteros.prepare_vibrations_job`: see
+  `psteros.prepare_vibrations_job`, `psteros.MACE_FOUNDATION_MODELS`,
+  `psteros.foundation_level_warnings`: see
   [`docs/source/mlip.rst`](source/mlip.rst) and [`docs/source/api.rst`](source/api.rst).
 * The flowchart: `python docs/images/mlip_route.py`.

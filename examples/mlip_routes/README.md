@@ -11,6 +11,7 @@ slabs with the right electron count, so these examples are semiconductors.
 | `sno2_charge_neutral_mlip.py build` | The route as one WorkGraph with VASP statics; `--vibrations` adds the model's harmonic modes (large bulk supercells, no extra DFT). |
 | `sno2_charge_neutral_mlip.py read` | The phase diagram from the final VASP energies; `--temperature T` uses the free energies. |
 | `gaas_polar_mlip.py show / build / read` | The polar GaAs (111) and (-1-1-1) faces on a pseudo-hydrogen passivated bottom (`PolarSurfaceStudy`); `read` gives the absolute surface energies and the bottom check of the MACE-relaxed slabs. |
+| `choose_mace_model.py list / check` | The MACE foundation models the route knows (heads, level of theory, licence, replay data) and, for a VASP recipe and the elements of a study, which heads match it; no AiiDA needed. |
 
 Each slab of the SnO₂ example keeps a centre of whole SnO₂ units in place (`fixed_half_width_angstrom` per slab):
 the vibrations count that frozen centre as bulk. Polar slabs relax every atom, as in the polar method.
