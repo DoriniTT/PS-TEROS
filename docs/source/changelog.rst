@@ -105,6 +105,12 @@ Recent Updates
   environment from a tar unpacked once per node on local disk, for clusters whose shared filesystem makes the imports
   of torch and the MLIP packages take minutes. The NequIP job runs ``nequip-train`` and ``nequip-package`` as modules of
   its own Python, so the environment can live anywhere
+* Bug fix (**results change**): on the MLIP route the replay structures of a study whose hydrogens are all
+  pseudo-hydrogens (every ``PolarSurfaceStudy`` of a compound without hydrogen) were chosen with hydrogen among the
+  elements, so structures with real hydrogen (GaH, H2, AsH, ... labelled by the foundation model) trained the same
+  species as the pseudo-hydrogens, which the models see as hydrogen. Such studies now replay structures without
+  hydrogen. MLIP-route results of polar studies (``MlipRoute(PolarSurfaceStudy(...))``, or hand-built slabs with
+  pseudo-hydrogen kinds) should be repeated; studies without pseudo-hydrogens are unchanged
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

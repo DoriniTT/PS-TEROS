@@ -152,8 +152,13 @@ faces with VASP (the pseudo-hydrogen POTCARs); use
 ``study.potential_mapping(...)`` and ``study.vasp_overrides("static")`` in the
 static recipe. Every atom of a polar slab relaxes, as in the polar method, and
 ``analyse`` returns the ``PolarStudyResult`` with the bottom check of the
-MACE-relaxed slabs. For MACE the pseudo-hydrogens are hydrogen atoms; the
-fine-tune learns them from their DFT labels like any other atom.
+MACE-relaxed slabs. For the model the pseudo-hydrogens are hydrogen atoms
+(the models see elements, not kinds); the fine-tune learns them from their DFT
+labels. Each pseudo-hydrogen kind passivates one element (on GaAs, ``H0p75``
+the As atoms and ``H1p25`` the Ga atoms), so the model tells the kinds apart
+by their neighbour. The replay structures of such a study hold no hydrogen:
+their foundation labels would teach the same species the chemistry of real
+hydrogen.
 
 .. _mlip-foundation-models:
 

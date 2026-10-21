@@ -156,8 +156,9 @@ result = route.analyse(orm.load_node(graph.pk))                # PolarStudyResul
 ```
 
 Every atom of a polar slab relaxes, as in the polar method; the bottom check
-then compares the MACE-relaxed bottoms. For MACE the pseudo-hydrogens are
-hydrogen atoms; the fine-tune learns them from their DFT labels.
+then compares the MACE-relaxed bottoms. For the model the pseudo-hydrogens
+are hydrogen atoms; the fine-tune learns them from their DFT labels, and the
+replay structures of a passivated study hold no hydrogen.
 
 Complete scripts: [`examples/mlip_routes/`](../examples/mlip_routes/).
 

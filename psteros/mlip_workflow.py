@@ -41,6 +41,7 @@ electron counting and need no check.
 from __future__ import annotations
 
 import json
+import re
 import tempfile
 import warnings
 from dataclasses import asdict, dataclass, field, replace
@@ -108,6 +109,44 @@ def _pymatgen(label: str, structure: Any) -> Any:
     if not isinstance(structure, Structure):
         raise TypeError(f"{label}: give a pymatgen Structure, a StructureData or its PK (known when the graph is built)")
     return Structure(structure.lattice, structure.species, structure.frac_coords)
+
+
+_PSEUDO_HYDROGEN_KIND = re.compile(r"H\d+p\d+")  # H0p75, H1p25, ...: the kinds of psteros.PseudoHydrogen
+
+
+def _hydrogen_kinds(structure: Any) -> set[str]:
+    """The hydrogen kinds of a structure: its pseudo-hydrogen kind names (``H0p75``, ...) and ``"H"`` for hydrogen.
+
+    ``structure`` is a pymatgen ``Structure`` (kinds in the ``kind_name`` site property), a ``StructureData`` or its
+    PK. Hydrogen kinds with any other name (``H``, ``H1``, ...) are hydrogen.
+    """
+
+    if isinstance(structure, int):
+        from aiida import orm
+
+        structure = orm.load_node(structure)
+    if hasattr(structure, "get_kind"):
+        names = [site.kind_name for site in structure.sites if structure.get_kind(site.kind_name).symbol == "H"]
+    else:
+        kinds = structure.site_properties.get("kind_name") or [None] * len(structure)
+        names = [kind for site, kind in zip(structure, kinds) if site.specie.symbol == "H"]
+    return {name if name and _PSEUDO_HYDROGEN_KIND.fullmatch(name) else "H" for name in names}
+
+
+def _replay_elements(structures: Mapping[str, Any], plain: Sequence[Any]) -> list[str]:
+    """The elements that the replay structures may hold: those of the study, without hydrogen when every hydrogen
+    of ``structures`` is a pseudo-hydrogen.
+
+    The models see elements, not kinds, so a pseudo-hydrogen is hydrogen for them; replay structures with real
+    hydrogen, labelled by the foundation model, would train that species on hydrogen chemistry that no structure of
+    a passivated study has. ``plain`` are the structures as plain pymatgen structures.
+    """
+
+    elements = {site.specie.symbol for item in plain for site in item}
+    hydrogen = set().union(*(_hydrogen_kinds(structure) for structure in structures.values()))
+    if hydrogen and "H" not in hydrogen:
+        elements.discard("H")
+    return sorted(elements)
 
 
 def _check_static(static: SurfaceWorkflowConfig, labels: Sequence[str]) -> None:
@@ -360,7 +399,7 @@ def _mlip_workgraph(
     if fine_tune.replay:
         from ase.io import write
 
-        elements = sorted({site.specie.symbol for item in (*plain.values(), *plain_extra.values()) for site in item})
+        elements = _replay_elements({**structures, **extra}, [*plain.values(), *plain_extra.values()])
         train, valid, replay_record = select_replay_structures(
             fine_tune.replay_file, elements=elements, min_atoms=fine_tune.replay_min_atoms,
             max_atoms=fine_tune.replay_max_atoms, validation_every=fine_tune.replay_validation_every,
