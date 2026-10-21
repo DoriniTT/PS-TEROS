@@ -135,6 +135,10 @@ Recent Updates
   ``prepare_forces_job``). Pure-Python layer: ``phonopy_displacements``, ``phonopy_modes``, ``PhonopyDisplacements``,
   ``PhononModes``; the stability check ``read_phonon_stability`` / ``PhononStability`` lists the imaginary modes
   along q. Leaving ``phonopy`` out keeps the Γ-point modes, graphs and outputs unchanged
+* Docs: the recipe of the displaced DFT calculations (:ref:`vibrations-step-1`): force constants need a cutoff
+  well above ``ENMAX`` and ``PREC = Accurate`` (VASP), also for the DFT check of a model's vibrations on the MLIP
+  route; a recipe that is good enough for energies can shift the modes by several cm^-1, which does not cancel in
+  gamma_vib
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

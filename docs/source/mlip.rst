@@ -438,7 +438,9 @@ modes of the model have not yet been compared with DFT finite differences for
 a series of systems, so check a few: ``route.dft_vibrations(graph, static)``
 builds the finite-difference graph of ``build_vibrations_workgraph`` on the
 MACE geometries with the same fixed sites (QE, VASP, and here also CP2K with
-``RUN_TYPE ENERGY_FORCE``), and
+``RUN_TYPE ENERGY_FORCE``). Give it a tight recipe (cutoff, precision, see
+:ref:`vibrations-step-1`), not a cheaper one that is good enough for the
+energies: a loose reference can shift the modes by more than a good model's error. Then
 ``route.analyse(graph, temperature_k=T, vibrations=psteros.read_vibrations(check, labels))``
 uses those modes instead. ``read_vibrations`` reads both graphs.
 Polar slabs have no vibrations yet (their pseudo chemical potentials are 0 K
@@ -457,8 +459,8 @@ the gas references keep their Γ-point modes. The outputs keep their names
 (``<label>_mlip_vibrations``, ``mlip_vibrations_results``), and
 ``read_phonon_stability(graph, labels)`` lists the imaginary modes along q.
 ``route.dft_vibrations(graph, static, vibrations)`` with the same
-``PhonopyConfig`` (smaller supercells are cheaper) checks the model's phonons
-with DFT:
+``PhonopyConfig`` (smaller supercells are cheaper; ``plus_minus=True`` and the
+tight recipe of :ref:`vibrations-step-1`) checks the model's phonons with DFT:
 
 .. code-block:: python
 

@@ -183,7 +183,9 @@ statics. `MlipSurfaceStudy` takes the same options.
 The model's modes have not yet been compared with DFT for a series of
 systems, so check a few: `route.dft_vibrations(graph, static)` builds the DFT
 finite-difference graph of `build_vibrations_workgraph` (QE, VASP, and here also
-CP2K) on the MACE geometries with the same fixed sites, and
+CP2K) on the MACE geometries with the same fixed sites (give it a tight recipe:
+a cutoff well above ENMAX and `PREC = Accurate`, since force constants are more
+sensitive to the recipe than energies), and
 `route.analyse(graph, temperature_k=T, vibrations=psteros.read_vibrations(check, labels))`
 uses its modes instead. Polar slabs have no vibrations yet.
 

@@ -57,13 +57,25 @@ minimum. ``imaginary_modes="drop"`` leaves them out, and
 ``low_frequency_cutoff_cm1`` raises very soft modes to a cutoff (they dominate
 the entropy and are the least converged).
 
+.. _vibrations-step-1:
+
 Step 1: the vibrations graph
 ----------------------------
 
 Run it after the relaxations, on the relaxed structures, with the static
-recipe of the energies and a tight electronic convergence (VASP
-``EDIFF <= 1e-7``, QE ``conv_thr <= 1e-10``). The ``fixed_sites`` of the
-overrides select the sites that are *not* displaced:
+recipe of the energies (converged, see below) and a tight electronic
+convergence (VASP ``EDIFF <= 1e-7``, QE ``conv_thr <= 1e-10``). The ``fixed_sites`` of the
+overrides select the sites that are *not* displaced.
+
+**The recipe of the displaced calculations.** Force constants are more
+sensitive to the recipe than total energies are. Use a plane-wave cutoff well
+above the largest ``ENMAX`` of the POTCARs (QE: a converged ``ecutwfc`` and
+``ecutrho``) and, with VASP, ``PREC = Accurate`` with ``ADDGRID = .TRUE.``. A
+cheaper recipe that is good enough for energies can shift the modes by several
+cm\ :sup:`-1`, by different amounts for surface and bulk atoms, and that error
+does not cancel in :math:`\gamma_\text{vib}`. The same holds for a DFT check
+of a model's modes (``dft_vibrations`` of the MLIP route); with phonopy,
+``PhonopyConfig(plus_minus=True)`` adds central differences.
 
 .. code-block:: python
 
@@ -71,7 +83,8 @@ overrides select the sites that are *not* displaced:
        backend="vasp",
        calculation=psteros.VaspCalculationConfig(
            code_label="vasp@my-cluster",
-           incar={"ENCUT": 520, "EDIFF": 1e-7, "ISMEAR": 0, "SIGMA": 0.05, "IBRION": -1, "NSW": 0},
+           incar={"ENCUT": 520, "PREC": "Accurate", "ADDGRID": True, "EDIFF": 1e-7, "ISMEAR": 0, "SIGMA": 0.05,
+                  "IBRION": -1, "NSW": 0},
            potential_mapping={"Sn": "Sn_d"},
        ),
        execution=psteros.ExecutionPolicy(max_concurrent_jobs=4),  # 1 by default
@@ -219,7 +232,8 @@ distortion that the cell of the calculation could not follow.
 symmetry needs a few tens of displacements, so the DFT graph is expensive; on
 the MLIP route the GPU job costs seconds. Converge ``supercell_length_angstrom``
 and ``mesh_length_angstrom`` with the model before relying on a number, and
-check the model against DFT in smaller supercells.
+check the model against DFT in smaller supercells, with the tight recipe of
+:ref:`vibrations-step-1` and ``plus_minus=True``.
 
 **Without AiiDA.** ``phonopy_displacements(structure, supercell)`` gives the
 displacements (``PhonopyDisplacements``: the undisplaced and displaced
