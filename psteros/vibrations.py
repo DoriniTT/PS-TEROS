@@ -18,8 +18,9 @@ of bulk cells in the frozen region (it must have the bulk stoichiometry).
 
 Frequencies come from Gamma-point finite differences (see
 :func:`psteros.build_vibrations_workgraph`); a bulk is calculated in a
-Gamma-only supercell.  A future implementation may add the bulk vibrations
-from phonopy on a q-point mesh.
+Gamma-only supercell.  Phonons on a q-point mesh (phonopy) are in
+:mod:`psteros.phonons`: their mesh frequencies are a ``HarmonicVibrations``
+whose ``supercell_size`` is the number of q-points.
 
 Nothing here needs an AiiDA profile.
 """

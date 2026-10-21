@@ -48,8 +48,8 @@ reference (the metal for an oxide), the poor limit becomes
 
 **Frequencies.** The modes come from Γ-point central finite differences of the
 forces. A bulk is calculated in a Γ-only supercell, whose 3 acoustic modes at
-Γ are removed. A future implementation may add the bulk vibrations from
-phonopy on a q-point mesh. A molecule loses its 5 (linear) or 6 rotational and
+Γ are removed. Phonons on a q-point mesh are the opt-in phonopy mode
+(:ref:`vibrations-phonopy`). A molecule loses its 5 (linear) or 6 rotational and
 translational zero modes.
 
 Imaginary modes raise an error, because they mean the structure is not at a
@@ -128,6 +128,107 @@ from frequencies calculated elsewhere:
 The complete VASP example is ``examples/vasp_surface_phase_diagram``
 (``vibrations.py``, then ``phase_diagram.py --vib-pk ... --temperature ...``).
 
+.. _vibrations-phonopy:
+
+Phonons on a q-point mesh (phonopy)
+-----------------------------------
+
+A Γ-point calculation sees a crystal only at the q-points commensurate with
+its cell. In the small cells of surface calculations this misses most of the
+acoustic branches, which carry much of the vibrational entropy, so the bulk
+:math:`F_\text{vib}(T)`, and with it the vibrational change of γ, is not
+converged (see the SnO\ :sub:`2` example under :ref:`vibrations-limits`).
+``VibrationsConfig(phonopy=psteros.PhonopyConfig(...))`` replaces the Γ-point
+modes of every structure that is not a molecule by phonons on a q-point mesh
+(``pip install "psteros[phonopy]"``; leave it out and every result is as
+before):
+
+* **Force constants.** phonopy displaces one atom at a time in a supercell
+  (its symmetry-reduced set, sites of one element with different kind names
+  kept apart); one static runs per displacement, plus one of the undisplaced
+  supercell, whose forces are subtracted from the others. That subtraction
+  removes the residual forces of a geometry that is not the minimum of the
+  method that gives the forces (DFT forces at an MLIP geometry).
+* **Free energy.** The force constants are interpolated onto a q-point mesh of
+  :math:`N_q` points, and the free energy per input cell is the mesh average
+
+  .. math::
+
+     F_\text{vib}(T) = \frac{1}{N_q} \sum_{\mathbf{q}, \nu} \left[ \frac{h\nu_{\mathbf{q}\nu}}{2}
+     + k_B T \ln\left(1 - e^{-h\nu_{\mathbf{q}\nu} / k_B T}\right) \right]
+
+  The mesh frequencies go into a ``HarmonicVibrations`` with
+  ``supercell_size`` :math:`= N_q`, so ``read_vibrations``,
+  ``solid_free_energy_ev`` and ``free_energies_with_vibrations`` work as
+  before. The mesh is shifted by half a step on every axis with more than one
+  point: Γ, whose three acoustic modes are zero, is not sampled, and
+  :math:`F_\text{vib}` converges much faster with the mesh than on a
+  Γ-centred one (``shifted_mesh=False``, which leaves the 3 acoustic modes at
+  Γ out).
+* **Slabs vibrate as a whole** (full-slab phonons): every atom, in an in-plane
+  supercell :math:`(n_a, n_b, 1)` with a 2D mesh :math:`(m_a, m_b, 1)`, the
+  vacuum along :math:`c`. No region is counted as bulk; the frozen centre of a
+  relaxation is only a constraint of that relaxation. For a stoichiometric
+  slab of :math:`n` bulk cells
+
+  .. math::
+
+     \gamma_\text{vib}(T) = \frac{F_\text{vib}(\text{slab}) - n\,F_\text{vib}(\text{bulk})}{2A}
+
+  which needs slabs thick enough for the centre to vibrate like the bulk:
+  check it with one thicker slab.
+* **Molecules** keep their Γ-point modes (5 or 6 zero modes removed).
+
+.. code-block:: python
+
+   vibrations = psteros.VibrationsConfig(
+       displacement_angstrom=0.01,
+       molecules=("o2",),
+       phonopy=psteros.PhonopyConfig(
+           supercell_length_angstrom=10.0,  # faces of every supercell at least 10 A apart
+           mesh_length_angstrom=40.0,       # m_i = round(40 A |b_i|) q-points per axis
+           slabs=("slab_o",),               # in-plane supercell, 2D mesh
+       ),
+   )
+   graph = psteros.build_vibrations_workgraph(
+       {"slab_o": relaxed_slab, "sno2_bulk": relaxed_bulk, "alpha_sn": relaxed_metal, "o2": relaxed_o2},
+       static, vibrations, submit=True,
+   )
+
+The displacements are generated when the graph is built, so the graph holds
+one static per displacement (``<label>_vib_p<i>`` and ``<label>_vib_perfect``)
+and one calcfunction per label. ``PhonopyConfig.supercells`` and
+``PhonopyConfig.meshes`` set them per label instead of the lengths (a slab's
+with 1 along :math:`c`); ``plus_minus=True`` adds the opposite of every
+displacement (central differences); ``symprec`` is phonopy's symmetry
+tolerance. ``displaced_sites`` and the Γ-only ``supercells`` of
+``VibrationsConfig`` cannot be combined with phonopy (it displaces every atom
+of its own supercell). A slab listed in ``slabs`` needs a vacuum gap along
+:math:`c`; a structure with one that is not listed gets a warning.
+
+**Stability.** Every ``<label>_vibrations`` of phonopy also holds the
+frequencies searched for imaginary modes on the mesh and at the q-points
+commensurate with the supercell (where the force constants are exact, Γ
+included): ``psteros.read_phonon_stability(graph, labels)`` returns a
+``PhononStability`` per label (``stable``, ``imaginary``,
+``lowest_frequency_cm1``, ``summary()``). An imaginary mode at some q means
+the structure is not a minimum: a saddle point of the relaxation, or a
+distortion that the cell of the calculation could not follow.
+
+**Cost.** A supercell of 10 Å holds 100 to 300 atoms, and a slab of low
+symmetry needs a few tens of displacements, so the DFT graph is expensive; on
+the MLIP route the GPU job costs seconds. Converge ``supercell_length_angstrom``
+and ``mesh_length_angstrom`` with the model before relying on a number, and
+check the model against DFT in smaller supercells.
+
+**Without AiiDA.** ``phonopy_displacements(structure, supercell)`` gives the
+displacements (``PhonopyDisplacements``: the undisplaced and displaced
+supercells as pymatgen structures), and ``phonopy_modes(structure,
+displacements, forces, reference_forces_ev_per_angstrom=..., mesh=...)`` the
+modes (``PhononModes``: ``vibrations``, ``stability``) from forces computed in
+any way. ``examples/vibrations_phonopy/cu100_emt.py`` does it with ASE's EMT
+potential.
+
 On the MLIP route
 -----------------
 
@@ -142,7 +243,10 @@ with ``free_energies_with_vibrations`` (solids ``E + F_vib(T)``, the frozen
 region counted as bulk; gas references ``E + ZPE``). Because the model is
 cheap, a bulk supercell much larger than the DFT one costs little. To check
 the model's modes, ``dft_vibrations`` builds this page's graph on the MACE
-geometries (with QE, VASP or CP2K).
+geometries (with QE, VASP or CP2K). ``VibrationsConfig(phonopy=...)``
+works on the route too: the daemon generates phonopy's displacements of each
+relaxed supercell, one GPU job gives their forces, and the slabs of the study
+vibrate as a whole (:ref:`vibrations-phonopy`).
 
 Imaginary modes and the phase diagram
 -------------------------------------
@@ -208,17 +312,20 @@ decides whether such a graph finishes:
   ``harmonic_modes`` calcfunction again in a small graph;
   ``validation/ternary_lovelace/rerun_modes.py`` does that and keeps the provenance.
 
+.. _vibrations-limits:
+
 Limits
 ------
 
 
-* Harmonic, Γ-point only. Bulk dispersion is sampled by the size of the
-  supercell (no q-point mesh yet). A small supercell has no acoustic region and
+* Harmonic. Without phonopy, Γ-point only: bulk dispersion is sampled by the
+  size of the supercell. A small supercell has no acoustic region and
   overestimates the free energy of the bulk against that of a slab's soft
   surface atoms: in the SnO\ :sub:`2`\ (110) test a 1x1x2 bulk gave a
   vibrational change of the surface energy of -26 meV/Å\ :sup:`2` at 900 K for
   the stoichiometric slab, a value that has to be checked against a larger
-  supercell before it is used.
+  supercell before it is used. The phonopy mode (:ref:`vibrations-phonopy`)
+  samples a q-point mesh instead. No thermal expansion (quasi-harmonic) yet.
 * The frozen region of a slab must be bulk-like. Polar slabs with a
   pseudo-hydrogen passivated bottom are not covered yet: their pseudo chemical
   potentials are 0 K energies, so leave them at 0 K.

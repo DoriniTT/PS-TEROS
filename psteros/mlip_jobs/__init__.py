@@ -2,13 +2,14 @@
 
 ``finetune.py`` fine-tunes a MACE foundation model (optionally with a replay head), ``uma_finetune.py`` a UMA
 model of fairchem and ``nequip_finetune.py`` a NequIP or Allegro package; ``relax.py`` relaxes structures with one or more models; ``vibrations.py`` gives the forces of
-displaced structures for harmonic modes. The UMA and NequIP scripts need fairchem-core or nequip instead of mace-torch.
+displaced structures for harmonic modes and ``forces.py`` those of a list of single-atom displacements (the phonopy
+supercells). The UMA and NequIP scripts need fairchem-core or nequip instead of mace-torch.
 :func:`script_path` gives the file of each, to copy into a job.
 """
 
 from pathlib import Path
 
-SCRIPTS = ("finetune.py", "relax.py", "vibrations.py", "uma_finetune.py", "nequip_finetune.py")
+SCRIPTS = ("finetune.py", "relax.py", "vibrations.py", "uma_finetune.py", "nequip_finetune.py", "forces.py")
 
 
 def script_path(name: str) -> Path:

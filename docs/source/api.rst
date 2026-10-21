@@ -692,12 +692,44 @@ See :doc:`vibrations` for the model and a worked example.
    QE static recipe: 6 static calculations per displaced site, at most
    ``static.execution.max_concurrent_jobs`` at once. The recipe's
    ``fixed_sites`` are not displaced. Outputs ``<label>_vibrations``.
-``VibrationsConfig(displacement_angstrom=0.01, displaced_sites={}, supercells={}, molecules=())``
+``VibrationsConfig(displacement_angstrom=0.01, displaced_sites={}, supercells={}, molecules=(), phonopy=None)``
    Finite-difference step, explicit sites per label, Γ-only supercells per
-   label (bulk) and the labels of gas molecules.
+   label (bulk), the labels of gas molecules and, opt-in, phonons on a
+   q-point mesh (``PhonopyConfig``, below).
 ``read_vibrations(graph, labels, *, imaginary_modes="raise", low_frequency_cutoff_cm1=None)``
    ``{label: HarmonicVibrations}`` from a finished vibrations graph, or from
    the ``<label>_mlip_vibrations`` of an MLIP graph built with ``vibrations``.
+
+.. _api-phonopy:
+
+.. index:: PhonopyConfig, phonopy_displacements, phonopy_modes, read_phonon_stability
+
+``PhonopyConfig(supercell_length_angstrom=10.0, mesh_length_angstrom=40.0, slabs=(), supercells={}, meshes={}, shifted_mesh=True, plus_minus=False, symprec=1e-5)``
+   Opt-in phonons on a q-point mesh (``pip install "psteros[phonopy]"``):
+   every structure that is not a molecule gets the modes of phonopy force
+   constants on a mesh (shifted by half a step unless ``shifted_mesh=False``),
+   a slab of ``slabs`` as a whole in an in-plane supercell with a 2D mesh.
+   Supercells ``n_i = ceil(L / w_i)`` (``w_i`` the cell width) and meshes
+   ``m_i = round(L |b_i|)`` unless given per label; ``plus_minus`` adds
+   ``-d`` to every displacement, ``symprec`` is phonopy's tolerance (Å).
+   ``phonopy=None`` keeps the Γ-point modes. See :ref:`vibrations-phonopy`.
+``phonopy_displacements(structure, supercell, *, displacement_angstrom=0.01, plus_minus=False, symprec=1e-5)``
+   phonopy's symmetry-reduced displacements of a pymatgen structure
+   (``PhonopyDisplacements``: ``supercell``, ``lattice_angstrom``,
+   ``positions_angstrom``, ``unit_sites``, ``displacements``, and
+   ``structures(structure)``, the undisplaced and displaced supercells).
+``phonopy_modes(structure, displacements, forces_ev_per_angstrom, *, reference_forces_ev_per_angstrom, mesh, shifted_mesh=True, symprec=1e-5, masses_amu=None, imaginary_modes="raise", low_frequency_cutoff_cm1=None)``
+   Force constants from the forces of the displacements (the forces of the
+   undisplaced supercell subtracted) and the modes on the mesh
+   (``PhononModes``: ``vibrations``, a ``HarmonicVibrations`` with
+   ``supercell_size`` the number of q-points, and ``stability``).
+``read_phonon_stability(graph, labels)``
+   ``{label: PhononStability}`` of a graph built with phonopy: the imaginary
+   modes on the mesh and at the q-points commensurate with the supercell
+   (``stable``, ``imaginary``, ``lowest_frequency_cm1``, ``q_points``, ``summary()``).
+``prepare_forces_job(directory, structures, model, displacements, *, default_dtype="float64", device="cuda", family="mace")``
+   The folder of one GPU job that gives a model's forces of each structure
+   undisplaced and after each single-atom displacement (``forces.py``).
 
 .. _api-ev-per-angstrom2-to-j-per-m2:
 

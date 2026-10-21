@@ -3,8 +3,8 @@
 ``psteros.ChargeNeutralSurfaceStudy`` cuts the charge-neutral (110) slabs and names every calculation;
 ``psteros.MlipRoute`` runs them on the MLIP route (docs/MLIP_SURFACES.md): VASP statics label a replay fine-tune of
 MACE-MH-1, the model relaxes the slabs on a GPU, one active-learning round, a VASP static at each relaxed geometry.
-With ``--vibrations`` the model also gives the harmonic modes of every structure, and ``read --temperature T`` draws
-the diagram with free energies at T.
+With ``--vibrations`` the model also gives the harmonic modes of every structure (``--phonopy``: phonons on a q-point
+mesh, the slabs vibrating as a whole), and ``read --temperature T`` draws the diagram with free energies at T.
 
 The bulk, alpha-Sn and O2 must be relaxed with the same VASP settings first (``build_relax_static_workgraph``); the
 built-in starting structures used here are not. Converge the VASP settings for your system.
@@ -13,11 +13,13 @@ Usage
 -----
     python sno2_charge_neutral_mlip.py show                      # slabs, fixed sites, DFT statics, GPU jobs; no AiiDA
     python sno2_charge_neutral_mlip.py build --profile P --code vasp@cpu-cluster --mace-code mace-python@gpu-cluster \\
-        --model /path/on/gpu/mace-mh-1.model --replay replay-data-mh-1-omat-pbe.xyz [--vibrations] [--error-bars] [--submit]
-    python sno2_charge_neutral_mlip.py read --profile P --pk <PK> [--temperature 800] [--error-bars]
+        --model /path/on/gpu/mace-mh-1.model --replay replay-data-mh-1-omat-pbe.xyz [--vibrations | --phonopy] \
+        [--error-bars] [--submit]
+    python sno2_charge_neutral_mlip.py read --profile P --pk <PK> [--temperature 800] [--error-bars] [--phonopy]
 
 ``--error-bars`` adds the model's Hessian job to the graph and, when reading, prints how much each gamma would change
-if DFT finished the relaxations (``MlipRoute.gamma_error_bars``).
+if DFT finished the relaxations (``MlipRoute.gamma_error_bars``). ``--phonopy`` needs phonopy where the AiiDA daemon
+runs (``pip install "psteros[phonopy]"``); when reading, it prints the stability check of the phonons.
 """
 
 from __future__ import annotations
@@ -91,6 +93,11 @@ def vibrations() -> psteros.VibrationsConfig:
     return psteros.VibrationsConfig(supercells={"bulk": (3, 3, 4), "ref_Sn": (2, 2, 2)})
 
 
+def phonons() -> psteros.VibrationsConfig:
+    # phonopy supercells of at least 12 A and a q-point mesh; the slabs vibrate as a whole, the O2 keeps its Gamma modes
+    return psteros.VibrationsConfig(phonopy=psteros.PhonopyConfig(supercell_length_angstrom=12.0))
+
+
 def show(args) -> None:
     print(route())
 
@@ -99,8 +106,9 @@ def build(args) -> None:
     static, fine_tune, job = recipes(args)
     sno2 = route()
     print(sno2)
-    graph = sno2.build(static, fine_tune, job=job, vibrations=vibrations() if args.vibrations else None,
-                       relaxation_estimate=args.error_bars, submit=args.submit)
+    modes = phonons() if args.phonopy else vibrations() if args.vibrations else None
+    graph = sno2.build(static, fine_tune, job=job, vibrations=modes, relaxation_estimate=args.error_bars,
+                       submit=args.submit)
     print(graph.name, len(graph.tasks), "tasks", f"submitted as {graph.pk}" if args.submit else "not submitted")
 
 
@@ -115,6 +123,10 @@ def read(args) -> None:
     if args.error_bars:  # how much each gamma would change if DFT finished the relaxations (built with --error-bars)
         for bar in route().gamma_error_bars(orm.load_node(args.pk)).values():
             print(bar.summary())
+    if args.phonopy:  # imaginary modes along q (built with --phonopy)
+        solids = [label for label in route().structures if label not in route().molecule_labels]
+        for label, stability in psteros.read_phonon_stability(orm.load_node(args.pk), solids).items():
+            print(f"{label}: {stability.summary()}")
 
 
 def main() -> None:
@@ -125,7 +137,9 @@ def main() -> None:
     for name in ("--profile", "--code", "--mace-code", "--model", "--replay"):
         first.add_argument(name, required=True)
     first.add_argument("--queue", default="gpu")
-    first.add_argument("--vibrations", action="store_true")
+    modes = first.add_mutually_exclusive_group()
+    modes.add_argument("--vibrations", action="store_true")
+    modes.add_argument("--phonopy", action="store_true")
     first.add_argument("--error-bars", action="store_true")
     first.add_argument("--submit", action="store_true")
     second = sub.add_parser("read")
@@ -133,6 +147,7 @@ def main() -> None:
     second.add_argument("--pk", type=int, required=True)
     second.add_argument("--temperature", type=float, default=None)
     second.add_argument("--error-bars", action="store_true")
+    second.add_argument("--phonopy", action="store_true")
     args = parser.parse_args()
     if args.phase != "show":
         from aiida import load_profile

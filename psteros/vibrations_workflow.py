@@ -14,8 +14,14 @@ same graph with CP2K too.
 The sites kept fixed in the relaxation (``CalculationOverride.fixed_sites``
 of the recipe) are not displaced: a slab with a frozen centre gets the
 partial Hessian of its free sites.  A bulk is calculated in a Gamma-only
-supercell (``VibrationsConfig.supercells``).  A future implementation may
-add the bulk vibrations from phonopy on a q-point mesh.
+supercell (``VibrationsConfig.supercells``).
+
+With ``VibrationsConfig(phonopy=PhonopyConfig(...))`` every structure that is
+not a molecule is calculated with phonopy instead (:mod:`psteros.phonons`):
+the symmetry-reduced displacements of a supercell are generated when the
+graph is built, one static runs per displacement plus one of the undisplaced
+supercell, and one calcfunction per label turns the forces into the modes on
+a q-point mesh. Slabs then vibrate as a whole (in-plane supercell, 2D mesh).
 
 The builders that already exist are not changed; this is a separate graph,
 usually run after the relaxation graph on its relaxed structures.
@@ -28,6 +34,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Mapping, Sequence
 
 from psteros.config import CalculationOverride, SurfaceWorkflowConfig
+from psteros.phonons import PhonopyConfig
 
 #: Ry/bohr in eV/A, for the forces printed by pw.x.
 EV_PER_ANGSTROM_PER_RY_PER_BOHR = 13.605_693_122_994 / 0.529_177_210_903
@@ -55,12 +62,20 @@ class VibrationsConfig:
         rotational and translational zero modes are removed. A periodic cell
         with every site displaced loses its 3 translations; a slab with
         frozen sites has no zero mode.
+    ``phonopy``
+        A :class:`psteros.PhonopyConfig`: every structure that is not a
+        molecule gets phonons on a q-point mesh from a phonopy supercell, a
+        slab as a whole (in-plane supercell, 2D mesh), instead of the
+        Gamma-point modes. ``None`` (default) keeps the Gamma-point modes.
+        With phonopy, ``displaced_sites`` and ``supercells`` are not used and
+        must be left out (phonopy displaces every atom of its supercell).
     """
 
     displacement_angstrom: float = 0.01
     displaced_sites: Mapping[str, tuple[int, ...]] = field(default_factory=dict)
     supercells: Mapping[str, tuple[int, int, int]] = field(default_factory=dict)
     molecules: tuple[str, ...] = ()
+    phonopy: PhonopyConfig | None = None
 
     def __post_init__(self) -> None:
         if not self.displacement_angstrom > 0:
@@ -95,6 +110,26 @@ class VibrationsConfig:
         for label in supercells:
             if label in sites:
                 raise ValueError(f"{label!r}: a supercell displaces every site; do not give displaced_sites")
+        if self.phonopy is not None:
+            if not isinstance(self.phonopy, PhonopyConfig):
+                raise TypeError("VibrationsConfig.phonopy must be a PhonopyConfig")
+            if sites or supercells:
+                raise ValueError(
+                    "VibrationsConfig: phonopy displaces every atom of its own supercell; leave displaced_sites and "
+                    f"supercells out (given for {', '.join(sorted(set(sites) | set(supercells)))}), or give the "
+                    "supercells as PhonopyConfig(supercells=...)"
+                )
+            both = sorted(self.phonopy.labels & set(self.molecules))
+            if both:
+                raise ValueError(f"VibrationsConfig: {', '.join(both)} are molecules (Gamma-point modes), "
+                                 "not structures for phonopy")
+
+    @property
+    def labels(self) -> set[str]:
+        """Every label that this config names."""
+
+        names = set(self.displaced_sites) | set(self.supercells) | set(self.molecules)
+        return names | (self.phonopy.labels if self.phonopy is not None else set())
 
     def sites_to_displace(
         self, label: str, number_of_sites: int, override: CalculationOverride | None = None
@@ -167,9 +202,7 @@ def _vibrations_workgraph(
     for label in structures:
         if not label or not label.replace("_", "").replace("-", "").isalnum():
             raise ValueError(f"invalid calculation label: {label!r}")
-    unknown = sorted(
-        (set(vibrations.displaced_sites) | set(vibrations.supercells) | set(vibrations.molecules)).difference(structures)
-    )
+    unknown = sorted(vibrations.labels.difference(structures))
     if unknown:
         raise ValueError(f"VibrationsConfig names labels that are not in structures: {unknown}")
     if static.backend == "cp2k" and not allow_cp2k:
@@ -200,6 +233,10 @@ def _vibrations_workgraph(
     for label, source in structures.items():
         structure = as_aiida_structure(source)
         override = static.role_overrides.get(label)
+        if vibrations.phonopy is not None and label not in vibrations.molecules:
+            modes = _add_phonopy_dft(workgraph, static, vibrations, label, structure, override)
+            workgraph.outputs.__setattr__(f"{label}_vibrations", modes.outputs.result)
+            continue
         sites = vibrations.sites_to_displace(label, len(structure.sites), override)
         size = vibrations.supercells.get(label, (1, 1, 1))
         supercell_size = size[0] * size[1] * size[2]
@@ -243,6 +280,83 @@ def _vibrations_workgraph(
     if submit:
         workgraph.submit()
     return workgraph
+
+
+def phonopy_plan(vibrations: VibrationsConfig, label: str, structure: Any) -> dict[str, Any]:
+    """Supercell, mesh and displacements of ``label`` for phonopy, known when the graph is built.
+
+    ``structure`` is a pymatgen structure (kind names as site properties). The
+    result holds ``supercell``, ``mesh`` and ``displacements``
+    (a :class:`psteros.PhonopyDisplacements`).
+    """
+
+    from psteros.phonons import phonopy_displacements
+
+    config = vibrations.phonopy
+    config.check(label, structure)
+    supercell = config.supercell(label, structure)
+    try:
+        displacements = phonopy_displacements(structure, supercell, displacement_angstrom=vibrations.displacement_angstrom,
+                                              plus_minus=config.plus_minus, symprec=config.symprec)
+    except ValueError as error:
+        raise ValueError(f"{label}: {error}") from error
+    return {"supercell": supercell, "mesh": config.mesh(label, structure), "displacements": displacements}
+
+
+def phonopy_settings(vibrations: VibrationsConfig, plan: Mapping[str, Any]) -> dict[str, Any]:
+    """The settings of a phonopy modes task (without the backend)."""
+
+    return {
+        "method": "phonopy",
+        "supercell": list(plan["supercell"]),
+        "mesh": list(plan["mesh"]),
+        "shifted_mesh": vibrations.phonopy.shifted_mesh,
+        "symprec": vibrations.phonopy.symprec,
+        "displacements": plan["displacements"].to_dict(),
+    }
+
+
+def _add_phonopy_dft(
+    workgraph: Any,
+    static: SurfaceWorkflowConfig,
+    vibrations: VibrationsConfig,
+    label: str,
+    structure: Any,
+    override: CalculationOverride | None,
+) -> Any:
+    """The statics of the phonopy displacements of ``label`` (generated now) and the task of its modes."""
+
+    from aiida import orm
+
+    from psteros.backends.vibration_tasks import _copy_structure, phonopy_harmonic_modes
+
+    plan = phonopy_plan(vibrations, label, structure.get_pymatgen_structure())
+    displacements = plan["displacements"]
+    kinds = [site.kind_name for site in structure.sites]
+    names = [kinds[site] for site in displacements.unit_sites]
+    calculation_override = _displacement_override(override, static.backend)
+    retrieved = {}
+    for key, positions in [("perfect", displacements.positions_angstrom),
+                           *((phonopy_key(index), displacements.displaced_positions(index))
+                             for index in range(len(displacements)))]:
+        supercell = _copy_structure(structure, [list(row) for row in displacements.lattice_angstrom],
+                                    [(name, [float(x) for x in position]) for name, position in zip(names, positions)])
+        retrieved[key] = _add_static_task(
+            workgraph, static, f"{label}_vib_{key}", supercell, structure, calculation_override
+        ).outputs.retrieved
+    return workgraph.add_task(
+        phonopy_harmonic_modes,
+        name=f"{label}_vibrations",
+        structure=structure,
+        settings=orm.Dict({"backend": static.backend, **phonopy_settings(vibrations, plan)}),
+        retrieved=retrieved,
+    )
+
+
+def phonopy_key(index: int) -> str:
+    """Name of one phonopy displacement, e.g. ``p3`` (``perfect`` is the undisplaced supercell)."""
+
+    return f"p{index}"
 
 
 def displacement_key(site: int, axis: int, sign: str) -> str:
@@ -305,7 +419,9 @@ def read_vibrations(
     result maps each label to a :class:`psteros.HarmonicVibrations`.
     ``imaginary_modes`` and ``low_frequency_cutoff_cm1`` are passed to it.
     A :func:`psteros.build_mlip_surface_workgraph` graph built with
-    ``vibrations`` is read the same way (its ``<label>_mlip_vibrations``).
+    ``vibrations`` is read the same way (its ``<label>_mlip_vibrations``), and
+    so are the phonopy modes on a q-point mesh (the frequencies of every
+    q-point, ``supercell_size`` the number of q-points).
     """
 
     from psteros.surface_study import _graph_output
@@ -322,6 +438,32 @@ def read_vibrations(
             )
         except ValueError as error:
             raise ValueError(f"{label}: {error}") from error
+    return result
+
+
+def read_phonon_stability(graph: Any, labels: Sequence[str]) -> dict[str, Any]:
+    """The stability check of the phonopy modes of a finished graph (built with ``VibrationsConfig(phonopy=...)``).
+
+    The result maps each label to a :class:`psteros.PhononStability`: the
+    imaginary modes found on the q-point mesh and at the q-points
+    commensurate with the supercell. Molecules (Gamma-point modes) have none.
+    """
+
+    from psteros.phonons import PhononStability
+    from psteros.surface_study import _graph_output
+
+    result, missing = {}, []
+    for label in labels:
+        data = _graph_output(graph.outputs, (f"{label}_vibrations", f"{label}_mlip_vibrations"))
+        if data is None:
+            raise ValueError(f"no vibrations output for {label}")
+        data = data.get_dict() if hasattr(data, "get_dict") else dict(data)
+        if "stability" not in data:
+            missing.append(label)
+            continue
+        result[label] = PhononStability.from_dict(data["stability"])
+    if missing:
+        raise ValueError(f"{', '.join(missing)}: Gamma-point modes, not phonopy (no stability check)")
     return result
 
 

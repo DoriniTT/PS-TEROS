@@ -93,7 +93,15 @@ from .vibrations import (
     molecule_reference_energy_ev,
     solid_free_energy_ev,
 )
-from .vibrations_workflow import VibrationsConfig, build_vibrations_workgraph, read_vibrations
+from .vibrations_workflow import VibrationsConfig, build_vibrations_workgraph, read_phonon_stability, read_vibrations
+from .phonons import (
+    PhononModes,
+    PhononStability,
+    PhonopyConfig,
+    PhonopyDisplacements,
+    phonopy_displacements,
+    phonopy_modes,
+)
 from .workflow import (
     build_cp2k_relax_static_workgraph,
     build_cp2k_surface_workgraph,
@@ -116,6 +124,7 @@ from .mlip import (
     partially_occupied_count,
     prepare_finetune_job,
     prepare_relax_job,
+    prepare_forces_job,
     prepare_vibrations_job,
     rattled_copies,
     relax_with_calculator,
@@ -302,4 +311,12 @@ __all__ = [
     "hessian_from_forces",
     "read_relaxation_estimates",
     "relaxation_estimate",
+    "PhononModes",
+    "PhononStability",
+    "PhonopyConfig",
+    "PhonopyDisplacements",
+    "phonopy_displacements",
+    "phonopy_modes",
+    "prepare_forces_job",
+    "read_phonon_stability",
 ]

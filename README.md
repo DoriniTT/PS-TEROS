@@ -23,7 +23,7 @@ PS-TEROS automates the pathway from crystal structures to thermodynamic stabilit
 - **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation → static SCF, or the MLIP route's DFT and GPU jobs) with bounded job concurrency and full provenance tracking.
 - **Polar Surfaces:** Absolute surface energies of polar faces (zinc blende (111), wurtzite (0001)) with a pseudo-hydrogen passivated bottom, on the same scale as non-polar ones ([guide](docs/POLAR_SURFACES.md)).
 - **Charge-Neutral Terminations:** Symmetric, charge-neutral slabs for semiconductors and insulators, and `ChargeNeutralSurfaceStudy` to run all of them with their references in one graph ([guide](docs/CHARGE_NEUTRAL_TERMINATIONS.md)).
-- **Vibrational Free Energies:** Harmonic Γ-point modes of slabs, bulks and molecules, from DFT finite differences or, on the MLIP route, from the fine-tuned model on the GPU ([guide](docs/source/vibrations.rst)).
+- **Vibrational Free Energies:** Harmonic Γ-point modes of slabs, bulks and molecules, from DFT finite differences or, on the MLIP route, from the fine-tuned model on the GPU; optionally phonons on a q-point mesh with phonopy, the slabs vibrating as a whole ([guide](docs/source/vibrations.rst)).
 - **Pure-Python Thermodynamics:** Evaluates surface free energies (J/m², eV/Å²) and termination phase diagrams directly as a function of chemical potential (Δμ<sub>O</sub> for an oxide, Δμ<sub>As</sub> for GaAs, ...).
 
 ## Quickstart

@@ -125,6 +125,16 @@ Recent Updates
   of each gamma (``gamma_error_bars``, ``GammaErrorBar``). ``hessian_from_forces`` gives the finite-difference
   Hessian that ``harmonic_vibrations_from_forces`` diagonalises (its modes are unchanged). Without the option the
   graphs, outputs and results are unchanged
+* Phonons on a q-point mesh with phonopy (``pip install '.[phonopy]'``; see :ref:`vibrations-phonopy`):
+  ``VibrationsConfig(phonopy=PhonopyConfig(...))`` in ``build_vibrations_workgraph``, ``dft_vibrations`` and the
+  ``vibrations`` of the MLIP route gives every structure that is not a molecule the modes of phonopy force constants
+  (symmetry-reduced displacements, the forces of the undisplaced supercell subtracted) on a shifted q-point mesh,
+  and the slabs vibrate as a whole (in-plane supercell, 2D mesh), so ``gamma_vib = [F_vib(slab) - n F_vib(bulk)] / 2A``.
+  The DFT graph generates the displacements when it is built (one static each, no calcfunction per displacement);
+  the MLIP route generates them on the daemon and runs their forces in one GPU job (``forces.py``,
+  ``prepare_forces_job``). Pure-Python layer: ``phonopy_displacements``, ``phonopy_modes``, ``PhonopyDisplacements``,
+  ``PhononModes``; the stability check ``read_phonon_stability`` / ``PhononStability`` lists the imaginary modes
+  along q. Leaving ``phonopy`` out keeps the Γ-point modes, graphs and outputs unchanged
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

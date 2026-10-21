@@ -187,6 +187,14 @@ CP2K) on the MACE geometries with the same fixed sites, and
 `route.analyse(graph, temperature_k=T, vibrations=psteros.read_vibrations(check, labels))`
 uses its modes instead. Polar slabs have no vibrations yet.
 
+**Phonons on a q-point mesh:** `vibrations=psteros.VibrationsConfig(phonopy=psteros.PhonopyConfig())`
+gives every solid phonopy force constants and the modes on a q-point mesh
+instead of Γ-point modes, and the slabs vibrate as a whole (in-plane supercell,
+2D mesh), so the frozen centre need not be bulk-like. The daemon generates the
+displacements of each relaxed structure (phonopy where the daemon runs), the
+same one GPU job gives their forces, and `psteros.read_phonon_stability` lists
+the imaginary modes along q. See `docs/source/vibrations.rst` (phonopy section).
+
 ## Error bars on gamma
 
 `route.build(..., relaxation_estimate=True)` adds one GPU job with the model's
@@ -298,7 +306,8 @@ replays foundation-labelled structures.
   `psteros.build_mlip_surface_workgraph`, `psteros.read_mlip_energies`,
   `psteros.read_mlip_results`, `psteros.MaceFineTuneConfig`,
   `psteros.MlipJobConfig`, `psteros.free_energies_with_vibrations`,
-  `psteros.prepare_vibrations_job`, `psteros.MACE_FOUNDATION_MODELS`,
+  `psteros.prepare_vibrations_job`, `psteros.PhonopyConfig`,
+  `psteros.read_phonon_stability`, `psteros.MACE_FOUNDATION_MODELS`,
   `psteros.foundation_level_warnings`, `psteros.UmaFineTuneConfig`,
   `psteros.NequipFineTuneConfig`: see
   [`docs/source/mlip.rst`](source/mlip.rst) and [`docs/source/api.rst`](source/api.rst).

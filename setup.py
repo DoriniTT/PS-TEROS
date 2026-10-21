@@ -27,6 +27,9 @@ setup(
             "ase",
             "aiida-shell>=0.8",
         ],
+        "phonopy": [
+            "phonopy>=2.48",
+        ],
         "docs": [
             "sphinx>=4.0.0",
             "sphinx-rtd-theme>=1.0.0",

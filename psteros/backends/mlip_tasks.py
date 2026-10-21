@@ -181,3 +181,79 @@ def mlip_harmonic_modes(structure: orm.StructureData, settings: orm.Dict, forces
     if plus.shape != expected or minus.shape != expected:
         raise ValueError(f"{label}: the vibrations job wrote forces of shape {plus.shape}, expected {expected}")
     return orm.Dict({**modes_from_forces(structure, options, plus, minus), "model": options["model"]})
+
+
+@task.calcfunction
+def mlip_displacements_folder(settings: orm.Dict, **structures) -> orm.FolderData:
+    """The folder of the forces job (:func:`psteros.mlip.prepare_forces_job`) of phonopy vibrations.
+
+    ``settings`` holds ``model`` (``[path, head]``), ``device``,
+    ``default_dtype``, ``displacement_angstrom``, ``plus_minus``, ``symprec``,
+    ``phonopy`` (label -> phonopy supercell) and ``molecules`` (label -> sites
+    displaced by ``+d`` and ``-d`` along x, y and z, the Gamma-point modes);
+    ``structures`` holds ``structure_<label>``, the relaxed structure of each
+    label. The phonopy displacements of every supercell are generated here,
+    from the relaxed structure, and written to ``phonopy.json`` next to the job.
+    """
+
+    from psteros.phonons import phonopy_displacements
+
+    options = settings.get_dict()
+    step = float(options["displacement_angstrom"])
+    plain, displacements, plans = {}, {}, {}
+    for label, supercell in options["phonopy"].items():
+        structure = structures[f"structure_{label}"].get_pymatgen_structure()
+        try:
+            plan = phonopy_displacements(structure, supercell, displacement_angstrom=step,
+                                         plus_minus=bool(options["plus_minus"]), symprec=float(options["symprec"]))
+        except ValueError as error:
+            raise ValueError(f"{label}: {error}") from error
+        plans[label] = plan.to_dict()
+        plain[label] = plan.structures(structure)[0]
+        displacements[label] = list(plan.displacements)
+    for label, sites in options["molecules"].items():
+        plain[label] = structures[f"structure_{label}"].get_pymatgen_structure()
+        displacements[label] = [(site, [sign * step if a == axis else 0.0 for a in range(3)])
+                                for site in sites for axis in range(3) for sign in (1.0, -1.0)]
+    with tempfile.TemporaryDirectory() as scratch:
+        folder = mlip.prepare_forces_job(
+            Path(scratch) / "job", plain, tuple(options["model"]), displacements,
+            default_dtype=options["default_dtype"], device=options["device"], family=options.get("family", "mace"),
+        )
+        (folder / "phonopy.json").write_text(json.dumps(plans) + "\n")
+        return orm.FolderData(tree=str(folder))
+
+
+@task.calcfunction
+def mlip_phonon_modes(structure: orm.StructureData, settings: orm.Dict, job: orm.FolderData,
+                      forces: orm.FolderData) -> orm.Dict:
+    """Modes of ``settings["label"]`` from the forces job of :func:`mlip_displacements_folder`.
+
+    ``job`` is the job's folder (its ``phonopy.json``), ``forces`` the job's
+    ``forces/`` folder and ``structure`` the relaxed structure. With
+    ``settings["method"] == "phonopy"`` the settings are those of
+    :func:`psteros.vibrations_workflow.phonopy_settings` (without
+    ``displacements``, read from ``phonopy.json``); with ``"gamma"`` (a
+    molecule) those of :func:`psteros.backends.vibration_tasks.harmonic_modes`.
+    The output reads like a ``<label>_vibrations`` of :func:`psteros.build_vibrations_workgraph`.
+    """
+
+    from psteros.backends.vibration_tasks import modes_from_forces, phonopy_modes_from_forces
+
+    options = settings.get_dict()
+    label = options["label"]
+    if f"{label}.npz" not in set(forces.base.repository.list_object_names()):
+        raise ValueError(f"{label}: the forces job wrote no {label}.npz")
+    with np.load(io.BytesIO(forces.base.repository.get_object_content(f"{label}.npz", mode="rb"))) as data:
+        values, reference = data["forces"], data["reference_forces"]
+    if options["method"] == "gamma":
+        sites = list(options["displaced_sites"])
+        if values.shape != (6 * len(sites), len(structure.sites), 3):
+            raise ValueError(f"{label}: the forces job wrote forces of shape {values.shape} for {len(sites)} sites")
+        return orm.Dict({**modes_from_forces(structure, options, values[0::2], values[1::2]), "model": options["model"]})
+    plans = json.loads(job.base.repository.get_object_content("phonopy.json"))
+    try:
+        result = phonopy_modes_from_forces(structure, {**options, "displacements": plans[label]}, values, reference)
+    except ValueError as error:
+        raise ValueError(f"{label}: {error}") from error
+    return orm.Dict({**result, "model": options["model"]})

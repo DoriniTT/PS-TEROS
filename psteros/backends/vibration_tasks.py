@@ -166,3 +166,55 @@ def modes_from_forces(structure: orm.StructureData, options: dict, forces_plus, 
         "displacement_angstrom": float(options["displacement_angstrom"]),
         "zero_modes": zero_modes,
     }
+
+
+@task.calcfunction
+def phonopy_harmonic_modes(structure: orm.StructureData, settings: orm.Dict, **retrieved) -> orm.Dict:
+    """Phonopy modes on a q-point mesh from the static calculations of the displaced supercells.
+
+    ``retrieved`` holds the retrieved folder of the undisplaced supercell
+    (``perfect``) and of every displacement (``p0``, ``p1``, ...: see
+    :func:`psteros.vibrations_workflow.phonopy_key`); ``settings`` the
+    ``backend`` and the settings of :func:`psteros.vibrations_workflow.phonopy_settings`.
+    """
+
+    from psteros.phonons import PhonopyDisplacements
+    from psteros.vibrations_workflow import phonopy_key
+
+    options = settings.get_dict()
+    displacements = PhonopyDisplacements.from_dict(options["displacements"])
+    expected = ["perfect", *(phonopy_key(index) for index in range(len(displacements)))]
+    missing = [key for key in expected if key not in retrieved]
+    if missing:
+        raise ValueError(
+            f"{len(missing)} of the {len(expected)} retrieved folders are missing ({', '.join(missing[:6])}"
+            f"{', ...' if len(missing) > 6 else ''}): the displaced calculations did not all reach this task. "
+            "If they all finished, run this task again on their retrieved folders"
+        )
+    unit = [structure.get_kind(site.kind_name).symbol for site in structure.sites]
+    symbols = [unit[site] for site in displacements.unit_sites]
+    reference = _forces(retrieved["perfect"], options["backend"], symbols)
+    forces = [_forces(retrieved[phonopy_key(index)], options["backend"], symbols) for index in range(len(displacements))]
+    return orm.Dict(phonopy_modes_from_forces(structure, options, forces, reference))
+
+
+def phonopy_modes_from_forces(structure: orm.StructureData, options: dict, forces, reference_forces) -> dict:
+    """The content of a ``<label>_vibrations`` output of phonopy from the forces of the displaced supercells.
+
+    ``options`` holds ``supercell``, ``mesh``, ``shifted_mesh``, ``symprec``
+    and ``displacements`` (a :class:`psteros.PhonopyDisplacements` as a dict);
+    the masses are those of the kinds of ``structure``.
+    """
+
+    from psteros.phonons import PhonopyDisplacements, phonopy_modes
+
+    displacements = PhonopyDisplacements.from_dict(options["displacements"])
+    if list(displacements.supercell) != list(options["supercell"]):
+        raise ValueError(f"the displacements are of the supercell {displacements.supercell}, not {options['supercell']}")
+    modes = phonopy_modes(
+        structure.get_pymatgen_structure(), displacements, forces, reference_forces_ev_per_angstrom=reference_forces,
+        mesh=options["mesh"], shifted_mesh=bool(options["shifted_mesh"]), symprec=float(options["symprec"]),
+        masses_amu=[structure.get_kind(site.kind_name).mass for site in structure.sites],
+        imaginary_modes="drop",  # stored as negative numbers; read_vibrations applies the policy
+    )
+    return modes.to_dict()

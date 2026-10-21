@@ -684,6 +684,57 @@ def prepare_vibrations_job(
     return folder
 
 
+def prepare_forces_job(
+    directory: str | Path,
+    structures: Mapping[str, Any],
+    model: tuple[str, str],
+    displacements: Mapping[str, Sequence[tuple[int, Sequence[float]]]],
+    *,
+    default_dtype: str = "float64",
+    device: str = "cuda",
+    family: str = "mace",
+) -> Path:
+    """Write the folder of one forces job: the model ``model`` (path, head) gives the forces of every pymatgen
+    structure of ``structures`` (label -> structure, e.g. a phonopy supercell) undisplaced and after each of
+    ``displacements[label]``, which moves one atom by a Cartesian vector (``(atom, (dx, dy, dz))`` in A, e.g. the
+    :class:`psteros.PhonopyDisplacements` of the supercell). ``family`` as in :func:`prepare_relax_job`."""
+
+    from psteros.mlip_jobs import script_path
+
+    if not structures:
+        raise ValueError("give at least one structure")
+    if set(displacements) != set(structures):
+        raise ValueError("displacements must be given for every structure, and only those")
+    if device not in ("cuda", "cpu"):
+        raise ValueError("device must be 'cuda' or 'cpu'")
+    if default_dtype not in ("float32", "float64"):
+        raise ValueError("default_dtype must be 'float32' or 'float64'")
+    _check_family(family)
+    folder = Path(directory)
+    folder.mkdir(parents=True, exist_ok=False)
+    items = []
+    for label, structure in structures.items():
+        rows = []
+        for atom, vector in displacements[label]:
+            vector = [float(value) for value in vector]
+            if isinstance(atom, bool) or int(atom) != atom or not 0 <= int(atom) < len(structure) or len(vector) != 3:
+                raise ValueError(f"{label}: each displacement must be (atom in [0, {len(structure)}), (dx, dy, dz))")
+            if not 0 < float(np.linalg.norm(vector)) <= 0.1:
+                raise ValueError(f"{label}: a displacement must move its atom by more than 0 and at most 0.1 A")
+            rows.append([int(atom), *vector])
+        if not rows:
+            raise ValueError(f"{label}: no displacements")
+        frame = LabelledStructure(label, structure, 0.0, np.zeros((len(structure), 3)))
+        write_extxyz([frame], folder / f"{label}.extxyz")
+        items.append({"label": label, "file": f"{label}.extxyz", "displacements": rows})
+    path, head = model
+    job = {"device": device, "default_dtype": default_dtype, "model": _model_entry(path, head, family),
+           "structures": items}
+    (folder / "job.json").write_text(json.dumps(job, indent=2) + "\n")
+    (folder / "forces.py").write_text(script_path("forces.py").read_text())
+    return folder
+
+
 def rattled_copies(
     structures: Mapping[str, Any],
     *,

@@ -444,6 +444,30 @@ uses those modes instead. ``read_vibrations`` reads both graphs.
 Polar slabs have no vibrations yet (their pseudo chemical potentials are 0 K
 energies).
 
+**Phonons on a q-point mesh.** With
+``vibrations=psteros.VibrationsConfig(phonopy=psteros.PhonopyConfig())`` the
+same GPU job gives the forces of phonopy's displacements instead
+(:ref:`vibrations-phonopy`): the daemon generates the symmetry-reduced
+displacements of each relaxed structure in its supercell (phonopy is needed
+where the daemon runs, not on the GPU computer), the job runs ``forces.py``,
+and one calcfunction per label turns the forces into the modes on a q-point
+mesh. The slabs of the study vibrate as a whole (they are added to
+``PhonopyConfig.slabs``), so their frozen centre no longer has to be bulk-like;
+the gas references keep their Γ-point modes. The outputs keep their names
+(``<label>_mlip_vibrations``, ``mlip_vibrations_results``), and
+``read_phonon_stability(graph, labels)`` lists the imaginary modes along q.
+``route.dft_vibrations(graph, static, vibrations)`` with the same
+``PhonopyConfig`` (smaller supercells are cheaper) checks the model's phonons
+with DFT:
+
+.. code-block:: python
+
+   phonons = psteros.VibrationsConfig(phonopy=psteros.PhonopyConfig(supercell_length_angstrom=12.0))
+   graph = route.build(static, fine_tune, job=job, vibrations=phonons, submit=True)
+   # later
+   stability = psteros.read_phonon_stability(orm.load_node(graph.pk), [*route.slabs, "bulk"])
+   result = route.analyse(orm.load_node(graph.pk), temperature_k=800.0)
+
 One energy source per diagram
 -----------------------------
 
@@ -531,7 +555,8 @@ CP2K statics and a GPU computer with a MACE environment:
    structures again from the start;
 5. with ``dft_check`` (default), one DFT static at each final geometry;
 6. with ``vibrations``, the harmonic modes of every structure from the
-   deployed model (``<label>_mlip_vibrations``).
+   deployed model (``<label>_mlip_vibrations``): Γ-point finite differences,
+   or phonons on a q-point mesh with ``VibrationsConfig(phonopy=...)``.
 
 ``allow_non_metallic=True`` skips the metal check of step 2, with a warning
 about the electron count of the slabs. Every task is wired when the graph is built; calcfunctions only turn finished

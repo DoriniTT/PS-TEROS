@@ -14,7 +14,9 @@
    model on all labels and relaxes the structures again from the start;
 5. with ``dft_check``, one DFT static at each final geometry;
 6. with ``vibrations``, the harmonic modes of every structure from the
-   deployed model at its relaxed geometry (one more GPU job).
+   deployed model at its relaxed geometry (one more GPU job): Gamma-point
+   finite differences, or with ``VibrationsConfig(phonopy=...)`` phonons on a
+   q-point mesh.
 
 The energies of one diagram come from one source (see
 :func:`psteros.check_one_energy_source`): ``"mlip_dft"``, the DFT statics of
@@ -286,7 +288,13 @@ def build_mlip_surface_workgraph(
         :func:`psteros.build_vibrations_workgraph` (one GPU job). The
         ``fixed_sites`` are not displaced (their region is counted as bulk);
         a bulk is displaced in its ``supercells`` entry; ``molecules`` lose
-        their zero modes. ``None`` (the default) adds nothing.
+        their zero modes. With ``VibrationsConfig(phonopy=PhonopyConfig(...))``
+        every structure that is not a molecule gets phonons on a q-point mesh
+        instead (:mod:`psteros.phonons`): the daemon generates phonopy's
+        displacements of each relaxed supercell, the GPU job gives their
+        forces, and the slabs listed in ``PhonopyConfig.slabs`` vibrate as a
+        whole (in-plane supercell, 2D mesh; ``fixed_sites`` constrain only the
+        relaxations). ``None`` (the default) adds nothing.
     allow_non_metallic
         Do not check that ``metallic_bulk`` is a metal. For a semiconductor or
         an insulator, the slabs must then have the right electron count
@@ -407,15 +415,25 @@ def _mlip_workgraph(
         if any(site < 0 or site >= len(plain[label]) for site in sites):
             raise ValueError(f"{label}: fixed_sites must be within [0, {len(plain[label])})")
     displaced: dict[str, tuple[int, ...]] = {}
+    phonons: dict[str, dict[str, tuple[int, int, int]]] = {}
     if vibrations is not None:
         if not isinstance(vibrations, VibrationsConfig):
             raise TypeError("vibrations must be a VibrationsConfig")
-        unknown = sorted(
-            (set(vibrations.displaced_sites) | set(vibrations.supercells) | set(vibrations.molecules)).difference(structures)
-        )
+        unknown = sorted(vibrations.labels.difference(structures))
         if unknown:
             raise ValueError(f"VibrationsConfig names labels that are not in structures: {unknown}")
+        if vibrations.phonopy is not None:
+            import importlib.util
+
+            if importlib.util.find_spec("phonopy") is None:
+                raise ImportError('VibrationsConfig(phonopy=...) needs phonopy where the graph is built and where the '
+                                  'AiiDA daemon runs: pip install "psteros[phonopy]"')
         for label, structure in plain.items():
+            if vibrations.phonopy is not None and label not in vibrations.molecules:
+                vibrations.phonopy.check(label, structure)  # the cell does not change in the relaxations
+                phonons[label] = {"supercell": vibrations.phonopy.supercell(label, structure),
+                                  "mesh": vibrations.phonopy.mesh(label, structure)}
+                continue
             override = CalculationOverride(fixed_sites=fixed_sites.get(label, ()))
             displaced[label] = vibrations.sites_to_displace(label, len(structure), override)
 
@@ -528,7 +546,11 @@ def _mlip_workgraph(
                 workgraph.outputs.__setattr__(f"{label}_mlip_dft_energy", energy.outputs.result)
                 workgraph.outputs.__setattr__(f"{label}_mlip_dft_parameters", output)
                 workgraph.outputs.__setattr__(f"{label}_mlip_dft_retrieved", retrieved)
-    if vibrations is not None:
+    if vibrations is not None and vibrations.phonopy is not None:
+        _add_mlip_phonons(workgraph, vibrations, final, displaced, phonons, code=code, execution=execution,
+                          model=(models[deployed][0], head), deployed=deployed, relax=relax, job=job,
+                          finetune=finetune, name=static.name, family=family)
+    elif vibrations is not None:
         _add_mlip_vibrations(workgraph, vibrations, final, displaced, plain, code=code, execution=execution,
                              model=(models[deployed][0], head), deployed=deployed, relax=relax, job=job,
                              finetune=finetune, name=static.name, family=family)
@@ -616,6 +638,51 @@ def _add_mlip_vibrations(workgraph, vibrations, structures, displaced, plain, *,
             settings=orm.Dict({"label": label, "model": deployed, "displaced_sites": sites[label],
                                "displacement_angstrom": vibrations.displacement_angstrom,
                                "supercell_size": sizes[label], "molecule": label in vibrations.molecules}),
+        )
+        workgraph.outputs.__setattr__(f"{label}_mlip_vibrations", modes.outputs.result)
+
+
+def _add_mlip_phonons(workgraph, vibrations, structures, displaced, phonons, *, code, execution, model, deployed,
+                      relax, job, finetune, name, family="mace") -> None:
+    """The GPU job of the phonopy displacements (and of the molecules' Gamma-point modes) and one modes task per
+    label (``<label>_mlip_vibrations``, as the Gamma-point mode gives)."""
+
+    from aiida import orm
+    from aiida_workgraph import shelljob
+
+    from psteros.backends.mlip_tasks import mlip_displacements_folder, mlip_phonon_modes
+
+    config = vibrations.phonopy
+    options = {"model": list(model), "device": job.device, "default_dtype": relax.default_dtype,
+               "displacement_angstrom": vibrations.displacement_angstrom, "plus_minus": config.plus_minus,
+               "symprec": config.symprec,
+               "phonopy": {label: list(plan["supercell"]) for label, plan in phonons.items()},
+               "molecules": {label: list(sites) for label, sites in displaced.items()}}
+    if family != "mace":
+        options["family"] = family
+    folder = workgraph.add_task(
+        mlip_displacements_folder, name="mlip_vibrations_job", settings=orm.Dict(options),
+        structures={f"structure_{label}": structure for label, structure in structures.items()},
+    )
+    forces = workgraph.add_task(
+        shelljob, name="mlip_vibrations", command=code, arguments=["-u", "forces.py"],
+        nodes={"job": folder.outputs.result, "finetune": finetune.outputs.remote_folder}, filenames={"finetune": "finetune"},
+        outputs=["results.json", "forces"],
+        metadata={"label": f"{name}_vibrations", "options": {**execution, "use_symlinks": True}},
+    )
+    workgraph.outputs.__setattr__("mlip_vibrations_results", forces.outputs.results_json)
+    for label, structure in structures.items():
+        if label in phonons:
+            settings = {"label": label, "model": deployed, "method": "phonopy",
+                        "supercell": list(phonons[label]["supercell"]), "mesh": list(phonons[label]["mesh"]),
+                        "shifted_mesh": config.shifted_mesh, "symprec": config.symprec}
+        else:
+            settings = {"label": label, "model": deployed, "method": "gamma", "displaced_sites": list(displaced[label]),
+                        "displacement_angstrom": vibrations.displacement_angstrom, "supercell_size": 1,
+                        "molecule": label in vibrations.molecules}
+        modes = workgraph.add_task(
+            mlip_phonon_modes, name=f"{label}_mlip_vibrations", structure=structure, settings=orm.Dict(settings),
+            job=folder.outputs.result, forces=forces.outputs.forces,
         )
         workgraph.outputs.__setattr__(f"{label}_mlip_vibrations", modes.outputs.result)
 
@@ -815,14 +882,20 @@ def _relaxed_structures(graph: Any, labels: Sequence[str]) -> dict[str, Any]:
     return structures
 
 
-def _with_molecules(vibrations: VibrationsConfig | None, molecules: Sequence[str]) -> VibrationsConfig | None:
-    """``vibrations`` with the gas references among its molecules (their rotations are zero modes)."""
+def _with_molecules(vibrations: VibrationsConfig | None, molecules: Sequence[str],
+                    slabs: Sequence[str] = ()) -> VibrationsConfig | None:
+    """``vibrations`` with the gas references among its molecules (their rotations are zero modes), and with
+    phonopy the slabs of the study among its slabs (in-plane supercell and 2D mesh)."""
 
     if vibrations is None:
         return None
     if not isinstance(vibrations, VibrationsConfig):
         raise TypeError("vibrations must be a VibrationsConfig")
-    return replace(vibrations, molecules=tuple(dict.fromkeys([*vibrations.molecules, *molecules])))
+    vibrations = replace(vibrations, molecules=tuple(dict.fromkeys([*vibrations.molecules, *molecules])))
+    if vibrations.phonopy is not None and slabs:
+        phonopy = replace(vibrations.phonopy, slabs=tuple(dict.fromkeys([*vibrations.phonopy.slabs, *slabs])))
+        vibrations = replace(vibrations, phonopy=phonopy)
+    return vibrations
 
 
 def _check_half_width(value: Any, slabs: Mapping[str, Any]) -> None:
@@ -903,8 +976,10 @@ def _dft_vibrations(
     fixed_sites: Mapping[str, Sequence[int]],
     molecules: Sequence[str],
     submit: bool,
+    slabs: Sequence[str] = (),
 ) -> Any:
-    """:func:`psteros.build_vibrations_workgraph` (also with CP2K) on the model's geometries, fixed sites kept fixed."""
+    """:func:`psteros.build_vibrations_workgraph` (also with CP2K) on the model's geometries, fixed sites kept fixed
+    (with phonopy every atom of the supercell is displaced, and ``slabs`` are the study's slabs)."""
 
     from psteros.vibrations_workflow import _vibrations_workgraph
 
@@ -913,7 +988,7 @@ def _dft_vibrations(
         if sites:
             overrides[label] = replace(overrides.get(label) or CalculationOverride(), fixed_sites=tuple(sites))
     return _vibrations_workgraph(relaxed, replace(static, role_overrides=overrides),
-                                 _with_molecules(vibrations or VibrationsConfig(), molecules), submit=submit,
+                                 _with_molecules(vibrations or VibrationsConfig(), molecules, slabs), submit=submit,
                                  allow_cp2k=True)
 
 
@@ -1055,18 +1130,20 @@ class MlipSurfaceStudy:
 
         ``vibrations`` adds the model's harmonic modes of every structure
         (the gas references are added to its ``molecules``); the frozen
-        centre of each slab must then have the bulk stoichiometry.
-        ``allow_non_metallic`` skips the metal check (see
+        centre of each slab must then have the bulk stoichiometry. With
+        ``VibrationsConfig(phonopy=...)`` the slabs vibrate as a whole (they
+        are added to its ``slabs``) and the frozen centre is only a constraint
+        of the relaxations. ``allow_non_metallic`` skips the metal check (see
         :func:`build_mlip_surface_workgraph`); ``relaxation_estimate`` adds
         the model's Hessian job for :meth:`gamma_error_bars`.
         """
 
-        if vibrations is not None:
+        if vibrations is not None and vibrations.phonopy is None:
             _check_frozen_regions(self.slabs, self.fixed_sites, self.bulk)
         return build_mlip_surface_workgraph(
             self.structures, static, fine_tune, relax, job=job, metallic_bulk="bulk", fixed_sites=self.fixed_sites,
             training_structures=self.training_structures or None, active_learning_rounds=active_learning_rounds,
-            dft_check=dft_check, vibrations=_with_molecules(vibrations, self.molecule_labels),
+            dft_check=dft_check, vibrations=_with_molecules(vibrations, self.molecule_labels, tuple(self.slabs)),
             allow_non_metallic=allow_non_metallic, relaxation_estimate=relaxation_estimate, submit=submit,
         )
 
@@ -1085,11 +1162,14 @@ class MlipSurfaceStudy:
         structures with ``static`` (QE, VASP, or CP2K with ``RUN_TYPE
         ENERGY_FORCE``), the slab centres kept fixed as in the relaxations
         and the gas references as molecules. Its ``<label>_vibrations`` go to
-        :meth:`analyse` as ``vibrations=psteros.read_vibrations(...)``.
+        :meth:`analyse` as ``vibrations=psteros.read_vibrations(...)``. With
+        ``VibrationsConfig(phonopy=...)`` the displacements are phonopy's,
+        generated now from the relaxed structures (the slabs as a whole).
         """
 
         relaxed = _relaxed_structures(source, list(self.structures))
-        return _dft_vibrations(relaxed, static, vibrations, self.fixed_sites, self.molecule_labels, submit)
+        return _dft_vibrations(relaxed, static, vibrations, self.fixed_sites, self.molecule_labels, submit,
+                               tuple(self.slabs))
 
     def references_from(self, energies_ev: Mapping[str, float]):
         """:class:`psteros.BinaryReferences` from the energies of ``bulk`` and ``ref_<element>``."""
@@ -1317,7 +1397,8 @@ class MlipRoute:
         (the pseudo-hydrogen potentials). ``vibrations`` adds the model's
         harmonic modes of every structure (gas references are added to its
         ``molecules``; the frozen centre of each slab must have the bulk
-        stoichiometry); polar studies have none, because the pseudo chemical
+        stoichiometry, unless ``VibrationsConfig(phonopy=...)`` makes the slabs
+        vibrate as a whole); polar studies have none, because the pseudo chemical
         potentials are 0 K energies. ``relaxation_estimate`` adds the model's
         Hessian job for :meth:`gamma_error_bars` (polar studies too).
         """
@@ -1338,13 +1419,13 @@ class MlipRoute:
                 if slab in overrides and label not in overrides:
                     overrides[label] = overrides[slab]
             static = replace(static, role_overrides=overrides)
-        if vibrations is not None:
+        if vibrations is not None and vibrations.phonopy is None:
             _check_frozen_regions(self.slabs, self.fixed_sites, self.study.bulk)
         return _mlip_workgraph(
             self.structures, static, fine_tune, relax, job=job, metallic_bulk="bulk", metal_check=False,
             fixed_sites=self.fixed_sites, training_structures=extra or None,
             active_learning_rounds=active_learning_rounds, dft_check=dft_check,
-            vibrations=_with_molecules(vibrations, self.molecule_labels), submit=submit,
+            vibrations=_with_molecules(vibrations, self.molecule_labels, tuple(self.slabs)), submit=submit,
             relaxation_estimate=relaxation_estimate,
         )
 
@@ -1425,4 +1506,5 @@ class MlipRoute:
         if self.polar:
             raise ValueError(f"{self.formula}: polar slabs have no vibrations yet")
         relaxed = _relaxed_structures(source, list(self.study.structures))
-        return _dft_vibrations(relaxed, static, vibrations, self.fixed_sites, self.molecule_labels, submit)
+        return _dft_vibrations(relaxed, static, vibrations, self.fixed_sites, self.molecule_labels, submit,
+                               tuple(self.slabs))
