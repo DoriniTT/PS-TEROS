@@ -261,6 +261,11 @@ replays foundation-labelled structures.
 * **Every energy with its vibrations.** With `temperature_k`, every structure
   needs its modes; a frozen slab centre that is not whole bulk formula units is
   refused before anything runs.
+* **No hydrogen next to pseudo-hydrogens.** The models see elements, not
+  kinds: hydrogen and the pseudo-hydrogens of a polar study would be one
+  species `H` in the same environments. A study with both is refused
+  (`ValueError` naming the labels and their kinds) and needs the DFT route;
+  pseudo-hydrogens of several charges are fine, each passivates one element.
 * **No unrelaxed geometry reaches DFT.** A MACE relaxation that does not
   reach 0.01 eV/Å stops the graph instead of sending its geometry to the next
   DFT static.

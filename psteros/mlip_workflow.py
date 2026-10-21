@@ -133,6 +133,24 @@ def _hydrogen_kinds(structure: Any) -> set[str]:
     return {name if name and _PSEUDO_HYDROGEN_KIND.fullmatch(name) else "H" for name in names}
 
 
+def _check_hydrogen_kinds(structures: Mapping[str, Any]) -> None:
+    """Refuse hydrogen together with pseudo-hydrogens: the models see elements, not kinds, so both are one species
+    ``H`` and can sit in the same environments (an H and an H0p75 on an As atom), with different DFT labels.
+
+    Several pseudo-hydrogen kinds are allowed: each passivates one element, so the model tells them apart by their
+    neighbour. The error names the labels and their hydrogen kinds.
+    """
+
+    found = {label: _hydrogen_kinds(structure) for label, structure in structures.items()}
+    kinds = set().union(*found.values())
+    if "H" in kinds and kinds != {"H"}:
+        detail = "; ".join(f"{label}: {', '.join(sorted(item))}" for label, item in found.items() if item)
+        raise ValueError(
+            "the MLIP route cannot hold hydrogen and pseudo-hydrogens together: its models see elements, not kinds, "
+            f"so both would be one species H ({detail}). Run this study with the DFT route"
+        )
+
+
 def _replay_elements(structures: Mapping[str, Any], plain: Sequence[Any]) -> list[str]:
     """The elements that the replay structures may hold: those of the study, without hydrogen when every hydrogen
     of ``structures`` is a pseudo-hydrogen.
@@ -323,6 +341,7 @@ def _mlip_workgraph(
     extra = dict(training_structures or {})
     if extra:
         _check_labels(extra)
+    _check_hydrogen_kinds({**structures, **extra})
     if not isinstance(job, MlipJobConfig):
         raise TypeError("job must be an MlipJobConfig")
     families = {MaceFineTuneConfig: "mace", UmaFineTuneConfig: "uma", NequipFineTuneConfig: "nequip"}

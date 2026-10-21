@@ -158,7 +158,10 @@ labels. Each pseudo-hydrogen kind passivates one element (on GaAs, ``H0p75``
 the As atoms and ``H1p25`` the Ga atoms), so the model tells the kinds apart
 by their neighbour. The replay structures of such a study hold no hydrogen:
 their foundation labels would teach the same species the chemistry of real
-hydrogen.
+hydrogen. For the same reason a study may not hold hydrogen and
+pseudo-hydrogens together (both would be ``H`` in the same environments): the
+builders refuse it with a ``ValueError`` naming the labels and their kinds;
+run such a study with the DFT route.
 
 .. _mlip-foundation-models:
 

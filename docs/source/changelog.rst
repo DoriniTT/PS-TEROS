@@ -111,6 +111,12 @@ Recent Updates
   species as the pseudo-hydrogens, which the models see as hydrogen. Such studies now replay structures without
   hydrogen. MLIP-route results of polar studies (``MlipRoute(PolarSurfaceStudy(...))``, or hand-built slabs with
   pseudo-hydrogen kinds) should be repeated; studies without pseudo-hydrogens are unchanged
+* Bug fix (**results change**): the models of the MLIP route see elements, not kinds, so a study with hydrogen
+  and pseudo-hydrogens together (a passivated slab and an H-containing reference, for example) trained both as one
+  species ``H`` in the same environments, with no error. ``build_mlip_surface_workgraph``, ``MlipSurfaceStudy.build``
+  and ``MlipRoute.build`` now raise a ``ValueError`` naming the labels and their hydrogen kinds. MLIP-route results of
+  such studies are wrong and should be repeated with the DFT route; pseudo-hydrogens of several charges (each
+  passivating one element, as in every polar study) and studies with hydrogen only are unchanged
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

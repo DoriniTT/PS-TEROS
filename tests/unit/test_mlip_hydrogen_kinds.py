@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from psteros.mlip_workflow import _hydrogen_kinds, _replay_elements
+import psteros
+from psteros.mlip_workflow import _check_hydrogen_kinds, _hydrogen_kinds, _replay_elements
 
 pymatgen = pytest.importorskip("pymatgen.core")
 
@@ -78,3 +79,33 @@ def test_polar_route_replays_no_real_hydrogen(tmp_path) -> None:
     graph = route.build(static, fine_tune, job=job)
     selection = graph.tasks["mlip_round0_training"].inputs.settings.value.get_dict()["replay_selection"]
     assert selection["elements"] == ["As", "Ga"] and selection["kept"] == 6  # the GaAs pairs only
+
+
+def recipes():
+    static = psteros.SurfaceWorkflowConfig(
+        backend="vasp", name="gaas", execution=psteros.ExecutionPolicy(),
+        calculation=psteros.VaspCalculationConfig("vasp@cluster", incar={"ENCUT": 400, "IBRION": -1, "NSW": 0}))
+    fine_tune = psteros.MaceFineTuneConfig("/models/mace-mh-1.model", replay=False, seeds=(1,))
+    job = psteros.MlipJobConfig("mace@cluster", psteros.ExecutionPolicy(with_mpi=False))
+    return static, fine_tune, job
+
+
+def test_several_pseudo_hydrogen_kinds_are_allowed() -> None:
+    _check_hydrogen_kinds({"bulk": structure(["Ga", "As"]), "slab": gaas_slab("H0p75", "H1p25"),
+                           "pseudo_molecule_Ga": structure(["Ga", "H", "H", "H"], ["Ga", "H1p25", "H1p25", "H1p25"])})
+    _check_hydrogen_kinds({"bulk": structure(["O", "H", "H"]), "ref_H": structure(["H", "H"])})  # hydrogen only
+
+
+def test_mlip_builder_refuses_hydrogen_with_pseudo_hydrogens() -> None:
+    """Regression: a study with hydrogen and pseudo-hydrogens trained both as one species H, without an error."""
+
+    static, fine_tune, job = recipes()
+    structures = {"bulk": structure(["Ga", "As"]), "slab": gaas_slab("H0p75"), "ref_water": structure(["O", "H", "H"])}
+    with pytest.raises(ValueError, match=r"cannot hold hydrogen and pseudo-hydrogens together.*"
+                                         r"\(slab: H0p75; ref_water: H\)"):
+        psteros.build_mlip_surface_workgraph(structures, static, fine_tune, job=job, metallic_bulk="bulk")
+    # the extra training structures count too
+    with pytest.raises(ValueError, match=r"\(slab: H0p75; slab_r1: H\)"):
+        psteros.build_mlip_surface_workgraph(
+            {"bulk": structure(["Ga", "As"]), "slab": gaas_slab("H0p75")}, static, fine_tune, job=job,
+            metallic_bulk="bulk", training_structures={"slab_r1": structure(["Ga", "As", "H"])})

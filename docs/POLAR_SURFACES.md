@@ -212,7 +212,9 @@ result = route.analyse(orm.load_node(graph.pk))    # PolarStudyResult, bottom ch
 
 Every atom relaxes, as above, and the bottom check runs on the MACE
 geometries. For MACE the pseudo-hydrogens are hydrogen atoms that the
-fine-tune learns from their VASP labels. Vibrations are not available for
+fine-tune learns from their VASP labels (each kind passivates one element, so
+the model tells them apart by their neighbour); a study that also holds real
+hydrogen is refused and needs the DFT route. Vibrations are not available for
 polar slabs. A complete script is
 [`examples/mlip_routes/gaas_polar_mlip.py`](../examples/mlip_routes/gaas_polar_mlip.py).
 
