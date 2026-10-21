@@ -130,6 +130,22 @@ from .mace_models import (
     mace_foundation_model,
     recipe_level_of_theory,
 )
+from .nequip import (
+    NEQUIP_FOUNDATION_MODELS,
+    NequipFineTuneConfig,
+    NequipFoundationModel,
+    nequip_foundation_model,
+    nequip_level_warnings,
+    prepare_nequip_finetune_job,
+)
+from .uma import (
+    UMA_FOUNDATION_MODELS,
+    UmaFineTuneConfig,
+    UmaFoundationModel,
+    prepare_uma_finetune_job,
+    uma_foundation_model,
+    uma_level_warnings,
+)
 from .mlip_workflow import (
     MlipJobConfig,
     MlipRoute,
@@ -265,4 +281,16 @@ __all__ = [
     "foundation_level_warnings",
     "mace_foundation_model",
     "recipe_level_of_theory",
+    "UMA_FOUNDATION_MODELS",
+    "UmaFineTuneConfig",
+    "UmaFoundationModel",
+    "prepare_uma_finetune_job",
+    "uma_foundation_model",
+    "uma_level_warnings",
+    "NEQUIP_FOUNDATION_MODELS",
+    "NequipFineTuneConfig",
+    "NequipFoundationModel",
+    "nequip_foundation_model",
+    "nequip_level_warnings",
+    "prepare_nequip_finetune_job",
 ]

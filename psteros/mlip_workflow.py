@@ -5,7 +5,9 @@
 1. one DFT static calculation (energy and forces) of every structure, plus
    optional extra training structures such as :func:`psteros.rattled_copies`;
 2. a replay fine-tune of a MACE foundation model on those labels (one model
-   per seed of :class:`~psteros.MaceFineTuneConfig`), on a GPU computer;
+   per seed of :class:`~psteros.MaceFineTuneConfig`; or of a UMA model with
+   :class:`~psteros.UmaFineTuneConfig`, or of a NequIP or Allegro model with
+   :class:`~psteros.NequipFineTuneConfig`), on a GPU computer;
 3. the model of the first seed relaxes every structure (cell fixed);
 4. ``active_learning_rounds`` times: one DFT static at each relaxed geometry
    is added to the labels, the model is fine-tuned again from the foundation
@@ -47,6 +49,8 @@ from typing import Any, Mapping, Sequence
 
 from psteros.config import CalculationOverride, ExecutionPolicy, SurfaceWorkflowConfig
 from psteros.mlip import MaceFineTuneConfig, MlipRelaxation, MlipRelaxConfig
+from psteros.nequip import NequipFineTuneConfig
+from psteros.uma import UmaFineTuneConfig
 from psteros.surface_study import ChargeNeutralStudyResult
 from psteros.vibrations_workflow import VibrationsConfig
 
@@ -62,11 +66,13 @@ NON_METALLIC_WARNING = (
 
 @dataclass(frozen=True)
 class MlipJobConfig:
-    """Where the MACE fine-tunes and relaxations run.
+    """Where the MACE (or UMA, NequIP, Allegro) fine-tunes and relaxations run.
 
     ``code_label`` is an AiiDA code whose executable is the Python of an
     environment with ase, torch and mace-torch on the GPU computer that holds
-    ``MaceFineTuneConfig.foundation_model``; ``execution`` gives the scheduler
+    ``MaceFineTuneConfig.foundation_model`` (for a :class:`psteros.UmaFineTuneConfig`,
+    an environment with fairchem-core instead; for a :class:`psteros.NequipFineTuneConfig`,
+    one with nequip and nequip-allegro); ``execution`` gives the scheduler
     settings of one job (one GPU; ``with_mpi=False``, the jobs run one Python
     process). Each fine-tune and each relaxation is one job; a relaxation
     links the remote folder of its fine-tune, where the models stay, so that
@@ -168,7 +174,7 @@ def _add_static(workgraph: Any, static: SurfaceWorkflowConfig, name: str, label:
 def build_mlip_surface_workgraph(
     structures: Mapping[str, Any],
     static: SurfaceWorkflowConfig,
-    fine_tune: MaceFineTuneConfig,
+    fine_tune: MaceFineTuneConfig | UmaFineTuneConfig | NequipFineTuneConfig,
     relax: MlipRelaxConfig = MlipRelaxConfig(),
     *,
     job: MlipJobConfig,
@@ -256,7 +262,7 @@ def build_mlip_surface_workgraph(
 def _mlip_workgraph(
     structures: Mapping[str, Any],
     static: SurfaceWorkflowConfig,
-    fine_tune: MaceFineTuneConfig,
+    fine_tune: MaceFineTuneConfig | UmaFineTuneConfig | NequipFineTuneConfig,
     relax: MlipRelaxConfig,
     *,
     job: MlipJobConfig,
@@ -280,8 +286,15 @@ def _mlip_workgraph(
         _check_labels(extra)
     if not isinstance(job, MlipJobConfig):
         raise TypeError("job must be an MlipJobConfig")
-    if not isinstance(fine_tune, MaceFineTuneConfig) or not isinstance(relax, MlipRelaxConfig):
-        raise TypeError("fine_tune must be a MaceFineTuneConfig and relax an MlipRelaxConfig")
+    families = {MaceFineTuneConfig: "mace", UmaFineTuneConfig: "uma", NequipFineTuneConfig: "nequip"}
+    if type(fine_tune) not in families or not isinstance(relax, MlipRelaxConfig):
+        raise TypeError("fine_tune must be a MaceFineTuneConfig, a UmaFineTuneConfig or a NequipFineTuneConfig and "
+                        "relax an MlipRelaxConfig")
+    family = families[type(fine_tune)]
+    # the head the deployed models run: MACE's fine-tuned head (relax.head), or the UMA task the fine-tune kept;
+    # a NequIP-framework model has none
+    head = fine_tune.task if family == "uma" else relax.head
+    suffix = ".nequip.zip" if family == "nequip" else ".model"  # the file the fine-tune job writes per seed
     if isinstance(active_learning_rounds, bool) or not isinstance(active_learning_rounds, int) or active_learning_rounds < 0:
         raise ValueError("active_learning_rounds must be a non-negative integer")
     if metallic_bulk not in structures:
@@ -305,11 +318,19 @@ def _mlip_workgraph(
     plain_extra = {label: _pymatgen(label, structure) for label, structure in extra.items()}
     if fine_tune.foundation_name is not None:
         from psteros.mace_models import foundation_level_warnings
+        from psteros.nequip import nequip_level_warnings
+        from psteros.uma import uma_level_warnings
 
         present = {site.specie.symbol for item in (*plain.values(), *plain_extra.values()) for site in item}
-        for message in foundation_level_warnings(fine_tune.foundation_name, fine_tune.foundation_head,
-                                                 static.calculation, present):
-            warnings.warn(f"MaceFineTuneConfig: {message}", UserWarning, stacklevel=3)
+        if family == "uma":
+            messages = uma_level_warnings(fine_tune.foundation_name, fine_tune.task, static.calculation, present)
+        elif family == "nequip":
+            messages = nequip_level_warnings(fine_tune.foundation_name, static.calculation, present)
+        else:
+            messages = foundation_level_warnings(fine_tune.foundation_name, fine_tune.foundation_head,
+                                                 static.calculation, present)
+        for message in messages:
+            warnings.warn(f"{type(fine_tune).__name__}: {message}", UserWarning, stacklevel=3)
     for label, sites in fixed_sites.items():
         if any(site < 0 or site >= len(plain[label]) for site in sites):
             raise ValueError(f"{label}: fixed_sites must be within [0, {len(plain[label])})")
@@ -381,6 +402,8 @@ def _mlip_workgraph(
         }
         if not metal_check:
             options["metal_check"] = False
+        if family != "mace":  # left out for MACE: the settings of MACE graphs stay as they were
+            options["family"] = family
         settings = orm.Dict(options)
         folder = workgraph.add_task(
             mlip_training_folder, name=f"mlip_round{round_}_training", settings=settings,
@@ -391,10 +414,11 @@ def _mlip_workgraph(
             nodes={"job": folder.outputs.result}, outputs=["summary.json"],
             metadata={"label": f"{name}_finetune", "options": dict(execution)},
         )
-        models = {f"seed{seed}": (f"finetune/models/{name}_seed{seed}.model", relax.head) for seed in fine_tune.seeds}
+        models = {f"seed{seed}": (f"finetune/models/{name}_seed{seed}{suffix}", head) for seed in fine_tune.seeds}
         with tempfile.TemporaryDirectory() as scratch:
             relax_folder = orm.FolderData(tree=str(prepare_relax_job(
-                Path(scratch) / "relax", plain, models, relax, fixed_sites=fixed_sites, device=job.device)))
+                Path(scratch) / "relax", plain, models, relax, fixed_sites=fixed_sites, device=job.device,
+                family=family)))
         relaxation = workgraph.add_task(
             shelljob, name=f"mlip_round{round_}_relax", command=code, arguments=["-u", "relax.py"],
             nodes={"job": relax_folder, "finetune": finetune.outputs.remote_folder}, filenames={"finetune": "finetune"},
@@ -434,15 +458,15 @@ def _mlip_workgraph(
                 workgraph.outputs.__setattr__(f"{label}_mlip_dft_retrieved", retrieved)
     if vibrations is not None:
         _add_mlip_vibrations(workgraph, vibrations, final, displaced, plain, code=code, execution=execution,
-                             model=(models[deployed][0], relax.head), deployed=deployed, relax=relax, job=job,
-                             finetune=finetune, name=static.name)
+                             model=(models[deployed][0], head), deployed=deployed, relax=relax, job=job,
+                             finetune=finetune, name=static.name, family=family)
     if submit:
         workgraph.submit()
     return workgraph
 
 
 def _add_mlip_vibrations(workgraph, vibrations, structures, displaced, plain, *, code, execution, model, deployed,
-                         relax, job, finetune, name) -> None:
+                         relax, job, finetune, name, family="mace") -> None:
     """The GPU job of the harmonic modes and one modes task per label (``<label>_mlip_vibrations``)."""
 
     from aiida import orm
@@ -462,11 +486,12 @@ def _add_mlip_vibrations(workgraph, vibrations, structures, displaced, plain, *,
             ).outputs.result
             sites[label] = list(range(len(plain[label]) * sizes[label]))
         targets[label] = structure
+    options = {"model": list(model), "displaced_sites": sites, "device": job.device,
+               "displacement_angstrom": vibrations.displacement_angstrom, "default_dtype": relax.default_dtype}
+    if family != "mace":
+        options["family"] = family
     folder = workgraph.add_task(
-        mlip_vibrations_folder, name="mlip_vibrations_job",
-        settings=orm.Dict({"model": list(model), "displaced_sites": sites, "device": job.device,
-                           "displacement_angstrom": vibrations.displacement_angstrom,
-                           "default_dtype": relax.default_dtype}),
+        mlip_vibrations_folder, name="mlip_vibrations_job", settings=orm.Dict(options),
         structures={f"structure_{label}": structure for label, structure in targets.items()},
     )
     forces = workgraph.add_task(
@@ -827,7 +852,7 @@ class MlipSurfaceStudy:
     def build(
         self,
         static: SurfaceWorkflowConfig,
-        fine_tune: MaceFineTuneConfig,
+        fine_tune: MaceFineTuneConfig | UmaFineTuneConfig | NequipFineTuneConfig,
         relax: MlipRelaxConfig = MlipRelaxConfig(),
         *,
         job: MlipJobConfig,
@@ -1067,7 +1092,7 @@ class MlipRoute:
     def build(
         self,
         static: SurfaceWorkflowConfig,
-        fine_tune: MaceFineTuneConfig,
+        fine_tune: MaceFineTuneConfig | UmaFineTuneConfig | NequipFineTuneConfig,
         relax: MlipRelaxConfig = MlipRelaxConfig(),
         *,
         job: MlipJobConfig,

@@ -257,6 +257,112 @@ the models trained on OMat24 do best among the MACE models (MACE-OMAT 7.8 %
 mean absolute percentage error, MACE-MPA 9.7 %, MACE-MP-0b3 25.2 %). After
 fine-tuning such differences shrink; choose by the level of theory first.
 
+.. _mlip-uma:
+
+UMA (fairchem) instead of MACE
+------------------------------
+
+The route also runs on Meta's UMA models (fairchem): give a
+``psteros.UmaFineTuneConfig`` where a ``MaceFineTuneConfig`` goes, and an
+``MlipJobConfig`` whose code is the Python of a fairchem environment on the
+GPU computer (``fairchem-core``, Python 3.11 or later). Everything else (the
+DFT statics, the active-learning round, the relaxations, the vibrations, the
+one-energy-source rule and the analysis) is the same:
+
+.. code-block:: python
+
+   model = psteros.uma_foundation_model("uma-s-1p2p1")
+   print(model.url)                      # gated: accept the licence on Hugging Face, then download
+   fine_tune = psteros.UmaFineTuneConfig.for_foundation(
+       "uma-s-1p2p1", "/work/me/models/uma-s-1p2p1.pt",
+       replay_file="replay-data-mh-1-omat-pbe.xyz", epochs=20)
+   job = psteros.MlipJobConfig("uma-python@gpu-cluster", gpu_execution)
+   graph = route.build(static, fine_tune, job=job, submit=True)
+
+``UmaFineTuneConfig(foundation_model, foundation_model_sha256=None,
+task="omat", replay=True, replay_file=None, ..., epochs=20,
+learning_rate=1e-4, weight_decay=1e-3, batch_size=2, energy_weight=20.0,
+forces_weight=2.0, ema_decay=0.999, seeds=(20260920,), foundation_name=None)``:
+``task`` is the UMA task the fine-tune starts from (``"omat"``, inorganic
+materials at PBE/PBE+U, for slabs), and the deployed model runs that task.
+
+**How the job fine-tunes UMA.** fairchem's own fine-tune starts from the raw
+(not the averaged) weights of the backbone, builds a new energy head from
+random weights and fits new element references, so its starting model is
+not the foundation model. The psteros job (``uma_finetune.py``) instead
+starts from the averaged weights that fairchem's inference uses, merges
+UMA's per-task head on ``task`` and copies it into the new head, keeps the
+foundation's normalizer and sets the element references of the task plus one
+shift per element (fitted to E_DFT − E_UMA over the training frames, as for
+MACE). A first pass at a zero learning rate checks,
+through the same checkpoint the training writes, that this model reproduces
+the foundation model (shifted) on a training frame and a replay structure.
+Then the training proper runs with the replay structures labelled by the
+foundation model (with the same shifts) among the DFT frames, so the model is
+pulled towards your DFT without forgetting the foundation elsewhere.
+
+``fairchem`` keeps an exponential moving average of the weights (``ema_decay``)
+and its inference loads that average; with few training steps a decay close to
+1 leaves the model near the foundation, so keep ``epochs × frames /
+batch_size`` well above ``1 / (1 − ema_decay)``.
+
+.. _mlip-nequip:
+
+NequIP and Allegro instead of MACE
+----------------------------------
+
+The route also runs on the foundation models of the NequIP framework
+(nequip.net, CC BY 4.0): give a ``psteros.NequipFineTuneConfig`` and an
+``MlipJobConfig`` whose code is the Python of an environment with ``nequip``
+(and ``nequip-allegro`` for Allegro models) on the GPU computer:
+
+.. code-block:: python
+
+   model = psteros.nequip_foundation_model("nequip-oam-l")
+   print(model.download)    # nequip.net:mir-group/NequIP-OAM-L:0.1
+   fine_tune = psteros.NequipFineTuneConfig.for_foundation(
+       "nequip-oam-l", "/work/me/models/NequIP-OAM-L-0.1.nequip.zip",
+       replay_file="replay-data-mh-1-omat-pbe.xyz", epochs=30)
+   job = psteros.MlipJobConfig("nequip-python@gpu-cluster", gpu_execution)
+   graph = route.build(static, fine_tune, job=job, submit=True)
+
+``psteros.NEQUIP_FOUNDATION_MODELS`` lists ``nequip-oam-s``, ``-m``, ``-l``,
+``-xl`` and ``allegro-oam-l`` (all trained on OMat24, then sAlex and MPtrj:
+PBE/PBE+U). Download a package once on a computer with internet, for
+example with ``python -c "from nequip.model.saved_models.load_utils import
+load_saved_model; load_saved_model('nequip.net:mir-group/NequIP-OAM-L:0.1')"``
+(it lands in ``~/.nequip/model_cache``, or ``$NEQUIP_CACHE_DIR``), and give
+its path. Allegro is strictly local, the fastest for large slabs.
+
+``NequipFineTuneConfig(foundation_model, foundation_model_sha256=None,
+replay=True, replay_file=None, ..., epochs=30, learning_rate=1e-4,
+batch_size=2, energy_weight=1.0, forces_weight=1.0, ema_decay=0.999,
+seeds=(20260920,), foundation_name=None)``: the job (``nequip_finetune.py``)
+follows nequip's fine-tuning guide (the package, its cutoff and atom types,
+``nequip-train`` with an EMA model and Adam) and starts from the foundation
+model: the per-type energy shifts are the foundation's plus one shift per
+element fitted to E_DFT − E_foundation, so the untrained model reproduces the
+foundation (shifted), which a zero-learning-rate pass checks through the
+checkpoint the training writes. The replay structures are labelled by the
+foundation model with the same shifts. Each model is packaged
+(``models/<name>.nequip.zip``) and run eagerly by the relaxation and
+vibrations jobs (nothing is compiled, so no C++ compiler is needed).
+
+Slow start of the GPU jobs
+--------------------------
+
+Each fine-tune, relaxation and vibrations job starts one Python process that
+imports torch and the MLIP package (MACE, fairchem, nequip). On a cluster
+whose shared filesystem serves many small files slowly, this can take ten
+minutes or more per job on a GPU node (on one CephFS cluster: about 8 minutes for torch
+and the first CUDA call and 9 minutes for fairchem), against
+seconds from local disk. ``examples/mlip_routes/node_local_python.sh`` runs
+the environment from the node's local disk: pack the (conda) environment once
+into a tar file, make the script the executable of the AiiDA code and set
+``export PSTEROS_ENV_TAR=/path/to/env.tar`` in the code's prepend text. The
+first job on a node unpacks the tar into ``/tmp/psteros_envs`` (once per
+node and tar version); the imports then take seconds.
+
 .. _mlip-vibrations:
 
 Vibrations on the GPU

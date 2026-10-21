@@ -86,6 +86,25 @@ Recent Updates
   named model the MLIP builders warn when the functional or the +U of the DFT recipe differs from the training data
   of the head (``recipe_level_of_theory``, ``foundation_level_warnings``). Recipes without ``foundation_name`` are not
   checked and give the same graphs, settings and results as before
+* UMA (fairchem) on the MLIP route (see :ref:`mlip-uma`): ``UmaFineTuneConfig`` in place of ``MaceFineTuneConfig``
+  in ``build_mlip_surface_workgraph``, ``MlipSurfaceStudy.build`` and ``MlipRoute.build``; ``UMA_FOUNDATION_MODELS``,
+  ``uma_foundation_model``, ``UmaFoundationModel``, ``uma_level_warnings`` and ``prepare_uma_finetune_job`` with the
+  job script ``uma_finetune.py``. The fine-tune starts from the foundation model (its averaged weights, its per-task
+  energy head merged on the task and copied, its element references plus fitted per-element shifts), which a zero-learning-rate pass checks before
+  training, and replays foundation-labelled structures. ``prepare_relax_job`` and ``prepare_vibrations_job`` take
+  ``family="uma"`` and ``relax.py`` and ``vibrations.py`` load either family. MACE graphs keep the same settings and
+  job files, except that the two scripts import the calculator of their family when they run
+* NequIP and Allegro (the NequIP framework) on the MLIP route (see :ref:`mlip-nequip`): ``NequipFineTuneConfig`` in
+  place of ``MaceFineTuneConfig``; ``NEQUIP_FOUNDATION_MODELS`` (NequIP-OAM-S/M/L/XL and Allegro-OAM-L of
+  nequip.net), ``nequip_foundation_model``, ``NequipFoundationModel``, ``nequip_level_warnings`` and
+  ``prepare_nequip_finetune_job`` with the job script ``nequip_finetune.py`` (``nequip-train`` from the package, the
+  foundation's per-type energy shifts plus fitted per-element shifts, checked by a zero-learning-rate pass, replay
+  of foundation-labelled structures, packaged models). ``prepare_relax_job`` and ``prepare_vibrations_job`` take
+  ``family="nequip"``
+* ``examples/mlip_routes/node_local_python.sh``: the executable for the AiiDA code of the GPU jobs that runs the
+  environment from a tar unpacked once per node on local disk, for clusters whose shared filesystem makes the imports
+  of torch and the MLIP packages take minutes. The NequIP job runs ``nequip-train`` and ``nequip-package`` as modules of
+  its own Python, so the environment can live anywhere
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

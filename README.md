@@ -17,7 +17,7 @@ Determining which termination is thermodynamically favored requires coordinating
 
 PS-TEROS automates the pathway from crystal structures to thermodynamic stability:
 
-- **Two Routes to the Energies:** the **MLIP route**, the default when you have a GPU: a few DFT single points teach a MACE foundation model your system, the fine-tuned model relaxes every slab on the GPU, and one DFT single point per relaxed geometry gives its energy, so no slab is relaxed with DFT and a study can afford many more terminations (`MlipRoute`, `MlipSurfaceStudy`, [guide](docs/MLIP_SURFACES.md)). Without a GPU, the **DFT route** relaxes every slab with DFT (relaxation → static).
+- **Two Routes to the Energies:** the **MLIP route**, the default when you have a GPU: a few DFT single points teach a foundation model your system (MACE by default, or UMA, NequIP or Allegro), the fine-tuned model relaxes every slab on the GPU, and one DFT single point per relaxed geometry gives its energy, so no slab is relaxed with DFT and a study can afford many more terminations (`MlipRoute`, `MlipSurfaceStudy`, [guide](docs/MLIP_SURFACES.md)). Without a GPU, the **DFT route** relaxes every slab with DFT (relaxation → static).
 - **Slab Builders:** Programmatically generates bulk references and multiple symmetric/asymmetric surface terminations (e.g., rutile SnO₂).
 - **Typed DFT Recipes:** Enforces strict parameter harmony across all terminations, bulk references, and reservoirs in **VASP** (the central engine, through aiida-vasp); the same recipes also run **Quantum ESPRESSO**, and **CP2K** runs statics and relaxations.
 - **AiiDA WorkGraphs:** Orchestrates multi-stage workflows (relaxation → static SCF, or the MLIP route's DFT and GPU jobs) with bounded job concurrency and full provenance tracking.
@@ -192,7 +192,7 @@ POTCAR family, see the [Installation Guide](docs/source/installation.rst).
 - **[SnO₂ Surface Model](docs/source/examples.rst):** Deep dive into terminations and thermodynamic reference states.
 - **[VASP Guide](docs/source/vasp-workflow.rst):** Setting up a two-stage relaxation → static workflow, with per-structure settings and fixed atoms.
 - **[Quantum ESPRESSO Guide](docs/source/qe-workflow.rst):** The same workflow with Quantum ESPRESSO.
-- **[MLIP Route](docs/MLIP_SURFACES.md):** The default route with a GPU, for metals, semiconductors and insulators: DFT statics, a replay fine-tune of MACE-MH-1, GPU relaxations, one active-learning round, the final DFT statics and optional vibrations from the model.
+- **[MLIP Route](docs/MLIP_SURFACES.md):** The default route with a GPU, for metals, semiconductors and insulators: DFT statics, a replay fine-tune of MACE-MH-1 (or another MACE model, UMA, NequIP or Allegro), GPU relaxations, one active-learning round, the final DFT statics and optional vibrations from the model.
 - **[Surface Phase Diagrams](docs/source/phase-diagram.rst):** From energies to γ(Δμ<sub>O</sub>) (binary oxides) or stable-termination maps over (Δμ<sub>A</sub>, Δμ<sub>O</sub>) (ternary oxides), as a figure or a CSV table.
 - **[API Reference](docs/source/api.rst):** Public classes, functions, and configuration schemas.
 

@@ -1,6 +1,7 @@
-"""psteros MACE relaxation job: runs on the GPU computer and needs only ase, torch and mace-torch.
+"""psteros relaxation job: runs on the GPU computer and needs only ase, torch and mace-torch (or fairchem-core, or nequip).
 
-``job.json`` (written by psteros) names the models (``{name: {"path": ..., "head": ...}}``), the structures
+``job.json`` (written by psteros) names the models (``{name: {"path": ..., "head": ...}}``, with ``"family": "uma"``
+for a UMA model, whose ``head`` is its task), the structures
 (``[{"label": ..., "file": "<label>.extxyz", "fixed": [zero-based indices]}]``) and the settings (``device``,
 ``default_dtype``, ``optimizer``, ``fmax_ev_per_angstrom``, ``max_steps``). Every model relaxes every structure
 (positions only, cell fixed, fixed atoms kept in place), as ``psteros.mlip.relax_with_calculator`` does. Results:
@@ -18,7 +19,6 @@ import numpy as np
 from ase.constraints import FixAtoms
 from ase.io import read, write
 from ase.optimize import BFGS, FIRE, LBFGS
-from mace.calculators import MACECalculator
 
 ROOT = Path.cwd()
 JOB = json.loads((ROOT / "job.json").read_text())
@@ -31,10 +31,38 @@ def dump() -> None:
     (ROOT / "results.json").write_text(json.dumps(RESULTS, indent=2, allow_nan=False) + "\n")
 
 
+def calculator(model: dict):
+    """The ASE calculator of ``model``: MACE (``family`` left out or ``"mace"``), UMA (``"uma"``, ``head`` = task) or
+    the NequIP framework (``"nequip"``: NequIP and Allegro packages, ``head`` unused)."""
+
+    family = model.get("family", "mace")
+    if family == "mace":
+        from mace.calculators import MACECalculator
+
+        return MACECalculator(model_paths=str(model["path"]), device=JOB.get("device", "cuda"),
+                              default_dtype=JOB.get("default_dtype", "float64"), head=model["head"])
+    if family == "uma":
+        from fairchem.core import FAIRChemCalculator
+        from fairchem.core.units.mlip_unit import load_predict_unit
+        from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+        # MoLE merged for the fixed composition (exact), no torch.compile (it needs a recent C++ compiler)
+        settings = InferenceSettings(tf32=False, activation_checkpointing=False, merge_mole=True, compile=False,
+                                     base_precision_dtype=JOB.get("default_dtype", "float64"))
+        unit = load_predict_unit(str(model["path"]), inference_settings=settings, device=JOB.get("device", "cuda"))
+        return FAIRChemCalculator(unit, task_name=model["head"])
+    if family == "nequip":
+        from nequip.integrations.ase import NequIPCalculator
+
+        # a NequIP or Allegro package, run eagerly (nothing compiled); its type names are chemical symbols
+        return NequIPCalculator._from_saved_model(str(model["path"]), device=JOB.get("device", "cuda"),
+                                                  chemical_species_to_atom_type_map=True)
+    raise ValueError(f"unknown model family {family!r}")
+
+
 try:
     for model_name, model in JOB["models"].items():
-        calc = MACECalculator(model_paths=str(model["path"]), device=JOB.get("device", "cuda"),
-                              default_dtype=JOB.get("default_dtype", "float64"), head=model["head"])
+        calc = calculator(model)
         out = ROOT / "relaxed" / model_name
         out.mkdir(parents=True, exist_ok=False)
         rows = RESULTS["models"].setdefault(model_name, {"path": str(model["path"]), "head": model["head"],

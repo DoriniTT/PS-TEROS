@@ -1,6 +1,7 @@
-"""psteros MACE vibrations job: runs on the GPU computer and needs only ase, numpy, torch and mace-torch.
+"""psteros vibrations job: runs on the GPU computer and needs only ase, numpy, torch and mace-torch (or fairchem-core, or nequip).
 
-``job.json`` (written by ``psteros.mlip.prepare_vibrations_job``) names the model (``{"path": ..., "head": ...}``), the
+``job.json`` (written by ``psteros.mlip.prepare_vibrations_job``) names the model (``{"path": ..., "head": ...}``,
+with ``"family": "uma"`` for a UMA model, whose ``head`` is its task), the
 settings (``device``, ``default_dtype``, ``displacement_angstrom``) and the structures
 (``[{"label": ..., "file": "<label>.extxyz", "sites": [zero-based indices to displace]}]``). Every listed site is moved
 by ``+d`` and ``-d`` along x, y and z, as the displaced DFT calculations of ``psteros.build_vibrations_workgraph`` are,
@@ -17,7 +18,6 @@ from pathlib import Path
 
 import numpy as np
 from ase.io import read
-from mace.calculators import MACECalculator
 
 ROOT = Path.cwd()
 JOB = json.loads((ROOT / "job.json").read_text())
@@ -28,9 +28,37 @@ def dump() -> None:
     (ROOT / "results.json").write_text(json.dumps(RESULTS, indent=2, allow_nan=False) + "\n")
 
 
+def calculator(model: dict):
+    """The ASE calculator of ``model``: MACE (``family`` left out or ``"mace"``), UMA (``"uma"``, ``head`` = task) or
+    the NequIP framework (``"nequip"``: NequIP and Allegro packages, ``head`` unused)."""
+
+    family = model.get("family", "mace")
+    if family == "mace":
+        from mace.calculators import MACECalculator
+
+        return MACECalculator(model_paths=str(model["path"]), device=JOB.get("device", "cuda"),
+                              default_dtype=JOB.get("default_dtype", "float64"), head=model["head"])
+    if family == "uma":
+        from fairchem.core import FAIRChemCalculator
+        from fairchem.core.units.mlip_unit import load_predict_unit
+        from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+
+        # MoLE merged for the fixed composition (exact), no torch.compile (it needs a recent C++ compiler)
+        settings = InferenceSettings(tf32=False, activation_checkpointing=False, merge_mole=True, compile=False,
+                                     base_precision_dtype=JOB.get("default_dtype", "float64"))
+        unit = load_predict_unit(str(model["path"]), inference_settings=settings, device=JOB.get("device", "cuda"))
+        return FAIRChemCalculator(unit, task_name=model["head"])
+    if family == "nequip":
+        from nequip.integrations.ase import NequIPCalculator
+
+        # a NequIP or Allegro package, run eagerly (nothing compiled); its type names are chemical symbols
+        return NequIPCalculator._from_saved_model(str(model["path"]), device=JOB.get("device", "cuda"),
+                                                  chemical_species_to_atom_type_map=True)
+    raise ValueError(f"unknown model family {family!r}")
+
+
 try:
-    calc = MACECalculator(model_paths=str(JOB["model"]["path"]), device=JOB.get("device", "cuda"),
-                          default_dtype=JOB.get("default_dtype", "float64"), head=JOB["model"]["head"])
+    calc = calculator(JOB["model"])
     step = float(JOB["displacement_angstrom"])
     out = ROOT / "vibrations"
     out.mkdir(exist_ok=False)

@@ -23,7 +23,7 @@ other compounds are plain PBE there.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
@@ -325,7 +325,15 @@ def foundation_level_warnings(model: str, head: str | None, calculation: Any, el
 
     entry = mace_foundation_model(model)
     info = entry.head(head)
-    label = f"{entry.name} (head {info.name!r})"
+    alternatives = [(f"{other.name} (head {item.name!r})", item) for other in _MODELS for item in other.heads]
+    return _level_warnings(f"{entry.name} (head {info.name!r})", info, calculation, elements, alternatives)
+
+
+def _level_warnings(label: str, info: MaceFoundationHead, calculation: Any, elements: Iterable[str],
+                    alternatives: Sequence[tuple[str, MaceFoundationHead]]) -> list[str]:
+    """The checks of :func:`foundation_level_warnings` for the head ``info`` (``label`` in the messages), suggesting
+    the matching heads among ``alternatives`` (label, head)."""
+
     messages = []
     if not info.for_slabs:
         messages.append(f"{label} was trained on molecules ({info.training_data}), not on solids or slabs")
@@ -333,8 +341,7 @@ def foundation_level_warnings(model: str, head: str | None, calculation: Any, el
     if functional is None:
         return messages
     if functional != info.functional:
-        closer = [f"{other.name} (head {item.name!r})" for other in _MODELS for item in other.heads
-                  if item.functional == functional and item.for_slabs]
+        closer = [name for name, item in alternatives if item.functional == functional and item.for_slabs]
         messages.append(
             f"the DFT recipe uses {functional} but {label} was trained on {info.functional} data; the fine-tune has "
             f"to learn the difference between the functionals from your labels"
@@ -344,12 +351,12 @@ def foundation_level_warnings(model: str, head: str | None, calculation: Any, el
     present = set(elements)
     hubbard_metals = sorted(present.intersection(MP_HUBBARD_METALS)) if present.intersection(MP_HUBBARD_ANIONS) else []
     if info.hubbard == "mp" and hubbard_metals and not uses_u:
+        closer = [name for name, item in alternatives
+                  if item.functional == functional and item.hubbard == "none" and item.for_slabs]
         messages.append(
             f"{label} was trained with the Materials Project +U on {', '.join(hubbard_metals)} in oxides and "
-            f"fluorides, but the DFT recipe has no +U (trained on {functional} without +U: "
-            + ", ".join(f"{other.name} (head {item.name!r})" for other in _MODELS for item in other.heads
-                        if item.functional == functional and item.hubbard == "none" and item.for_slabs)
-            + ")"
+            f"fluorides, but the DFT recipe has no +U"
+            + (f" (trained on {functional} without +U: {', '.join(closer)})" if closer else "")
         )
     if info.hubbard == "none" and uses_u:
         messages.append(f"{label} was trained without +U, but the DFT recipe uses +U")

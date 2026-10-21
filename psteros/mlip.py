@@ -569,6 +569,23 @@ def prepare_finetune_job(
     return folder
 
 
+MODEL_FAMILIES = ("mace", "uma", "nequip")
+
+
+def _check_family(family: str) -> None:
+    if family not in MODEL_FAMILIES:
+        raise ValueError(f"family must be one of {MODEL_FAMILIES}, got {family!r}")
+
+
+def _model_entry(path: Any, head: str, family: str) -> dict[str, str]:
+    """A model of a job: path and head, and the family unless it is MACE (the job files of MACE stay as they were)."""
+
+    entry = {"path": str(path), "head": head}
+    if family != "mace":
+        entry["family"] = family
+    return entry
+
+
 def prepare_relax_job(
     directory: str | Path,
     structures: Mapping[str, Any],
@@ -577,9 +594,13 @@ def prepare_relax_job(
     *,
     fixed_sites: Mapping[str, Sequence[int]] | None = None,
     device: str = "cuda",
+    family: str = "mace",
 ) -> Path:
     """Write the folder of one relaxation job: every model of ``models`` (name -> (path, head)) relaxes every
-    pymatgen structure of ``structures`` (label -> structure), keeping ``fixed_sites[label]`` in place."""
+    pymatgen structure of ``structures`` (label -> structure), keeping ``fixed_sites[label]`` in place.
+
+    ``family`` is that of the models: ``"mace"`` (the default; ``head`` is a MACE head), ``"uma"`` (``head`` is
+    the UMA task) or ``"nequip"`` (NequIP and Allegro packages; ``head`` is not used), see :data:`MODEL_FAMILIES`."""
 
     from psteros.mlip_jobs import script_path
 
@@ -591,6 +612,7 @@ def prepare_relax_job(
         raise ValueError(f"fixed_sites names labels that are not in structures: {unknown}")
     if device not in ("cuda", "cpu"):
         raise ValueError("device must be 'cuda' or 'cpu'")
+    _check_family(family)
     folder = Path(directory)
     folder.mkdir(parents=True, exist_ok=False)
     items = []
@@ -604,7 +626,7 @@ def prepare_relax_job(
     job = {
         "device": device, "default_dtype": config.default_dtype, "optimizer": config.optimizer,
         "fmax_ev_per_angstrom": config.fmax_ev_per_angstrom, "max_steps": config.max_steps,
-        "models": {name: {"path": str(path), "head": head} for name, (path, head) in models.items()},
+        "models": {name: _model_entry(path, head, family) for name, (path, head) in models.items()},
         "structures": items,
     }
     (folder / "job.json").write_text(json.dumps(job, indent=2) + "\n")
@@ -621,11 +643,13 @@ def prepare_vibrations_job(
     displacement_angstrom: float = 0.01,
     default_dtype: str = "float64",
     device: str = "cuda",
+    family: str = "mace",
 ) -> Path:
     """Write the folder of one vibrations job: the model ``model`` (path, head) gives the forces of every pymatgen
     structure of ``structures`` (label -> structure) with each site of ``displaced_sites[label]`` moved by ``+d`` and
     ``-d`` along x, y and z (``d = displacement_angstrom``), as the displaced DFT statics of
-    :func:`psteros.build_vibrations_workgraph`. A bulk is given as its supercell."""
+    :func:`psteros.build_vibrations_workgraph`. A bulk is given as its supercell. ``family`` as in
+    :func:`prepare_relax_job`."""
 
     from psteros.mlip_jobs import script_path
 
@@ -639,6 +663,7 @@ def prepare_vibrations_job(
         raise ValueError("device must be 'cuda' or 'cpu'")
     if default_dtype not in ("float32", "float64"):
         raise ValueError("default_dtype must be 'float32' or 'float64'")
+    _check_family(family)
     folder = Path(directory)
     folder.mkdir(parents=True, exist_ok=False)
     items = []
@@ -652,7 +677,7 @@ def prepare_vibrations_job(
     path, head = model
     job = {
         "device": device, "default_dtype": default_dtype, "displacement_angstrom": float(displacement_angstrom),
-        "model": {"path": str(path), "head": head}, "structures": items,
+        "model": _model_entry(path, head, family), "structures": items,
     }
     (folder / "job.json").write_text(json.dumps(job, indent=2) + "\n")
     (folder / "vibrations.py").write_text(script_path("vibrations.py").read_text())

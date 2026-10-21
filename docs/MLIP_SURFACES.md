@@ -211,6 +211,41 @@ differs from the head's training data: the per-element energy shifts of the
 fine-tune absorb constant offsets, not a different functional. Details, and
 the head names of each file, in [`docs/source/mlip.rst`](source/mlip.rst).
 
+## UMA instead of MACE
+
+The route also runs on Meta's UMA models (fairchem): pass a
+`psteros.UmaFineTuneConfig` instead of a `MaceFineTuneConfig`, with an
+`MlipJobConfig` whose code is the Python of a fairchem environment on the GPU
+computer. The weights are gated (accept the licence at
+https://huggingface.co/facebook/UMA).
+
+```python
+fine_tune = psteros.UmaFineTuneConfig.for_foundation(
+    "uma-s-1p2p1", "/work/me/models/uma-s-1p2p1.pt", replay_file="replay-data-mh-1-omat-pbe.xyz")
+graph = route.build(static, fine_tune, job=psteros.MlipJobConfig("uma-python@gpu-cluster", gpu), submit=True)
+```
+
+fairchem's own fine-tune starts from a new random energy head; the psteros job
+copies the foundation's head and element references (plus fitted per-element
+shifts) and checks that the untrained model reproduces UMA before training,
+as for MACE. See [`docs/source/mlip.rst`](source/mlip.rst).
+
+## NequIP and Allegro instead of MACE
+
+`psteros.NequipFineTuneConfig` runs the route on a NequIP or Allegro package of
+nequip.net (`NequIP-OAM-S/M/L/XL`, `Allegro-OAM-L`; CC BY 4.0), with an
+`MlipJobConfig` whose code is the Python of an environment with `nequip` (and
+`nequip-allegro`):
+
+```python
+fine_tune = psteros.NequipFineTuneConfig.for_foundation(
+    "nequip-oam-l", "/work/me/models/NequIP-OAM-L-0.1.nequip.zip", replay_file="replay-data-mh-1-omat-pbe.xyz")
+```
+
+As for MACE and UMA, the job starts from the foundation model (its per-type
+energy shifts plus fitted per-element shifts), checks it before training and
+replays foundation-labelled structures.
+
 ## Rules the route enforces
 
 * **The right electron count.** Hand-cut slabs need a metallic bulk (the first
@@ -249,6 +284,7 @@ the head names of each file, in [`docs/source/mlip.rst`](source/mlip.rst).
   `psteros.read_mlip_results`, `psteros.MaceFineTuneConfig`,
   `psteros.MlipJobConfig`, `psteros.free_energies_with_vibrations`,
   `psteros.prepare_vibrations_job`, `psteros.MACE_FOUNDATION_MODELS`,
-  `psteros.foundation_level_warnings`: see
+  `psteros.foundation_level_warnings`, `psteros.UmaFineTuneConfig`,
+  `psteros.NequipFineTuneConfig`: see
   [`docs/source/mlip.rst`](source/mlip.rst) and [`docs/source/api.rst`](source/api.rst).
 * The flowchart: `python docs/images/mlip_route.py`.

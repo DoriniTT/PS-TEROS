@@ -829,6 +829,25 @@ forces in eV/Å; nothing here needs AiiDA.
    ``functional``, ``hubbard`` (``"mp"``, ``"none"`` or ``None``),
    ``training_data`` and ``for_slabs``. See :ref:`mlip-foundation-models`.
 
+``UmaFineTuneConfig(foundation_model, foundation_model_sha256=None, task="omat", replay=True, replay_file=None, replay_min_atoms=2, replay_max_atoms=128, replay_validation_every=5, epochs=20, learning_rate=1e-4, weight_decay=1e-3, batch_size=2, energy_weight=20.0, forces_weight=2.0, ema_decay=0.999, seeds=(20260920,), foundation_name=None)``
+   A UMA fine-tune for the MLIP route (``UmaFineTuneConfig.for_foundation(name, foundation_model, *, task=None, **options)``);
+   ``prepare_uma_finetune_job(directory, frames, config, *, name, replay_train=(), replay_valid=(), device="cuda", seeds=None)``
+   writes its job folder (``uma_finetune.py``, needs fairchem-core). ``UMA_FOUNDATION_MODELS``,
+   ``uma_foundation_model(name)`` and ``UmaFoundationModel`` (``filename``, ``url``, ``licence``,
+   ``tasks``, ``default_task``, ``task(name=None)``) list the UMA checkpoints;
+   ``uma_level_warnings(model, task, calculation, elements)`` is ``foundation_level_warnings`` for a UMA task.
+   See :ref:`mlip-uma`.
+
+``NequipFineTuneConfig(foundation_model, foundation_model_sha256=None, replay=True, replay_file=None, replay_min_atoms=2, replay_max_atoms=128, replay_validation_every=5, epochs=30, learning_rate=1e-4, batch_size=2, energy_weight=1.0, forces_weight=1.0, ema_decay=0.999, seeds=(20260920,), foundation_name=None)``
+   A NequIP or Allegro fine-tune for the MLIP route (``foundation_model``: a
+   ``.nequip.zip`` package; ``NequipFineTuneConfig.for_foundation(name, foundation_model, **options)``);
+   ``prepare_nequip_finetune_job(directory, frames, config, *, name, replay_train=(), replay_valid=(), device="cuda", seeds=None)``
+   writes its job folder (``nequip_finetune.py``, needs nequip). ``NEQUIP_FOUNDATION_MODELS``,
+   ``nequip_foundation_model(name)`` and ``NequipFoundationModel`` (``model_id``, ``download``, ``url``,
+   ``architecture``, ``licence``, ``level``) list the nequip.net models;
+   ``nequip_level_warnings(model, calculation, elements)`` is ``foundation_level_warnings`` for them.
+   See :ref:`mlip-nequip`.
+
 ``recipe_level_of_theory(calculation)``, ``foundation_level_warnings(model, head, calculation, elements)``
    ``(functional, uses_hubbard_u)`` of a QE, VASP or CP2K recipe (``None``
    where it cannot be read), and the messages the MLIP builders turn into
@@ -838,10 +857,12 @@ forces in eV/Å; nothing here needs AiiDA.
 ``select_replay_structures(path, *, elements, min_atoms=2, max_atoms=128, validation_every=5)``
    Replay geometries (training, validation) and a record of the selection.
 
-``prepare_finetune_job(directory, frames, config, *, name, replay_train=(), replay_valid=(), device="cuda", seeds=None)``, ``prepare_relax_job(directory, structures, models, config=MlipRelaxConfig(), *, fixed_sites=None, device="cuda")``
+``prepare_finetune_job(directory, frames, config, *, name, replay_train=(), replay_valid=(), device="cuda", seeds=None)``, ``prepare_relax_job(directory, structures, models, config=MlipRelaxConfig(), *, fixed_sites=None, device="cuda", family="mace")``
    Job folders with the inputs and the self-contained scripts ``finetune.py``
-   and ``relax.py`` (they need only ase, torch and mace-torch).
-``prepare_vibrations_job(directory, structures, model, displaced_sites, *, displacement_angstrom=0.01, default_dtype="float64", device="cuda")``
+   and ``relax.py`` (they need only ase, torch and mace-torch). With
+   ``family="uma"`` the models are UMA models (``head`` is the task) and the
+   scripts need fairchem-core instead.
+``prepare_vibrations_job(directory, structures, model, displaced_sites, *, displacement_angstrom=0.01, default_dtype="float64", device="cuda", family="mace")``
    The folder of a vibrations job: the model ``(path, head)`` gives the forces
    of every structure with each site of ``displaced_sites[label]`` moved by
    ``±d`` along x, y and z (``vibrations.py``; ``vibrations/<label>.npz``).

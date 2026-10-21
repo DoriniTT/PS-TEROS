@@ -44,7 +44,8 @@ def mlip_training_folder(settings: orm.Dict, **inputs) -> orm.FolderData:
     """The folder of one fine-tune job (:func:`psteros.mlip.prepare_finetune_job`) from finished DFT statics.
 
     ``settings`` holds ``backend``, ``name``, ``device``, the
-    :class:`~psteros.mlip.MaceFineTuneConfig` fields (``fine_tune``), the
+    :class:`~psteros.mlip.MaceFineTuneConfig` fields (``fine_tune``; with
+    ``family="uma"`` those of :class:`~psteros.uma.UmaFineTuneConfig`), the
     labels of the training frames (``frames``) and the label of the bulk that
     must be metallic (``metallic_bulk``; not checked when ``metal_check`` is
     false). ``inputs`` holds, for every frame,
@@ -70,7 +71,16 @@ def mlip_training_folder(settings: orm.Dict, **inputs) -> orm.FolderData:
         )
         for label in options["frames"]
     ]
-    config = mlip.MaceFineTuneConfig(**options["fine_tune"])
+    if options.get("family", "mace") == "uma":
+        from psteros.uma import UmaFineTuneConfig, prepare_uma_finetune_job
+
+        config, prepare = UmaFineTuneConfig(**options["fine_tune"]), prepare_uma_finetune_job
+    elif options.get("family") == "nequip":
+        from psteros.nequip import NequipFineTuneConfig, prepare_nequip_finetune_job
+
+        config, prepare = NequipFineTuneConfig(**options["fine_tune"]), prepare_nequip_finetune_job
+    else:
+        config, prepare = mlip.MaceFineTuneConfig(**options["fine_tune"]), mlip.prepare_finetune_job
     replay = {}
     if config.replay:
         replay = {
@@ -78,9 +88,7 @@ def mlip_training_folder(settings: orm.Dict, **inputs) -> orm.FolderData:
             "replay_valid": _read_extxyz(inputs["replay_valid"].get_content()),
         }
     with tempfile.TemporaryDirectory() as scratch:
-        folder = mlip.prepare_finetune_job(
-            Path(scratch) / "job", frames, config, name=options["name"], device=options["device"], **replay
-        )
+        folder = prepare(Path(scratch) / "job", frames, config, name=options["name"], device=options["device"], **replay)
         return orm.FolderData(tree=str(folder))
 
 
@@ -145,7 +153,7 @@ def mlip_vibrations_folder(settings: orm.Dict, **structures) -> orm.FolderData:
         folder = mlip.prepare_vibrations_job(
             Path(scratch) / "job", plain, tuple(options["model"]), options["displaced_sites"],
             displacement_angstrom=options["displacement_angstrom"], default_dtype=options["default_dtype"],
-            device=options["device"],
+            device=options["device"], family=options.get("family", "mace"),
         )
         return orm.FolderData(tree=str(folder))
 
