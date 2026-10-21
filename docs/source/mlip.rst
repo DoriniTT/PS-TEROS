@@ -265,6 +265,45 @@ the models trained on OMat24 do best among the MACE models (MACE-OMAT 7.8 %
 mean absolute percentage error, MACE-MPA 9.7 %, MACE-MP-0b3 25.2 %). After
 fine-tuning such differences shrink; choose by the level of theory first.
 
+.. _mlip-error-bars:
+
+Error bars on gamma
+-------------------
+
+The model relaxes every structure and one DFT static at that geometry gives
+its energy; the DFT minimum is a little lower. ``relaxation_estimate=True``
+in ``build`` (and in ``build_mlip_surface_workgraph``) adds one GPU job with
+the deployed model's Hessian ``H`` at the final geometries, over the atoms
+that relax. With the DFT forces ``F`` of the final statics it gives, for every
+structure, the quasi-Newton step ``H^-1 F`` towards the DFT minimum and the
+energy that a DFT relaxation would still lose,
+
+``dE = -1/2 F^T H^-1 F``  (eV, <= 0; exact for a quadratic energy surface).
+
+The zero modes are left out (3 translations of a periodic cell whose every
+atom relaxes, 5 or 6 for a molecule), and so is every mode softer than
+``min_curvature_ev_per_angstrom2`` (0.05 eV/A^2) or negative (a saddle point
+of the model); the force on them is reported. ``route.gamma_error_bars(graph)``
+lowers every structure (slabs, bulk, references) by its ``dE``, draws the
+diagram again and returns, per termination, the change of gamma
+(``GammaErrorBar``, usually negative): the error that the model's geometry
+puts on that gamma.
+
+.. code-block:: python
+
+   graph = route.build(static, fine_tune, job=job, relaxation_estimate=True, submit=True)
+   # when it has finished
+   for bar in route.gamma_error_bars(orm.load_node(graph.pk)).values():
+       print(bar.summary())   # per slab: d gamma (meV/A2), dE (meV), largest DFT force and step
+
+An estimate is ``reliable`` when no mode was negative, the force on the
+left-out modes is at most 0.05 eV/A and no atom would move more than 0.1 A;
+beyond that the quadratic model is not to be trusted and the structure needs
+another active-learning round or a DFT relaxation. ``read_relaxation_estimates``
+gives the estimates of a graph, ``relaxation_estimate`` the estimate of any
+forces and Hessian (``hessian_from_forces`` builds a Hessian from displaced
+forces).
+
 .. _mlip-uma:
 
 UMA (fairchem) instead of MACE

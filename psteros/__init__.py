@@ -89,6 +89,7 @@ from .vibrations import (
     HarmonicVibrations,
     free_energies_with_vibrations,
     harmonic_vibrations_from_forces,
+    hessian_from_forces,
     molecule_reference_energy_ev,
     solid_free_energy_ev,
 )
@@ -154,7 +155,9 @@ from .mlip_workflow import (
     build_mlip_surface_workgraph,
     read_mlip_energies,
     read_mlip_results,
+    read_relaxation_estimates,
 )
+from .relaxation_estimate import GammaErrorBar, RelaxationEstimate, gamma_error_bars, relaxation_estimate
 
 __version__ = "2.0.0"
 
@@ -293,4 +296,10 @@ __all__ = [
     "nequip_foundation_model",
     "nequip_level_warnings",
     "prepare_nequip_finetune_job",
+    "GammaErrorBar",
+    "RelaxationEstimate",
+    "gamma_error_bars",
+    "hessian_from_forces",
+    "read_relaxation_estimates",
+    "relaxation_estimate",
 ]

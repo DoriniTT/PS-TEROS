@@ -910,7 +910,7 @@ forces in eV/Å; nothing here needs AiiDA.
    gives the study's result (``MlipStudyResult`` or ``PolarStudyResult``);
    ``dft_vibrations`` as above.
 
-``build_mlip_surface_workgraph(structures, static, fine_tune, relax=MlipRelaxConfig(), *, job, metallic_bulk, fixed_sites=None, training_structures=None, active_learning_rounds=1, dft_check=True, vibrations=None, allow_non_metallic=False, submit=False)``
+``build_mlip_surface_workgraph(structures, static, fine_tune, relax=MlipRelaxConfig(), *, job, metallic_bulk, fixed_sites=None, training_structures=None, active_learning_rounds=1, dft_check=True, vibrations=None, allow_non_metallic=False, relaxation_estimate=False, submit=False)``
    The route as one WorkGraph (DFT statics with any backend, aiida-shell GPU
    jobs). Outputs per label: ``<label>_static_parameters``,
    ``<label>_static_retrieved``, ``<label>_mlip_relaxed_structure``,
@@ -925,6 +925,18 @@ forces in eV/Å; nothing here needs AiiDA.
    of the slabs. ``MlipJobConfig(code_label, execution, device="cuda")``
    names the Python of the MACE environment and its scheduler settings
    (``with_mpi=False``).
+
+``relaxation_estimate(forces_ev_per_angstrom, hessian_ev_per_angstrom2, *, sites, zero_modes=0, min_curvature_ev_per_angstrom2=0.05, max_step_angstrom=0.1, max_left_out_force_ev_per_angstrom=0.05)``, ``hessian_from_forces(*, displaced_sites, displacement_angstrom, forces_plus, forces_minus)``
+   ``dE = -1/2 F^T H^-1 F`` over the modes with a restoring force
+   (``RelaxationEstimate``: ``energy_ev``, ``max_force_ev_per_angstrom``,
+   ``max_step_angstrom``, ``modes``, ``negative_modes``, ``soft_modes``,
+   ``left_out_force_ev_per_angstrom``, ``reliable``), and the finite-difference
+   Hessian (eV/Å²). ``read_relaxation_estimates(graph, labels, *, molecules=(), **thresholds)``
+   gives them for a graph built with ``relaxation_estimate=True``;
+   ``gamma_error_bars(base, lowered, estimates, slabs)`` and the
+   ``gamma_error_bars(source, **thresholds)`` methods of ``MlipSurfaceStudy``
+   and ``MlipRoute`` the change of each gamma (``GammaErrorBar``). See
+   :ref:`mlip-error-bars`.
 
 ``read_mlip_results(graph, labels, *, seed=None, round=None)``, ``read_mlip_energies(graph, labels, *, energy_source="mlip_dft")``
    ``MlipRelaxation`` per label (the deployed seed and the last finished round

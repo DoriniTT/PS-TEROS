@@ -117,6 +117,14 @@ Recent Updates
   and ``MlipRoute.build`` now raise a ``ValueError`` naming the labels and their hydrogen kinds. MLIP-route results of
   such studies are wrong and should be repeated with the DFT route; pseudo-hydrogens of several charges (each
   passivating one element, as in every polar study) and studies with hydrogen only are unchanged
+* Error bars on gamma for the MLIP route (see :ref:`mlip-error-bars`): ``relaxation_estimate=True`` in
+  ``build_mlip_surface_workgraph``, ``MlipSurfaceStudy.build`` and ``MlipRoute.build`` adds one GPU job with the
+  deployed model's Hessian at the final geometries (``mlip_hessian_forces``); ``read_relaxation_estimates`` turns it
+  and the DFT forces of the final statics into ``dE = -1/2 F^T H^-1 F`` per structure (``relaxation_estimate``,
+  ``RelaxationEstimate``), and ``MlipSurfaceStudy.gamma_error_bars`` / ``MlipRoute.gamma_error_bars`` into the change
+  of each gamma (``gamma_error_bars``, ``GammaErrorBar``). ``hessian_from_forces`` gives the finite-difference
+  Hessian that ``harmonic_vibrations_from_forces`` diagonalises (its modes are unchanged). Without the option the
+  graphs, outputs and results are unchanged
 * See :doc:`/phase-diagram` and ``CHANGE.md`` for details
 
 Earlier Unreleased Features

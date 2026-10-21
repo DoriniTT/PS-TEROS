@@ -187,6 +187,15 @@ CP2K) on the MACE geometries with the same fixed sites, and
 `route.analyse(graph, temperature_k=T, vibrations=psteros.read_vibrations(check, labels))`
 uses its modes instead. Polar slabs have no vibrations yet.
 
+## Error bars on gamma
+
+`route.build(..., relaxation_estimate=True)` adds one GPU job with the model's
+Hessian `H` at the final geometries. With the DFT forces `F` of the final
+statics, `dE = -1/2 F^T H^-1 F` is the energy a DFT relaxation would still lose
+at each model geometry; `route.gamma_error_bars(graph)` lowers every structure
+by its `dE`, draws the diagram again and gives the change of each gamma, the
+error bar that the model's geometry puts on it (`docs/source/mlip.rst`).
+
 ## Other MACE models
 
 MACE-MH-1 is the default, but any MACE model file works.

@@ -290,6 +290,43 @@ def free_energies_with_vibrations(
     return result
 
 
+def _hessian(sites: Sequence[int], displacement_angstrom: float, plus: Any, minus: Any) -> Any:
+    """``H[(i,a),(j,b)] = -[F_jb(+d_ia) - F_jb(-d_ia)] / 2d`` of the displaced sites, symmetrised (eV/A^2)."""
+
+    hessian = -(plus - minus)[:, sites, :].reshape(3 * len(sites), 3 * len(sites)) / (2.0 * displacement_angstrom)
+    return (hessian + hessian.T) / 2.0
+
+
+def hessian_from_forces(
+    *,
+    displaced_sites: Sequence[int],
+    displacement_angstrom: float,
+    forces_plus: Sequence[Any],
+    forces_minus: Sequence[Any],
+) -> Any:
+    """The Hessian (eV/A^2, not mass-weighted) of the displaced sites from central finite differences of the forces.
+
+    The same matrix as :func:`harmonic_vibrations_from_forces` diagonalises
+    (before mass-weighting): ``H[(i,a),(j,b)] = -[F_jb(+d_ia) - F_jb(-d_ia)] / 2d``,
+    symmetrised, rows and columns in ``displaced_sites`` order (``3 k + a``).
+    """
+
+    import numpy as np
+
+    sites = list(displaced_sites)
+    if not sites or len(set(sites)) != len(sites):
+        raise ValueError("displaced_sites must be distinct sites, at least one")
+    if displacement_angstrom <= 0:
+        raise ValueError("displacement_angstrom must be positive")
+    plus = np.asarray(forces_plus, dtype=float)
+    minus = np.asarray(forces_minus, dtype=float)
+    if plus.shape != minus.shape or plus.ndim != 3 or plus.shape[0] != 3 * len(sites) or plus.shape[2] != 3:
+        raise ValueError(f"forces_plus and forces_minus must have shape (3 * {len(sites)}, atoms, 3)")
+    if any(site < 0 or site >= plus.shape[1] for site in sites):
+        raise ValueError(f"displaced_sites must be site indices in [0, {plus.shape[1]})")
+    return _hessian(sites, displacement_angstrom, plus, minus)
+
+
 def harmonic_vibrations_from_forces(
     *,
     masses_amu: Sequence[float],
@@ -339,8 +376,7 @@ def harmonic_vibrations_from_forces(
     if not 0 <= zero_modes < 3 * len(sites):
         raise ValueError(f"zero_modes must be in [0, {3 * len(sites)})")
 
-    hessian = -(plus - minus)[:, sites, :].reshape(3 * len(sites), 3 * len(sites)) / (2.0 * displacement_angstrom)
-    hessian = (hessian + hessian.T) / 2.0
+    hessian = _hessian(sites, displacement_angstrom, plus, minus)
     weights = 1.0 / np.sqrt(np.repeat(masses[sites], 3))
     eigenvalues = np.linalg.eigvalsh(hessian * np.outer(weights, weights))
     frequencies = np.sign(eigenvalues) * np.sqrt(np.abs(eigenvalues)) * _CM1_PER_SQRT_EIGENVALUE

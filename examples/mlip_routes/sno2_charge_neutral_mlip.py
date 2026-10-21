@@ -13,8 +13,11 @@ Usage
 -----
     python sno2_charge_neutral_mlip.py show                      # slabs, fixed sites, DFT statics, GPU jobs; no AiiDA
     python sno2_charge_neutral_mlip.py build --profile P --code vasp@cpu-cluster --mace-code mace-python@gpu-cluster \\
-        --model /path/on/gpu/mace-mh-1.model --replay replay-data-mh-1-omat-pbe.xyz [--vibrations] [--submit]
-    python sno2_charge_neutral_mlip.py read --profile P --pk <PK> [--temperature 800]
+        --model /path/on/gpu/mace-mh-1.model --replay replay-data-mh-1-omat-pbe.xyz [--vibrations] [--error-bars] [--submit]
+    python sno2_charge_neutral_mlip.py read --profile P --pk <PK> [--temperature 800] [--error-bars]
+
+``--error-bars`` adds the model's Hessian job to the graph and, when reading, prints how much each gamma would change
+if DFT finished the relaxations (``MlipRoute.gamma_error_bars``).
 """
 
 from __future__ import annotations
@@ -97,7 +100,7 @@ def build(args) -> None:
     sno2 = route()
     print(sno2)
     graph = sno2.build(static, fine_tune, job=job, vibrations=vibrations() if args.vibrations else None,
-                       submit=args.submit)
+                       relaxation_estimate=args.error_bars, submit=args.submit)
     print(graph.name, len(graph.tasks), "tasks", f"submitted as {graph.pk}" if args.submit else "not submitted")
 
 
@@ -109,6 +112,9 @@ def read(args) -> None:
     suffix = "" if args.temperature is None else f"_{args.temperature:g}K"
     result.diagram.plot(f"sno2_110_mlip{suffix}.png", title="SnO$_2$(110), MLIP route")
     result.diagram.to_csv(f"sno2_110_mlip{suffix}.csv")
+    if args.error_bars:  # how much each gamma would change if DFT finished the relaxations (built with --error-bars)
+        for bar in route().gamma_error_bars(orm.load_node(args.pk)).values():
+            print(bar.summary())
 
 
 def main() -> None:
@@ -120,11 +126,13 @@ def main() -> None:
         first.add_argument(name, required=True)
     first.add_argument("--queue", default="gpu")
     first.add_argument("--vibrations", action="store_true")
+    first.add_argument("--error-bars", action="store_true")
     first.add_argument("--submit", action="store_true")
     second = sub.add_parser("read")
     second.add_argument("--profile", required=True)
     second.add_argument("--pk", type=int, required=True)
     second.add_argument("--temperature", type=float, default=None)
+    second.add_argument("--error-bars", action="store_true")
     args = parser.parse_args()
     if args.phase != "show":
         from aiida import load_profile

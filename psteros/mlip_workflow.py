@@ -242,6 +242,7 @@ def build_mlip_surface_workgraph(
     dft_check: bool = True,
     vibrations: VibrationsConfig | None = None,
     allow_non_metallic: bool = False,
+    relaxation_estimate: bool = False,
     submit: bool = False,
 ) -> Any:
     """Build or submit the WorkGraph of the MLIP route (see the module docstring).
@@ -290,6 +291,13 @@ def build_mlip_surface_workgraph(
         Do not check that ``metallic_bulk`` is a metal. For a semiconductor or
         an insulator, the slabs must then have the right electron count
         (a warning says so); see :class:`MlipRoute`.
+    relaxation_estimate
+        Add one GPU job with the deployed model's Hessian at the final
+        geometries, over the atoms that relax (needs ``dft_check``):
+        :func:`read_relaxation_estimates` turns it and the DFT forces of the
+        final statics into ``dE = -1/2 F^T H^-1 F``, the DFT energy still to
+        lose at each model geometry (:meth:`MlipRoute.gamma_error_bars`).
+        False (the default) adds nothing.
     submit
         Submit the graph when true; otherwise return it unsubmitted.
 
@@ -302,7 +310,8 @@ def build_mlip_surface_workgraph(
     ``mlip_round<r>_finetune_summary``, ``mlip_round<r>_model_folder`` and
     ``mlip_round<r>_relax_results`` (every seed's relaxations); with
     ``vibrations`` ``<label>_mlip_vibrations`` (read by
-    :func:`psteros.read_vibrations`) and ``mlip_vibrations_results``.
+    :func:`psteros.read_vibrations`) and ``mlip_vibrations_results``; with
+    ``relaxation_estimate`` ``mlip_hessian_forces`` and ``mlip_hessian_results``.
     """
 
     if not isinstance(allow_non_metallic, bool):
@@ -312,7 +321,7 @@ def build_mlip_surface_workgraph(
     return _mlip_workgraph(
         structures, static, fine_tune, relax, job=job, metallic_bulk=metallic_bulk, metal_check=not allow_non_metallic,
         fixed_sites=fixed_sites, training_structures=training_structures, active_learning_rounds=active_learning_rounds,
-        dft_check=dft_check, vibrations=vibrations, submit=submit,
+        dft_check=dft_check, vibrations=vibrations, relaxation_estimate=relaxation_estimate, submit=submit,
     )
 
 
@@ -331,6 +340,7 @@ def _mlip_workgraph(
     dft_check: bool,
     vibrations: VibrationsConfig | None,
     submit: bool,
+    relaxation_estimate: bool = False,
 ) -> Any:
     """The graph of :func:`build_mlip_surface_workgraph`; ``metal_check=False`` skips the metal check silently."""
 
@@ -355,6 +365,10 @@ def _mlip_workgraph(
     suffix = ".nequip.zip" if family == "nequip" else ".model"  # the file the fine-tune job writes per seed
     if isinstance(active_learning_rounds, bool) or not isinstance(active_learning_rounds, int) or active_learning_rounds < 0:
         raise ValueError("active_learning_rounds must be a non-negative integer")
+    if not isinstance(relaxation_estimate, bool):
+        raise TypeError("relaxation_estimate must be True or False")
+    if relaxation_estimate and not dft_check:
+        raise ValueError("relaxation_estimate needs dft_check: it uses the DFT forces of the final statics")
     if metallic_bulk not in structures:
         raise ValueError(f"metallic_bulk {metallic_bulk!r} is not a label of structures")
     overlap = sorted(set(extra).intersection(structures))
@@ -518,9 +532,46 @@ def _mlip_workgraph(
         _add_mlip_vibrations(workgraph, vibrations, final, displaced, plain, code=code, execution=execution,
                              model=(models[deployed][0], head), deployed=deployed, relax=relax, job=job,
                              finetune=finetune, name=static.name, family=family)
+    if relaxation_estimate:
+        free = {label: [index for index in range(len(structure)) if index not in set(fixed_sites.get(label, ()))]
+                for label, structure in plain.items()}
+        _add_mlip_hessian(workgraph, final, free, code=code, execution=execution, model=(models[deployed][0], head),
+                          relax=relax, job=job, finetune=finetune, name=static.name, family=family)
     if submit:
         workgraph.submit()
     return workgraph
+
+
+#: Displacement (A) of the finite differences of the model's Hessian for :func:`read_relaxation_estimates`.
+HESSIAN_DISPLACEMENT_ANGSTROM = 0.01
+
+
+def _add_mlip_hessian(workgraph, structures, sites, *, code, execution, model, relax, job, finetune, name,
+                      family="mace") -> None:
+    """The GPU job of the deployed model's Hessian at the final geometries, over the atoms that relax
+    (``mlip_hessian_forces``: ``<label>.npz`` of the displaced forces, read by :func:`read_relaxation_estimates`)."""
+
+    from aiida import orm
+    from aiida_workgraph import shelljob
+
+    from psteros.backends.mlip_tasks import mlip_vibrations_folder
+
+    options = {"model": list(model), "displaced_sites": sites, "device": job.device,
+               "displacement_angstrom": HESSIAN_DISPLACEMENT_ANGSTROM, "default_dtype": relax.default_dtype}
+    if family != "mace":
+        options["family"] = family
+    folder = workgraph.add_task(
+        mlip_vibrations_folder, name="mlip_hessian_job", settings=orm.Dict(options),
+        structures={f"structure_{label}": structure for label, structure in structures.items()},
+    )
+    forces = workgraph.add_task(
+        shelljob, name="mlip_hessian", command=code, arguments=["-u", "vibrations.py"],
+        nodes={"job": folder.outputs.result, "finetune": finetune.outputs.remote_folder}, filenames={"finetune": "finetune"},
+        outputs=["results.json", "vibrations"],
+        metadata={"label": f"{name}_hessian", "options": {**execution, "use_symlinks": True}},
+    )
+    workgraph.outputs.__setattr__("mlip_hessian_forces", forces.outputs.vibrations)
+    workgraph.outputs.__setattr__("mlip_hessian_results", forces.outputs.results_json)
 
 
 def _add_mlip_vibrations(workgraph, vibrations, structures, displaced, plain, *, code, execution, model, deployed,
@@ -667,6 +718,83 @@ def read_mlip_energies(graph: Any, labels: Sequence[str], *, energy_source: str 
     if missing:
         raise ValueError(f"no DFT energy at the model geometry for {missing} (dft_check off, or not finished)")
     return energies
+
+
+def read_relaxation_estimates(
+    graph: Any,
+    labels: Sequence[str],
+    *,
+    molecules: Sequence[str] = (),
+    **thresholds: float,
+) -> dict[str, Any]:
+    """The second-order estimate of the DFT energy still to lose at each model geometry of a graph built with
+    ``relaxation_estimate=True`` (:func:`psteros.relaxation_estimate`, ``{label: RelaxationEstimate}``).
+
+    The forces are those of the final DFT static of each label, at the model's geometry; the Hessian is the
+    deployed model's there, over the atoms that relaxed (the ``mlip_hessian`` job). Zero modes left out: 5 or 6 for
+    ``molecules`` (linear or not), 3 for a periodic structure whose every atom relaxes, none for a slab with a fixed
+    centre. ``thresholds`` (``min_curvature_ev_per_angstrom2``, ``max_step_angstrom``,
+    ``max_left_out_force_ev_per_angstrom``) go to :func:`psteros.relaxation_estimate`. Works on a running graph for
+    the labels whose static has finished.
+    """
+
+    import io
+
+    import numpy as np
+
+    from psteros.backends.mlip_tasks import retrieved_files
+    from psteros.backends.vibration_tasks import _is_linear
+    from psteros.mlip import dft_label
+    from psteros.relaxation_estimate import relaxation_estimate
+    from psteros.vibrations import hessian_from_forces
+
+    training, job, run = (_task_node(graph, name) for name in ("mlip_round0_training", "mlip_hessian_job",
+                                                                   "mlip_hessian"))
+    if job is None:
+        raise ValueError("this graph has no Hessian job: build it with relaxation_estimate=True")
+    if run is None or not run.is_finished_ok:
+        raise ValueError("the Hessian job of this graph has not finished")
+    backend = training.inputs.settings.get_dict()["backend"]
+    sites = job.inputs.settings.get_dict()["displaced_sites"]
+    displacement = float(job.inputs.settings.get_dict()["displacement_angstrom"])
+    folder = run.outputs.vibrations
+    structures = _relaxed_structures(graph, labels)
+    estimates, missing = {}, []
+    for label in labels:
+        static = _task_node(graph, f"{label}_mlip_dft_{backend}")
+        if static is None or not static.is_finished_ok:
+            missing.append(label)
+            continue
+        parameters = (static.outputs.misc if backend == "vasp" else static.outputs.output_parameters).get_dict()
+        structure = structures[label]
+        frame = dft_label(backend, label=label, structure=structure.get_pymatgen_structure(), parameters=parameters,
+                          files=retrieved_files(static.outputs.retrieved, backend))
+        with np.load(io.BytesIO(folder.base.repository.get_object_content(f"{label}.npz", mode="rb"))) as data:
+            hessian = hessian_from_forces(displaced_sites=sites[label], displacement_angstrom=displacement,
+                                          forces_plus=data["forces_plus"], forces_minus=data["forces_minus"])
+        if label in molecules:
+            zero_modes = 5 if _is_linear(structure) else 6
+        elif len(sites[label]) == len(structure.sites):
+            zero_modes = 3
+        else:
+            zero_modes = 0
+        estimates[label] = relaxation_estimate(frame.forces_ev_per_angstrom, hessian, sites=sites[label],
+                                               zero_modes=zero_modes, **thresholds)
+    if missing:
+        raise ValueError(f"no final DFT static of {missing} (not finished)")
+    return estimates
+
+
+def _gamma_error_bars(analyse: Any, source: Any, labels: Sequence[str], slabs: Sequence[str],
+                      molecules: Sequence[str], thresholds: Mapping[str, float], **options: Any) -> dict[str, Any]:
+    """The error bars of :meth:`MlipSurfaceStudy.gamma_error_bars`: the study analysed with E and with E + dE."""
+
+    from psteros.relaxation_estimate import gamma_error_bars
+
+    estimates = read_relaxation_estimates(source, labels, molecules=molecules, **thresholds)
+    energies = read_mlip_energies(source, labels, energy_source="mlip_dft")
+    lowered = {label: energies[label] + estimates[label].energy_ev for label in labels}
+    return gamma_error_bars(analyse(energies, **options), analyse(lowered, **options), estimates, slabs)
 
 
 def _relaxed_structures(graph: Any, labels: Sequence[str]) -> dict[str, Any]:
@@ -886,14 +1014,16 @@ class MlipSurfaceStudy:
         return tuple(f"ref_{element}" for element in self.elements if element in GAS_REFERENCES)
 
     def calculation_count(
-        self, active_learning_rounds: int = 1, dft_check: bool = True, vibrations: bool = False
+        self, active_learning_rounds: int = 1, dft_check: bool = True, vibrations: bool = False,
+        relaxation_estimate: bool = False,
     ) -> dict[str, int]:
         """DFT statics and GPU jobs of :meth:`build` with these options."""
 
         structures = len(self.structures)
         statics = structures + len(self.slabs) * self.rattled
         statics += structures * active_learning_rounds + (structures if dft_check else 0)
-        return {"dft_statics": statics, "gpu_jobs": 2 * (active_learning_rounds + 1) + (1 if vibrations else 0)}
+        return {"dft_statics": statics,
+                "gpu_jobs": 2 * (active_learning_rounds + 1) + (1 if vibrations else 0) + (1 if relaxation_estimate else 0)}
 
     def summary(self) -> str:
         counts = self.calculation_count()
@@ -918,6 +1048,7 @@ class MlipSurfaceStudy:
         dft_check: bool = True,
         vibrations: VibrationsConfig | None = None,
         allow_non_metallic: bool = False,
+        relaxation_estimate: bool = False,
         submit: bool = False,
     ) -> Any:
         """The graph of :func:`build_mlip_surface_workgraph` for these structures (bulk checked as a metal).
@@ -926,7 +1057,8 @@ class MlipSurfaceStudy:
         (the gas references are added to its ``molecules``); the frozen
         centre of each slab must then have the bulk stoichiometry.
         ``allow_non_metallic`` skips the metal check (see
-        :func:`build_mlip_surface_workgraph`).
+        :func:`build_mlip_surface_workgraph`); ``relaxation_estimate`` adds
+        the model's Hessian job for :meth:`gamma_error_bars`.
         """
 
         if vibrations is not None:
@@ -935,7 +1067,7 @@ class MlipSurfaceStudy:
             self.structures, static, fine_tune, relax, job=job, metallic_bulk="bulk", fixed_sites=self.fixed_sites,
             training_structures=self.training_structures or None, active_learning_rounds=active_learning_rounds,
             dft_check=dft_check, vibrations=_with_molecules(vibrations, self.molecule_labels),
-            allow_non_metallic=allow_non_metallic, submit=submit,
+            allow_non_metallic=allow_non_metallic, relaxation_estimate=relaxation_estimate, submit=submit,
         )
 
     def dft_vibrations(
@@ -1016,6 +1148,20 @@ class MlipSurfaceStudy:
         diagram = surface_phase_diagram(terminations, references, **diagram_options)
         return MlipStudyResult(self.formula, references, diagram, terminations, energy_source=energy_source,
                                temperature_k=temperature_k)
+
+    def gamma_error_bars(self, source: Any, **thresholds: float) -> dict[str, Any]:
+        """How much each gamma would change if DFT finished the relaxations (``{slab: GammaErrorBar}``).
+
+        ``source`` is a finished graph built with ``relaxation_estimate=True``.
+        Every structure is lowered by its estimate ``dE = -1/2 F^T H^-1 F``
+        (:func:`read_relaxation_estimates`: the DFT forces of its final static,
+        the model's Hessian) and the diagram is drawn again from ``E + dE``; the
+        change of each gamma is its error bar (:class:`psteros.GammaErrorBar`).
+        ``thresholds`` go to :func:`psteros.relaxation_estimate`.
+        """
+
+        return _gamma_error_bars(self.analyse, source, list(self.structures), list(self.slabs), self.molecule_labels,
+                                 thresholds)
 
 
 @dataclass(frozen=True)
@@ -1125,14 +1271,16 @@ class MlipRoute:
         return tuple(labels)
 
     def calculation_count(
-        self, active_learning_rounds: int = 1, dft_check: bool = True, vibrations: bool = False
+        self, active_learning_rounds: int = 1, dft_check: bool = True, vibrations: bool = False,
+        relaxation_estimate: bool = False,
     ) -> dict[str, int]:
         """DFT statics and GPU jobs of :meth:`build` with these options."""
 
         structures = len(self.study.structures)
         statics = structures + len(self.slabs) * self.rattled
         statics += structures * active_learning_rounds + (structures if dft_check else 0)
-        return {"dft_statics": statics, "gpu_jobs": 2 * (active_learning_rounds + 1) + (1 if vibrations else 0)}
+        return {"dft_statics": statics,
+                "gpu_jobs": 2 * (active_learning_rounds + 1) + (1 if vibrations else 0) + (1 if relaxation_estimate else 0)}
 
     def summary(self) -> str:
         counts = self.calculation_count()
@@ -1157,6 +1305,7 @@ class MlipRoute:
         active_learning_rounds: int = 1,
         dft_check: bool = True,
         vibrations: VibrationsConfig | None = None,
+        relaxation_estimate: bool = False,
         submit: bool = False,
     ) -> Any:
         """The graph of :func:`build_mlip_surface_workgraph` for the study (no metal check).
@@ -1169,7 +1318,8 @@ class MlipRoute:
         harmonic modes of every structure (gas references are added to its
         ``molecules``; the frozen centre of each slab must have the bulk
         stoichiometry); polar studies have none, because the pseudo chemical
-        potentials are 0 K energies.
+        potentials are 0 K energies. ``relaxation_estimate`` adds the model's
+        Hessian job for :meth:`gamma_error_bars` (polar studies too).
         """
 
         if self.polar and static.backend != "vasp":
@@ -1195,6 +1345,7 @@ class MlipRoute:
             fixed_sites=self.fixed_sites, training_structures=extra or None,
             active_learning_rounds=active_learning_rounds, dft_check=dft_check,
             vibrations=_with_molecules(vibrations, self.molecule_labels), submit=submit,
+            relaxation_estimate=relaxation_estimate,
         )
 
     def read(self, source: Any, *, energy_source: str = "mlip_dft") -> tuple[dict[str, float], dict[str, Any]]:
@@ -1250,6 +1401,16 @@ class MlipRoute:
         return MlipStudyResult(result.formula, result.references, result.diagram, result.terminations,
                                result.surface_energies_j_per_m2, energy_source=energy_source,
                                temperature_k=temperature_k)
+
+    def gamma_error_bars(self, source: Any, **thresholds: float) -> dict[str, Any]:
+        """How much each gamma would change if DFT finished the relaxations (``{slab: GammaErrorBar}``), as
+        :meth:`MlipSurfaceStudy.gamma_error_bars`; ``source`` is a graph of :meth:`build` with
+        ``relaxation_estimate=True``. The relaxed structures of the graph go to the study's analysis (the bottom
+        checks of a polar study)."""
+
+        labels = list(self.study.structures)
+        return _gamma_error_bars(self.analyse, source, labels, list(self.slabs), self.molecule_labels, thresholds,
+                                 relaxed_structures=_relaxed_structures(source, labels))
 
     def dft_vibrations(
         self,
